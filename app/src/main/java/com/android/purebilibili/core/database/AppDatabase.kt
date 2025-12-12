@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import com.android.purebilibili.core.database.dao.SearchHistoryDao
 import com.android.purebilibili.core.database.entity.SearchHistory
 
-@Database(entities = [SearchHistory::class], version = 1, exportSchema = false)
+@Database(entities = [SearchHistory::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun searchHistoryDao(): SearchHistoryDao
 
@@ -22,7 +22,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_database"
                 )
-                    // 🔥 性能优化：移除 allowMainThreadQueries，强制使用协程  
+                    // 🔥 数据库迁移：Schema 变更时清空旧数据
+                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance

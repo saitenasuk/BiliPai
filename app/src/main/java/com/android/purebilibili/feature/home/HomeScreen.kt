@@ -6,6 +6,8 @@ import android.app.Activity
 import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -13,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -37,6 +40,7 @@ import com.android.purebilibili.core.ui.VideoCardSkeleton
 import com.android.purebilibili.core.ui.ErrorState as ModernErrorState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
+import com.android.purebilibili.core.ui.shimmer
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,6 +121,22 @@ fun HomeScreen(
     androidx.activity.compose.BackHandler(enabled = isUnimplementedCategory) {
         viewModel.switchCategory(HomeCategory.RECOMMEND)
     }
+    
+    // 🔥🔥 [修复] 如果当前在直播-关注分类且列表为空，返回时先切换到热门，再切换到推荐
+    val isEmptyLiveFollowed = state.currentCategory == HomeCategory.LIVE && 
+                               state.liveSubCategory == LiveSubCategory.FOLLOWED &&
+                               state.liveRooms.isEmpty() && 
+                               !state.isLoading
+    androidx.activity.compose.BackHandler(enabled = isEmptyLiveFollowed) {
+        // 切换到热门直播
+        viewModel.switchLiveSubCategory(LiveSubCategory.POPULAR)
+    }
+
+    // 🔥🔥 [修复] 如果当前在直播分类（非关注空列表情况），返回时切换到推荐
+    val isLiveCategoryNotHome = state.currentCategory == HomeCategory.LIVE && !isEmptyLiveFollowed
+    androidx.activity.compose.BackHandler(enabled = isLiveCategoryNotHome) {
+        viewModel.switchCategory(HomeCategory.RECOMMEND)
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -135,7 +155,7 @@ fun HomeScreen(
             
             // 1. 底层：视频列表
             if (showSkeleton) {
-                // 🔥 骨架屏加载动画（适用于视频和直播）
+                // 🔥 骨架屏加载动画（适用于视频和直播）- 包含完整的顶栏和分类栏
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     contentPadding = PaddingValues(
@@ -148,6 +168,62 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
+                    // 🔥 顶栏骨架
+                    item(span = { GridItemSpan(2) }) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 头像骨架
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .shimmer()
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            // 搜索框骨架
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(36.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .shimmer()
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            // 设置按钮骨架
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .shimmer()
+                            )
+                        }
+                    }
+                    
+                    // 🔥 分类标签栏骨架
+                    item(span = { GridItemSpan(2) }) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            repeat(5) { index ->
+                                Box(
+                                    modifier = Modifier
+                                        .width(if (index == 0) 48.dp else 40.dp)
+                                        .height(28.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .shimmer(delayMillis = index * 50)
+                                )
+                            }
+                        }
+                    }
+                    
+                    // 🔥 视频卡片骨架
                     items(6) { index -> VideoCardSkeleton(index = index) }
                 }
             } else if (state.error != null && state.videos.isEmpty() && state.liveRooms.isEmpty()) {

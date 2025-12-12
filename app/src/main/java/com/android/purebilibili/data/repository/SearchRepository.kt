@@ -107,4 +107,51 @@ object SearchRepository {
             Result.failure(e)
         }
     }
+    
+    // 🔥 搜索建议/联想
+    suspend fun getSuggest(keyword: String): Result<List<String>> = withContext(Dispatchers.IO) {
+        try {
+            if (keyword.isBlank()) return@withContext Result.success(emptyList())
+            
+            val response = api.getSearchSuggest(keyword)
+            val suggestions = response.result?.tag?.map { it.value } ?: emptyList()
+            Result.success(suggestions)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    // 🔥 获取搜索发现 (个性化 + 官方热搜兜底)
+    suspend fun getSearchDiscover(historyKeywords: List<String>): Result<Pair<String, List<String>>> = withContext(Dispatchers.IO) {
+        try {
+            // 1. 个性化推荐：尝试使用最近的搜索词进行联想
+            if (historyKeywords.isNotEmpty()) {
+                val lastKeyword = historyKeywords.firstOrNull()
+                if (!lastKeyword.isNullOrBlank()) {
+                    val response = api.getSearchSuggest(lastKeyword)
+                    val suggestions = response.result?.tag?.map { it.value }?.filter { it != lastKeyword }?.take(10)
+                    
+                    if (!suggestions.isNullOrEmpty()) {
+                        return@withContext Result.success("大家都在搜 \"$lastKeyword\" 相关" to suggestions)
+                    }
+                }
+            }
+            
+            // 2. 官方推荐：使用热搜词乱序 (模拟官方推荐流)
+            val hotResponse = api.getHotSearch()
+            val hotList = hotResponse.data?.trending?.list?.map { it.show_name }?.shuffled()?.take(10) ?: emptyList()
+            
+            if (hotList.isNotEmpty()) {
+                return@withContext Result.success("🔥 热门推荐" to hotList)
+            }
+            
+            // 3. 静态兜底
+            Result.success("搜索发现" to listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰"))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // 发生异常时的最后兜底
+            Result.success("搜索发现" to listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰"))
+        }
+    }
 }

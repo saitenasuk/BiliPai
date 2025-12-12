@@ -6,98 +6,192 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Language-Kotlin-purple.svg" alt="Kotlin">
   <img src="https://img.shields.io/badge/UI-Jetpack%20Compose-blue.svg" alt="Compose">
-  <img src="https://img.shields.io/badge/Platform-Android-green.svg" alt="Android">
+  <img src="https://img.shields.io/badge/Material-You%20(M3)-green.svg" alt="Material You">
+  <img src="https://img.shields.io/badge/Platform-Android%2010+-brightgreen.svg" alt="Android">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License">
 </p>
 
-> **"Cheers to the Pure View."**
-> 
-> BiliPai 是一个基于 **Jetpack Compose** 和 **Material Design 3** 构建的现代化 Bilibili 第三方客户端。
-> 我们剔除了所有繁杂的营销功能，只保留最纯粹的视频观看体验。
+> **"Cheers to the Pure View."**  ✨
+>
+> BiliPai 是一款现代化的 Bilibili 第三方 Android 客户端，基于 **Jetpack Compose** 和 **Material Design 3** 构建。
+> 我们专注于提供纯粹、流畅、无广告的视频观看体验。
 
 ---
 
-## 📸 预览 Preview
+## 📸 应用预览
+
+<!-- 
+🖼️ 截图建议：
+1. 首页推荐流 (浅色主题) - 展示瀑布流布局和视频卡片
+2. 首页推荐流 (深色主题) - 展示深色模式适配
+3. 视频播放页 - 展示播放器、弹幕、清晰度按钮
+4. 全屏播放 (横屏) - 展示弹幕效果和控制栏
+5. 画中画模式 - 小窗播放效果
+6. 搜索页面 - 搜索发现、热门搜索、历史记录
+7. 设置页面 - 展示个性化选项
+8. 登录页面 - 扫码登录界面
+-->
 
 <p align="center">
-  <img src="docs/images/home_light.png" alt="首页推荐" width="30%">
+  <img src="docs/images/home_light.png" alt="首页浅色" width="30%">
+  <img src="docs/images/home_dark.png" alt="首页深色" width="30%">
   <img src="docs/images/video_player.png" alt="视频播放" width="30%">
-  <img src="docs/images/home_pip.png" alt="画中画模式" width="30%">
 </p>
 
 <p align="center">
-  <img src="docs/images/settings.png" alt="个性化设置 (浅色)" width="30%">
-  <img src="docs/images/settings_dark.png" alt="个性化设置 (深色)" width="30%">
-  <img src="docs/images/dynamic.png" alt="热门搜索" width="30%">
+  <img src="docs/images/fullscreen.png" alt="全屏弹幕" width="30%">
+  <img src="docs/images/search.png" alt="搜索结果" width="30%">
+  <img src="docs/images/settings.png" alt="个性化设置" width="30%">
 </p>
 
 ---
 
 ## ✨ 核心特性
 
+### 🎬 视频播放
+
+| 功能 | 描述 |
+|------|------|
+| **高清画质** | 支持 4K、1080P60、HDR 等高清画质 (需登录/大会员) |
+| **DASH 流媒体** | 现代化视频格式，自适应码率切换 |
+| **弹幕系统** | 基于 DanmakuFlameMaster，支持透明度、字体、速度调节 |
+| **手势控制** | 左滑亮度、右滑音量、横滑进度 (支持灵敏度调节) |
+| **倍速播放** | 0.5x ~ 2.0x 倍速切换 |
+| **画中画** | 悬浮小窗播放，多任务无缝切换 |
+
 ### 🎨 现代化 UI
-- **Material Design 3** 设计规范，支持动态取色
-- **Lottie 动画**：加载、点赞、收藏等丝滑动画效果
-- **骨架屏加载**：Shimmer 效果的占位加载
-- **彩色按钮栏**：点赞(粉)、投币(金)、收藏(黄)、分享(蓝)、评论(青)
+
+| 功能 | 描述 |
+|------|------|
+| **Material You** | 完整支持 Material Design 3，动态主题色 |
+| **深色模式** | 完美适配系统深色/浅色主题 |
+| **Lottie 动画** | 点赞、投币、收藏等丝滑反馈动画 |
+| **骨架屏** | Shimmer 效果的优雅加载占位 |
+| **彩色互动栏** | 点赞(粉)、投币(金)、收藏(黄)、三连(红)、评论(青) |
+
+### 🔍 智能搜索
+
+| 功能 | 描述 |
+|------|------|
+| **搜索发现** | 基于历史记录的个性化推荐 + 热门推荐兜底 |
+| **实时联想** | 输入时即时显示搜索建议 (300ms 防抖) |
+| **热门搜索** | B 站实时热搜榜单 |
+| **搜索历史** | 本地历史记录，自动去重 |
 
 ### 📱 核心功能
-- **首页推荐**：高性能瀑布流，下拉刷新，无限加载
-- **视频播放**：基于 ExoPlayer，支持手势控制（亮度/音量/进度）
-- **1080P+ 画质**：DASH 格式支持，大会员可切换更高画质
-- **评论系统**：支持楼中楼回复查看
+
+- **首页推荐**：高性能瀑布流，智能预加载，无限滚动
+- **视频详情**：完整的视频信息、UP主信息、相关推荐
+- **评论系统**：支持楼中楼回复、表情解析
 - **动态页面**：关注 UP 主的动态流
-- **搜索功能**：热搜、历史记录、搜索建议
 
 ### 🔐 账户功能
-- **扫码登录**：官方 API 扫码登录
-- **网页登录**：WebView 备选登录方式
-- **VIP 状态检测**：大会员标识与专属画质
 
-### 🌗 个性化
-- **深色/浅色主题**：完美适配系统主题
-- **画中画模式**：悬浮窗播放
-- **播放统计**：实时显示分辨率和码率
+- **扫码登录**：官方 TV 端扫码 API
+- **网页登录**：WebView 备选方案
+- **大会员识别**：VIP 标识与专属画质权限
 
 ---
 
-## 🛠 技术栈
+## 🛠 技术架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Presentation Layer                    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
+│  │   Screens   │  │  ViewModels │  │   Compose   │     │
+│  │  (Compose)  │  │   (State)   │  │    Theme    │     │
+│  └─────────────┘  └─────────────┘  └─────────────┘     │
+├─────────────────────────────────────────────────────────┤
+│                      Domain Layer                        │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │              Repository Pattern                  │   │
+│  └─────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────┤
+│                       Data Layer                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+│  │ Retrofit │  │   Room   │  │DataStore │  │ExoPlayer│ │
+│  │  (API)   │  │   (DB)   │  │(Settings)│  │ (Video) │ │
+│  └──────────┘  └──────────┘  └──────────┘  └────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 技术栈详情
 
 | 类别 | 技术 |
 |------|------|
-| **语言** | Kotlin |
-| **UI** | Jetpack Compose (Material3) |
-| **架构** | MVVM + Repository |
-| **网络** | Retrofit + OkHttp + Kotlinx Serialization |
-| **图片** | Coil |
-| **视频** | ExoPlayer (DASH) |
-| **动画** | Lottie Compose |
-| **异步** | Coroutines + Flow |
+| **语言** | Kotlin 1.9+ |
+| **UI 框架** | Jetpack Compose (Material3) |
+| **架构模式** | MVVM + Clean Architecture |
+| **依赖注入** | Manual DI (Repository Pattern) |
+| **网络请求** | Retrofit + OkHttp + Kotlinx Serialization |
+| **图片加载** | Coil Compose |
+| **视频播放** | ExoPlayer (Media3) + DASH |
+| **弹幕引擎** | DanmakuFlameMaster |
+| **动画库** | Lottie Compose |
+| **本地存储** | Room (历史记录) + DataStore (设置) |
+| **异步处理** | Kotlin Coroutines + Flow |
 | **导航** | Jetpack Navigation Compose |
+
+---
+
+## 📦 安装使用
+
+### 下载安装
+
+前往 [Releases](https://github.com/jay3-yy/BiliPai/releases) 页面下载最新版本 APK。
+
+### 系统要求
+
+- Android 10.0 (API 29) 及以上
+- 推荐 Android 12+ 以获得完整 Material You 体验
+
+### 从源码构建
+
+```bash
+# 克隆仓库
+git clone https://github.com/jay3-yy/BiliPai.git
+
+# 进入目录
+cd BiliPai
+
+# 构建 Debug 版本
+./gradlew assembleDebug
+
+# APK 位置
+# app/build/outputs/apk/debug/app-debug.apk
+```
 
 ---
 
 ## 🗺️ 开发路线图
 
 ### ✅ 已完成
-- [x] 首页推荐流
-- [x] 视频播放 (DASH 格式)
-- [x] 1080P 及以上画质支持
-- [x] 扫码/网页登录
-- [x] 评论系统
-- [x] 动态页面
-- [x] 搜索功能
-- [x] 现代化 UI 组件 (Lottie + Shimmer)
 
-### � 进行中
-- [ ] 弹幕系统
-- [ ] 视频发布时间/分区显示
+- [x] 首页推荐流 (瀑布流 + 无限滚动)
+- [x] 视频播放 (DASH + 手势控制)
+- [x] 弹幕系统 (显示 + 设置调节)
+- [x] 高清画质支持 (4K/1080P60/HDR)
+- [x] 扫码/网页登录
+- [x] 评论系统 (楼中楼)
+- [x] 动态页面
+- [x] 搜索功能 (联想 + 热搜 + 历史)
+- [x] 画中画模式
+- [x] 倍速播放
+- [x] Material You 主题
+- [x] 深色模式
+
+### 🚧 进行中
+
+- [ ] 弹幕发送功能
+- [ ] 离线缓存 (视频下载)
 
 ### 📋 计划中
-- [ ] 番剧支持
+
+- [ ] 番剧/影视支持
 - [ ] 直播功能
-- [ ] 离线缓存
-- [ ] 平板适配
+- [ ] 平板/折叠屏适配
+- [ ] 观看历史云同步
 
 ---
 
@@ -108,24 +202,34 @@
 | 项目 | 用途 |
 |------|------|
 | [Jetpack Compose](https://developer.android.com/jetpack/compose) | 现代化声明式 UI 框架 |
-| [ExoPlayer](https://github.com/google/ExoPlayer) | 强大的视频播放器 |
+| [Media3 ExoPlayer](https://github.com/androidx/media) | 强大的媒体播放器 |
+| [DanmakuFlameMaster](https://github.com/bilibili/DanmakuFlameMaster) | Bilibili 官方弹幕引擎 |
 | [Retrofit](https://github.com/square/retrofit) | 类型安全的 HTTP 客户端 |
-| [OkHttp](https://github.com/square/okhttp) | 高效的网络请求库 |
 | [Coil](https://github.com/coil-kt/coil) | Kotlin 优先的图片加载库 |
-| [Lottie](https://github.com/airbnb/lottie-android) | 精美的动画效果 |
+| [Lottie](https://github.com/airbnb/lottie-android) | 精美的矢量动画 |
 | [bilibili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) | B 站 API 文档整理 |
 
 ---
 
-## 🤝 贡献
+## 🤝 贡献指南
 
 欢迎各种形式的贡献！
 
-1. Fork 本仓库
-2. 新建分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add AmazingFeature'`)
-4. 推送 (`git push origin feature/AmazingFeature`)
-5. 提交 Pull Request
+1. **Fork** 本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'feat: add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 提交 **Pull Request**
+
+### 提交规范
+
+- `feat:` 新功能
+- `fix:` 修复 Bug
+- `docs:` 文档更新
+- `style:` 代码格式
+- `refactor:` 重构
+- `perf:` 性能优化
+- `chore:` 构建/工具
 
 ---
 
@@ -149,15 +253,17 @@
 
 ## ⚠️ 免责声明
 
-1. 本项目仅供 **学习交流** 使用
-2. **严禁用于商业用途**
-3. API 来源于 Bilibili 官方，数据版权归上海幻电信息科技有限公司所有
-4. 如侵犯您的权益，请联系作者删除
+> [!CAUTION]
+>
+> 1. 本项目仅供 **学习交流** 使用，**严禁用于商业用途**
+> 2. 所有数据来源于 Bilibili 官方 API，版权归上海幻电信息科技有限公司所有
+> 3. 本项目不存储任何用户隐私数据，登录信息仅保存在本地
+> 4. 如涉及版权问题，请联系作者删除
 
 ---
 
 <p align="center">
-  Made with ❤️ by YangY 
+  Made with ❤️ by <a href="https://x.com/YangY_0x00">YangY</a>
   <br>
-  ( ゜- ゜)つロ 干杯~
+  <sub>( ゜- ゜)つロ 干杯~</sub>
 </p>

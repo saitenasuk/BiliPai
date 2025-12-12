@@ -240,6 +240,14 @@ interface SearchApi {
 
     @GET("x/web-interface/search/all/v2")
     suspend fun search(@QueryMap params: Map<String, String>): SearchResponse
+    
+    // 🔥 搜索建议/联想
+    @GET("https://s.search.bilibili.com/main/suggest")
+    suspend fun getSearchSuggest(
+        @Query("term") term: String,
+        @Query("main_ver") mainVer: String = "v1",
+        @Query("highlight") highlight: Int = 0
+    ): SearchSuggestResponse
 }
 
 // 🔥 动态 API

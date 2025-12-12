@@ -72,7 +72,7 @@ fun FluidHomeTopBar(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             shape = RoundedCornerShape(24.dp),
-            color = Color.White,  // 纯白表面，与浅灰背景形成对比
+            color = MaterialTheme.colorScheme.surface,  // 🔥 使用主题色，适配深色模式
             shadowElevation = 6.dp,  // 添加阴影增加层次感
             tonalElevation = 0.dp,
             border = androidx.compose.foundation.BorderStroke(

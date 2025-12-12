@@ -15,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.SubtitlesOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -333,26 +335,28 @@ fun TopControlBar(
         )
         // 🔥🔥 弹幕开关按钮 - 增强颜色对比度
         Spacer(modifier = Modifier.width(8.dp))
+        // 🔥🔥 弹幕开关 (图标版 - 状态更清晰)
+        Spacer(modifier = Modifier.width(8.dp))
         Surface(
-            modifier = Modifier.combinedClickable(
-                onClick = onDanmakuToggle,
-                onLongClick = onDanmakuSettingsClick
-            ),
-            color = if (danmakuEnabled) Color(0xFFFB7299) else Color(0xFF444444),
-            shape = RoundedCornerShape(16.dp),
-            border = if (!danmakuEnabled) BorderStroke(1.5.dp, Color(0xFF666666)) else null
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .combinedClickable(
+                    onClick = onDanmakuToggle,
+                    onLongClick = onDanmakuSettingsClick
+                ),
+            color = Color.White.copy(alpha = 0.2f),
+            shape = RoundedCornerShape(4.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            Box(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "弹",
-                    color = if (danmakuEnabled) Color.White else Color.White.copy(alpha = 0.4f),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    textDecoration = if (!danmakuEnabled) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                // 使用图标明确表示开关状态
+                Icon(
+                    imageVector = if (danmakuEnabled) Icons.Rounded.Subtitles else Icons.Rounded.SubtitlesOff,
+                    contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
+                    tint = if (danmakuEnabled) Color(0xFFFB7299) else Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

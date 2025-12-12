@@ -124,3 +124,23 @@ enum class SearchType(val value: String, val displayName: String) {
         }
     }
 }
+
+// --- 5. 🔥 搜索建议模型 ---
+@Serializable
+data class SearchSuggestResponse(
+    val code: Int = 0,
+    val result: SearchSuggestResult? = null
+)
+
+@Serializable
+data class SearchSuggestResult(
+    val tag: List<SearchSuggestTag>? = null
+)
+
+@Serializable
+data class SearchSuggestTag(
+    val value: String = "",    // 搜索建议词
+    val name: String = "",     // 显示名称 (可能包含高亮)
+    val ref: Int = 0,
+    val spid: Int = 0
+)

@@ -248,11 +248,14 @@ fun VideoDetailScreen(
             } else {
                 // 🔥🔥 B站风格布局：视频 + 内容区域
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // 1. 播放器区域（标准 16:9 比例）
+                    // 1. 播放器区域（4:3 比例，更接近官方 B站 App 竖屏播放器大小）
+                    val screenWidthDp = configuration.screenWidthDp.dp
+                    val playerHeight = screenWidthDp * 3f / 4f  // 🔥 使用 4:3 比例，让播放器更大
+                    
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
+                            .height(playerHeight)
                             .background(Color.Black)
                     ) {
                         VideoPlayerSection(

@@ -5,8 +5,8 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "search_history")
 data class SearchHistory(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    // 🔥 使用 keyword 作为主键，实现自动去重
+    @PrimaryKey
     val keyword: String,
     // 用于按时间倒序排列
     val timestamp: Long = System.currentTimeMillis()

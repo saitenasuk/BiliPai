@@ -31,6 +31,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 enum class VideoGestureMode { None, Brightness, Volume, Seek }
@@ -360,7 +361,10 @@ fun VideoPlayerSection(
                 // 🔥🔥 [新增] 弹幕开关和设置
                 danmakuEnabled = danmakuEnabled,
                 onDanmakuToggle = {
-                    danmakuManager.isEnabled = !danmakuManager.isEnabled
+                    val newState = !danmakuEnabled
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuEnabled(context, newState)
+                    }
                 },
                 danmakuOpacity = danmakuManager.opacity,
                 danmakuFontScale = danmakuManager.fontScale,

@@ -10,6 +10,8 @@ import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.SearchUpItem
 import com.android.purebilibili.data.model.response.SearchType
 import com.android.purebilibili.data.repository.SearchRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -27,6 +29,11 @@ data class SearchUiState(
     val upResults: List<SearchUpItem> = emptyList(),
     val hotList: List<HotItem> = emptyList(),
     val historyList: List<SearchHistory> = emptyList(),
+    // 🔥 搜索建议
+    val suggestions: List<String> = emptyList(),
+    // 🔥 搜索发现 / 猜你想搜
+    val discoverList: List<String> = listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰"),
+    val discoverTitle: String = "搜索发现",
     val error: String? = null
 )
 
@@ -35,6 +42,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     val uiState = _uiState.asStateFlow()
 
     private val searchDao = AppDatabase.getDatabase(application).searchHistoryDao()
+    
+    // 🔥 防抖任务
+    private var suggestJob: Job? = null
 
     init {
         loadHotSearch()
@@ -44,7 +54,22 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun onQueryChange(newQuery: String) {
         _uiState.update { it.copy(query = newQuery) }
         if (newQuery.isEmpty()) {
-            _uiState.update { it.copy(showResults = false, error = null) }
+            _uiState.update { it.copy(showResults = false, suggestions = emptyList(), error = null) }
+        } else {
+            // 🔥 触发搜索建议（防抖 300ms）
+            loadSuggestions(newQuery)
+        }
+    }
+    
+    // 🔥 防抖加载搜索建议
+    private fun loadSuggestions(keyword: String) {
+        suggestJob?.cancel()
+        suggestJob = viewModelScope.launch {
+            delay(300) // 防抖 300ms
+            val result = SearchRepository.getSuggest(keyword)
+            result.onSuccess { suggestions ->
+                _uiState.update { it.copy(suggestions = suggestions.take(8)) }
+            }
         }
     }
     
@@ -60,7 +85,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun search(keyword: String) {
         if (keyword.isBlank()) return
 
-        _uiState.update { it.copy(query = keyword, isSearching = true, showResults = true, error = null) }
+        // 🔥 清空建议列表
+        _uiState.update { it.copy(query = keyword, isSearching = true, showResults = true, suggestions = emptyList(), error = null) }
         saveHistory(keyword)
 
         viewModelScope.launch {
@@ -104,12 +130,33 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             searchDao.getAll().collect { history ->
                 _uiState.update { it.copy(historyList = history) }
+                // 🔥 更新搜索发现
+                updateDiscover(history)
+            }
+        }
+    }
+
+    // 🔥 生成个性化发现内容
+    private fun updateDiscover(history: List<SearchHistory>) {
+        viewModelScope.launch {
+            val historyKeywords = history.map { it.keyword }
+            // 使用 Repository 获取 (包含个性化逻辑 + 官方热搜兜底)
+            val result = SearchRepository.getSearchDiscover(historyKeywords)
+            
+            result.onSuccess { (title, list) ->
+                _uiState.update { 
+                    it.copy(
+                        discoverTitle = title,
+                        discoverList = list
+                    )
+                }
             }
         }
     }
 
     private fun saveHistory(keyword: String) {
         viewModelScope.launch {
+            // 🔥 使用 keyword 主键，重复搜索自动更新时间戳
             searchDao.insert(SearchHistory(keyword = keyword, timestamp = System.currentTimeMillis()))
         }
     }

@@ -408,10 +408,28 @@ class DanmakuManager(
     }
 
     /**
-     * 显示弹幕
+     * 显示弹幕 - 🔥🔥 [修复] 完整的重新启动逻辑
      */
     fun show() {
-        danmakuView?.show()
+        val view = danmakuView ?: return
+        Log.d(TAG, "👁️ show() called: isReady=$isReady, isPrepared=$isPrepared, playerPlaying=${player?.isPlaying}")
+        
+        // 1. 确保视图可见
+        view.visibility = android.view.View.VISIBLE
+        view.show()
+        
+        // 2. 如果播放器正在播放，需要完整重新启动弹幕
+        if (player?.isPlaying == true && isReady && isPrepared) {
+            // 同步到当前播放位置
+            val position = player?.currentPosition ?: 0L
+            view.seekTo(position)
+            Log.d(TAG, "👁️ show(): seekTo($position), starting danmaku...")
+            
+            // 启动弹幕
+            view.start()
+            view.resume()
+            Log.d(TAG, "✅ show(): danmaku restarted successfully")
+        }
     }
 
     /**
