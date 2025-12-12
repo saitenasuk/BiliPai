@@ -39,7 +39,6 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/fullscreen.png" alt="全屏弹幕" width="30%">
   <img src="docs/images/search.png" alt="搜索结果" width="30%">
   <img src="docs/images/settings.png" alt="个性化设置" width="30%">
 </p>
