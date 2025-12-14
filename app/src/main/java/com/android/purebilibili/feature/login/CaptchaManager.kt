@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.util.Base64
-import android.util.Log
+import com.android.purebilibili.core.util.Logger
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -44,7 +44,7 @@ class CaptchaManager(private val activity: Activity) {
         onCancel: () -> Unit = {}
     ) {
         try {
-            Log.d(TAG, "Starting WebView captcha with gt=$gt, challenge=$challenge")
+            Logger.d(TAG, "Starting WebView captcha with gt=$gt, challenge=$challenge")
             
             // 创建 WebView
             webView = WebView(activity).apply {
@@ -57,7 +57,7 @@ class CaptchaManager(private val activity: Activity) {
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        Log.d(TAG, "Captcha page loaded")
+                        Logger.d(TAG, "Captcha page loaded")
                     }
                 }
                 
@@ -67,7 +67,7 @@ class CaptchaManager(private val activity: Activity) {
                 addJavascriptInterface(object {
                     @JavascriptInterface
                     fun onCaptchaSuccess(validate: String, seccode: String, newChallenge: String) {
-                        Log.d(TAG, "Captcha success via JS: validate=$validate, challenge=$newChallenge")
+                        Logger.d(TAG, "Captcha success via JS: validate=$validate, challenge=$newChallenge")
                         activity.runOnUiThread {
                             dialog?.dismiss()
                             // 🔥 使用验证后返回的新 challenge
@@ -77,7 +77,7 @@ class CaptchaManager(private val activity: Activity) {
                     
                     @JavascriptInterface
                     fun onCaptchaFailed(error: String) {
-                        Log.e(TAG, "Captcha failed via JS: $error")
+                        com.android.purebilibili.core.util.Logger.e(TAG, "Captcha failed via JS: $error")
                         activity.runOnUiThread {
                             dialog?.dismiss()
                             onFailed(error)
@@ -86,7 +86,7 @@ class CaptchaManager(private val activity: Activity) {
                     
                     @JavascriptInterface
                     fun onCaptchaCancel() {
-                        Log.d(TAG, "Captcha cancelled")
+                        Logger.d(TAG, "Captcha cancelled")
                         activity.runOnUiThread {
                             dialog?.dismiss()
                             onCancel()
@@ -122,7 +122,7 @@ class CaptchaManager(private val activity: Activity) {
             )
             
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start captcha", e)
+            com.android.purebilibili.core.util.Logger.e(TAG, "Failed to start captcha", e)
             onFailed("验证初始化失败: ${e.message}")
         }
     }
@@ -303,7 +303,7 @@ object RsaEncryption {
             // Base64 编码
             Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to encrypt password", e)
+            com.android.purebilibili.core.util.Logger.e(TAG, "Failed to encrypt password", e)
             null
         }
     }

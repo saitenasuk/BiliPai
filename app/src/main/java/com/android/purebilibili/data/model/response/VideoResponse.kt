@@ -149,7 +149,7 @@ fun Dash.getBestVideo(targetQn: Int, preferCodec: String = "avc"): DashVideo? {
         return null
     }
     
-    android.util.Log.d("VideoResponse", "🔍 getBestVideo: targetQn=$targetQn, availableIds=${video.map { it.id }}")
+    com.android.purebilibili.core.util.Logger.d("VideoResponse", "🔍 getBestVideo: targetQn=$targetQn, availableIds=${video.map { it.id }}")
     
     val validVideos = video.filter { it.getValidUrl().isNotEmpty() }
     if (validVideos.isEmpty()) {
@@ -174,14 +174,14 @@ fun Dash.getBestVideo(targetQn: Int, preferCodec: String = "avc"): DashVideo? {
         }
         .firstOrNull()
     
-    android.util.Log.d("VideoResponse", "✅ getBestVideo: selected id=${selected?.id}, codec=${selected?.codecs}")
+    com.android.purebilibili.core.util.Logger.d("VideoResponse", "✅ getBestVideo: selected id=${selected?.id}, codec=${selected?.codecs}")
     return selected
 }
 
 // 🔥🔥 扩展函数：获取最佳音频流
 fun Dash.getBestAudio(): DashAudio? {
     if (audio.isNullOrEmpty()) {
-        android.util.Log.d("VideoResponse", "ℹ️ getBestAudio: no audio streams")
+        com.android.purebilibili.core.util.Logger.d("VideoResponse", "ℹ️ getBestAudio: no audio streams")
         return null
     }
     
@@ -191,6 +191,6 @@ fun Dash.getBestAudio(): DashAudio? {
     }
     
     val selected = validAudios.maxByOrNull { it.bandwidth }
-    android.util.Log.d("VideoResponse", "✅ getBestAudio: selected id=${selected?.id}, bandwidth=${selected?.bandwidth}")
+    com.android.purebilibili.core.util.Logger.d("VideoResponse", "✅ getBestAudio: selected id=${selected?.id}, bandwidth=${selected?.bandwidth}")
     return selected
 }

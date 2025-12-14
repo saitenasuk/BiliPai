@@ -44,7 +44,7 @@ object WbiKeyManager {
         // 1. 检查内存缓存
         val cached = cachedKeys
         if (cached != null && isCacheValid()) {
-            android.util.Log.d(TAG, "✅ Using cached WBI keys")
+            com.android.purebilibili.core.util.Logger.d(TAG, "✅ Using cached WBI keys")
             return Result.success(cached)
         }
         
@@ -53,7 +53,7 @@ object WbiKeyManager {
             // 双重检查：可能在等待锁的过程中其他协程已刷新
             val rechecked = cachedKeys
             if (rechecked != null && isCacheValid()) {
-                android.util.Log.d(TAG, "✅ Using cached WBI keys (after lock)")
+                com.android.purebilibili.core.util.Logger.d(TAG, "✅ Using cached WBI keys (after lock)")
                 return@withLock Result.success(rechecked)
             }
             
@@ -75,7 +75,7 @@ object WbiKeyManager {
      * 内部刷新逻辑
      */
     private suspend fun refreshKeysInternal(): Result<Pair<String, String>> {
-        android.util.Log.d(TAG, "🔄 Refreshing WBI keys from network...")
+        com.android.purebilibili.core.util.Logger.d(TAG, "🔄 Refreshing WBI keys from network...")
         
         return try {
             val api = NetworkModule.api
@@ -99,7 +99,7 @@ object WbiKeyManager {
                     android.util.Log.w(TAG, "⚠️ Failed to persist WBI keys: ${e.message}")
                 }
                 
-                android.util.Log.d(TAG, "✅ WBI keys refreshed successfully")
+                com.android.purebilibili.core.util.Logger.d(TAG, "✅ WBI keys refreshed successfully")
                 Result.success(Pair(imgKey, subKey))
             } else {
                 android.util.Log.e(TAG, "❌ WBI keys not found in response")
@@ -115,7 +115,7 @@ object WbiKeyManager {
      * 使缓存失效
      */
     fun invalidateCache() {
-        android.util.Log.d(TAG, "🗑️ Invalidating WBI keys cache")
+        com.android.purebilibili.core.util.Logger.d(TAG, "🗑️ Invalidating WBI keys cache")
         cachedKeys = null
         cacheTimestamp = 0
     }
@@ -148,7 +148,7 @@ object WbiKeyManager {
             .putLong(SP_KEY_TIMESTAMP, cacheTimestamp)
             .apply()
         
-        android.util.Log.d(TAG, "💾 WBI keys persisted to storage")
+        com.android.purebilibili.core.util.Logger.d(TAG, "💾 WBI keys persisted to storage")
     }
     
     /**
@@ -165,14 +165,14 @@ object WbiKeyManager {
             cacheTimestamp = timestamp
             
             if (isCacheValid()) {
-                android.util.Log.d(TAG, "✅ WBI keys restored from storage")
+                com.android.purebilibili.core.util.Logger.d(TAG, "✅ WBI keys restored from storage")
                 return true
             } else {
-                android.util.Log.d(TAG, "⏰ Restored WBI keys are expired")
+                com.android.purebilibili.core.util.Logger.d(TAG, "⏰ Restored WBI keys are expired")
                 invalidateCache()
             }
         } else {
-            android.util.Log.d(TAG, "❌ No WBI keys found in storage")
+            com.android.purebilibili.core.util.Logger.d(TAG, "❌ No WBI keys found in storage")
         }
         
         return false

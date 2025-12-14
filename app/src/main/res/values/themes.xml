@@ -1,12 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.PureBiliBili" parent="android:Theme.Material.Light.NoActionBar">
-        <!-- 设置窗口背景为白色，防止APP动画时显示黑色遮罩 -->
+    <!-- 🎀 BiliPai 品牌色 -->
+    <color name="bili_pink">#FB7299</color>
+    <color name="splash_background">@android:color/white</color>
+    
+    <!-- 🚀 启动屏主题 (浅色模式) - 使用白色背景 -->
+    <style name="Theme.PureBiliBili" parent="Theme.SplashScreen.IconBackground">
+        <!-- 🎨 Splash Screen 背景色 - 浅色模式使用白色 -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <!-- 🖼️ Splash Screen 图标背景 -->
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_background</item>
+        <!-- 🖼️ Splash Screen 图标 -->
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <!-- ⏱️ 图标动画时长 -->
+        <item name="windowSplashScreenAnimationDuration">300</item>
+        <!-- 🔄 Splash 结束后的主题 -->
+        <item name="postSplashScreenTheme">@style/Theme.PureBiliBili.Main</item>
+    </style>
+    
+    <!-- 主应用主题 (浅色模式) -->
+    <style name="Theme.PureBiliBili.Main" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:colorBackground">@android:color/white</item>
+        <item name="android:navigationBarColor">@android:color/white</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
 
-    <style name="Theme.Purebilibili" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
-    </style>
+    <!-- 兼容旧主题名 -->
+    <style name="Theme.Purebilibili" parent="Theme.PureBiliBili" />
 </resources>

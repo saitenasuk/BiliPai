@@ -22,16 +22,16 @@ object ActionRepository {
         return withContext(Dispatchers.IO) {
             try {
                 val csrf = TokenManager.csrfCache ?: ""
-                android.util.Log.d("ActionRepository", "🔥 followUser: mid=$mid, follow=$follow, csrf.length=${csrf.length}")
+                com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 followUser: mid=$mid, follow=$follow, csrf.length=${csrf.length}")
                 if (csrf.isEmpty()) {
                     android.util.Log.e("ActionRepository", "❌ CSRF token is empty!")
                     return@withContext Result.failure(Exception("请先登录"))
                 }
                 
                 val act = if (follow) 1 else 2
-                android.util.Log.d("ActionRepository", "🔥 Calling modifyRelation...")
+                com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 Calling modifyRelation...")
                 val response = api.modifyRelation(fid = mid, act = act, csrf = csrf)
-                android.util.Log.d("ActionRepository", "🔥 Response: code=${response.code}, message=${response.message}")
+                com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 Response: code=${response.code}, message=${response.message}")
                 
                 if (response.code == 0) {
                     Result.success(follow)
@@ -107,7 +107,7 @@ object ActionRepository {
                 val response = api.getRelation(mid)
                 if (response.code == 0) {
                     val isFollowing = response.data?.isFollowing ?: false
-                    android.util.Log.d("ActionRepository", "🔥 checkFollowStatus: mid=$mid, isFollowing=$isFollowing")
+                    com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 checkFollowStatus: mid=$mid, isFollowing=$isFollowing")
                     isFollowing
                 } else {
                     false
@@ -128,7 +128,7 @@ object ActionRepository {
                 val response = api.checkFavoured(aid)
                 if (response.code == 0) {
                     val isFavoured = response.data?.favoured ?: false
-                    android.util.Log.d("ActionRepository", "🔥 checkFavoriteStatus: aid=$aid, isFavoured=$isFavoured")
+                    com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 checkFavoriteStatus: aid=$aid, isFavoured=$isFavoured")
                     isFavoured
                 } else {
                     false
@@ -153,7 +153,7 @@ object ActionRepository {
                 
                 val likeAction = if (like) 1 else 2
                 val response = api.likeVideo(aid = aid, like = likeAction, csrf = csrf)
-                android.util.Log.d("ActionRepository", "🔥 likeVideo: aid=$aid, like=$like, code=${response.code}")
+                com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 likeVideo: aid=$aid, like=$like, code=${response.code}")
                 
                 if (response.code == 0) {
                     Result.success(like)
@@ -176,7 +176,7 @@ object ActionRepository {
                 val response = api.hasLiked(aid)
                 if (response.code == 0) {
                     val isLiked = response.data == 1
-                    android.util.Log.d("ActionRepository", "🔥 checkLikeStatus: aid=$aid, isLiked=$isLiked")
+                    com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 checkLikeStatus: aid=$aid, isLiked=$isLiked")
                     isLiked
                 } else {
                     false
@@ -201,7 +201,7 @@ object ActionRepository {
                 
                 val selectLike = if (alsoLike) 1 else 0
                 val response = api.coinVideo(aid = aid, multiply = count, selectLike = selectLike, csrf = csrf)
-                android.util.Log.d("ActionRepository", "🔥 coinVideo: aid=$aid, count=$count, code=${response.code}")
+                com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 coinVideo: aid=$aid, count=$count, code=${response.code}")
                 
                 when (response.code) {
                     0 -> Result.success(true)
@@ -226,7 +226,7 @@ object ActionRepository {
                 val response = api.hasCoined(aid)
                 if (response.code == 0) {
                     val coinCount = response.data?.multiply ?: 0
-                    android.util.Log.d("ActionRepository", "🔥 checkCoinStatus: aid=$aid, coinCount=$coinCount")
+                    com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 checkCoinStatus: aid=$aid, coinCount=$coinCount")
                     coinCount
                 } else {
                     0
@@ -268,7 +268,7 @@ object ActionRepository {
             val favoriteResult = favoriteVideo(aid, true)
             val favoriteSuccess = favoriteResult.isSuccess
             
-            android.util.Log.d("ActionRepository", "🔥 tripleAction: like=$likeSuccess, coin=$coinSuccess, fav=$favoriteSuccess")
+            com.android.purebilibili.core.util.Logger.d("ActionRepository", "🔥 tripleAction: like=$likeSuccess, coin=$coinSuccess, fav=$favoriteSuccess")
             
             Result.success(TripleResult(
                 likeSuccess = likeSuccess,

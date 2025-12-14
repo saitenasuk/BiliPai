@@ -2,6 +2,9 @@
 package com.android.purebilibili.feature.video
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.data.model.response.ReplyItem
+import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 
 @Composable
 fun SubReplySheet(
@@ -49,11 +53,21 @@ fun SubReplySheet(
             )
         }
 
+        // 🍎 iOS 风格弹性滑入动画
         AnimatedVisibility(
             visible = state.visible && state.rootReply != null,
-            enter = slideInVertically { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter) // 🔥 这里的 align 依赖外层的 BoxScope
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = spring(
+                    dampingRatio = 0.7f,  // 较低阻尼创造弹性效果
+                    stiffness = 400f
+                )
+            ) + fadeIn(animationSpec = tween(200)),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = tween(250)
+            ) + fadeOut(animationSpec = tween(150)),
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Surface(
                 modifier = Modifier
@@ -123,7 +137,7 @@ fun SubReplyList(
             item {
                 Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                     when {
-                        isLoading -> CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.primary)
+                        isLoading -> CupertinoActivityIndicator()
                         isEnd -> Text("没有更多回复了", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
                         else -> TextButton(onClick = onLoadMore) { Text("加载更多", color = MaterialTheme.colorScheme.primary) }
                     }

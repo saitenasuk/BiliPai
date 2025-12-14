@@ -30,21 +30,15 @@ fun GlassCard(
     borderAlpha: Float = 0.2f,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    // 🔥 使用 MaterialTheme 颜色代替硬编码
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val outlineColor = MaterialTheme.colorScheme.outline
     
-    // 毛玻璃颜色
-    val glassColor = if (isDark) {
-        Color.White.copy(alpha = glassAlpha)
-    } else {
-        Color.White.copy(alpha = glassAlpha + 0.3f)
-    }
+    // 毛玻璃颜色 - 使用 surface 色
+    val glassColor = surfaceColor.copy(alpha = glassAlpha + 0.5f)
     
-    // 边框颜色
-    val borderColor = if (isDark) {
-        Color.White.copy(alpha = borderAlpha)
-    } else {
-        Color.Black.copy(alpha = 0.05f)
-    }
+    // 边框颜色 - 使用 outline 色
+    val borderColor = outlineColor.copy(alpha = borderAlpha)
     
     Box(
         modifier = modifier
@@ -61,21 +55,17 @@ fun GlassCard(
 
 /**
  * 🔥 iOS 风格时长标签 (毛玻璃效果)
+ * 注意：此组件用于视频封面上，保持固定的黑色半透明背景以确保可读性
  */
 @Composable
 fun GlassDurationTag(
     duration: String,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
-    
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(
-                if (isDark) Color.Black.copy(alpha = 0.6f)
-                else Color.Black.copy(alpha = 0.5f)
-            )
+            .background(Color.Black.copy(alpha = 0.55f))
             .padding(horizontal = 6.dp, vertical = 3.dp)
     ) {
         androidx.compose.material3.Text(

@@ -83,7 +83,7 @@ object WbiUtils {
         val strToHash = queryBuilder.toString() + mixinKey
         val wRid = md5(strToHash)
         
-        android.util.Log.d("WbiUtils", "🔐 w_rid: $wRid, params count: ${rawParams.size}")
+        com.android.purebilibili.core.util.Logger.d("WbiUtils", "🔐 w_rid: $wRid, params count: ${rawParams.size}")
 
         // 5. 将签名加入原始参数表
         rawParams["w_rid"] = wRid

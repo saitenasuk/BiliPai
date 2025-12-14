@@ -42,3 +42,9 @@ keystore.properties
 
 # 🔥 忽略测试报告
 /reports/
+
+# 🔥 忽略 APK 和发布文件
+*.apk
+*.aab
+**/release/
+app/release/

@@ -301,14 +301,33 @@ fun ActionButton(
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
-    val scale by androidx.compose.animation.core.animateFloatAsState(
+    val pressScale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (isPressed) 0.85f else 1f,
         animationSpec = androidx.compose.animation.core.spring(
             dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
             stiffness = androidx.compose.animation.core.Spring.StiffnessLow
         ),
-        label = "scale"
+        label = "pressScale"
     )
+    
+    // 🍎 心跳脉冲动画 - 当 isActive 变为 true 时触发
+    var shouldPulse by remember { mutableStateOf(false) }
+    val pulseScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (shouldPulse) 1.3f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = 0.35f,  // 较低的阻尼创造弹性效果
+            stiffness = 300f
+        ),
+        label = "pulseScale",
+        finishedListener = { shouldPulse = false }  // 动画结束后重置
+    )
+    
+    // 监听 isActive 变化
+    LaunchedEffect(isActive) {
+        if (isActive) {
+            shouldPulse = true
+        }
+    }
     
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -316,8 +335,8 @@ fun ActionButton(
             .padding(vertical = 2.dp)
             .width(56.dp)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = pressScale
+                scaleY = pressScale
             }
             .clickable(
                 interactionSource = interactionSource,
@@ -328,6 +347,11 @@ fun ActionButton(
         Box(
             modifier = Modifier
                 .size(38.dp)
+                .graphicsLayer {
+                    // 🍎 脉冲缩放应用到图标容器
+                    scaleX = pulseScale
+                    scaleY = pulseScale
+                }
                 .clip(CircleShape)
                 .background(iconColor.copy(alpha = if (isDark) 0.15f else 0.1f)),
             contentAlignment = Alignment.Center

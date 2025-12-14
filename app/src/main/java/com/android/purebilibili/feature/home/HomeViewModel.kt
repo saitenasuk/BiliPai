@@ -2,6 +2,8 @@
 package com.android.purebilibili.feature.home
 
 import android.app.Application
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.data.model.response.VideoItem
@@ -12,7 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-// 保持 UserState 不变
+// 🚀 性能优化：@Immutable 告诉 Compose 此类不可变，减少不必要的重组
+@Immutable
 data class UserState(
     val isLogin: Boolean = false,
     val face: String = "",
@@ -28,14 +31,17 @@ data class UserState(
     val vipLabel: String = ""
 )
 
-// 🔥🔥 [新增] 首页分类枚举
-enum class HomeCategory(val label: String) {
-    RECOMMEND("推荐"),
-    POPULAR("热门"),
-    // 以下待实现
-    LIVE("直播"),
-    ANIME("追番"),
-    MOVIE("影视")
+// 🔥🔥 [新增] 首页分类枚举（含 Bilibili 分区 ID）
+enum class HomeCategory(val label: String, val tid: Int = 0) {
+    RECOMMEND("推荐", 0),
+    POPULAR("热门", 0),
+    LIVE("直播", 0),
+    ANIME("追番", 13),     // 番剧分区
+    MOVIE("影视", 181),    // 影视分区
+    // 🔥 新增分类
+    GAME("游戏", 4),       // 游戏分区
+    KNOWLEDGE("知识", 36), // 知识分区
+    TECH("科技", 188)      // 科技分区
 }
 
 // 🔥🔥 [新增] 直播子分类
@@ -44,6 +50,8 @@ enum class LiveSubCategory(val label: String) {
     POPULAR("热门")
 }
 
+// 🚀 性能优化：@Stable 告诉 Compose 此类字段变化可被追踪，优化重组
+@Stable
 data class HomeUiState(
     val videos: List<VideoItem> = emptyList(),
     val liveRooms: List<LiveRoom> = emptyList(),  // 🔥 直播列表
@@ -142,7 +150,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         
         // 🔥 修复：如果是直播分类且没有更多数据，不再加载
         if (_uiState.value.currentCategory == HomeCategory.LIVE && !hasMoreLiveData) {
-            android.util.Log.d("HomeVM", "🔴 No more live data, skipping loadMore")
+            com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 No more live data, skipping loadMore")
             return
         }
         
@@ -214,7 +222,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val page = if (isLoadMore) livePage else 1
         val subCategory = _uiState.value.liveSubCategory
         
-        android.util.Log.d("HomeVM", "🔴 fetchLiveRooms: isLoadMore=$isLoadMore, page=$page, livePage=$livePage, subCategory=$subCategory")
+        com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 fetchLiveRooms: isLoadMore=$isLoadMore, page=$page, livePage=$livePage, subCategory=$subCategory")
         
         // 🔥 根据子分类选择不同的 API
         val result = when (subCategory) {
@@ -226,7 +234,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (isLoadMore) delay(100)
         
         result.onSuccess { rooms ->
-            android.util.Log.d("HomeVM", "🔴 Fetched ${rooms.size} rooms for page $page")
+            com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 Fetched ${rooms.size} rooms for page $page")
             
             if (rooms.isNotEmpty()) {
                 // 🔥 修复：过滤重复的直播间
@@ -237,12 +245,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     rooms
                 }
                 
-                android.util.Log.d("HomeVM", "🔴 New unique rooms: ${newRooms.size}")
+                com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 New unique rooms: ${newRooms.size}")
                 
                 // 🔥 关键修复：如果没有新的唯一房间，标记为无更多数据
                 if (isLoadMore && newRooms.isEmpty()) {
                     hasMoreLiveData = false
-                    android.util.Log.d("HomeVM", "🔴 No more unique live data, stopping pagination")
+                    com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 No more unique live data, stopping pagination")
                     _uiState.value = _uiState.value.copy(isLoading = false)
                     return@onSuccess
                 }

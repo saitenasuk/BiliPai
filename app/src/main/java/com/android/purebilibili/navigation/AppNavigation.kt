@@ -21,6 +21,8 @@ import com.android.purebilibili.feature.login.LoginScreen
 import com.android.purebilibili.feature.profile.ProfileScreen
 import com.android.purebilibili.feature.search.SearchScreen
 import com.android.purebilibili.feature.settings.SettingsScreen
+import com.android.purebilibili.feature.settings.AppearanceSettingsScreen
+import com.android.purebilibili.feature.settings.PlaybackSettingsScreen
 import com.android.purebilibili.feature.list.CommonListScreen
 import com.android.purebilibili.feature.list.HistoryViewModel
 import com.android.purebilibili.feature.list.FavoriteViewModel
@@ -81,8 +83,17 @@ fun AppNavigation(
                 onSettingsClick = { navController.navigate(ScreenRoutes.Settings.route) },
                 onDynamicClick = { navController.navigate(ScreenRoutes.Dynamic.route) },
                 onHistoryClick = { navController.navigate(ScreenRoutes.History.route) },
+                onPartitionClick = { navController.navigate(ScreenRoutes.Partition.route) },  // 🔥 分区点击
                 onLiveClick = { roomId, title, uname ->
                     navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                },
+                // 🔥🔥 [修复] 番剧点击导航，接受类型参数
+                onBangumiClick = { initialType ->
+                    navController.navigate(ScreenRoutes.Bangumi.createRoute(initialType))
+                },
+                // 🔥 分类点击：跳转到分类详情页面
+                onCategoryClick = { tid, name ->
+                    navController.navigate(ScreenRoutes.Category.createRoute(tid, name))
                 }
             )
         }
@@ -226,7 +237,9 @@ fun AppNavigation(
         ) {
             SettingsScreen(
                 onBack = { navController.popBackStack() },
-                onOpenSourceLicensesClick = { navController.navigate(ScreenRoutes.OpenSourceLicenses.route) }
+                onOpenSourceLicensesClick = { navController.navigate(ScreenRoutes.OpenSourceLicenses.route) },
+                onAppearanceClick = { navController.navigate(ScreenRoutes.AppearanceSettings.route) },
+                onPlaybackClick = { navController.navigate(ScreenRoutes.PlaybackSettings.route) }
             )
         }
 
@@ -251,6 +264,28 @@ fun AppNavigation(
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
         ) {
             com.android.purebilibili.feature.settings.OpenSourceLicensesScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        
+        // --- 🔥 外观设置二级页面 ---
+        composable(
+            route = ScreenRoutes.AppearanceSettings.route,
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) {
+            AppearanceSettingsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        
+        // --- 🔥 播放设置二级页面 ---
+        composable(
+            route = ScreenRoutes.PlaybackSettings.route,
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) {
+            PlaybackSettingsScreen(
                 onBack = { navController.popBackStack() }
             )
         }
@@ -291,6 +326,105 @@ fun AppNavigation(
                 title = Uri.decode(title),
                 uname = Uri.decode(uname),
                 onBack = { navController.popBackStack() }
+            )
+        }
+        
+        // --- 11. 🔥🔥 [新增] 番剧/影视主页面 ---
+        composable(
+            route = ScreenRoutes.Bangumi.route,
+            arguments = listOf(
+                navArgument("type") { type = NavType.IntType; defaultValue = 1 }
+            ),
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) { backStackEntry ->
+            val initialType = backStackEntry.arguments?.getInt("type") ?: 1
+            com.android.purebilibili.feature.bangumi.BangumiScreen(
+                onBack = { navController.popBackStack() },
+                onBangumiClick = { seasonId ->
+                    navController.navigate(ScreenRoutes.BangumiDetail.createRoute(seasonId))
+                },
+                initialType = initialType  // 🔥🔥 [修复] 传入初始类型
+            )
+        }
+        
+        // --- 12. 🔥🔥 [新增] 番剧/影视详情页面 ---
+        composable(
+            route = ScreenRoutes.BangumiDetail.route,
+            arguments = listOf(
+                navArgument("seasonId") { type = NavType.LongType }
+            ),
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) { backStackEntry ->
+            val seasonId = backStackEntry.arguments?.getLong("seasonId") ?: 0L
+            com.android.purebilibili.feature.bangumi.BangumiDetailScreen(
+                seasonId = seasonId,
+                onBack = { navController.popBackStack() },
+                onEpisodeClick = { episode ->
+                    // 🔥🔥 [修改] 跳转到番剧播放页
+                    navController.navigate(ScreenRoutes.BangumiPlayer.createRoute(seasonId, episode.id))
+                },
+                onSeasonClick = { newSeasonId ->
+                    // 🔥 切换到其他季度（替换当前页面）
+                    navController.navigate(ScreenRoutes.BangumiDetail.createRoute(newSeasonId)) {
+                        popUpTo(ScreenRoutes.BangumiDetail.createRoute(seasonId)) { inclusive = true }
+                    }
+                }
+            )
+        }
+        
+        // --- 13. 🔥🔥 [新增] 番剧播放页面 ---
+        composable(
+            route = ScreenRoutes.BangumiPlayer.route,
+            arguments = listOf(
+                navArgument("seasonId") { type = NavType.LongType },
+                navArgument("epId") { type = NavType.LongType }
+            ),
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) { backStackEntry ->
+            val seasonId = backStackEntry.arguments?.getLong("seasonId") ?: 0L
+            val epId = backStackEntry.arguments?.getLong("epId") ?: 0L
+            com.android.purebilibili.feature.bangumi.BangumiPlayerScreen(
+                seasonId = seasonId,
+                epId = epId,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        
+        // --- 14. 🔥 分区页面 ---
+        composable(
+            route = ScreenRoutes.Partition.route,
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Up, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down, tween(animDuration)) }
+        ) {
+            com.android.purebilibili.feature.partition.PartitionScreen(
+                onBack = { navController.popBackStack() },
+                onPartitionClick = { id, name ->
+                    // 🔥 点击分区后，跳转到分类详情页面
+                    navController.navigate(ScreenRoutes.Category.createRoute(id, name))
+                }
+            )
+        }
+        
+        // --- 15. 🔥 分类详情页面 ---
+        composable(
+            route = ScreenRoutes.Category.route,
+            arguments = listOf(
+                navArgument("tid") { type = NavType.IntType },
+                navArgument("name") { type = NavType.StringType; defaultValue = "" }
+            ),
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) { backStackEntry ->
+            val tid = backStackEntry.arguments?.getInt("tid") ?: 0
+            val name = Uri.decode(backStackEntry.arguments?.getString("name") ?: "")
+            com.android.purebilibili.feature.category.CategoryScreen(
+                tid = tid,
+                name = name,
+                onBack = { navController.popBackStack() },
+                onVideoClick = { bvid, cid, cover -> navigateToVideo(bvid, cid, cover) }
             )
         }
     }

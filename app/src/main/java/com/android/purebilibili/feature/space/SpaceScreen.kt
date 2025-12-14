@@ -29,6 +29,8 @@ import coil.request.ImageRequest
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.*
+import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import com.android.purebilibili.core.util.iOSTapEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,7 +71,7 @@ fun SpaceScreen(
             when (val state = uiState) {
                 is SpaceUiState.Loading -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = BiliPink)
+                        CupertinoActivityIndicator()
                     }
                 }
                 
@@ -156,11 +158,7 @@ private fun SpaceContent(
                     contentAlignment = Alignment.Center
                 ) {
                     if (state.isLoadingMore) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = BiliPink,
-                            strokeWidth = 2.dp
-                        )
+                        CupertinoActivityIndicator()
                     } else {
                         Text("加载更多", color = BiliPink, fontSize = 14.sp)
                     }
@@ -357,7 +355,7 @@ private fun SpaceVideoItem(video: SpaceVideoItem, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .iOSTapEffect(scale = 0.98f) { onClick() }
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         // 封面

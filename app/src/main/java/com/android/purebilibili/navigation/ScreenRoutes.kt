@@ -16,6 +16,10 @@ sealed class ScreenRoutes(val route: String) {
 
     // 🔥 开源许可证页面
     object OpenSourceLicenses : ScreenRoutes("open_source_licenses")
+    
+    // 🔥 二级设置页面
+    object AppearanceSettings : ScreenRoutes("appearance_settings")
+    object PlaybackSettings : ScreenRoutes("playback_settings")
 
     object VideoPlayer : ScreenRoutes("video_player/{bvid}?cid={cid}") {
         fun createRoute(bvid: String, cid: Long = 0): String {
@@ -36,6 +40,36 @@ sealed class ScreenRoutes(val route: String) {
             val encodedTitle = android.net.Uri.encode(title)
             val encodedUname = android.net.Uri.encode(uname)
             return "live/$roomId?title=$encodedTitle&uname=$encodedUname"
+        }
+    }
+    
+    // 🔥🔥 [新增] 番剧/影视页面 - 支持初始类型参数
+    object Bangumi : ScreenRoutes("bangumi?type={type}") {
+        fun createRoute(initialType: Int = 1): String {
+            return "bangumi?type=$initialType"
+        }
+    }
+    
+    object BangumiDetail : ScreenRoutes("bangumi/{seasonId}") {
+        fun createRoute(seasonId: Long): String {
+            return "bangumi/$seasonId"
+        }
+    }
+    
+    // 🔥🔥 [新增] 番剧播放页面
+    object BangumiPlayer : ScreenRoutes("bangumi/play/{seasonId}/{epId}") {
+        fun createRoute(seasonId: Long, epId: Long): String {
+            return "bangumi/play/$seasonId/$epId"
+        }
+    }
+    
+    // 🔥 分区页面
+    object Partition : ScreenRoutes("partition")
+    
+    // 🔥 分类详情页面
+    object Category : ScreenRoutes("category/{tid}?name={name}") {
+        fun createRoute(tid: Int, name: String): String {
+            return "category/$tid?name=${android.net.Uri.encode(name)}"
         }
     }
 }

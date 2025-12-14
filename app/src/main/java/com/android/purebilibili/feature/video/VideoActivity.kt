@@ -14,7 +14,7 @@ import android.content.res.Configuration
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import com.android.purebilibili.core.util.Logger
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -60,11 +60,11 @@ class VideoActivity : ComponentActivity() {
             if (intent?.action == ACTION_PIP_CONTROL) {
                 when (intent.getIntExtra(EXTRA_CONTROL_TYPE, 0)) {
                     CONTROL_TYPE_PLAY -> {
-                        Log.d(TAG, "PiP: Play")
+                        Logger.d(TAG, "PiP: Play")
                         // 由 Compose 状态自动处理播放
                     }
                     CONTROL_TYPE_PAUSE -> {
-                        Log.d(TAG, "PiP: Pause")
+                        Logger.d(TAG, "PiP: Pause")
                         // 由 Compose 状态自动处理暂停
                     }
                 }
@@ -76,7 +76,7 @@ class VideoActivity : ComponentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
-        if (isGranted) Log.d(TAG, "✅ 通知权限已授予") else Log.w(TAG, "❌ 通知权限被拒绝，媒体控件可能无法显示")
+        if (isGranted) Logger.d(TAG, "✅ 通知权限已授予") else com.android.purebilibili.core.util.Logger.w(TAG, "❌ 通知权限被拒绝，媒体控件可能无法显示")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,14 +90,15 @@ class VideoActivity : ComponentActivity() {
             requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         
-        // 🔥 注册 PiP 控制广播
+        // 🔥 注册 PiP 控制广播 (使用 ContextCompat 兼容所有版本)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val filter = IntentFilter(ACTION_PIP_CONTROL)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(pipReceiver, filter, RECEIVER_NOT_EXPORTED)
-            } else {
-                registerReceiver(pipReceiver, filter)
-            }
+            androidx.core.content.ContextCompat.registerReceiver(
+                this,
+                pipReceiver,
+                filter,
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+            )
         }
 
         val bvid = intent.getStringExtra("bvid")
@@ -142,7 +143,9 @@ class VideoActivity : ComponentActivity() {
                             },
                             onBack = {
                                 if (isFullscreen) toggleFullscreen() else finish()
-                            }
+                            },
+                            // 🧪 实验性功能：双击点赞
+                            onDoubleTapLike = { viewModel.toggleLike() }
                         )
                     }
 
@@ -166,7 +169,7 @@ class VideoActivity : ComponentActivity() {
             try {
                 unregisterReceiver(pipReceiver)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to unregister PiP receiver", e)
+                com.android.purebilibili.core.util.Logger.w(TAG, "Failed to unregister PiP receiver", e)
             }
         }
     }
@@ -262,7 +265,7 @@ class VideoActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
-        Log.d(TAG, "PiP mode changed: $isInPictureInPictureMode")
+        Logger.d(TAG, "PiP mode changed: $isInPictureInPictureMode")
     }
 
     companion object {

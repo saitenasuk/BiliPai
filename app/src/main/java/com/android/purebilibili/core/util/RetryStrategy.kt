@@ -57,12 +57,12 @@ object RetryStrategy {
         repeat(config.maxAttempts) { attempt ->
             // 通知 UI 当前尝试次数
             onAttempt(attempt + 1, config.maxAttempts)
-            android.util.Log.d(TAG, "🔄 Attempt ${attempt + 1}/${config.maxAttempts}")
+            com.android.purebilibili.core.util.Logger.d(TAG, "🔄 Attempt ${attempt + 1}/${config.maxAttempts}")
             
             try {
                 val result = block()
                 if (result != null) {
-                    android.util.Log.d(TAG, "✅ Success on attempt ${attempt + 1}")
+                    com.android.purebilibili.core.util.Logger.d(TAG, "✅ Success on attempt ${attempt + 1}")
                     return RetryResult.Success(result)
                 }
                 // 结果为 null，视为失败
@@ -74,14 +74,14 @@ object RetryStrategy {
                 
                 // 检查是否应该重试
                 if (!shouldRetry(e)) {
-                    android.util.Log.d(TAG, "🛑 Error is not retryable, stopping")
+                    com.android.purebilibili.core.util.Logger.d(TAG, "🛑 Error is not retryable, stopping")
                     return RetryResult.Failure(lastError, attempt + 1)
                 }
             }
             
             // 最后一次尝试不需要等待
             if (attempt < config.maxAttempts - 1) {
-                android.util.Log.d(TAG, "⏳ Waiting ${currentDelay}ms before next attempt")
+                com.android.purebilibili.core.util.Logger.d(TAG, "⏳ Waiting ${currentDelay}ms before next attempt")
                 delay(currentDelay)
                 // 计算下一次延迟（指数退避）
                 currentDelay = (currentDelay * config.multiplier).toLong()

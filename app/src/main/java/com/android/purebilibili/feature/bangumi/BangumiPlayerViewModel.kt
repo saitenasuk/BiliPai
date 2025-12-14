@@ -1,0 +1,309 @@
+// 文件路径: feature/bangumi/BangumiPlayerViewModel.kt
+package com.android.purebilibili.feature.bangumi
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.data.model.response.*
+import com.android.purebilibili.data.repository.BangumiRepository
+import com.android.purebilibili.data.repository.VideoRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+/**
+ * 番剧播放器 UI 状态
+ */
+sealed class BangumiPlayerState {
+    object Loading : BangumiPlayerState()
+    
+    data class Success(
+        val seasonDetail: BangumiDetail,
+        val currentEpisode: BangumiEpisode,
+        val currentEpisodeIndex: Int,
+        val playUrl: String?,
+        val audioUrl: String?,
+        val quality: Int,
+        val acceptQuality: List<Int>,
+        val acceptDescription: List<String>
+    ) : BangumiPlayerState()
+    
+    data class Error(
+        val message: String,
+        val isVipRequired: Boolean = false,
+        val isLoginRequired: Boolean = false,  // 🔥 新增：需要登录
+        val canRetry: Boolean = true
+    ) : BangumiPlayerState()
+}
+
+/**
+ * 番剧播放器 ViewModel
+ */
+class BangumiPlayerViewModel : ViewModel() {
+    
+    private val _uiState = MutableStateFlow<BangumiPlayerState>(BangumiPlayerState.Loading)
+    val uiState = _uiState.asStateFlow()
+    
+    private val _danmakuData = MutableStateFlow<ByteArray?>(null)
+    val danmakuData = _danmakuData.asStateFlow()
+    
+    private var player: ExoPlayer? = null
+    private var currentSeasonId: Long = 0
+    private var currentEpId: Long = 0
+    
+    /**
+     * 附加播放器
+     */
+    fun attachPlayer(exoPlayer: ExoPlayer) {
+        this.player = exoPlayer
+    }
+    
+    /**
+     * 加载番剧播放（从详情页进入）
+     */
+    fun loadBangumiPlay(seasonId: Long, epId: Long) {
+        if (seasonId == currentSeasonId && epId == currentEpId && _uiState.value is BangumiPlayerState.Success) {
+            return // 避免重复加载
+        }
+        
+        currentSeasonId = seasonId
+        currentEpId = epId
+        
+        viewModelScope.launch {
+            _uiState.value = BangumiPlayerState.Loading
+            
+            // 1. 获取番剧详情（包含剧集列表）
+            val detailResult = BangumiRepository.getSeasonDetail(seasonId)
+            
+            detailResult.onSuccess { detail ->
+                // 找到当前剧集
+                val episode = detail.episodes?.find { it.id == epId }
+                    ?: detail.episodes?.firstOrNull()
+                
+                if (episode == null) {
+                    _uiState.value = BangumiPlayerState.Error("未找到可播放的剧集")
+                    return@onSuccess
+                }
+                
+                val episodeIndex = detail.episodes?.indexOfFirst { it.id == episode.id } ?: 0
+                
+                // 2. 获取播放地址
+                fetchPlayUrl(detail, episode, episodeIndex)
+                
+            }.onFailure { e ->
+                _uiState.value = BangumiPlayerState.Error(
+                    message = e.message ?: "加载失败",
+                    canRetry = true
+                )
+            }
+        }
+    }
+    
+    /**
+     * 获取播放地址
+     */
+    private suspend fun fetchPlayUrl(detail: BangumiDetail, episode: BangumiEpisode, episodeIndex: Int) {
+        val playUrlResult = BangumiRepository.getBangumiPlayUrl(episode.id)
+        
+        playUrlResult.onSuccess { playData ->
+            // 解析播放地址
+            val videoUrl: String?
+            val audioUrl: String?
+            
+            if (playData.dash != null) {
+                // DASH 格式
+                val dash = playData.dash
+                val video = dash.getBestVideo(playData.quality)
+                val audio = dash.getBestAudio()
+                videoUrl = video?.getValidUrl()
+                audioUrl = audio?.getValidUrl()
+            } else if (!playData.durl.isNullOrEmpty()) {
+                // FLV/MP4 格式
+                videoUrl = playData.durl.firstOrNull()?.url
+                audioUrl = null
+            } else {
+                _uiState.value = BangumiPlayerState.Error("无法获取播放地址")
+                return
+            }
+            
+            if (videoUrl.isNullOrEmpty()) {
+                _uiState.value = BangumiPlayerState.Error("无法获取播放地址")
+                return
+            }
+            
+            _uiState.value = BangumiPlayerState.Success(
+                seasonDetail = detail,
+                currentEpisode = episode,
+                currentEpisodeIndex = episodeIndex,
+                playUrl = videoUrl,
+                audioUrl = audioUrl,
+                quality = playData.quality,
+                acceptQuality = playData.acceptQuality ?: emptyList(),
+                acceptDescription = playData.acceptDescription ?: emptyList()
+            )
+            
+            // 播放视频
+            playVideo(videoUrl, audioUrl)
+            
+            // 加载弹幕
+            loadDanmaku(episode.cid)
+            
+        }.onFailure { e ->
+            val isVip = e.message?.contains("大会员") == true
+            val isLogin = e.message?.contains("登录") == true  // 🔥 检测是否需要登录
+            _uiState.value = BangumiPlayerState.Error(
+                message = e.message ?: "获取播放地址失败",
+                isVipRequired = isVip,
+                isLoginRequired = isLogin,
+                canRetry = !isVip && !isLogin
+            )
+        }
+    }
+    
+    /**
+     * 播放视频
+     * 🔥🔥 使用 OkHttpDataSource 配置 Referer 头，解决 B站 CDN 403 问题
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun playVideo(videoUrl: String, audioUrl: String?) {
+        val exoPlayer = player ?: return
+        
+        android.util.Log.d("BangumiPlayer", "🎬 playVideo: video=$videoUrl")
+        android.util.Log.d("BangumiPlayer", "🔊 playVideo: audio=$audioUrl")
+        
+        // 🔥🔥 配置带 Referer 的数据源，解决 B站 CDN 403 拒绝问题
+        val headers = mapOf(
+            "Referer" to "https://www.bilibili.com",
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        )
+        val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.okHttpClient)
+            .setDefaultRequestProperties(headers)
+        val mediaSourceFactory = ProgressiveMediaSource.Factory(dataSourceFactory)
+        
+        val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(videoUrl))
+        
+        val finalSource = if (!audioUrl.isNullOrEmpty()) {
+            // DASH: 使用 MergingMediaSource 合并视频和音频
+            val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(audioUrl))
+            MergingMediaSource(videoSource, audioSource)
+        } else {
+            videoSource
+        }
+        
+        exoPlayer.setMediaSource(finalSource)
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
+    }
+    
+    /**
+     * 加载弹幕
+     */
+    private fun loadDanmaku(cid: Long) {
+        viewModelScope.launch {
+            val data = VideoRepository.getDanmakuRawData(cid)
+            if (data != null) {
+                _danmakuData.value = data
+            }
+        }
+    }
+    
+    /**
+     * 切换剧集
+     */
+    fun switchEpisode(episode: BangumiEpisode) {
+        val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
+        
+        if (episode.id == currentState.currentEpisode.id) return
+        
+        currentEpId = episode.id
+        val newIndex = currentState.seasonDetail.episodes?.indexOfFirst { it.id == episode.id } ?: 0
+        
+        viewModelScope.launch {
+            _uiState.value = BangumiPlayerState.Loading
+            fetchPlayUrl(currentState.seasonDetail, episode, newIndex)
+        }
+    }
+    
+    /**
+     * 切换清晰度
+     */
+    fun changeQuality(qualityId: Int) {
+        val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
+        val currentPos = player?.currentPosition ?: 0L
+        
+        viewModelScope.launch {
+            val playUrlResult = BangumiRepository.getBangumiPlayUrl(currentState.currentEpisode.id, qualityId)
+            
+            playUrlResult.onSuccess { playData ->
+                val videoUrl: String?
+                val audioUrl: String?
+                
+                if (playData.dash != null) {
+                    val video = playData.dash.getBestVideo(qualityId)
+                    val audio = playData.dash.getBestAudio()
+                    videoUrl = video?.getValidUrl()
+                    audioUrl = audio?.getValidUrl()
+                } else if (!playData.durl.isNullOrEmpty()) {
+                    videoUrl = playData.durl.firstOrNull()?.url
+                    audioUrl = null
+                } else {
+                    return@onSuccess
+                }
+                
+                if (videoUrl.isNullOrEmpty()) return@onSuccess
+                
+                _uiState.value = currentState.copy(
+                    playUrl = videoUrl,
+                    audioUrl = audioUrl,
+                    quality = playData.quality
+                )
+                
+                // 从当前位置继续播放
+                playVideo(videoUrl, audioUrl)
+                player?.seekTo(currentPos)
+            }
+        }
+    }
+    
+    /**
+     * 追番/取消追番
+     */
+    fun toggleFollow() {
+        val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
+        val isFollowing = currentState.seasonDetail.userStatus?.follow == 1
+        
+        viewModelScope.launch {
+            val result = if (isFollowing) {
+                BangumiRepository.unfollowBangumi(currentState.seasonDetail.seasonId)
+            } else {
+                BangumiRepository.followBangumi(currentState.seasonDetail.seasonId)
+            }
+            
+            if (result.isSuccess) {
+                // 重新加载详情以更新追番状态
+                val newDetail = BangumiRepository.getSeasonDetail(currentState.seasonDetail.seasonId).getOrNull()
+                if (newDetail != null) {
+                    _uiState.value = currentState.copy(seasonDetail = newDetail)
+                }
+            }
+        }
+    }
+    
+    /**
+     * 重试
+     */
+    fun retry() {
+        loadBangumiPlay(currentSeasonId, currentEpId)
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        player = null
+    }
+}

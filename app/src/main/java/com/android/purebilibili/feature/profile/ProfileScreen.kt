@@ -39,6 +39,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.theme.BiliPink
+import com.android.purebilibili.core.theme.iOSBlue
+import com.android.purebilibili.core.theme.iOSGreen
+import com.android.purebilibili.core.theme.iOSOrange
+import com.android.purebilibili.core.theme.iOSYellow
+import com.android.purebilibili.core.theme.iOSSystemGray
+import com.android.purebilibili.core.theme.DarkBackground
+import com.android.purebilibili.core.theme.DarkSurface
+import com.android.purebilibili.core.theme.DarkSurfaceVariant
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.core.ui.LoadingAnimation
@@ -139,9 +147,9 @@ fun GuestProfileContent(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF1A1A2E),
-                        Color(0xFF16213E),
-                        Color(0xFF0F0F23)
+                        DarkSurfaceVariant,
+                        DarkSurface,
+                        DarkBackground
                     )
                 )
             )
@@ -313,7 +321,7 @@ fun UserInfoSection(user: UserState) {
 
 @Composable
 fun LevelTag(level: Int) {
-    Surface(color = if (level >= 5) Color(0xFFFF9800) else Color(0xFF9E9E9E), shape = RoundedCornerShape(2.dp)) {
+    Surface(color = if (level >= 5) iOSOrange else iOSSystemGray, shape = RoundedCornerShape(2.dp)) {
         Text("LV$level", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
     }
 }
@@ -389,13 +397,13 @@ fun ServicesSection(
         ServiceItem(Icons.Default.Download, "离线缓存", BiliPink) { /* TODO */ }
         Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 56.dp))
 
-        ServiceItem(Icons.Default.History, "历史记录", Color(0xFF2196F3), onClick = onHistoryClick)
+        ServiceItem(Icons.Default.History, "历史记录", iOSBlue, onClick = onHistoryClick)
         Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 56.dp))
 
-        ServiceItem(Icons.Default.FavoriteBorder, "我的收藏", Color(0xFFFFC107), onClick = onFavoriteClick)
+        ServiceItem(Icons.Default.FavoriteBorder, "我的收藏", iOSYellow, onClick = onFavoriteClick)
         Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 56.dp))
 
-        ServiceItem(Icons.Default.Schedule, "稍后再看", Color(0xFF4CAF50)) { /* TODO */ }
+        ServiceItem(Icons.Default.Schedule, "稍后再看", iOSGreen) { /* TODO */ }
     }
 }
 

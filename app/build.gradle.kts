@@ -26,12 +26,16 @@ android {
         }
 
         // 👇👇👇 核心修复：指定打包的 CPU 架构 👇👇👇
-        // 解决 INSTALL_FAILED_NO_MATCHING_ABIS 错误
         ndk {
-            // arm64-v8a: 现代真机 (Pixel 7/8/9 等纯64位手机)
-            // armeabi-v7a: 老旧真机
-            // x86_64: 电脑模拟器
+            // arm64-v8a: 现代 64 位真机 (Pixel、三星、小米等)
             abiFilters += listOf("arm64-v8a")
+        }
+    }
+    
+    // 🔥 ABI 分包 - 暂时禁用，只生成 64 位 APK
+    splits {
+        abi {
+            isEnable = false
         }
     }
 
@@ -40,14 +44,19 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             // Disable PNG crunching to avoid AAPT errors
             isCrunchPngs = false
-            // 🔥 暂时关闭 R8 混淆以修复反射崩溃问题
-            // 问题: java.lang.Class cannot be cast to java.lang.reflect.ParameterizedType
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // 🔥 启用 R8 代码压缩
+            isMinifyEnabled = true
+            // 🔥 启用资源压缩 (移除未使用的资源)
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            // Debug 构建保持快速编译
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 
@@ -68,14 +77,35 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // 🔥 排除不必要的文件以减小体积
+            excludes += "/META-INF/DEPENDENCIES"
+            excludes += "/META-INF/LICENSE*"
+            excludes += "/META-INF/NOTICE*"
+            excludes += "/META-INF/*.kotlin_module"
+            excludes += "/kotlin/**"
+            excludes += "DebugProbesKt.bin"
         }
     }
+    
+    // 🚀 启用 JUnit 5
+    testOptions {
+        unitTests.all {
+            it.useJUnitPlatform()
+        }
+    }
+}
+
+// 🔥 Compose 编译器性能指标 (生成重组分析报告)
+composeCompiler {
+    reportsDestination = layout.buildDirectory.dir("compose_reports")
+    metricsDestination = layout.buildDirectory.dir("compose_metrics")
 }
 
 dependencies {
     // --- 1. Compose UI ---
     implementation(platform("androidx.compose:compose-bom:2024.02.00"))
     implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.appcompat:appcompat:1.6.1")  // 🚀 For AppCompatDelegate night mode
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -104,6 +134,11 @@ dependencies {
     
     // --- 3.4 Shimmer (骨架屏加载) ---
     implementation("com.valentinilk.shimmer:compose-shimmer:1.2.0")
+    
+    // --- 3.5 Compose Cupertino (iOS 风格 UI 组件) ---
+    // 提供 iOS 风格的 Switch、Button、Picker、Dialog 等组件
+    implementation("io.github.alexzhirkevich:cupertino:0.1.0-alpha04")
+    implementation("io.github.alexzhirkevich:cupertino-adaptive:0.1.0-alpha04")
 
     // --- 4. Player (视频播放器 Media3) ---
     implementation("androidx.media3:media3-exoplayer:1.3.0")
@@ -115,7 +150,10 @@ dependencies {
     implementation("androidx.media:media:1.7.0")
 
     // --- 5. Danmaku (弹幕引擎) ---
+    // 🔥 旧版弹幕引擎 (保留作为 fallback)
     implementation("com.github.bilibili:DanmakuFlameMaster:0.9.25")
+    // 🔥 新版弹幕引擎 (ByteDance DanmakuRenderEngine - 高性能)
+    implementation("com.github.bytedance:DanmakuRenderEngine:v0.1.0")
 
     // --- 6. Database (Room 数据库) ---
     val roomVersion = "2.6.1"
@@ -136,8 +174,39 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
 
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    
+    // --- 9. SplashScreen (启动屏支持) ---
+    implementation("androidx.core:core-splashscreen:1.0.1")
+    
+    // --- 10. ProfileInstaller (启动优化) ---
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
 
-    // --- 9. Debug (调试工具) ---
+    // --- 11. Debug (调试工具) ---
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    // 🔥 LeakCanary - 内存泄漏检测 (仅 Debug 构建)
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.13")
+    
+    // --- 12. Testing (测试框架) ---
+    // JUnit 4 (兼容旧测试)
+    testImplementation("junit:junit:4.13.2")
+    // JUnit 5
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
+    // JUnit 4 兼容层 (允许 JUnit 5 运行 JUnit 4 测试)
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:5.10.2")
+    // Kotlin Test (提供 assertEquals, assertTrue 等断言)
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.22")
+    // MockK for Kotlin mocking
+    testImplementation("io.mockk:mockk:1.13.9")
+    // Coroutines testing
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+    // Turbine for Flow testing
+    testImplementation("app.cash.turbine:turbine:1.0.0")
+    
+    // --- 13. Android Instrumented Tests ---
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.02.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }

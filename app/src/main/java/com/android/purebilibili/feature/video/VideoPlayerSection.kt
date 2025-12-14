@@ -45,7 +45,9 @@ fun VideoPlayerSection(
     isInPipMode: Boolean,
     onToggleFullscreen: () -> Unit,
     onQualityChange: (Int, Long) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    // 🧪 实验性功能：双击点赞
+    onDoubleTapLike: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
@@ -63,6 +65,11 @@ fun VideoPlayerSection(
 
     // --- 新增：存储真实分辨率 ---
     var realResolution by remember { mutableStateOf("") }
+    
+    // 🧪 读取双击点赞设置 (从 DataStore 读取)
+    val doubleTapLikeEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getDoubleTapLike(context)
+        .collectAsState(initial = true)
 
     // --- 新增：监听 ExoPlayer 分辨率变化 ---
     DisposableEffect(playerState.player) {
@@ -116,11 +123,7 @@ fun VideoPlayerSection(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { showControls = !showControls }
-                )
-            }
+            // 🔥 先处理拖拽手势
             .pointerInput(isInPipMode) {
                 if (!isInPipMode) {
                     detectDragGestures(
@@ -192,11 +195,14 @@ fun VideoPlayerSection(
                                     // 🔥 应用灵敏度
                                     val deltaPercent = totalDragDistanceY / screenHeight * gestureSensitivity
                                     val newBrightness = (startBrightness + deltaPercent).coerceIn(0f, 1f)
-
-                                    getActivity()?.window?.attributes = getActivity()?.window?.attributes?.apply {
-                                        screenBrightness = newBrightness
+                                    
+                                    // 🚀 优化：仅在变化超过阈值时更新（减少 WindowManager 调用）
+                                    if (kotlin.math.abs(newBrightness - gesturePercent) > 0.02f) {
+                                        getActivity()?.window?.attributes = getActivity()?.window?.attributes?.apply {
+                                            screenBrightness = newBrightness
+                                        }
+                                        gesturePercent = newBrightness
                                     }
-                                    gesturePercent = newBrightness
                                     gestureIcon = Icons.Rounded.Brightness7
                                 }
                                 VideoGestureMode.Volume -> {
@@ -216,8 +222,22 @@ fun VideoPlayerSection(
                     )
                 }
             }
+            // 🧪 点击/双击手势在拖拽之后处理
+            .pointerInput(doubleTapLikeEnabled, uiState) {
+                detectTapGestures(
+                    onTap = { showControls = !showControls },
+                    onDoubleTap = { offset ->
+                        // 🧪 双击点赞
+                        com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "🧪 DoubleTap detected! enabled=$doubleTapLikeEnabled")
+                        if (doubleTapLikeEnabled && uiState is PlayerUiState.Success && uiState.isLoggedIn) {
+                            com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "🧪 Calling onDoubleTapLike!")
+                            onDoubleTapLike()
+                        }
+                    }
+                )
+            }
     ) {
-        // 🔥🔥 弹幕管理器
+        // 🔥🔥 弹幕管理器 (使用原版 DanmakuFlameMaster - 稳定可用)
         val scope = rememberCoroutineScope()
         val danmakuManager = remember(context, scope) { DanmakuManager(context, scope) }
         
@@ -266,21 +286,16 @@ fun VideoPlayerSection(
             modifier = Modifier.fillMaxSize()
         )
         
-        // 2. DanmakuView (覆盖在 PlayerView 上方)
+        // 2. DanmakuView (DanmakuFlameMaster - 覆盖在 PlayerView 上方)
         if (!isInPipMode) {
             AndroidView(
                 factory = { ctx ->
                     master.flame.danmaku.ui.widget.DanmakuView(ctx).apply {
-                        // 🔥🔥 [调试] 设置透明背景
                         setBackgroundColor(android.graphics.Color.TRANSPARENT)
                         danmakuManager.attachView(this)
-                        android.util.Log.d("DanmakuManager", "🎨 DanmakuView created in factory")
                     }
                 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    // 🔥🔥 [调试] 添加红色边框验证视图位置
-                    // .border(2.dp, Color.Red)
+                modifier = Modifier.fillMaxSize()
             )
         }
 

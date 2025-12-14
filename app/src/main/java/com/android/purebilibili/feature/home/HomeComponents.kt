@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.theme.BiliPink
 
 // ==========================================
 // 对话框组件
@@ -90,8 +89,8 @@ fun LiveSubCategoryRow(
                 onClick = { onSubCategorySelected(subCategory) },
                 label = { Text(subCategory.label) },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = BiliPink,
-                    selectedLabelColor = androidx.compose.ui.graphics.Color.White
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,  // 🔥 使用主题色
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary     // 🔥 使用主题对应的前景色
                 )
             )
         }

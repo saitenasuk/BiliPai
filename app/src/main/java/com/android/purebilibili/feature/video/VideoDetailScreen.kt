@@ -46,6 +46,7 @@ import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ViewInfo
+import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -151,19 +152,20 @@ fun VideoDetailScreen(
             )
             
             // 🔥 同步视频信息到小窗管理器（为小窗模式做准备）
-            android.util.Log.d("VideoDetailScreen", "🔥 miniPlayerManager=${if (miniPlayerManager != null) "存在" else "null"}, bvid=$bvid")
+            com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "🔥 miniPlayerManager=${if (miniPlayerManager != null) "存在" else "null"}, bvid=$bvid")
             if (miniPlayerManager != null) {
-                android.util.Log.d("VideoDetailScreen", "🔥 调用 setVideoInfo: title=${info.title}")
+                com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "🔥 调用 setVideoInfo: title=${info.title}")
                 miniPlayerManager.setVideoInfo(
                     bvid = bvid,
                     title = info.title,
                     cover = info.pic,
                     owner = info.owner.name,
+                    cid = info.cid,  // 🔥🔥 传递 cid 用于弹幕加载
                     externalPlayer = playerState.player
                 )
                 // 🔥🔥 [新增] 缓存完整 UI 状态，用于从小窗返回时恢复
                 miniPlayerManager.cacheUiState(success)
-                android.util.Log.d("VideoDetailScreen", "✅ setVideoInfo + cacheUiState 调用完成")
+                com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "✅ setVideoInfo + cacheUiState 调用完成")
             } else {
                 android.util.Log.w("VideoDetailScreen", "⚠️ miniPlayerManager 是 null!")
             }
@@ -243,7 +245,9 @@ fun VideoDetailScreen(
                     isInPipMode = isPipMode,
                     onToggleFullscreen = { toggleOrientation() },
                     onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
-                    onBack = { toggleOrientation() }
+                    onBack = { toggleOrientation() },
+                    // 🧪 实验性功能：双击点赞
+                    onDoubleTapLike = { viewModel.toggleLike() }
                 )
             } else {
                 // 🔥🔥 B站风格布局：视频 + 内容区域
@@ -265,7 +269,9 @@ fun VideoDetailScreen(
                             isInPipMode = isPipMode,
                             onToggleFullscreen = { toggleOrientation() },
                             onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
-                            onBack = onBack
+                            onBack = onBack,
+                            // 🧪 实验性功能：双击点赞
+                            onDoubleTapLike = { viewModel.toggleLike() }
                         )
                     }
 
@@ -285,9 +291,8 @@ fun VideoDetailScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            CircularProgressIndicator(
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
+                                            // 🍎 iOS 风格加载
+                                            CupertinoActivityIndicator()
                                             Spacer(Modifier.height(16.dp))
                                             Text(
                                                 text = "正在重试 ${loadingState.retryAttempt}/${loadingState.maxAttempts}...",
@@ -614,7 +619,7 @@ fun VideoContentSection(
             if (isRepliesLoading && replies.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = BiliPink)
+                        CupertinoActivityIndicator()
                     }
                 }
             } else if (replies.isEmpty()) {
@@ -643,7 +648,7 @@ fun VideoContentSection(
                     ) {
                         if (replies.size < replyCount) {
                              LaunchedEffect(Unit) { onLoadMoreReplies() }
-                             CircularProgressIndicator(modifier = Modifier.size(24.dp), color = BiliPink)
+                             CupertinoActivityIndicator()
                         } else {
                              Text("—— end ——", color = Color.Gray, fontSize = 12.sp)
                         }

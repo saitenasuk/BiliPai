@@ -92,10 +92,10 @@ class DanmakuManager(
             setDanmakuStyle(IDisplayer.DANMAKU_STYLE_STROKEN, 3.5f)
             // 合并重复弹幕
             setDuplicateMergingEnabled(true)
-            // 🚀 滚动速度 - 适中速度，便于阅读
-            setScrollSpeedFactor(1.2f)
-            // 📏 字体大小缩放
-            setScaleTextSize(1.2f)
+            // 🚀 滚动速度 - 1.5f 适中速度（数值越大弹幕越慢），便于阅读
+            setScrollSpeedFactor(1.5f)
+            // 📏 字体大小缩放 - 1.0f 原始大小
+            setScaleTextSize(1.0f)
             // 🌟 透明度 - 0.85f 既清晰又不遮挡画面
             setDanmakuTransparency(0.85f)
             // 禁用粗体（使用正常字重）
@@ -237,6 +237,10 @@ class DanmakuManager(
         danmakuView?.seekTo(position)
         if (player.isPlaying && isEnabled) {
             startDanmaku()
+        } else {
+            // 🔥🔥 [修复] 如果视频暂停，弹幕也需要暂停
+            danmakuView?.pause()
+            Log.d(TAG, "⏸️ Video paused, danmaku paused during sync")
         }
     }
 
@@ -392,7 +396,7 @@ class DanmakuManager(
             val danmaku = ctx.mDanmakuFactory?.createDanmaku(danmakuType, ctx) ?: return null
             danmaku.time = time.toLong()
             danmaku.text = content
-            danmaku.textSize = fontSize * 2.5f  // 增大字体
+            danmaku.textSize = fontSize * 2.0f  // 适中字体大小
             danmaku.textColor = colorInt.toInt() or 0xFF000000.toInt()
             danmaku.textShadowColor = if (colorInt == 0xFFFFFF.toLong()) Color.BLACK else Color.WHITE
             danmaku.flags = GlobalFlagValues()

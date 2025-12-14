@@ -43,7 +43,9 @@ import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
+import androidx.compose.runtime.collectAsState
 
 private const val AUTO_HIDE_DELAY = 4000L
 
@@ -237,6 +239,34 @@ fun FullscreenPlayerOverlay(
                 )
             }
     ) {
+        // 🔥🔥 [新增] 弹幕管理器
+        val scope = rememberCoroutineScope()
+        val danmakuManager = remember(context, scope) { DanmakuManager(context, scope) }
+        
+        // 🔥 弹幕开关设置
+        val danmakuEnabled by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuEnabled(context)
+            .collectAsState(initial = true)
+        
+        // 🔥 获取当前 cid 并加载弹幕
+        val currentCid = miniPlayerManager.currentCid
+        LaunchedEffect(currentCid, danmakuEnabled) {
+            if (currentCid > 0 && danmakuEnabled) {
+                danmakuManager.isEnabled = true
+                danmakuManager.loadDanmaku(currentCid)
+            } else {
+                danmakuManager.isEnabled = false
+            }
+        }
+        
+        // 🔥 绑定 Player
+        DisposableEffect(player) {
+            player?.let { danmakuManager.attachPlayer(it) }
+            onDispose {
+                danmakuManager.release()
+            }
+        }
+        
         // 视频播放器
         player?.let { exoPlayer ->
             AndroidView(
@@ -250,6 +280,20 @@ fun FullscreenPlayerOverlay(
                 update = { it.player = exoPlayer },
                 modifier = Modifier.fillMaxSize()
             )
+            
+            // 🔥🔥 [新增] DanmakuView (覆盖在 PlayerView 上方)
+            if (danmakuEnabled) {
+                AndroidView(
+                    factory = { ctx ->
+                        master.flame.danmaku.ui.widget.DanmakuView(ctx).apply {
+                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                            danmakuManager.attachView(this)
+                            com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", "🎨 DanmakuView created for fullscreen")
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
         
         // 手势指示器

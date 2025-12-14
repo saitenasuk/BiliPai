@@ -4,7 +4,7 @@ package com.android.purebilibili.feature.login
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.util.Log
+import com.android.purebilibili.core.util.Logger
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
@@ -45,7 +45,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _state.value = LoginState.Loading
-                Log.d("LoginDebug", "1. 开始获取二维码...")
+                Logger.d("LoginDebug", "1. 开始获取二维码...")
 
                 val resp = NetworkModule.passportApi.generateQrCode()
 
@@ -56,14 +56,14 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 // 👇 这里使用 ?: 抛出异常，解决了 Type mismatch 问题
                 qrcodeKey = data.qrcode_key ?: throw Exception("二维码 Key 为空")
 
-                Log.d("LoginDebug", "2. 二维码获取成功 Key: $qrcodeKey")
+                Logger.d("LoginDebug", "2. 二维码获取成功 Key: $qrcodeKey")
                 val bitmap = generateQrBitmap(url)
                 currentBitmap = bitmap // 🔥 保存以便在 Scanned 状态使用
                 _state.value = LoginState.QrCode(bitmap)
 
                 startPolling()
             } catch (e: Exception) {
-                Log.e("LoginDebug", "获取二维码失败", e)
+                com.android.purebilibili.core.util.Logger.e("LoginDebug", "获取二维码失败", e)
                 _state.value = LoginState.Error(e.message ?: "网络错误")
             }
         }
@@ -73,7 +73,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun startPolling() {
         viewModelScope.launch {
-            Log.d("LoginDebug", "3. 开始轮询...")
+            Logger.d("LoginDebug", "3. 开始轮询...")
             while (isPolling) {
                 delay(2000) // 🔥 缩短轮询间隔，更快响应
                 try {
@@ -83,12 +83,12 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     // 🔥 核心修复：处理可空类型，默认为 -1 防止空指针
                     val code = body?.data?.code ?: -1
 
-                    Log.d("LoginDebug", "轮询状态: Code=$code")
+                    Logger.d("LoginDebug", "轮询状态: Code=$code")
 
                     when (code) {
                         0 -> {
                             // 🔥 登录成功
-                            Log.d("LoginDebug", ">>> 登录成功！开始解析 Cookie <<<")
+                            Logger.d("LoginDebug", ">>> 登录成功！开始解析 Cookie <<<")
 
                             val cookies = response.headers().values("Set-Cookie")
                             var sessData = ""
@@ -119,8 +119,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                             }
 
                             if (sessData.isNotEmpty()) {
-                                Log.d("LoginDebug", "✅ 成功提取 SESSDATA: $sessData")
-                                Log.d("LoginDebug", "✅ 成功提取 bili_jct: $biliJct")
+                                Logger.d("LoginDebug", "✅ 成功提取 SESSDATA: $sessData")
+                                Logger.d("LoginDebug", "✅ 成功提取 bili_jct: $biliJct")
 
                                 // 保存并更新缓存
                                 TokenManager.saveCookies(getApplication(), sessData)
@@ -139,7 +139,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         86090 -> {
                             // 🔥 新增: 已扫描待确认
-                            Log.d("LoginDebug", "📱 二维码已扫描，等待确认...")
+                            Logger.d("LoginDebug", "📱 二维码已扫描，等待确认...")
                             currentBitmap?.let { bitmap ->
                                 withContext(Dispatchers.Main) {
                                     _state.value = LoginState.Scanned(bitmap)
@@ -153,11 +153,11 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         86101 -> {
                             // 未扫描，继续轮询
-                            Log.d("LoginDebug", "等待扫描...")
+                            Logger.d("LoginDebug", "等待扫描...")
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("LoginDebug", "轮询异常", e)
+                    com.android.purebilibili.core.util.Logger.e("LoginDebug", "轮询异常", e)
                 }
             }
         }
@@ -196,18 +196,18 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _state.value = LoginState.Loading
-                Log.d("LoginDebug", "获取极验验证参数...")
+                Logger.d("LoginDebug", "获取极验验证参数...")
                 
                 val response = NetworkModule.passportApi.getCaptcha()
                 if (response.code == 0 && response.data != null) {
                     currentCaptchaData = response.data
-                    Log.d("LoginDebug", "极验参数获取成功: gt=${response.data.geetest?.gt}")
+                    Logger.d("LoginDebug", "极验参数获取成功: gt=${response.data.geetest?.gt}")
                     _state.value = LoginState.CaptchaReady(response.data)
                 } else {
                     _state.value = LoginState.Error("获取验证参数失败: ${response.message}")
                 }
             } catch (e: Exception) {
-                Log.e("LoginDebug", "获取验证参数异常", e)
+                com.android.purebilibili.core.util.Logger.e("LoginDebug", "获取验证参数异常", e)
                 _state.value = LoginState.Error("网络错误: ${e.message}")
             }
         }
@@ -220,7 +220,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         currentValidate = validate
         currentSeccode = seccode
         currentChallenge = challenge
-        Log.d("LoginDebug", "极验验证成功: validate=$validate")
+        Logger.d("LoginDebug", "极验验证成功: validate=$validate")
     }
     
     /**
@@ -237,7 +237,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 
-                Log.d("LoginDebug", "发送短信验证码到: $phone")
+                Logger.d("LoginDebug", "发送短信验证码到: $phone")
                 
                 val response = NetworkModule.passportApi.sendSmsCode(
                     tel = phone,
@@ -249,13 +249,13 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 
                 if (response.code == 0 && response.data != null) {
                     currentCaptchaKey = response.data.captchaKey
-                    Log.d("LoginDebug", "短信发送成功: captchaKey=${currentCaptchaKey}")
+                    Logger.d("LoginDebug", "短信发送成功: captchaKey=${currentCaptchaKey}")
                     _state.value = LoginState.SmsSent(currentCaptchaKey)
                 } else {
                     _state.value = LoginState.Error("短信发送失败: ${response.message}")
                 }
             } catch (e: Exception) {
-                Log.e("LoginDebug", "发送短信异常", e)
+                com.android.purebilibili.core.util.Logger.e("LoginDebug", "发送短信异常", e)
                 _state.value = LoginState.Error("网络错误: ${e.message}")
             }
         }
@@ -268,7 +268,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _state.value = LoginState.Loading
-                Log.d("LoginDebug", "短信验证码登录: phone=$currentPhone, code=$code")
+                Logger.d("LoginDebug", "短信验证码登录: phone=$currentPhone, code=$code")
                 
                 val response = NetworkModule.passportApi.loginBySms(
                     tel = currentPhone,
@@ -285,7 +285,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     _state.value = LoginState.Error("登录失败: ${body?.message ?: "未知错误"}")
                 }
             } catch (e: Exception) {
-                Log.e("LoginDebug", "短信登录异常", e)
+                com.android.purebilibili.core.util.Logger.e("LoginDebug", "短信登录异常", e)
                 _state.value = LoginState.Error("网络错误: ${e.message}")
             }
         }
@@ -298,7 +298,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _state.value = LoginState.Loading
-                Log.d("LoginDebug", "密码登录: phone=$phone")
+                Logger.d("LoginDebug", "密码登录: phone=$phone")
                 
                 // 1. 获取 RSA 公钥
                 val keyResponse = NetworkModule.passportApi.getWebKey()
@@ -341,7 +341,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     _state.value = LoginState.Error("登录失败: ${body?.message ?: "未知错误"}")
                 }
             } catch (e: Exception) {
-                Log.e("LoginDebug", "密码登录异常", e)
+                com.android.purebilibili.core.util.Logger.e("LoginDebug", "密码登录异常", e)
                 _state.value = LoginState.Error("网络错误: ${e.message}")
             }
         }
@@ -366,7 +366,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         if (sessData.isNotEmpty()) {
-            Log.d("LoginDebug", "✅ 登录成功: SESSDATA=$sessData")
+            Logger.d("LoginDebug", "✅ 登录成功: SESSDATA=$sessData")
             TokenManager.saveCookies(getApplication(), sessData)
             if (biliJct.isNotEmpty()) {
                 TokenManager.saveCsrf(getApplication(), biliJct)

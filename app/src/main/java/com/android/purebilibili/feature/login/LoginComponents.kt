@@ -480,7 +480,7 @@ fun WebLoginContent(
             try {
                 val cookies = CookieManager.getInstance().getCookie("https://passport.bilibili.com")
                     ?: CookieManager.getInstance().getCookie("https://www.bilibili.com")
-                android.util.Log.d("WebLogin", "🔥 检查 Cookie: $cookies")
+                com.android.purebilibili.core.util.Logger.d("WebLogin", "🔥 检查 Cookie: $cookies")
                 
                 if (!cookies.isNullOrEmpty() && cookies.contains("SESSDATA")) {
                     val sessData = cookies.split(";")
@@ -489,7 +489,7 @@ fun WebLoginContent(
                         ?.substringAfter("SESSDATA=")
                     
                     if (!sessData.isNullOrEmpty()) {
-                        android.util.Log.d("WebLogin", "✅ 检测到 SESSDATA")
+                        com.android.purebilibili.core.util.Logger.d("WebLogin", "✅ 检测到 SESSDATA")
                         TokenManager.saveCookies(context, sessData)
                         onLoginSuccess()
                         return@launch

@@ -1,7 +1,7 @@
 // 文件路径: feature/video/MiniPlayerOverlay.kt
 package com.android.purebilibili.feature.video
 
-import android.util.Log
+import com.android.purebilibili.core.util.Logger
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background

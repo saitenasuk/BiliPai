@@ -13,7 +13,7 @@ import com.android.purebilibili.data.model.response.PlayUrlData
 object PlayUrlCache {
     
     private const val TAG = "PlayUrlCache"
-    private const val MAX_CACHE_SIZE = 50
+    private const val MAX_CACHE_SIZE = 80  // 🔥 优化：增加缓存容量
     private const val CACHE_DURATION_MS = 10 * 60 * 1000L // 10 分钟
     
     /**
@@ -55,17 +55,17 @@ object PlayUrlCache {
         
         return when {
             cached == null -> {
-                android.util.Log.d(TAG, "❌ Cache miss: bvid=$bvid, cid=$cid")
+                com.android.purebilibili.core.util.Logger.d(TAG, "❌ Cache miss: bvid=$bvid, cid=$cid")
                 null
             }
             cached.isExpired() -> {
-                android.util.Log.d(TAG, "⏰ Cache expired: bvid=$bvid, cid=$cid")
+                com.android.purebilibili.core.util.Logger.d(TAG, "⏰ Cache expired: bvid=$bvid, cid=$cid")
                 cache.remove(key)
                 null
             }
             else -> {
                 val remainingMs = cached.expiresAt - System.currentTimeMillis()
-                android.util.Log.d(TAG, "✅ Cache hit: bvid=$bvid, cid=$cid, expires in ${remainingMs / 1000}s")
+                com.android.purebilibili.core.util.Logger.d(TAG, "✅ Cache hit: bvid=$bvid, cid=$cid, expires in ${remainingMs / 1000}s")
                 cached.data
             }
         }
@@ -89,7 +89,7 @@ object PlayUrlCache {
             quality = quality
         )
         cache.put(key, entry)
-        android.util.Log.d(TAG, "💾 Cached: bvid=$bvid, cid=$cid, quality=$quality")
+        com.android.purebilibili.core.util.Logger.d(TAG, "💾 Cached: bvid=$bvid, cid=$cid, quality=$quality")
     }
     
     /**
@@ -99,7 +99,7 @@ object PlayUrlCache {
     fun invalidate(bvid: String, cid: Long) {
         val key = generateKey(bvid, cid)
         cache.remove(key)
-        android.util.Log.d(TAG, "🗑️ Invalidated: bvid=$bvid, cid=$cid")
+        com.android.purebilibili.core.util.Logger.d(TAG, "🗑️ Invalidated: bvid=$bvid, cid=$cid")
     }
     
     /**
@@ -108,7 +108,7 @@ object PlayUrlCache {
     @Synchronized
     fun clear() {
         cache.evictAll()
-        android.util.Log.d(TAG, "🧹 Cache cleared")
+        com.android.purebilibili.core.util.Logger.d(TAG, "🧹 Cache cleared")
     }
     
     /**

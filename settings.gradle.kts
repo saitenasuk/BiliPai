@@ -17,6 +17,8 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
+        // 🔥 ByteDance DanmakuRenderEngine 仓库
+        maven { url = uri("https://artifact.bytedance.com/repository/releases/") }
     }
 }
 

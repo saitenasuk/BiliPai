@@ -6,7 +6,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import com.android.purebilibili.core.util.Logger
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -45,6 +45,7 @@ import kotlinx.coroutines.runBlocking
 import com.android.purebilibili.feature.video.MiniPlayerManager
 import com.android.purebilibili.feature.video.MiniPlayerOverlay
 import coil.compose.AsyncImage
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 private const val TAG = "MainActivity"
 private const val PREFS_NAME = "app_welcome"
@@ -63,7 +64,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var miniPlayerManager: MiniPlayerManager
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 🚀 安装 SplashScreen（必须在 super.onCreate 之前调用）
+        val splashScreen = installSplashScreen()
+        
         super.onCreate(savedInstanceState)
+        // 🔥 初始调用，后续会根据主题动态更新
         enableEdgeToEdge()
         
         // 初始化小窗管理器
@@ -96,6 +101,20 @@ class MainActivity : ComponentActivity() {
                 AppThemeMode.DARK -> true                  // 强制深色
             }
 
+            // 🔥🔥 [新增] 根据主题动态更新状态栏样式
+            LaunchedEffect(useDarkTheme) {
+                enableEdgeToEdge(
+                    statusBarStyle = if (useDarkTheme) {
+                        androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                    } else {
+                        androidx.activity.SystemBarStyle.light(
+                            android.graphics.Color.TRANSPARENT,
+                            android.graphics.Color.TRANSPARENT
+                        )
+                    }
+                )
+            }
+
             // 6. 传入参数
             PureBiliBiliTheme(
                 darkTheme = useDarkTheme,
@@ -113,11 +132,11 @@ class MainActivity : ComponentActivity() {
                             isInPipMode = isInPipMode,
                             onVideoDetailEnter = { 
                                 isInVideoDetail = true
-                                Log.d(TAG, "🎬 进入视频详情页")
+                                Logger.d(TAG, "🎬 进入视频详情页")
                             },
                             onVideoDetailExit = { 
                                 isInVideoDetail = false
-                                Log.d(TAG, "🔙 退出视频详情页")
+                                Logger.d(TAG, "🔙 退出视频详情页")
                             }
                         )
                         
@@ -174,18 +193,18 @@ class MainActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         
-        Log.d(TAG, "👋 onUserLeaveHint 触发, isInVideoDetail=$isInVideoDetail")
+        Logger.d(TAG, "👋 onUserLeaveHint 触发, isInVideoDetail=$isInVideoDetail")
         
         // 🔥 使用 runBlocking 从 DataStore 读取设置 (仅在 onUserLeaveHint 中短暂使用)
         val bgPlayEnabled = runBlocking {
             SettingsManager.getBgPlay(this@MainActivity).first()
         }
         
-        Log.d(TAG, "📺 bgPlayEnabled=$bgPlayEnabled, API=${Build.VERSION.SDK_INT}")
+        Logger.d(TAG, "📺 bgPlayEnabled=$bgPlayEnabled, API=${Build.VERSION.SDK_INT}")
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInVideoDetail && bgPlayEnabled) {
             try {
-                Log.d(TAG, "🎬 尝试进入 PiP 模式...")
+                Logger.d(TAG, "🎬 尝试进入 PiP 模式...")
                 
                 val pipParams = PictureInPictureParams.Builder()
                     .setAspectRatio(Rational(16, 9))
@@ -197,12 +216,12 @@ class MainActivity : ComponentActivity() {
                 }
                 
                 enterPictureInPictureMode(pipParams.build())
-                Log.d(TAG, "✅ 成功进入 PiP 模式")
+                Logger.d(TAG, "✅ 成功进入 PiP 模式")
             } catch (e: Exception) {
-                Log.e(TAG, "❌ 进入 PiP 失败", e)
+                com.android.purebilibili.core.util.Logger.e(TAG, "❌ 进入 PiP 失败", e)
             }
         } else {
-            Log.d(TAG, "⏳ 未满足 PiP 条件: API>=${Build.VERSION_CODES.O}=${Build.VERSION.SDK_INT >= Build.VERSION_CODES.O}, inVideoDetail=$isInVideoDetail, bgPlay=$bgPlayEnabled")
+            Logger.d(TAG, "⏳ 未满足 PiP 条件: API>=${Build.VERSION_CODES.O}=${Build.VERSION.SDK_INT >= Build.VERSION_CODES.O}, inVideoDetail=$isInVideoDetail, bgPlay=$bgPlayEnabled")
         }
     }
     
@@ -210,7 +229,7 @@ class MainActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
-        Log.d(TAG, "📱 PiP 模式变化: $isInPictureInPictureMode")
+        Logger.d(TAG, "📱 PiP 模式变化: $isInPictureInPictureMode")
     }
 }
 

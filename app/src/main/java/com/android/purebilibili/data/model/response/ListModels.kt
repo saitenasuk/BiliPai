@@ -516,3 +516,24 @@ data class FollowedLiveRoom(
         )
     }
 }
+
+// --- 🔥 分区视频 Response ---
+@Serializable
+data class RegionVideosResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: RegionVideosData? = null
+)
+
+@Serializable
+data class RegionVideosData(
+    val archives: List<PopularItem>? = null,  // 复用 PopularItem 结构
+    val page: RegionPage? = null
+)
+
+@Serializable
+data class RegionPage(
+    val count: Int = 0,
+    val num: Int = 1,
+    val size: Int = 30
+)

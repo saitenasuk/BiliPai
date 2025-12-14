@@ -11,12 +11,12 @@ object HistoryRepository {
     suspend fun getHistoryList(ps: Int = 20): Result<List<HistoryData>> {
         return withContext(Dispatchers.IO) {
             try {
-                android.util.Log.d("HistoryRepo", "🔴 Fetching history list...")
+                com.android.purebilibili.core.util.Logger.d("HistoryRepo", "🔴 Fetching history list...")
                 val response = api.getHistoryList(ps)
-                android.util.Log.d("HistoryRepo", "🔴 Response code=${response.code}, items=${response.data?.list?.size ?: 0}")
+                com.android.purebilibili.core.util.Logger.d("HistoryRepo", "🔴 Response code=${response.code}, items=${response.data?.list?.size ?: 0}")
                 // 打印前两条记录的标题以便调试
                 response.data?.list?.take(2)?.forEach {
-                    android.util.Log.d("HistoryRepo", "🔴 Item: ${it.title}")
+                    com.android.purebilibili.core.util.Logger.d("HistoryRepo", "🔴 Item: ${it.title}")
                 }
                 
                 if (response.code == 0) {

@@ -133,9 +133,9 @@ class SpaceViewModel : ViewModel() {
     private suspend fun fetchSpaceInfo(mid: Long, imgKey: String, subKey: String): SpaceUserInfo? {
         return try {
             val params = WbiUtils.sign(mapOf("mid" to mid.toString()), imgKey, subKey)
-            android.util.Log.d("SpaceVM", "🔍 fetchSpaceInfo params: $params")
+            com.android.purebilibili.core.util.Logger.d("SpaceVM", "🔍 fetchSpaceInfo params: $params")
             val response = spaceApi.getSpaceInfo(params)
-            android.util.Log.d("SpaceVM", "📦 fetchSpaceInfo response: code=${response.code}, message=${response.message}")
+            com.android.purebilibili.core.util.Logger.d("SpaceVM", "📦 fetchSpaceInfo response: code=${response.code}, message=${response.message}")
             if (response.code == 0) response.data else {
                 android.util.Log.e("SpaceVM", "❌ fetchSpaceInfo failed: code=${response.code}, message=${response.message}")
                 null

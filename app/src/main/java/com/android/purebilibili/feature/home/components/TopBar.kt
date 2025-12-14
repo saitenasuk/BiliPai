@@ -164,54 +164,106 @@ fun FluidHomeTopBar(
 }
 
 /**
- * 🔥 iOS 风格分类标签栏
- * - 胶囊式选中效果
- * - 横向滚动支持
+ * 🔥 官方 Bilibili 风格分类标签栏
+ * - 下划线指示器
+ * - 选中项粉色/主题色 + 下划线
+ * - 汉堡菜单图标打开分区
  */
 @Composable
 fun CategoryTabRow(
-    categories: List<String> = listOf("推荐", "热门", "直播", "追番", "影视"),
+    categories: List<String> = listOf("推荐", "热门", "直播", "追番", "影视", "游戏", "知识", "科技"),  // 🔥 更多分类
     selectedIndex: Int = 0,
-    onCategorySelected: (Int) -> Unit = {}
+    onCategorySelected: (Int) -> Unit = {},
+    onPartitionClick: () -> Unit = {}  // 🔥 新增：分区按钮回调
 ) {
-    val selectedColor = MaterialTheme.colorScheme.primary
+    val primaryColor = MaterialTheme.colorScheme.primary
     val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
     
-    androidx.compose.foundation.lazy.LazyRow(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        items(categories.size) { index ->
-            val isSelected = index == selectedIndex
-            val bgColor by animateColorAsState(
-                targetValue = if (isSelected) selectedColor else Color.Transparent,
-                animationSpec = spring(),
-                label = "bgColor"
-            )
-            val textColor by animateColorAsState(
-                targetValue = if (isSelected) Color.White else unselectedColor,
-                animationSpec = spring(),
-                label = "textColor"
-            )
-            
-            Surface(
-                onClick = { onCategorySelected(index) },
-                shape = RoundedCornerShape(20.dp),
-                color = bgColor,
-                border = if (!isSelected) {
-                    androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                } else null
-            ) {
-                Text(
-                    text = categories[index],
-                    color = textColor,
-                    fontSize = 14.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        // 🔥 分类标签 - 横向滚动（使用 weight 让汉堡菜单固定在右侧）
+        androidx.compose.foundation.lazy.LazyRow(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            items(categories.size) { index ->
+                val isSelected = index == selectedIndex
+                
+                // 🔥 文字颜色动画
+                val textColor by animateColorAsState(
+                    targetValue = if (isSelected) primaryColor else unselectedColor,
+                    animationSpec = spring(
+                        dampingRatio = 0.7f,
+                        stiffness = 400f
+                    ),
+                    label = "textColor"
                 )
+                
+                // 🔥 字体大小动画
+                val fontSize by animateFloatAsState(
+                    targetValue = if (isSelected) 17f else 15f,
+                    animationSpec = spring(
+                        dampingRatio = 0.7f,
+                        stiffness = 400f
+                    ),
+                    label = "fontSize"
+                )
+                
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { onCategorySelected(index) }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Text(
+                        text = categories[index],
+                        color = textColor,
+                        fontSize = fontSize.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    // 🔥 下划线指示器
+                    Box(
+                        modifier = Modifier
+                            .width(20.dp)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(1.5.dp))
+                            .background(
+                                if (isSelected) primaryColor else Color.Transparent
+                            )
+                    )
+                }
             }
+        }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        // 🔥 汉堡菜单按钮 - 打开分区
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .offset(y = (-4).dp)  // 🔥 向上偏移，与文字对齐（抵消下划线高度）
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onPartitionClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "≡",  // 汉堡菜单符号
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
         }
     }
 }

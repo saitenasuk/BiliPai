@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
+import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.delay
 
 @Stable
@@ -65,13 +66,20 @@ fun VideoPlayerOverlay(
     danmakuSpeed: Float = 1.2f,
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
-    onDanmakuSpeedChange: (Float) -> Unit = {}
+    onDanmakuSpeedChange: (Float) -> Unit = {},
+    // 🧪🧪 [实验性功能] 双击点赞
+    doubleTapLikeEnabled: Boolean = true,
+    onDoubleTapLike: () -> Unit = {}
 ) {
     var showQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
     var showDanmakuSettings by remember { mutableStateOf(false) }
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
+    
+    // 🧪 双击检测状态
+    var lastTapTime by remember { mutableLongStateOf(0L) }
+    var showLikeAnimation by remember { mutableStateOf(false) }
 
     val progressState by produceState(initialValue = PlayerProgress(), key1 = player) {
         while (true) {
@@ -95,6 +103,14 @@ fun VideoPlayerOverlay(
             if (isVisible) {
                 onToggleVisible()
             }
+        }
+    }
+    
+    // 🧪 双击点赞动画自动消失
+    LaunchedEffect(showLikeAnimation) {
+        if (showLikeAnimation) {
+            delay(800)
+            showLikeAnimation = false
         }
     }
 
@@ -241,11 +257,8 @@ fun VideoPlayerOverlay(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
                 ) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 3.dp,
-                        modifier = Modifier.size(36.dp)
-                    )
+                    // 🍎 iOS 风格加载器
+                    CupertinoActivityIndicator()
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "正在切换清晰度...",

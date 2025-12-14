@@ -97,6 +97,34 @@ class PlayerViewModel : ViewModel() {
     private var currentBvid: String = ""
     private var currentCid: Long = 0
     private var exoPlayer: ExoPlayer? = null
+    
+    // 🔥🔥 [修复1] 心跳上报 Job，每 30 秒上报一次播放进度
+    private var heartbeatJob: kotlinx.coroutines.Job? = null
+    
+    private fun startHeartbeat() {
+        stopHeartbeat() // 确保没有重复的 Job
+        heartbeatJob = viewModelScope.launch {
+            while (true) {  // Job.cancel() 会在 delay 时抛出 CancellationException 终止循环
+                kotlinx.coroutines.delay(30_000) // 每 30 秒
+                val player = exoPlayer ?: continue
+                if (player.isPlaying && currentBvid.isNotEmpty() && currentCid > 0) {
+                    val positionSec = player.currentPosition / 1000
+                    com.android.purebilibili.core.util.Logger.d("PlayerVM", "💓 Heartbeat: bvid=$currentBvid, cid=$currentCid, pos=$positionSec")
+                    try {
+                        VideoRepository.reportPlayHeartbeat(currentBvid, currentCid, positionSec)
+                    } catch (e: Exception) {
+                        com.android.purebilibili.core.util.Logger.w("PlayerVM", "Heartbeat failed: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+    
+    private fun stopHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+    }
+
 
     fun attachPlayer(player: ExoPlayer) {
         this.exoPlayer = player
@@ -111,7 +139,7 @@ class PlayerViewModel : ViewModel() {
     
     // 🔥🔥 新增：关注/取关 UP 主
     fun toggleFollow() {
-        android.util.Log.d("PlayerViewModel", "🔥 toggleFollow() called")
+        com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🔥 toggleFollow() called")
         val current = _uiState.value as? PlayerUiState.Success
         if (current == null) {
             android.util.Log.e("PlayerViewModel", "❌ toggleFollow: uiState is not Success")
@@ -119,12 +147,12 @@ class PlayerViewModel : ViewModel() {
         }
         val mid = current.info.owner.mid
         val newFollowing = !current.isFollowing
-        android.util.Log.d("PlayerViewModel", "🔥 toggleFollow: mid=$mid, newFollowing=$newFollowing")
+        com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🔥 toggleFollow: mid=$mid, newFollowing=$newFollowing")
         
         viewModelScope.launch {
             val result = com.android.purebilibili.data.repository.ActionRepository.followUser(mid, newFollowing)
             result.onSuccess {
-                android.util.Log.d("PlayerViewModel", "✅ toggleFollow success: $it")
+                com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "✅ toggleFollow success: $it")
                 _uiState.value = current.copy(isFollowing = it)
                 _toastEvent.send(if (it) "关注成功" else "已取消关注")
             }.onFailure {
@@ -136,7 +164,7 @@ class PlayerViewModel : ViewModel() {
     
     // 🔥🔥 新增：收藏/取消收藏视频
     fun toggleFavorite() {
-        android.util.Log.d("PlayerViewModel", "🔥 toggleFavorite() called")
+        com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🔥 toggleFavorite() called")
         val current = _uiState.value as? PlayerUiState.Success
         if (current == null) {
             android.util.Log.e("PlayerViewModel", "❌ toggleFavorite: uiState is not Success")
@@ -144,12 +172,12 @@ class PlayerViewModel : ViewModel() {
         }
         val aid = current.info.aid
         val newFavorited = !current.isFavorited
-        android.util.Log.d("PlayerViewModel", "🔥 toggleFavorite: aid=$aid, newFavorited=$newFavorited")
+        com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🔥 toggleFavorite: aid=$aid, newFavorited=$newFavorited")
         
         viewModelScope.launch {
             val result = com.android.purebilibili.data.repository.ActionRepository.favoriteVideo(aid, newFavorited)
             result.onSuccess {
-                android.util.Log.d("PlayerViewModel", "✅ toggleFavorite success: $it")
+                com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "✅ toggleFavorite success: $it")
                 // 🔥 更新收藏状态和计数
                 val newStat = current.info.stat.copy(
                     favorite = current.info.stat.favorite + (if (it) 1 else -1)
@@ -166,7 +194,7 @@ class PlayerViewModel : ViewModel() {
     
     // 🔥🔥 [新增] 点赞/取消点赞
     fun toggleLike() {
-        android.util.Log.d("PlayerViewModel", "🔥 toggleLike() called")
+        com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🔥 toggleLike() called")
         val current = _uiState.value as? PlayerUiState.Success ?: return
         val aid = current.info.aid
         val newLiked = !current.isLiked
@@ -208,7 +236,7 @@ class PlayerViewModel : ViewModel() {
     
     // 🔥🔥 [新增] 执行投币
     fun doCoin(count: Int, alsoLike: Boolean) {
-        android.util.Log.d("PlayerViewModel", "🔥 doCoin: count=$count, alsoLike=$alsoLike")
+        com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🔥 doCoin: count=$count, alsoLike=$alsoLike")
         val current = _uiState.value as? PlayerUiState.Success ?: return
         val aid = current.info.aid
         
@@ -232,7 +260,7 @@ class PlayerViewModel : ViewModel() {
     
     // 🔥🔥 [新增] 一键三连
     fun doTripleAction() {
-        android.util.Log.d("PlayerViewModel", "🔥 doTripleAction() called")
+        com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🔥 doTripleAction() called")
         val current = _uiState.value as? PlayerUiState.Success ?: return
         val aid = current.info.aid
         
@@ -276,7 +304,7 @@ class PlayerViewModel : ViewModel() {
             return
         }
         
-        android.util.Log.d("PlayerVM", "🔥 switchPage: index=$pageIndex, cid=${page.cid}, part=${page.part}")
+        com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 switchPage: index=$pageIndex, cid=${page.cid}, part=${page.part}")
         currentCid = page.cid
         
         viewModelScope.launch {
@@ -328,6 +356,7 @@ class PlayerViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        stopHeartbeat()  // 🔥 停止心跳上报
         exoPlayer = null
     }
 
@@ -356,7 +385,7 @@ class PlayerViewModel : ViewModel() {
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun playDashVideo(videoUrl: String, audioUrl: String?, seekTo: Long = 0L) {
         val player = exoPlayer ?: return
-        android.util.Log.d("PlayerVM", "🔥 playDashVideo: video=${videoUrl.take(50)}..., audio=${audioUrl?.take(50) ?: "null"}")
+        com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 playDashVideo: video=${videoUrl.take(50)}..., audio=${audioUrl?.take(50) ?: "null"}")
         
         val headers = mapOf(
             "Referer" to "https://www.bilibili.com",
@@ -388,7 +417,7 @@ class PlayerViewModel : ViewModel() {
     
     // 🔥🔥 [新增] 从缓存恢复 UI 状态，避免网络重载
     fun restoreFromCache(cachedState: PlayerUiState.Success, startPosition: Long = -1L) {
-        android.util.Log.d("PlayerVM", "🔥 Restoring from cache: ${cachedState.info.title}, position=$startPosition")
+        com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 Restoring from cache: ${cachedState.info.title}, position=$startPosition")
         currentBvid = cachedState.info.bvid
         currentCid = cachedState.info.cid
         
@@ -407,7 +436,7 @@ class PlayerViewModel : ViewModel() {
         // 🔥 如果已经加载过相同的视频，跳过重载（保持进度）
         val currentState = _uiState.value
         if (currentBvid == bvid && currentState is PlayerUiState.Success) {
-            android.util.Log.d("PlayerVM", "🔥 Same video already loaded, skip reload: $bvid")
+            com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 Same video already loaded, skip reload: $bvid")
             return
         }
         
@@ -429,7 +458,7 @@ class PlayerViewModel : ViewModel() {
                 
                 // 🔥🔥 [修复] 使用扩展函数选择最佳视频和音频流，增加更多 fallback
                 val targetQn = playData.quality.takeIf { it > 0 } ?: 64
-                android.util.Log.d("PlayerVM", "🔍 loadVideo: targetQn=$targetQn, dash=${playData.dash != null}, dashVideoCount=${playData.dash?.video?.size ?: 0}, durlCount=${playData.durl?.size ?: 0}")
+                com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔍 loadVideo: targetQn=$targetQn, dash=${playData.dash != null}, dashVideoCount=${playData.dash?.video?.size ?: 0}, durlCount=${playData.durl?.size ?: 0}")
                 
                 val dashVideo = playData.dash?.getBestVideo(targetQn)
                 val dashAudio = playData.dash?.getBestAudio()
@@ -445,8 +474,8 @@ class PlayerViewModel : ViewModel() {
                 val audioUrl = dashAudio?.getValidUrl()?.takeIf { it.isNotEmpty() }
                     ?: playData.dash?.audio?.firstOrNull()?.baseUrl?.takeIf { it.isNotEmpty() }  // 直接访问第一个音频
                 
-                android.util.Log.d("PlayerVM", "🔥 VideoUrl: ${if (videoUrl.isNotEmpty()) "${videoUrl.take(60)}..." else "EMPTY!"}")
-                android.util.Log.d("PlayerVM", "🔥 AudioUrl: ${if (audioUrl?.isNotEmpty() == true) "${audioUrl.take(60)}..." else "null"}")
+                com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 VideoUrl: ${if (videoUrl.isNotEmpty()) "${videoUrl.take(60)}..." else "EMPTY!"}")
+                com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 AudioUrl: ${if (audioUrl?.isNotEmpty() == true) "${audioUrl.take(60)}..." else "null"}")
                 
                 val qualities = playData.accept_quality ?: emptyList()
                 val labels = playData.accept_description ?: emptyList()
@@ -510,10 +539,11 @@ class PlayerViewModel : ViewModel() {
                         coinCount = coinCount
                     )
                     
-                    // 🔥🔥 [新增] 上报播放心跳，记录到历史记录
+                    // 🔥🔥 [修复1] 上报播放心跳并启动定时心跳
                     launch {
                         VideoRepository.reportPlayHeartbeat(bvid, info.cid, 0)
                     }
+                    startHeartbeat()  // 🔥 启动定时心跳上报
                     
                     // 移除 loadComments 调用
                 } else {
@@ -536,7 +566,7 @@ class PlayerViewModel : ViewModel() {
         val bvid = currentBvid
         if (bvid.isBlank()) return
         
-        android.util.Log.d("PlayerVM", "🔄 Retrying video load: $bvid")
+        com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔄 Retrying video load: $bvid")
         
         // 清除可能过期的缓存
         com.android.purebilibili.core.cache.PlayUrlCache.invalidate(bvid, currentCid)
@@ -574,7 +604,7 @@ class PlayerViewModel : ViewModel() {
                     val cachedVideos = currentState.cachedDashVideos
                     val cachedAudios = currentState.cachedDashAudios
                     
-                    android.util.Log.d("PlayerVM", "🔥 changeQuality: requested=$qualityId, cachedVideos=${cachedVideos.map { it.id }}")
+                    com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 changeQuality: requested=$qualityId, cachedVideos=${cachedVideos.map { it.id }}")
                     
                     if (cachedVideos.isNotEmpty()) {
                         // 从缓存中查找目标画质
@@ -587,7 +617,7 @@ class PlayerViewModel : ViewModel() {
                         val audioUrl = dashAudio?.getValidUrl()
                         val realQuality = dashVideo?.id ?: qualityId
                         
-                        android.util.Log.d("PlayerVM", "🔥 Using cached DASH: found=$realQuality, url=${videoUrl.take(50)}...")
+                        com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 Using cached DASH: found=$realQuality, url=${videoUrl.take(50)}...")
                         
                         if (videoUrl.isNotEmpty()) {
                             playDashVideo(videoUrl, audioUrl, currentPos)
@@ -616,7 +646,7 @@ class PlayerViewModel : ViewModel() {
                     }
                     
                     // 🔥 缓存中没有，fallback 到 API 请求
-                    android.util.Log.d("PlayerVM", "🔥 Cache miss, falling back to API request")
+                    com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 Cache miss, falling back to API request")
                     fetchAndPlay(currentBvid, currentCid, qualityId, currentState, currentPos)
                     
                 } catch (e: Exception) {
@@ -640,7 +670,7 @@ class PlayerViewModel : ViewModel() {
         val playUrlData = VideoRepository.getPlayUrlData(bvid, cid, qn)
         
         // 🔥 添加调试日志
-        android.util.Log.d("PlayerVM", "🔥 fetchAndPlay: playUrlData=${if (playUrlData != null) "OK" else "NULL"}")
+        com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 fetchAndPlay: playUrlData=${if (playUrlData != null) "OK" else "NULL"}")
         
         if (playUrlData == null) {
             android.util.Log.e("PlayerVM", "❌ getPlayUrlData returned null for bvid=$bvid, cid=$cid, qn=$qn")
@@ -656,7 +686,7 @@ class PlayerViewModel : ViewModel() {
         val dashVideo = playUrlData.dash?.getBestVideo(qn)
         val dashAudio = playUrlData.dash?.getBestAudio()
         
-        android.util.Log.d("PlayerVM", "🔥 fetchAndPlay: requested=$qn, found=${dashVideo?.id ?: "none"}, codec=${dashVideo?.codecs ?: "none"}")
+        com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 fetchAndPlay: requested=$qn, found=${dashVideo?.id ?: "none"}, codec=${dashVideo?.codecs ?: "none"}")
         
         // 🔥 使用 getValidUrl 扩展函数，自动 fallback 到备用 URL
         val videoUrl = dashVideo?.getValidUrl() 
@@ -664,7 +694,7 @@ class PlayerViewModel : ViewModel() {
             ?: playUrlData.durl?.firstOrNull()?.backup_url?.firstOrNull()
             ?: ""
         val audioUrl = dashAudio?.getValidUrl()
-        android.util.Log.d("PlayerVM", "🔥 fetchAndPlay: videoUrl=${videoUrl.take(50)}...")
+        com.android.purebilibili.core.util.Logger.d("PlayerVM", "🔥 fetchAndPlay: videoUrl=${videoUrl.take(50)}...")
         
         val qualities = playUrlData.accept_quality ?: emptyList()
         val labels = playUrlData.accept_description ?: emptyList()

@@ -203,3 +203,76 @@ fun Modifier.hapticClickable(
         onClick()
     }
 }
+
+/**
+ * 🍎 iOS 风格点击效果 Modifier
+ * 
+ * 特性：
+ * - 按压时缩放到 0.96f (iOS 默认值)
+ * - 弹性回弹动画 (damping=0.6f)
+ * - 自动触发轻量触觉反馈
+ * 
+ * @param scale 按压时的缩放比例，默认 0.96f
+ * @param hapticEnabled 是否启用触觉反馈
+ * @param onClick 点击回调
+ */
+fun Modifier.iOSTapEffect(
+    scale: Float = 0.96f,
+    hapticEnabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier = composed {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val haptic = rememberHapticFeedback()
+    
+    // 🍎 iOS 风格弹性动画
+    val animatedScale by animateFloatAsState(
+        targetValue = if (isPressed) scale else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.6f,    // iOS 弹性感
+            stiffness = 400f        // 适中的动画速度
+        ),
+        label = "ios_tap_scale"
+    )
+    
+    this
+        .graphicsLayer {
+            scaleX = animatedScale
+            scaleY = animatedScale
+        }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = null
+        ) {
+            if (hapticEnabled) {
+                haptic(HapticType.LIGHT)
+            }
+            onClick()
+        }
+}
+
+/**
+ * 🍎 iOS 风格点击效果 (仅动画，不处理点击事件)
+ * 
+ * 用于需要自定义点击处理的场景
+ */
+fun Modifier.iOSTapScale(
+    scale: Float = 0.96f
+): Modifier = composed {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val animatedScale by animateFloatAsState(
+        targetValue = if (isPressed) scale else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.6f,
+            stiffness = 400f
+        ),
+        label = "ios_tap_scale_only"
+    )
+    
+    this.graphicsLayer {
+        scaleX = animatedScale
+        scaleY = animatedScale
+    }
+}

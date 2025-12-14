@@ -10,7 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Build
-import android.util.Log
+import com.android.purebilibili.core.util.Logger
 import android.view.ViewGroup
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -105,6 +105,10 @@ class MiniPlayerManager private constructor(private val context: Context) {
     var currentOwner by mutableStateOf("")
         private set
     
+    // 🔥🔥 [新增] 当前视频的 cid，用于弹幕加载
+    var currentCid by mutableLongStateOf(0L)
+        private set
+    
     // 🔥🔥 [新增] 缓存的视频详情页 UI 状态，用于从小窗返回时恢复
     var cachedUiState: PlayerUiState.Success? = null
         private set
@@ -112,7 +116,7 @@ class MiniPlayerManager private constructor(private val context: Context) {
     // 🔥🔥 [新增] 缓存 UI 状态
     fun cacheUiState(state: PlayerUiState.Success) {
         cachedUiState = state
-        android.util.Log.d(TAG, "✅ 缓存 UI 状态: ${state.info.title}")
+        com.android.purebilibili.core.util.Logger.d(TAG, "✅ 缓存 UI 状态: ${state.info.title}")
     }
     
     // 🔥🔥 [新增] 获取并清除缓存的 UI 状态
@@ -129,6 +133,16 @@ class MiniPlayerManager private constructor(private val context: Context) {
     // 🔥 优先使用外部播放器（如果存在）
     val player: ExoPlayer?
         get() = _externalPlayer ?: _player
+    
+    // 🔥🔥 [修复2] 检查是否有外部播放器
+    val hasExternalPlayer: Boolean
+        get() = _externalPlayer != null
+    
+    // 🔥🔥 [修复2] 清除外部播放器引用（从小窗返回全屏时调用）
+    fun resetExternalPlayer() {
+        Logger.d(TAG, "🔥 resetExternalPlayer: clearing external player reference")
+        _externalPlayer = null
+    }
 
     // --- MediaSession ---
     private var mediaSession: MediaSession? = null
@@ -139,7 +153,7 @@ class MiniPlayerManager private constructor(private val context: Context) {
      */
     fun ensurePlayer(): ExoPlayer {
         if (_player == null) {
-            Log.d(TAG, "Creating new ExoPlayer instance")
+            Logger.d(TAG, "Creating new ExoPlayer instance")
             
             val headers = mapOf(
                 "Referer" to "https://www.bilibili.com",
@@ -190,13 +204,13 @@ class MiniPlayerManager private constructor(private val context: Context) {
         videoUrl: String,
         audioUrl: String?
     ) {
-        Log.d(TAG, "startVideo: bvid=$bvid, title=$title")
+        Logger.d(TAG, "startVideo: bvid=$bvid, title=$title")
         
         ensurePlayer()
         
         // 如果是同一个视频，不重新加载
         if (currentBvid == bvid && _player?.isPlaying == true) {
-            Log.d(TAG, "Same video already playing, skip reload")
+            Logger.d(TAG, "Same video already playing, skip reload")
             return
         }
 
@@ -238,12 +252,12 @@ class MiniPlayerManager private constructor(private val context: Context) {
      * 进入小窗模式
      */
     fun enterMiniMode() {
-        Log.d(TAG, "🔥 enterMiniMode called: isActive=$isActive, currentBvid=$currentBvid, isMiniMode=$isMiniMode")
+        Logger.d(TAG, "🔥 enterMiniMode called: isActive=$isActive, currentBvid=$currentBvid, isMiniMode=$isMiniMode")
         if (!isActive) {
-            Log.w(TAG, "⚠️ Cannot enter mini mode: isActive is false!")
+            com.android.purebilibili.core.util.Logger.w(TAG, "⚠️ Cannot enter mini mode: isActive is false!")
             return
         }
-        Log.d(TAG, "✅ Entering mini mode for video: $currentTitle")
+        Logger.d(TAG, "✅ Entering mini mode for video: $currentTitle")
         isMiniMode = true
         // 继续播放
     }
@@ -252,7 +266,7 @@ class MiniPlayerManager private constructor(private val context: Context) {
      * 退出小窗模式（返回全屏详情页）
      */
     fun exitMiniMode() {
-        Log.d(TAG, "Exiting mini mode")
+        Logger.d(TAG, "Exiting mini mode")
         isMiniMode = false
     }
 
@@ -260,7 +274,7 @@ class MiniPlayerManager private constructor(private val context: Context) {
      * 停止播放并关闭小窗
      */
     fun dismiss() {
-        Log.d(TAG, "Dismissing mini player")
+        Logger.d(TAG, "Dismissing mini player")
         isMiniMode = false
         isActive = false
         // 🔥 不释放 player，因为它属于 VideoPlayerState
@@ -281,13 +295,15 @@ class MiniPlayerManager private constructor(private val context: Context) {
         title: String,
         cover: String,
         owner: String,
+        cid: Long,  // 🔥🔥 [新增] cid 用于弹幕加载
         externalPlayer: ExoPlayer
     ) {
-        Log.d(TAG, "setVideoInfo: bvid=$bvid, title=$title")
+        Logger.d(TAG, "setVideoInfo: bvid=$bvid, title=$title, cid=$cid")
         currentBvid = bvid
         currentTitle = title
         currentCover = cover
         currentOwner = owner
+        currentCid = cid  // 🔥🔥 保存 cid
         _externalPlayer = externalPlayer
         isActive = true
         isMiniMode = false
@@ -321,7 +337,7 @@ class MiniPlayerManager private constructor(private val context: Context) {
      * 释放所有资源
      */
     fun release() {
-        Log.d(TAG, "Releasing all resources")
+        Logger.d(TAG, "Releasing all resources")
         dismiss()
         mediaSession?.release()
         mediaSession = null
@@ -335,17 +351,17 @@ class MiniPlayerManager private constructor(private val context: Context) {
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(playing: Boolean) {
             isPlaying = playing
-            Log.d(TAG, "isPlaying changed: $playing")
+            Logger.d(TAG, "isPlaying changed: $playing")
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
                 Player.STATE_READY -> {
                     duration = _player?.duration ?: 0L
-                    Log.d(TAG, "Player ready, duration=$duration")
+                    Logger.d(TAG, "Player ready, duration=$duration")
                 }
                 Player.STATE_ENDED -> {
-                    Log.d(TAG, "Playback ended")
+                    Logger.d(TAG, "Playback ended")
                 }
             }
         }
@@ -393,7 +409,7 @@ class MiniPlayerManager private constructor(private val context: Context) {
             val result = loader.execute(request)
             (result as? SuccessResult)?.drawable?.let { (it as BitmapDrawable).bitmap }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load bitmap", e)
+            com.android.purebilibili.core.util.Logger.e(TAG, "Failed to load bitmap", e)
             null
         }
     }
@@ -432,7 +448,7 @@ class MiniPlayerManager private constructor(private val context: Context) {
         try {
             notificationManager.notify(NOTIFICATION_ID, builder.build())
         } catch (e: SecurityException) {
-            Log.e(TAG, "Failed to show notification", e)
+            com.android.purebilibili.core.util.Logger.e(TAG, "Failed to show notification", e)
         }
     }
 }

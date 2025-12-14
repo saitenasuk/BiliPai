@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 🎀 BiliPai 品牌色 (深色模式也使用相同品牌色) -->
+    <color name="bili_pink">#FB7299</color>
+    <color name="splash_background">#121212</color>
+    
+    <!-- 🌙 启动屏主题 (深色模式) - 使用深色背景 -->
+    <style name="Theme.PureBiliBili" parent="Theme.SplashScreen.IconBackground">
+        <!-- 🎨 Splash Screen 背景色 - 深色模式使用黑色 -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <!-- 🖼️ Splash Screen 图标背景 -->
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_background</item>
+        <!-- 🖼️ Splash Screen 图标 -->
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <!-- ⏱️ 图标动画时长 -->
+        <item name="windowSplashScreenAnimationDuration">300</item>
+        <!-- 🔄 Splash 结束后的主题 -->
+        <item name="postSplashScreenTheme">@style/Theme.PureBiliBili.Main</item>
+    </style>
+    
+    <!-- 主应用主题 (深色模式) -->
+    <style name="Theme.PureBiliBili.Main" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#121212</item>
+        <item name="android:colorBackground">#121212</item>
+        <item name="android:navigationBarColor">#121212</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- 兼容旧主题名 -->
+    <style name="Theme.Purebilibili" parent="Theme.PureBiliBili" />
+</resources>

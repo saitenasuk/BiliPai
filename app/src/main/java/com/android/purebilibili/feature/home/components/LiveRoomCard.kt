@@ -1,11 +1,8 @@
 // 文件路径: feature/home/components/LiveRoomCard.kt
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,11 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -28,76 +23,58 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.HapticType
+import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.data.model.response.LiveRoom
+import com.android.purebilibili.core.util.iOSTapEffect
 
 /**
- * 🔥 直播间卡片组件
+ * 🍎 iOS 风格直播间卡片
  */
 @Composable
 fun LiveRoomCard(
     room: LiveRoom,
     index: Int,
-    onClick: (Long) -> Unit  // 传递 roomId
+    onClick: (Long) -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val haptic = rememberHapticFeedback()
     
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "scale"
-    )
-    
-    // 🔥 入场动画：渐入 + 上滑
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(index * 50L)  // 错开动画时间
-        visible = true
+    val coverUrl = remember(room.roomid) {
+        FormatUtils.fixImageUrl(room.cover.ifEmpty { room.keyframe.ifEmpty { room.userCover } })
     }
-    
-    val alpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-        label = "alpha"
-    )
-    
-    val offsetY by animateFloatAsState(
-        targetValue = if (visible) 0f else 30f,
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-        label = "offsetY"
-    )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer {
-                this.alpha = alpha
-                this.translationY = offsetY
+            // 🍎 iOS 点击动画
+            .iOSTapEffect(
+                scale = 0.97f,
+                hapticEnabled = true
+            ) {
+                onClick(room.roomid)
             }
-            .scale(scale)
-            .clickable(interactionSource = interactionSource, indication = null) { onClick(room.roomid) }
-            .padding(bottom = 12.dp)
+            .padding(bottom = 14.dp)
     ) {
+        // 🍎 封面容器 - iOS 风格
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1.6f)
+                .aspectRatio(16f / 10f)
                 .shadow(
-                    elevation = 4.dp,
-                    shape = RoundedCornerShape(12.dp),
-                    ambientColor = Color.Black.copy(alpha = 0.1f),
-                    spotColor = Color.Black.copy(alpha = 0.15f)
+                    elevation = 2.dp,
+                    shape = RoundedCornerShape(14.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.08f),
+                    spotColor = Color.Black.copy(alpha = 0.12f)
                 )
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            // 封面图
-            val coverUrl = room.cover.ifEmpty { room.keyframe.ifEmpty { room.userCover } }
+            // 封面图 - 🚀 优化
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(coverUrl))
-                    .crossfade(200)
-                    .size(480, 300)
+                    .data(coverUrl)
+                    .crossfade(150)
                     .memoryCacheKey("live_cover_${room.roomid}")
                     .build(),
                 contentDescription = null,

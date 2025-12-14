@@ -55,7 +55,7 @@ object TokenManager {
         csrfCache = sp.getString(SP_KEY_CSRF, null)  // 🔥 读取 CSRF
         midCache = sp.getLong(SP_KEY_MID, 0L).takeIf { it > 0 }  // 🔥 读取 MID
         
-        android.util.Log.d("TokenManager", "🔥 init: sessData=${sessDataCache?.take(10)}..., csrf=${csrfCache?.take(10)}..., mid=$midCache")
+        com.android.purebilibili.core.util.Logger.d("TokenManager", "🔥 init: sessData=${sessDataCache?.take(10)}..., csrf=${csrfCache?.take(10)}..., mid=$midCache")
 
         // 2. 启动 DataStore 监听 (主要数据源)
         CoroutineScope(Dispatchers.IO).launch {
@@ -89,7 +89,7 @@ object TokenManager {
         csrfCache = csrf
         context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .edit().putString(SP_KEY_CSRF, csrf).apply()
-        android.util.Log.d("TokenManager", "🔥 saveCsrf: ${csrf.take(10)}...")
+        com.android.purebilibili.core.util.Logger.d("TokenManager", "🔥 saveCsrf: ${csrf.take(10)}...")
     }
     
     // 🔥 [新增] 保存用户 MID
@@ -97,7 +97,7 @@ object TokenManager {
         midCache = mid
         context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .edit().putLong(SP_KEY_MID, mid).apply()
-        android.util.Log.d("TokenManager", "🔥 saveMid: $mid")
+        com.android.purebilibili.core.util.Logger.d("TokenManager", "🔥 saveMid: $mid")
     }
 
     suspend fun saveCookies(context: Context, sessData: String) {

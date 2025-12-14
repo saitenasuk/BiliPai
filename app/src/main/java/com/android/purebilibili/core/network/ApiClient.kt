@@ -54,6 +54,14 @@ interface BilibiliApi {
         @Query("ps") ps: Int = 20
     ): PopularResponse  // 🔥 使用专用响应类型
     
+    // 🔥🔥 [新增] 分区视频 - 按分类 ID 获取视频
+    @GET("x/web-interface/newlist")
+    suspend fun getRegionVideos(
+        @Query("rid") rid: Int,    // 分区 ID (如 129=舞蹈)
+        @Query("pn") pn: Int = 1,
+        @Query("ps") ps: Int = 30
+    ): RegionVideosResponse
+    
     // 🔥🔥 [新增] 直播列表 - 使用正确的 API 端点
     @GET("https://api.live.bilibili.com/room/v3/area/getRoomList")
     suspend fun getLiveList(
@@ -124,8 +132,9 @@ interface BilibiliApi {
     @GET("x/web-interface/archive/related")
     suspend fun getRelatedVideos(@Query("bvid") bvid: String): RelatedResponse
 
-    @GET("x/v1/dm/list.so")
-    suspend fun getDanmakuXml(@Query("oid") cid: Long): ResponseBody
+    // 🔥🔥 [修复] 使用 comment.bilibili.com 弹幕端点，避免 412 错误
+    @GET("https://comment.bilibili.com/{cid}.xml")
+    suspend fun getDanmakuXml(@retrofit2.http.Path("cid") cid: Long): ResponseBody
 
     // 🔥🔥 [核心修改] 改为 wbi 路径，并接收 Map 参数以支持签名
     @GET("x/v2/reply/wbi/main")
@@ -279,6 +288,70 @@ interface SpaceApi {
     suspend fun getUpStat(@Query("mid") mid: Long): com.android.purebilibili.data.model.response.UpStatResponse
 }
 
+// 🔥🔥 [新增] 番剧/影视 API
+interface BangumiApi {
+    // 番剧时间表
+    @GET("pgc/web/timeline")
+    suspend fun getTimeline(
+        @Query("types") types: Int,      // 1=番剧 4=国创
+        @Query("before") before: Int = 3,
+        @Query("after") after: Int = 7
+    ): com.android.purebilibili.data.model.response.BangumiTimelineResponse
+    
+    // 番剧索引/筛选 - 🔥 需要 st 参数（与 season_type 相同值）
+    @GET("pgc/season/index/result")
+    suspend fun getBangumiIndex(
+        @Query("season_type") seasonType: Int,   // 1=番剧 2=电影 3=纪录片 4=国创 5=电视剧 7=综艺
+        @Query("st") st: Int,                    // 🔥🔥 [修复] 必需参数，与 season_type 相同
+        @Query("page") page: Int = 1,
+        @Query("pagesize") pageSize: Int = 20,
+        @Query("order") order: Int = 2,          // 2=播放量排序（默认更热门）
+        @Query("season_version") seasonVersion: Int = -1,  // -1=全部
+        @Query("spoken_language_type") spokenLanguageType: Int = -1,  // -1=全部
+        @Query("area") area: Int = -1,           // -1=全部地区
+        @Query("is_finish") isFinish: Int = -1,  // -1=全部
+        @Query("copyright") copyright: Int = -1, // -1=全部
+        @Query("season_status") seasonStatus: Int = -1,  // -1=全部
+        @Query("season_month") seasonMonth: Int = -1,    // -1=全部
+        @Query("year") year: String = "-1",      // -1=全部
+        @Query("style_id") styleId: Int = -1,    // -1=全部
+        @Query("sort") sort: Int = 0,
+        @Query("type") type: Int = 1
+    ): com.android.purebilibili.data.model.response.BangumiIndexResponse
+    
+    // 番剧详情
+    @GET("pgc/view/web/season")
+    suspend fun getSeasonDetail(
+        @Query("season_id") seasonId: Long
+    ): com.android.purebilibili.data.model.response.BangumiDetailResponse
+    
+    // 番剧播放地址
+    @GET("pgc/player/web/v2/playurl")
+    suspend fun getBangumiPlayUrl(
+        @Query("ep_id") epId: Long,
+        @Query("qn") qn: Int = 80,
+        @Query("fnval") fnval: Int = 4048,
+        @Query("fnver") fnver: Int = 0,
+        @Query("fourk") fourk: Int = 1
+    ): com.android.purebilibili.data.model.response.BangumiPlayUrlResponse
+    
+    // 追番/追剧
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("pgc/web/follow/add")
+    suspend fun followBangumi(
+        @retrofit2.http.Field("season_id") seasonId: Long,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): com.android.purebilibili.data.model.response.SimpleApiResponse
+    
+    // 取消追番/追剧
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("pgc/web/follow/del")
+    suspend fun unfollowBangumi(
+        @retrofit2.http.Field("season_id") seasonId: Long,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): com.android.purebilibili.data.model.response.SimpleApiResponse
+}
+
 interface PassportApi {
     // 二维码登录
     @GET("x/passport-login/web/qrcode/generate")
@@ -371,6 +444,17 @@ object NetworkModule {
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            // 🚀🚀 [性能优化] HTTP 磁盘缓存 - 10MB，减少重复请求
+            .cache(okhttp3.Cache(
+                directory = java.io.File(appContext?.cacheDir ?: java.io.File("/tmp"), "okhttp_cache"),
+                maxSize = 10L * 1024 * 1024  // 10 MB
+            ))
+            // 🚀🚀 [性能优化] 连接池优化 - 保持更多空闲连接
+            .connectionPool(okhttp3.ConnectionPool(
+                maxIdleConnections = 10,
+                keepAliveDuration = 5,
+                timeUnit = java.util.concurrent.TimeUnit.MINUTES
+            ))
             // 🔥 [新增] 自动重试和重定向
             .retryOnConnectionFailure(true)
             .followRedirects(true)
@@ -386,7 +470,7 @@ object NetworkModule {
                         // 移除同名旧 cookie，添加新 cookie
                         existingCookies.removeAll { it.name == newCookie.name }
                         existingCookies.add(newCookie)
-                        android.util.Log.d("CookieJar", "🍪 Saved cookie: ${newCookie.name}=${newCookie.value.take(20)}... for $host")
+                        com.android.purebilibili.core.util.Logger.d("CookieJar", "🍪 Saved cookie: ${newCookie.name}=${newCookie.value.take(20)}... for $host")
                     }
                 }
                 
@@ -439,13 +523,18 @@ object NetworkModule {
                 if (url.encodedPath.contains("/x/space/") && !mid.isNullOrEmpty()) {
                     referer = "https://space.bilibili.com/$mid"
                 }
+                
+                // 🔥🔥 [修复] 弹幕 API 需要使用视频页面作为 Referer (解决 412 问题)
+                if (url.encodedPath.contains("/dm/list.so") || url.encodedPath.contains("/x/v1/dm/")) {
+                    referer = "https://www.bilibili.com/video/"
+                }
 
                 val builder = original.newBuilder()
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
                     .header("Referer", referer)
                     .header("Origin", "https://www.bilibili.com") // 🔥 增加 Origin 头
 
-                android.util.Log.d("ApiClient", "🔥 Sending request to ${original.url}, Referer: $referer, Cookie contains SESSDATA: ${TokenManager.sessDataCache?.isNotEmpty() == true}")
+                com.android.purebilibili.core.util.Logger.d("ApiClient", "🔥 Sending request to ${original.url}, Referer: $referer, Cookie contains SESSDATA: ${TokenManager.sessDataCache?.isNotEmpty() == true}")
 
                 chain.proceed(builder.build())
             }
@@ -487,5 +576,12 @@ object NetworkModule {
         Retrofit.Builder().baseUrl("https://api.bilibili.com/").client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
             .create(SpaceApi::class.java)
+    }
+    
+    // 🔥🔥 [新增] 番剧/影视 API
+    val bangumiApi: BangumiApi by lazy {
+        Retrofit.Builder().baseUrl("https://api.bilibili.com/").client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
+            .create(BangumiApi::class.java)
     }
 }

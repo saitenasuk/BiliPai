@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.theme.BiliPink
+import com.android.purebilibili.core.theme.iOSBlue
+import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.ui.EmptyState
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.ui.BiliGradientButton
@@ -310,9 +312,9 @@ fun DynamicCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
-                    StatButton(icon = Icons.Default.Share, count = stat.forward.count, label = "转发", tintColor = Color(0xFF00A1D6))
-                    StatButton(icon = Icons.Default.ChatBubbleOutline, count = stat.comment.count, label = "评论", tintColor = Color(0xFFFB7299))
-                    StatButton(icon = Icons.Default.FavoriteBorder, count = stat.like.count, label = "点赞", tintColor = Color(0xFFFF6699))
+                    StatButton(icon = Icons.Default.Share, count = stat.forward.count, label = "转发", tintColor = iOSBlue)
+                    StatButton(icon = Icons.Default.ChatBubbleOutline, count = stat.comment.count, label = "评论", tintColor = BiliPink)
+                    StatButton(icon = Icons.Default.FavoriteBorder, count = stat.like.count, label = "点赞", tintColor = iOSPink)
                 }
             }
         }
