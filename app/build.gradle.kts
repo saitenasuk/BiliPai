@@ -7,6 +7,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     // Room 数据库编译插件
     id("com.google.devtools.ksp")
+    // 🔥 Firebase 相关插件
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -17,8 +20,8 @@ android {
         applicationId = "com.android.purebilibili"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "2.4.1"
+        versionCode = 7
+        versionName = "3.0.3-beta1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -180,6 +183,11 @@ dependencies {
     
     // --- 10. ProfileInstaller (启动优化) ---
     implementation("androidx.profileinstaller:profileinstaller:1.3.1")
+    
+    // --- 11. Firebase (崩溃追踪和分析) ---
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-crashlytics-ktx")
+    implementation("com.google.firebase:firebase-analytics-ktx")
 
     // --- 11. Debug (调试工具) ---
     debugImplementation("androidx.compose.ui:ui-tooling")

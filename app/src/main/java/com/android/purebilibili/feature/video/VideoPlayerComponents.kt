@@ -38,7 +38,7 @@ import com.android.purebilibili.core.theme.ActionFavoriteDark
 import com.android.purebilibili.core.theme.ActionShareDark
 import com.android.purebilibili.core.theme.ActionCommentDark
 
-// 🔥🔥 [重构] 视频标题区域 (仿 Bilibili 样式)
+// 🔥🔥 [重构] 视频标题区域 (官方B站样式：紧凑布局)
 @Composable
 fun VideoTitleSection(
     info: ViewInfo,
@@ -50,21 +50,20 @@ fun VideoTitleSection(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clickable { expanded = !expanded }
+            .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
         // 标题行 (可展开)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = !expanded },
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
         ) {
             Text(
                 text = info.title,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 15.sp,
-                    lineHeight = 20.sp,
-                    fontWeight = FontWeight.Medium
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.SemiBold
                 ),
                 maxLines = if (expanded) Int.MAX_VALUE else 1,
                 overflow = TextOverflow.Ellipsis,
@@ -73,66 +72,102 @@ fun VideoTitleSection(
                     .weight(1f)
                     .animateContentSize()
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(4.dp))
             Icon(
                 imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.size(20.dp)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        
+        Spacer(Modifier.height(2.dp))
+        
+        // 统计行 (官方样式：播放量 • 弹幕 • 日期)
+        Text(
+            text = "${FormatUtils.formatStat(info.stat.view.toLong())}  •  ${FormatUtils.formatStat(info.stat.danmaku.toLong())}弹幕  •  ${FormatUtils.formatPublishTime(info.pubdate)}",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            maxLines = 1
+        )
+    }
+}
+
+// 🔥🔥 [新增] 官方布局：标题 + 统计 + 描述 (紧凑排列)
+@Composable
+fun VideoTitleWithDesc(
+    info: ViewInfo
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable { expanded = !expanded }
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        // 标题行 (可展开)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            Text(
+                text = info.title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                maxLines = if (expanded) Int.MAX_VALUE else 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .weight(1f)
+                    .animateContentSize()
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(16.dp)
             )
         }
         
         Spacer(Modifier.height(4.dp))
         
-        // 统计行 (播放量 • 弹幕 • 日期)
+        // 统计行 (官方样式：播放量 • 弹幕 • 日期)
         Row(
-            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 播放量
-            Icon(
-                Icons.Outlined.PlayCircle,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
-            Spacer(Modifier.width(3.dp))
             Text(
-                text = FormatUtils.formatStat(info.stat.view.toLong()),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                text = "${FormatUtils.formatStat(info.stat.view.toLong())}播放  •  ${FormatUtils.formatStat(info.stat.danmaku.toLong())}弹幕  •  ${FormatUtils.formatPublishTime(info.pubdate)}",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                maxLines = 1
             )
-            
+        }
+        
+        // 🔥🔥 描述（动态）- 紧接在统计后面
+        if (info.desc.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
             Text(
-                text = "  •  ",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-            )
-            
-            // 弹幕
-            Text(
-                text = FormatUtils.formatStat(info.stat.danmaku.toLong()) + "弹幕",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-            
-            Text(
-                text = "  •  ",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-            )
-            
-            // 发布日期
-            Text(
-                text = FormatUtils.formatPublishTime(info.pubdate),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                text = info.desc,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                maxLines = if (expanded) Int.MAX_VALUE else 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.animateContentSize()
             )
         }
     }
 }
 
-// 🔥🔥 [新增] UP主信息区域 (仿 Bilibili 样式)
+// 🔥🔥 [重构] UP主信息区域 (官方B站样式：蓝色UP主标签)
 @Composable
 fun UpInfoSection(
     info: ViewInfo,
@@ -145,7 +180,7 @@ fun UpInfoSection(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
             .clickable { onUpClick(info.owner.mid) }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 头像
@@ -156,29 +191,39 @@ fun UpInfoSection(
                 .build(),
             contentDescription = null,
             modifier = Modifier
-                .size(36.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         )
         
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         
-        // UP主名称 + 粉丝数
+        // UP主名称行
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = info.owner.name,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = info.owner.name,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Spacer(Modifier.height(2.dp))
-            Text(
-                text = "UP主",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
+            // 蓝色 UP主 标签
+            Surface(
+                color = Color(0xFF00AEEC).copy(alpha = 0.15f),
+                shape = RoundedCornerShape(4.dp)
+            ) {
+                Text(
+                    text = "UP主",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF00AEEC),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
         }
         
         // 关注按钮
@@ -213,7 +258,7 @@ fun UpInfoSection(
 }
 
 
-// 🔥 2. 操作按钮行（优化布局和视觉效果）
+// 🔥 2. 操作按钮行（官方B站样式：纯图标+数字，无圆形背景）
 @Composable
 fun ActionButtonsRow(
     info: ViewInfo,
@@ -226,62 +271,130 @@ fun ActionButtonsRow(
     onTripleClick: () -> Unit = {},
     onCommentClick: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
-    
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-            // 🔥 点赞 - 粉色（支持状态切换）
-            ActionButton(
-                icon = if (isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
-                text = FormatUtils.formatStat(info.stat.like.toLong()),
-                iconColor = if (isDark) ActionLikeDark else BiliPink,
-                iconSize = 26.dp,
-                isActive = isLiked,
-                onClick = onLikeClick
-            )
+        // 🔥 点赞
+        BiliActionButton(
+            icon = if (isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+            text = FormatUtils.formatStat(info.stat.like.toLong()),
+            isActive = isLiked,
+            activeColor = BiliPink,
+            onClick = onLikeClick
+        )
 
-            // 🔥 投币 - 金色（支持状态切换）
-            ActionButton(
-                icon = if (coinCount > 0) Icons.Filled.MonetizationOn else Icons.Outlined.MonetizationOn,
-                text = if (coinCount > 0) "$coinCount 币" else "投币",
-                iconColor = if (isDark) ActionCoinDark else Color(0xFFFFB300),
-                iconSize = 26.dp,
-                isActive = coinCount > 0,
-                onClick = onCoinClick
-            )
+        // 🔥 投币
+        BiliActionButton(
+            icon = if (coinCount > 0) Icons.Filled.MonetizationOn else Icons.Outlined.MonetizationOn,
+            text = FormatUtils.formatStat(info.stat.coin.toLong()),
+            isActive = coinCount > 0,
+            activeColor = Color(0xFFFFB300),
+            onClick = onCoinClick
+        )
 
-            // 🔥 收藏 - 黄色（支持状态切换）
-            ActionButton(
-                icon = if (isFavorited) Icons.Filled.Star else Icons.Outlined.Star,
-                text = if (info.stat.favorite > 0) FormatUtils.formatStat(info.stat.favorite.toLong()) else "收藏",
-                iconColor = if (isDark) ActionFavoriteDark else Color(0xFFFFC107),
-                iconSize = 26.dp,
-                isActive = isFavorited,
-                onClick = onFavoriteClick
-            )
+        // 🔥 收藏
+        BiliActionButton(
+            icon = if (isFavorited) Icons.Filled.Star else Icons.Outlined.Star,
+            text = FormatUtils.formatStat(info.stat.favorite.toLong()),
+            isActive = isFavorited,
+            activeColor = Color(0xFFFFC107),
+            onClick = onFavoriteClick
+        )
 
-            // 🔥 三连 - 渐变色
-            ActionButton(
-                icon = Icons.Filled.Favorite,
-                text = "三连",
-                iconColor = if (isDark) Color(0xFFFF6B9D) else Color(0xFFE91E63),
-                iconSize = 26.dp,
-                onClick = onTripleClick
-            )
+        // 🔥 三连（❤心形图标）
+        BiliActionButton(
+            icon = Icons.Filled.Favorite,
+            text = "三连",
+            isActive = false,
+            activeColor = Color(0xFFE91E63),
+            onClick = onTripleClick
+        )
 
-            // 🔥 评论 - 青色
-            val replyCount = runCatching { info.stat.reply }.getOrDefault(0)
-            ActionButton(
-                icon = Icons.Outlined.Comment,
-                text = if (replyCount > 0) FormatUtils.formatStat(replyCount.toLong()) else "评论",
-                iconColor = if (isDark) ActionCommentDark else Color(0xFF00BCD4),
-                onClick = onCommentClick,
-                iconSize = 26.dp
-            )
+        // 🔥 评论
+        val replyCount = runCatching { info.stat.reply }.getOrDefault(0)
+        BiliActionButton(
+            icon = Icons.Outlined.ChatBubbleOutline,
+            text = FormatUtils.formatStat(replyCount.toLong()),
+            isActive = false,
+            activeColor = MaterialTheme.colorScheme.primary,
+            onClick = onCommentClick
+        )
+    }
+}
+
+// 🔥 官方B站样式操作按钮 - 纯图标+数字，无圆形背景
+@Composable
+private fun BiliActionButton(
+    icon: ImageVector,
+    text: String,
+    isActive: Boolean,
+    activeColor: Color,
+    onClick: () -> Unit
+) {
+    // 按压动画
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+        ),
+        label = "buttonScale"
+    )
+    
+    // 激活状态脉冲动画
+    var shouldPulse by remember { mutableStateOf(false) }
+    val pulseScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (shouldPulse) 1.2f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = 0.4f,
+            stiffness = 400f
+        ),
+        label = "pulseScale",
+        finishedListener = { shouldPulse = false }
+    )
+    
+    LaunchedEffect(isActive) {
+        if (isActive) shouldPulse = true
+    }
+    
+    val iconColor = if (isActive) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+    val textColor = if (isActive) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+    
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .graphicsLayer {
+                scaleX = scale * pulseScale
+                scaleY = scale * pulseScale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) { onClick() }
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconColor,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            color = textColor,
+            fontWeight = FontWeight.Normal,
+            maxLines = 1
+        )
     }
 }
 

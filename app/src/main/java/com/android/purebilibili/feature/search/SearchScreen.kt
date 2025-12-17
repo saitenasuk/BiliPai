@@ -46,7 +46,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.ui.LoadingAnimation
-import com.android.purebilibili.feature.home.components.VideoGridItem
+import com.android.purebilibili.feature.home.components.cards.VideoGridItem
+import com.android.purebilibili.data.repository.SearchOrder
+import com.android.purebilibili.data.repository.SearchDuration
+import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.core.util.FormatUtils
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -97,17 +108,27 @@ fun SearchScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        state = resultGridState,
-                        // 🔥 contentPadding 顶部避让搜索栏
-                        contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 8.dp, end = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        itemsIndexed(state.searchResults) { index, video ->
-                            VideoGridItem(video, index) { bvid -> onVideoClick(bvid, 0) }
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // 🔥 筛选条件栏
+                        Spacer(modifier = Modifier.height(contentTopPadding + 4.dp))
+                        SearchFilterBar(
+                            currentOrder = state.searchOrder,
+                            currentDuration = state.searchDuration,
+                            onOrderChange = { viewModel.setSearchOrder(it) },
+                            onDurationChange = { viewModel.setSearchDuration(it) }
+                        )
+                        
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            state = resultGridState,
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp, start = 8.dp, end = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            itemsIndexed(state.searchResults) { index, video ->
+                                SearchResultCard(video, index) { bvid -> onVideoClick(bvid, 0) }
+                            }
                         }
                     }
                 }
@@ -597,5 +618,274 @@ fun QuickCategory(
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/**
+ * 🔥 搜索筛选条件栏
+ */
+@Composable
+fun SearchFilterBar(
+    currentOrder: SearchOrder,
+    currentDuration: SearchDuration,
+    onOrderChange: (SearchOrder) -> Unit,
+    onDurationChange: (SearchDuration) -> Unit
+) {
+    var showOrderMenu by remember { mutableStateOf(false) }
+    var showDurationMenu by remember { mutableStateOf(false) }
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // 排序选择
+        Box {
+            Surface(
+                onClick = { showOrderMenu = true },
+                color = if (currentOrder != SearchOrder.TOTALRANK) 
+                    BiliPink.copy(alpha = 0.1f) 
+                else 
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = currentOrder.displayName,
+                        fontSize = 13.sp,
+                        color = if (currentOrder != SearchOrder.TOTALRANK) 
+                            BiliPink 
+                        else 
+                            MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (currentOrder != SearchOrder.TOTALRANK) 
+                            BiliPink 
+                        else 
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            
+            DropdownMenu(
+                expanded = showOrderMenu,
+                onDismissRequest = { showOrderMenu = false }
+            ) {
+                SearchOrder.entries.forEach { order ->
+                    DropdownMenuItem(
+                        text = { 
+                            Text(
+                                order.displayName,
+                                color = if (order == currentOrder) BiliPink else MaterialTheme.colorScheme.onSurface
+                            ) 
+                        },
+                        onClick = {
+                            onOrderChange(order)
+                            showOrderMenu = false
+                        }
+                    )
+                }
+            }
+        }
+        
+        // 时长选择
+        Box {
+            Surface(
+                onClick = { showDurationMenu = true },
+                color = if (currentDuration != SearchDuration.ALL) 
+                    BiliPink.copy(alpha = 0.1f) 
+                else 
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = currentDuration.displayName,
+                        fontSize = 13.sp,
+                        color = if (currentDuration != SearchDuration.ALL) 
+                            BiliPink 
+                        else 
+                            MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (currentDuration != SearchDuration.ALL) 
+                            BiliPink 
+                        else 
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            
+            DropdownMenu(
+                expanded = showDurationMenu,
+                onDismissRequest = { showDurationMenu = false }
+            ) {
+                SearchDuration.entries.forEach { duration ->
+                    DropdownMenuItem(
+                        text = { 
+                            Text(
+                                duration.displayName,
+                                color = if (duration == currentDuration) BiliPink else MaterialTheme.colorScheme.onSurface
+                            ) 
+                        },
+                        onClick = {
+                            onDurationChange(duration)
+                            showDurationMenu = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 🔥 搜索结果卡片 (显示发布时间)
+ */
+@Composable
+fun SearchResultCard(
+    video: VideoItem,
+    index: Int,
+    onClick: (String) -> Unit
+) {
+    val coverUrl = remember(video.bvid) {
+        FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic)
+    }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick(video.bvid) }
+            .padding(bottom = 8.dp)
+    ) {
+        // 封面
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 10f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(coverUrl)
+                    .crossfade(150)
+                    .size(480, 300)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            
+            // 底部渐变
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.6f)
+                            )
+                        )
+                    )
+            )
+            
+            // 时长标签
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp),
+                shape = RoundedCornerShape(4.dp),
+                color = Color.Black.copy(alpha = 0.6f)
+            ) {
+                Text(
+                    text = FormatUtils.formatDuration(video.duration),
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                )
+            }
+            
+            // 播放量
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "▶ ${FormatUtils.formatStat(video.stat.view.toLong())}",
+                    color = Color.White,
+                    fontSize = 11.sp
+                )
+                if (video.stat.danmaku > 0) {
+                    Text(
+                        text = "  💬 ${FormatUtils.formatStat(video.stat.danmaku.toLong())}",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // 标题
+        Text(
+            text = video.title,
+            maxLines = 2,
+            minLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            lineHeight = 18.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 2.dp)
+        )
+        
+        Spacer(modifier = Modifier.height(6.dp))
+        
+        // UP主 + 发布时间
+        Row(
+            modifier = Modifier.padding(horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = video.owner.name,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            
+            // 🔥 显示发布时间
+            if (video.pubdate > 0) {
+                Text(
+                    text = " · ${FormatUtils.formatPublishTime(video.pubdate)}",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+        }
     }
 }

@@ -22,15 +22,20 @@ data class SettingsUiState(
     val themeColorIndex: Int = 0,
     val appIcon: String = "3D",
     val isBottomBarFloating: Boolean = true,
+    val bottomBarLabelMode: Int = 1,  // 0=图标+文字, 1=仅图标, 2=仅文字
     val headerBlurEnabled: Boolean = true,
     val bottomBarBlurEnabled: Boolean = true,
     val displayMode: Int = 0,
     val cacheSize: String = "计算中...",
+    val cacheBreakdown: CacheUtils.CacheBreakdown? = null,  // 🚀 详细缓存统计
     // 🧪 实验性功能
     val auto1080p: Boolean = true,
     val autoSkipOpEd: Boolean = false,
     val prefetchVideo: Boolean = false,
-    val doubleTapLike: Boolean = true
+    val doubleTapLike: Boolean = true,
+    // 🚀 空降助手
+    val sponsorBlockEnabled: Boolean = false,
+    val sponsorBlockAutoSkip: Boolean = true
 )
 
 // 内部数据类，用于分批合并流
@@ -46,6 +51,7 @@ data class ExtraSettings(
     val themeColorIndex: Int,
     val appIcon: String,
     val isBottomBarFloating: Boolean,
+    val bottomBarLabelMode: Int,
     val headerBlurEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
     val displayMode: Int
@@ -56,7 +62,10 @@ data class ExperimentalSettings(
     val auto1080p: Boolean,
     val autoSkipOpEd: Boolean,
     val prefetchVideo: Boolean,
-    val doubleTapLike: Boolean
+    val doubleTapLike: Boolean,
+    // 🚀 空降助手
+    val sponsorBlockEnabled: Boolean,
+    val sponsorBlockAutoSkip: Boolean
 )
 
 private data class BaseSettings(
@@ -68,6 +77,7 @@ private data class BaseSettings(
     val themeColorIndex: Int,
     val appIcon: String,
     val isBottomBarFloating: Boolean,
+    val bottomBarLabelMode: Int,
     val headerBlurEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
     val displayMode: Int // 🔥 新增
@@ -78,6 +88,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     // 本地状态流：缓存大小
     private val _cacheSize = MutableStateFlow("计算中...")
+    private val _cacheBreakdown = MutableStateFlow<CacheUtils.CacheBreakdown?>(null)
 
     // 🔥🔥 [核心修复] 分步合并，解决 combine 参数限制报错
     // 第 1 步：合并前 4 个设置
@@ -90,15 +101,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         CoreSettings(hwDecode, themeMode, dynamicColor, bgPlay)
     }
     
-    // 第 2 步：合并界面设置 (5个) - 增加 DisplayMode
-    private val uiSettingsFlow = combine(
+    // 第 2 步：合并界面设置 (分两组，每组最多5个)
+    private val uiSettingsFlow1 = combine(
         SettingsManager.getGestureSensitivity(context),
         SettingsManager.getThemeColorIndex(context),
-        SettingsManager.getAppIcon(context),
+        SettingsManager.getAppIcon(context)
+    ) { gestureSensitivity, themeColorIndex, appIcon ->
+        Triple(gestureSensitivity, themeColorIndex, appIcon)
+    }
+    
+    private val uiSettingsFlow2 = combine(
         SettingsManager.getBottomBarFloating(context),
-        SettingsManager.getDisplayMode(context) // 🔥 新增
-    ) { gestureSensitivity, themeColorIndex, appIcon, isBottomBarFloating, displayMode ->
-        listOf(gestureSensitivity, themeColorIndex, appIcon, isBottomBarFloating, displayMode)
+        SettingsManager.getBottomBarLabelMode(context),
+        SettingsManager.getDisplayMode(context)
+    ) { isBottomBarFloating, labelMode, displayMode ->
+        Triple(isBottomBarFloating, labelMode, displayMode)
+    }
+    
+    private val uiSettingsFlow = combine(uiSettingsFlow1, uiSettingsFlow2) { ui1, ui2 ->
+        listOf(ui1.first, ui1.second, ui1.third, ui2.first, ui2.second, ui2.third)
     }
     
     // 第 3 步：合并模糊设置 (2个)
@@ -116,7 +137,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             themeColorIndex = ui[1] as Int,
             appIcon = ui[2] as String,
             isBottomBarFloating = ui[3] as Boolean,
-            displayMode = ui[4] as Int,
+            bottomBarLabelMode = ui[4] as Int,
+            displayMode = ui[5] as Int,
             headerBlurEnabled = blur.first,
             bottomBarBlurEnabled = blur.second
         )
@@ -127,9 +149,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsManager.getAuto1080p(context),
         SettingsManager.getAutoSkipOpEd(context),
         SettingsManager.getPrefetchVideo(context),
-        SettingsManager.getDoubleTapLike(context)
-    ) { auto1080p, autoSkipOpEd, prefetchVideo, doubleTapLike ->
-        ExperimentalSettings(auto1080p, autoSkipOpEd, prefetchVideo, doubleTapLike)
+        SettingsManager.getDoubleTapLike(context),
+        SettingsManager.getSponsorBlockEnabled(context),
+        SettingsManager.getSponsorBlockAutoSkip(context)
+    ) { values ->
+        ExperimentalSettings(
+            auto1080p = values[0] as Boolean,
+            autoSkipOpEd = values[1] as Boolean,
+            prefetchVideo = values[2] as Boolean,
+            doubleTapLike = values[3] as Boolean,
+            sponsorBlockEnabled = values[4] as Boolean,
+            sponsorBlockAutoSkip = values[5] as Boolean
+        )
     }
     
     // 第 5 步：合并两组设置
@@ -143,18 +174,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             themeColorIndex = extra.themeColorIndex,
             appIcon = extra.appIcon,
             isBottomBarFloating = extra.isBottomBarFloating,
+            bottomBarLabelMode = extra.bottomBarLabelMode,
             headerBlurEnabled = extra.headerBlurEnabled,
             bottomBarBlurEnabled = extra.bottomBarBlurEnabled,
-            displayMode = extra.displayMode // 🔥 新增
+            displayMode = extra.displayMode
         )
     }
 
     // 第 6 步：与缓存大小和实验性功能合并
+    private val cacheFlow = combine(_cacheSize, _cacheBreakdown) { size, breakdown ->
+        Pair(size, breakdown)
+    }
+    
     val state: StateFlow<SettingsUiState> = combine(
         baseSettingsFlow,
-        _cacheSize,
+        cacheFlow,
         experimentalSettingsFlow
-    ) { settings, cacheSize, experimental ->
+    ) { settings, cache, experimental ->
         SettingsUiState(
             hwDecode = settings.hwDecode,
             themeMode = settings.themeMode,
@@ -164,15 +200,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             themeColorIndex = settings.themeColorIndex,
             appIcon = settings.appIcon,
             isBottomBarFloating = settings.isBottomBarFloating,
+            bottomBarLabelMode = settings.bottomBarLabelMode,
             headerBlurEnabled = settings.headerBlurEnabled,
             bottomBarBlurEnabled = settings.bottomBarBlurEnabled,
             displayMode = settings.displayMode,
-            cacheSize = cacheSize,
+            cacheSize = cache.first,
+            cacheBreakdown = cache.second,  // 🚀 详细缓存统计
             // 🧪 实验性功能
             auto1080p = experimental.auto1080p,
             autoSkipOpEd = experimental.autoSkipOpEd,
             prefetchVideo = experimental.prefetchVideo,
-            doubleTapLike = experimental.doubleTapLike
+            doubleTapLike = experimental.doubleTapLike,
+            // 🚀 空降助手
+            sponsorBlockEnabled = experimental.sponsorBlockEnabled,
+            sponsorBlockAutoSkip = experimental.sponsorBlockAutoSkip
         )
     }.stateIn(
         scope = viewModelScope,
@@ -186,14 +227,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     // --- 功能方法 ---
 
+    // 🚀 优化：同时获取缓存大小和详细统计
     fun refreshCacheSize() {
-        viewModelScope.launch { _cacheSize.value = CacheUtils.getTotalCacheSize(context) }
+        viewModelScope.launch { 
+            val breakdown = CacheUtils.getCacheBreakdown(context)
+            _cacheSize.value = breakdown.format()
+            _cacheBreakdown.value = breakdown
+        }
     }
 
     fun clearCache() {
         viewModelScope.launch {
             CacheUtils.clearAllCache(context)
-            _cacheSize.value = CacheUtils.getTotalCacheSize(context)
+            // 清理后立即刷新
+            val breakdown = CacheUtils.getCacheBreakdown(context)
+            _cacheSize.value = breakdown.format()
+            _cacheBreakdown.value = breakdown
         }
     }
 
@@ -253,6 +302,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // 🔥🔥 [新增] 切换底栏样式
     fun toggleBottomBarFloating(value: Boolean) { viewModelScope.launch { SettingsManager.setBottomBarFloating(context, value) } }
     
+    // 🔥🔥 [新增] 底栏显示模式 (0=图标+文字, 1=仅图标, 2=仅文字)
+    fun setBottomBarLabelMode(mode: Int) { viewModelScope.launch { SettingsManager.setBottomBarLabelMode(context, mode) } }
+    
     // 🔥🔥 [新增] 模糊效果开关
     fun toggleHeaderBlur(value: Boolean) { viewModelScope.launch { SettingsManager.setHeaderBlurEnabled(context, value) } }
     fun toggleBottomBarBlur(value: Boolean) { viewModelScope.launch { SettingsManager.setBottomBarBlurEnabled(context, value) } }
@@ -281,6 +333,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleAutoSkipOpEd(value: Boolean) { viewModelScope.launch { SettingsManager.setAutoSkipOpEd(context, value) } }
     fun togglePrefetchVideo(value: Boolean) { viewModelScope.launch { SettingsManager.setPrefetchVideo(context, value) } }
     fun toggleDoubleTapLike(value: Boolean) { viewModelScope.launch { SettingsManager.setDoubleTapLike(context, value) } }
+    
+    // 🚀🚀 [新增] 空降助手
+    fun toggleSponsorBlock(value: Boolean) { viewModelScope.launch { SettingsManager.setSponsorBlockEnabled(context, value) } }
+    fun toggleSponsorBlockAutoSkip(value: Boolean) { viewModelScope.launch { SettingsManager.setSponsorBlockAutoSkip(context, value) } }
 }
 
 // Move DisplayMode enum here to be accessible

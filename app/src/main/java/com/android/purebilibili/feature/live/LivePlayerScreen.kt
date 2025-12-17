@@ -140,12 +140,21 @@ fun LivePlayerScreen(
         }
     }
     
+    // 🔥 清理播放器 + 屏幕常亮管理
     DisposableEffect(Unit) {
+        val window = (context as? Activity)?.window
+        
+        // 🔥🔥 [修复] 进入直播间时保持屏幕常亮，防止自动熄屏
+        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        
         onDispose {
             exoPlayer.release()
             // 🔥 恢复默认方向，避免离开直播后卡在横屏
             (context as? Activity)?.requestedOrientation = 
                 ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            
+            // 🔥🔥 [修复] 离开直播间时取消屏幕常亮
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
     
@@ -163,6 +172,7 @@ fun LivePlayerScreen(
                 PlayerView(ctx).apply {
                     player = exoPlayer
                     useController = false  // 🔥 隐藏默认控制器（包含进度条）
+                    keepScreenOn = true  // 🔥 确保屏幕常亮
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT

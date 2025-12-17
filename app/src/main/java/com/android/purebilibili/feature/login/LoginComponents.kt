@@ -872,16 +872,25 @@ private fun PhoneInputSection(
         OutlinedTextField(
             value = phoneNumber,
             onValueChange = onPhoneChange,
-            label = { Text("手机号") },
-            placeholder = { Text("请输入11位手机号") },
+            label = { Text("手机号", color = BiliPink) },
+            placeholder = { Text("请输入11位手机号", color = Color.Gray) },
             leadingIcon = {
-                Text("+86", color = Color.Gray, fontSize = 14.sp)
+                Text("+86", color = Color(0xFF333333), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
+            textStyle = androidx.compose.ui.text.TextStyle(
+                color = Color(0xFF333333),  // 🔥 深色输入文字
+                fontSize = 16.sp
+            ),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = BiliPink,
-                cursorColor = BiliPink
+                unfocusedBorderColor = Color(0xFFDDDDDD),  // 🔥 未聚焦边框灰色
+                focusedTextColor = Color(0xFF333333),
+                unfocusedTextColor = Color(0xFF333333),
+                cursorColor = BiliPink,
+                focusedLabelColor = BiliPink,
+                unfocusedLabelColor = Color.Gray
             )
         )
         
@@ -891,11 +900,22 @@ private fun PhoneInputSection(
         Button(
             onClick = onGetCaptcha,
             enabled = isValid,
-            colors = ButtonDefaults.buttonColors(containerColor = BiliPink),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = BiliPink,
+                contentColor = Color.White,
+                disabledContainerColor = Color(0xFFFFD0DC),  // 🔥 禁用时浅粉色背景
+                disabledContentColor = Color(0xFFCC8899)     // 🔥 禁用时深粉色文字
+            ),
             shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
         ) {
-            Text("获取验证码", color = Color.White)
+            Text(
+                text = if (isValid) "获取验证码" else "请输入手机号",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }

@@ -47,6 +47,7 @@ import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.ui.AppIcons
+import kotlinx.coroutines.launch
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
 import io.github.alexzhirkevich.cupertino.CupertinoSlider
 import io.github.alexzhirkevich.cupertino.CupertinoSliderDefaults
@@ -123,12 +124,19 @@ fun SettingsScreen(
             item { SettingsSectionTitle("关注作者") }
             item {
                 SettingsGroup {
+                    // 🔥 根据主题动态选择图标 (使用 background 亮度判断)
+                    val isDarkTheme = MaterialTheme.colorScheme.background.red < 0.5f
+                    val telegramIcon = if (isDarkTheme) {
+                        com.android.purebilibili.R.drawable.ic_telegram_squircle_dark
+                    } else {
+                        com.android.purebilibili.R.drawable.ic_telegram_squircle
+                    }
                     SettingClickableItem(
-                        iconPainter = androidx.compose.ui.res.painterResource(com.android.purebilibili.R.drawable.ic_telegram_logo),
+                        iconPainter = androidx.compose.ui.res.painterResource(telegramIcon),
                         title = "Telegram 频道",
                         value = "@BiliPai",
                         onClick = { uriHandler.openUri("https://t.me/BiliPai") },
-                        iconTint = Color.Unspecified
+                        iconTint = Color.Unspecified  // 🔥 使用图标原始颜色
                     )
                     Divider()
                     SettingClickableItem(
@@ -165,6 +173,13 @@ fun SettingsScreen(
             
             item { SettingsSectionTitle("高级选项") }
             item {
+                // 🔥 获取崩溃追踪和 Analytics 设置状态
+                val crashTrackingEnabled by com.android.purebilibili.core.store.SettingsManager
+                    .getCrashTrackingEnabled(context).collectAsState(initial = true)
+                val analyticsEnabled by com.android.purebilibili.core.store.SettingsManager
+                    .getAnalyticsEnabled(context).collectAsState(initial = true)
+                val scope = rememberCoroutineScope()
+                
                 SettingsGroup {
                     SettingClickableItem(
                         icon = Icons.Outlined.DeleteOutline,
@@ -172,6 +187,38 @@ fun SettingsScreen(
                         value = state.cacheSize,
                         onClick = { showCacheDialog = true },
                         iconTint = iOSPink
+                    )
+                    Divider()
+                    // 🔥 崩溃追踪开关
+                    SettingSwitchItem(
+                        icon = Icons.Outlined.BugReport,
+                        title = "崩溃追踪",
+                        subtitle = "帮助开发者发现和修复问题",
+                        checked = crashTrackingEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setCrashTrackingEnabled(context, enabled)
+                                com.android.purebilibili.core.util.CrashReporter.setEnabled(enabled)
+                            }
+                        },
+                        iconTint = iOSTeal
+                    )
+                    Divider()
+                    // 📊 用户行为分析开关
+                    SettingSwitchItem(
+                        icon = Icons.Outlined.Analytics,
+                        title = "使用情况统计",
+                        subtitle = "帮助改进应用体验，不收集个人信息",
+                        checked = analyticsEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setAnalyticsEnabled(context, enabled)
+                                com.android.purebilibili.core.util.AnalyticsHelper.setEnabled(enabled)
+                            }
+                        },
+                        iconTint = iOSBlue
                     )
                     Divider()
                     SettingClickableItem(
@@ -239,6 +286,40 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.toggleDoubleTapLike(it) },
                         iconTint = iOSPink
                     )
+                }
+            }
+            
+            // 🚀 空降助手 (SponsorBlock)
+            item { SettingsSectionTitle("空降助手") }
+            item {
+                SettingsGroup {
+                    SettingSwitchItem(
+                        icon = Icons.Outlined.RocketLaunch,
+                        title = "启用空降助手",
+                        subtitle = "自动跳过视频中的广告/恰饭片段",
+                        checked = state.sponsorBlockEnabled,
+                        onCheckedChange = { viewModel.toggleSponsorBlock(it) },
+                        iconTint = iOSTeal
+                    )
+                    if (state.sponsorBlockEnabled) {
+                        Divider()
+                        SettingSwitchItem(
+                            icon = Icons.Outlined.FlashOn,
+                            title = "自动跳过",
+                            subtitle = "关闭后将显示跳过按钮而非自动跳过",
+                            checked = state.sponsorBlockAutoSkip,
+                            onCheckedChange = { viewModel.toggleSponsorBlockAutoSkip(it) },
+                            iconTint = iOSOrange
+                        )
+                        Divider()
+                        SettingClickableItem(
+                            icon = Icons.Outlined.Info,
+                            title = "关于空降助手",
+                            value = "BilibiliSponsorBlock",
+                            onClick = { uriHandler.openUri("https://github.com/hanydd/BilibiliSponsorBlock") },
+                            iconTint = iOSBlue
+                        )
+                    }
                 }
             }
             

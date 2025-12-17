@@ -41,6 +41,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 
 private const val TAG = "MiniPlayerManager"
 private const val NOTIFICATION_ID = 1002
@@ -174,6 +175,8 @@ class MiniPlayerManager private constructor(private val context: Context) {
                 .build()
                 .apply {
                     addListener(playerListener)
+                    // 🔥🔥 [修复] 确保音量正常
+                    volume = 1.0f
                     prepare()
                 }
             
@@ -241,6 +244,8 @@ class MiniPlayerManager private constructor(private val context: Context) {
             _player?.setMediaSource(videoSource)
         }
 
+        // 🔥🔥 [修复] 确保音量正常
+        _player?.volume = 1.0f
         _player?.prepare()
         _player?.playWhenReady = true
 

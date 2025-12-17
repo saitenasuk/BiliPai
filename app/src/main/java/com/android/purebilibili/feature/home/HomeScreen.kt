@@ -3,14 +3,19 @@ package com.android.purebilibili.feature.home
 
 import android.annotation.SuppressLint
 import android.content.Context
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.lazy.staggeredgrid.*  // 🌊 瀑布流布局
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -27,14 +33,15 @@ import com.android.purebilibili.feature.settings.GITHUB_URL
 import com.android.purebilibili.core.store.SettingsManager // 🔥 引入 SettingsManager
 // 🔥 从 components 包导入拆分后的组件
 import com.android.purebilibili.feature.home.components.BottomNavItem
-import com.android.purebilibili.feature.home.components.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.FluidHomeTopBar
 import com.android.purebilibili.feature.home.components.FrostedBottomBar
 import com.android.purebilibili.feature.home.components.CategoryTabRow
-import com.android.purebilibili.feature.home.components.LiveRoomCard
-import com.android.purebilibili.feature.home.components.StoryVideoCard   // 🎬 故事卡片
-import com.android.purebilibili.feature.home.components.GlassVideoCard   // 🍎 玻璃拟态
 import com.android.purebilibili.feature.home.components.iOSHomeHeader  // 🍎 iOS 大标题头部
+// 🔥 从 cards 子包导入卡片组件
+import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
+import com.android.purebilibili.feature.home.components.cards.LiveRoomCard
+import com.android.purebilibili.feature.home.components.cards.StoryVideoCard   // 🎬 故事卡片
+import com.android.purebilibili.feature.home.components.cards.GlassVideoCard   // 🍎 玻璃拟态
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.ui.VideoCardSkeleton
 import com.android.purebilibili.core.ui.ErrorState as ModernErrorState
@@ -74,11 +81,30 @@ fun HomeScreen(
     val pullRefreshState = rememberPullToRefreshState()
     val context = LocalContext.current
     val gridState = rememberLazyGridState()
+    val staggeredGridState = rememberLazyStaggeredGridState()  // 🌊 瀑布流状态
     val hazeState = remember { HazeState() }
     val coroutineScope = rememberCoroutineScope()  // 🍎 用于双击回顶动画
+    
+    // 🔥🔥 [修复] 确保首页显示时 WindowInsets 配置正确，防止从视频页返回时布局跳动
+    val view = androidx.compose.ui.platform.LocalView.current
+    SideEffect {
+        val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
+        // 保持边到边显示（与 VideoDetailScreen 一致）
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+    }
 
-    // 🔥🔥 [新增] 首页展示模式 (0=网格, 1=故事卡片, 2=玻璃拟态)
-    val displayMode by SettingsManager.getDisplayMode(context).collectAsState(initial = 0)
+    // �� [性能优化] 合并首页设置为单一 Flow，减少 6 个 collectAsState → 1 个
+    val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
+        initial = com.android.purebilibili.core.store.HomeSettings()
+    )
+    
+    // 解构设置值（避免每次访问都触发重组）
+    val displayMode = homeSettings.displayMode
+    val isBottomBarFloating = homeSettings.isBottomBarFloating
+    val bottomBarLabelMode = homeSettings.bottomBarLabelMode
+    val isHeaderBlurEnabled = homeSettings.isHeaderBlurEnabled
+    val isBottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled
+    val crashTrackingConsentShown = homeSettings.crashTrackingConsentShown
     
     // 🔥🔥 [修复] 根据展示模式动态设置网格列数
     // 故事卡片需要单列全宽，网格和玻璃使用双列
@@ -89,13 +115,6 @@ fun HomeScreen(
 
     val density = LocalDensity.current
     val navBarHeight = WindowInsets.navigationBars.getBottom(density).let { with(density) { it.toDp() } }
-    
-    // 🔥 iOS 风格：BottomBar 悬浮，已包含 navigationBarsPadding
-    val isBottomBarFloating by SettingsManager.getBottomBarFloating(context).collectAsState(initial = true)
-    
-    // 🔥 [新增] 模糊效果设置
-    val isHeaderBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
-    val isBottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(context).collectAsState(initial = true)
     
     // 🔥 动态计算底部避让高度
     val bottomBarHeight = if (isBottomBarFloating) {
@@ -111,6 +130,31 @@ fun HomeScreen(
     
     // 🔥 分类标签索引由 ViewModel 状态计算
     val categoryIndex = state.currentCategory.ordinal
+    
+    // 🔥🔥 [修复] 使用 rememberSaveable 记住本次会话中是否已处理过弹窗（防止导航后重新显示）
+    var consentDialogHandled by rememberSaveable { mutableStateOf(false) }
+    var showConsentDialog by remember { mutableStateOf(false) }
+    
+    // 🔥🔥 检查欢迎弹窗是否已显示过（确保弹窗顺序显示，不会同时出现）
+    val welcomePrefs = remember { context.getSharedPreferences("app_welcome", Context.MODE_PRIVATE) }
+    val welcomeAlreadyShown = welcomePrefs.getBoolean("first_launch_shown", false)
+    
+    // 检查是否需要显示弹窗（欢迎弹窗已显示过 且 同意弹窗尚未显示过 且 本次会话未处理过）
+    LaunchedEffect(crashTrackingConsentShown) {
+        if (welcomeAlreadyShown && !crashTrackingConsentShown && !consentDialogHandled) {
+            showConsentDialog = true
+        }
+    }
+    
+    // 显示弹窗
+    if (showConsentDialog) {
+        com.android.purebilibili.feature.home.components.CrashTrackingConsentDialog(
+            onDismiss = { 
+                showConsentDialog = false
+                consentDialogHandled = true  // 标记为已处理
+            }
+        )
+    }
     
     // 🍎 计算滚动偏移量用于头部动画 - 🚀 优化：量化减少重组
     val scrollOffset by remember {
@@ -191,6 +235,46 @@ fun HomeScreen(
     androidx.activity.compose.BackHandler(enabled = isLiveCategoryNotHome) {
         viewModel.switchCategory(HomeCategory.RECOMMEND)
     }
+    
+    // 🔥 记录滑动方向用于动画 (true = 向右/上一个分类, false = 向左/下一个分类)
+    var swipeDirection by remember { mutableStateOf(true) }
+    
+    // 🔥 水平滑动切换分类的回调
+    val switchToPreviousCategory: () -> Unit = remember(state.currentCategory) {
+        {
+            swipeDirection = true  // 右滑
+            val currentIndex = HomeCategory.entries.indexOf(state.currentCategory)
+            if (currentIndex > 0) {
+                val prevCategory = HomeCategory.entries[currentIndex - 1]
+                // 处理特殊分类（番剧、影视等需要跳转而非切换）
+                when (prevCategory) {
+                    HomeCategory.ANIME -> onBangumiClick(1)
+                    HomeCategory.MOVIE -> onBangumiClick(2)
+                    HomeCategory.GAME, HomeCategory.KNOWLEDGE, HomeCategory.TECH -> 
+                        onCategoryClick(prevCategory.tid, prevCategory.label)
+                    else -> viewModel.switchCategory(prevCategory)
+                }
+            }
+        }
+    }
+    
+    val switchToNextCategory: () -> Unit = remember(state.currentCategory) {
+        {
+            swipeDirection = false  // 左滑
+            val currentIndex = HomeCategory.entries.indexOf(state.currentCategory)
+            if (currentIndex < HomeCategory.entries.size - 1) {
+                val nextCategory = HomeCategory.entries[currentIndex + 1]
+                // 处理特殊分类（番剧、影视等需要跳转而非切换）
+                when (nextCategory) {
+                    HomeCategory.ANIME -> onBangumiClick(1)
+                    HomeCategory.MOVIE -> onBangumiClick(2)
+                    HomeCategory.GAME, HomeCategory.KNOWLEDGE, HomeCategory.TECH -> 
+                        onCategoryClick(nextCategory.tid, nextCategory.label)
+                    else -> viewModel.switchCategory(nextCategory)
+                }
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -219,7 +303,8 @@ fun HomeScreen(
                             coroutineScope.launch { gridState.animateScrollToItem(0) }
                         },
                         hazeState = if (isBottomBarBlurEnabled) hazeState else null,
-                        isFloating = true
+                        isFloating = true,
+                        labelMode = bottomBarLabelMode
                     )
                 }
             } else {
@@ -241,7 +326,8 @@ fun HomeScreen(
                         coroutineScope.launch { gridState.animateScrollToItem(0) }
                     },
                     hazeState = if (isBottomBarBlurEnabled) hazeState else null,
-                    isFloating = false
+                    isFloating = false,
+                    labelMode = bottomBarLabelMode
                 )
             }
         },
@@ -287,105 +373,157 @@ fun HomeScreen(
                         .padding(bottom = if (isBottomBarFloating) 100.dp else padding.calculateBottomPadding() + 20.dp)
                 )
             } else {
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(
-                        top = 0.dp, 
-                        bottom = if (isBottomBarFloating) 100.dp else padding.calculateBottomPadding() + 20.dp,
-                        start = 8.dp, 
-                        end = 8.dp
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(bottom = if (isBottomBarFloating) 0.dp else navBarHeight)
-                ) {
-                    item(span = { GridItemSpan(gridColumns) }) {
-                        Spacer(modifier = Modifier.height(156.dp))  // 🔥 Header 高度：状态栏 + 搜索栏(52dp) + 分类标签(~52dp) + 阴影缓冲
-                    }
-                    
-                    if (state.currentCategory == HomeCategory.LIVE) {
-                        item(span = { GridItemSpan(gridColumns) }) {
-                            LiveSubCategoryRow(
-                                selectedSubCategory = state.liveSubCategory,
-                                onSubCategorySelected = { viewModel.switchLiveSubCategory(it) }
+                // 🔥 使用 AnimatedContent 实现分类切换动画
+                AnimatedContent(
+                    targetState = state.currentCategory,
+                    transitionSpec = {
+                        // 根据滑动方向决定动画方向
+                        if (swipeDirection) {
+                            // 右滑：新内容从左边滑入，旧内容向右边滑出
+                            (slideInHorizontally(
+                                animationSpec = tween(300),
+                                initialOffsetX = { -it / 3 }
+                            ) + fadeIn(animationSpec = tween(300))).togetherWith(
+                                slideOutHorizontally(
+                                    animationSpec = tween(300),
+                                    targetOffsetX = { it / 3 }
+                                ) + fadeOut(animationSpec = tween(300))
+                            )
+                        } else {
+                            // 左滑：新内容从右边滑入，旧内容向左边滑出
+                            (slideInHorizontally(
+                                animationSpec = tween(300),
+                                initialOffsetX = { it / 3 }
+                            ) + fadeIn(animationSpec = tween(300))).togetherWith(
+                                slideOutHorizontally(
+                                    animationSpec = tween(300),
+                                    targetOffsetX = { -it / 3 }
+                                ) + fadeOut(animationSpec = tween(300))
                             )
                         }
-
-                        if (state.liveRooms.isNotEmpty()) {
-                            itemsIndexed(
-                                items = state.liveRooms,
-                                key = { _, room -> room.roomid },
-                                contentType = { _, _ -> "live_room" }  // 🚀 性能优化
-                            ) { index, room ->
-                                LiveRoomCard(
-                                    room = room,
-                                    index = index,
-                                    onClick = { onLiveClick(room.roomid, room.title, room.uname) } 
+                    },
+                    label = "category_transition"
+                ) { targetCategory ->
+                    // ✅ 对齐模式 (Regular Grid - 每行底部对齐)
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Fixed(gridColumns),
+                        contentPadding = PaddingValues(
+                            top = 156.dp,  // 🔥 Header 高度
+                            bottom = if (isBottomBarFloating) 100.dp else padding.calculateBottomPadding() + 20.dp,
+                            start = 8.dp, 
+                            end = 8.dp
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = if (isBottomBarFloating) 0.dp else navBarHeight)
+                            // 🔥 水平滑动手势切换分类
+                            .pointerInput(targetCategory) {
+                                var totalDragX = 0f
+                                detectHorizontalDragGestures(
+                                    onDragStart = { totalDragX = 0f },
+                                    onDragEnd = {
+                                        // 滑动阈值：120px
+                                        if (totalDragX > 120f) {
+                                            // 右滑：切换到上一个分类
+                                            switchToPreviousCategory()
+                                        } else if (totalDragX < -120f) {
+                                            // 左滑：切换到下一个分类
+                                            switchToNextCategory()
+                                        }
+                                    },
+                                    onDragCancel = { totalDragX = 0f },
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        change.consume()
+                                        totalDragX += dragAmount
+                                    }
                                 )
                             }
-                        }
-                    } else {
-                        if (state.videos.isNotEmpty()) {
-                            itemsIndexed(
-                                items = state.videos,
-                                key = { _, video -> video.bvid },
-                                contentType = { _, _ -> "video" }  // 🚀 性能优化
-                            ) { index, video ->
-                                // 🔥🔥 [新增] 根据展示模式选择卡片样式
-                                when (displayMode) {
-                                    1 -> {
-                                        // 🎬 故事卡片 (Apple TV+ 风格)
-                                        StoryVideoCard(
-                                            video = video,
-                                            onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
-                                        )
-                                    }
-                                    2 -> {
-                                        // 🍎 玻璃拟态 (Vision Pro 风格)
-                                        GlassVideoCard(
-                                            video = video,
-                                            onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
-                                        )
-                                    }
-                                    else -> {
-                                        // 🔥 默认网格卡片
-                                        ElegantVideoCard(
-                                            video = video,
-                                            index = index,
-                                            onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
-                                        )
-                                    }
-                                }
+                    ) {
+                        if (targetCategory == HomeCategory.LIVE) {
+                            item(span = { GridItemSpan(gridColumns) }) {
+                                LiveSubCategoryRow(
+                                    selectedSubCategory = state.liveSubCategory,
+                                    onSubCategorySelected = { viewModel.switchLiveSubCategory(it) }
+                                )
                             }
-                        }
-                    }
 
-                    if (!state.isLoading && state.error == null) {
-                        item(span = { GridItemSpan(gridColumns) }) {
-                            LaunchedEffect(Unit) {
-                                viewModel.loadMore()
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (state.isLoading) {
-                                    CupertinoActivityIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        color = MaterialTheme.colorScheme.secondary
+                            if (state.liveRooms.isNotEmpty()) {
+                                itemsIndexed(
+                                    items = state.liveRooms,
+                                    key = { _, room -> room.roomid },
+                                    contentType = { _, _ -> "live_room" }
+                                ) { index, room ->
+                                    LiveRoomCard(
+                                        room = room,
+                                        index = index,
+                                        onClick = { onLiveClick(room.roomid, room.title, room.uname) } 
                                     )
                                 }
                             }
+                        } else {
+                            if (state.videos.isNotEmpty()) {
+                                itemsIndexed(
+                                    items = state.videos,
+                                    key = { _, video -> video.bvid },
+                                    contentType = { _, _ -> "video" }
+                                ) { index, video ->
+                                    // 🔥🔥 [新增] 根据展示模式选择卡片样式
+                                    when (displayMode) {
+                                        1 -> {
+                                            // 🎬 故事卡片 (Apple TV+ 风格)
+                                            StoryVideoCard(
+                                                video = video,
+                                                onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                            )
+                                        }
+                                        2 -> {
+                                            // 🍎 玻璃拟态 (Vision Pro 风格)
+                                            GlassVideoCard(
+                                                video = video,
+                                                onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                            )
+                                        }
+                                        else -> {
+                                            // 🔥 默认网格卡片
+                                            ElegantVideoCard(
+                                                video = video,
+                                                index = index,
+                                                isFollowing = video.owner.mid in state.followingMids,  // 🔥 判断是否已关注
+                                                onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
-                    }
-                    
-                    item(span = { GridItemSpan(gridColumns) }) {
-                        Box(modifier = Modifier.fillMaxWidth().height(20.dp))
+
+                        if (!state.isLoading && state.error == null) {
+                            item(span = { GridItemSpan(gridColumns) }) {
+                                LaunchedEffect(Unit) {
+                                    viewModel.loadMore()
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (state.isLoading) {
+                                        CupertinoActivityIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
+                        item(span = { GridItemSpan(gridColumns) }) {
+                            Box(modifier = Modifier.fillMaxWidth().height(20.dp))
+                        }
                     }
                 }
             }

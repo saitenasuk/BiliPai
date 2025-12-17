@@ -84,13 +84,24 @@ fun FrostedBottomBar(
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
     isFloating: Boolean = true,
+    labelMode: Int = 1,  // 🔥 0=图标+文字, 1=仅图标, 2=仅文字
     onHomeDoubleTap: () -> Unit = {}  // 🍎 双击首页回到顶部
 ) {
     val isDarkTheme = MaterialTheme.colorScheme.background.red < 0.5f
     val haptic = rememberHapticFeedback()  // 🍎 触觉反馈
 
-    // 🔥 样式参数计算
-    // Floating 使用固定高度，Docked 使用自适应高度 (Content 64dp + SystemBars)
+    // 🔥 根据 labelMode 动态计算高度
+    val floatingHeight = when (labelMode) {
+        0 -> 64.dp   // 图标+文字
+        2 -> 48.dp   // 仅文字
+        else -> 56.dp // 仅图标
+    }
+    val dockedHeight = when (labelMode) {
+        0 -> 56.dp   // 图标+文字
+        2 -> 44.dp   // 仅文字
+        else -> 52.dp // 仅图标
+    }
+    
     val barHorizontalPadding = if (isFloating) 24.dp else 0.dp
     val barBottomPadding = if (isFloating) 16.dp else 0.dp
     val barShape = if (isFloating) RoundedCornerShape(36.dp) else androidx.compose.ui.graphics.RectangleShape  // 🍎 iOS 风格：紧贴底部无圆角
@@ -114,7 +125,7 @@ fun FrostedBottomBar(
                                 ambientColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                 spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                             )
-                            .height(72.dp) // Floating 固定高度
+                            .height(floatingHeight)
                     } else {
                         Modifier // Docked 高度由内容撑开
                     }
@@ -186,7 +197,7 @@ fun FrostedBottomBar(
                         .fillMaxWidth()
                         .then(
                             if (isFloating) Modifier.fillMaxHeight()
-                            else Modifier.height(64.dp)  // 非悬浮固定内容高度
+                            else Modifier.height(dockedHeight)
                         )
                 ) {
                 // 🔥 考虑 Row 的 padding 后的实际可用宽度
@@ -196,7 +207,7 @@ fun FrostedBottomBar(
                 
                 // 🔥 Telegram 风格滑动胶囊指示器
                 val indicatorOffset by animateDpAsState(
-                    targetValue = rowPadding + (itemWidth * selectedIndex) + (itemWidth - 60.dp) / 2,
+                    targetValue = rowPadding + (itemWidth * selectedIndex) + (itemWidth - 48.dp) / 2,  // 🍎 适配 48dp 胶囊
                     animationSpec = spring(
                         dampingRatio = 0.7f,  // 柔和阻尼
                         stiffness = 400f       // 较快响应
@@ -208,8 +219,8 @@ fun FrostedBottomBar(
                 Box(
                     modifier = Modifier
                         .offset(x = indicatorOffset)
-                        .padding(vertical = if (isFloating) 14.dp else 10.dp)
-                        .width(60.dp)
+                        .padding(vertical = if (isFloating) 10.dp else 8.dp)
+                        .width(48.dp)  // 🍎 更小的胶囊
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(18.dp))
                         .background(
@@ -277,25 +288,52 @@ fun FrostedBottomBar(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)  // 🍎 增大图标尺寸
-                                .scale(scale),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CompositionLocalProvider(
-                                LocalContentColor provides iconColor
-                            ) {
-                                if (isSelected) item.selectedIcon() else item.unselectedIcon()
+                        // 🔥 根据 labelMode 显示不同组合
+                        when (labelMode) {
+                            0 -> {
+                                // 图标 + 文字
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .scale(scale),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CompositionLocalProvider(LocalContentColor provides iconColor) {
+                                        if (isSelected) item.selectedIcon() else item.unselectedIcon()
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = item.label,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = iconColor
+                                )
+                            }
+                            2 -> {
+                                // 仅文字
+                                Text(
+                                    text = item.label,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = iconColor,
+                                    modifier = Modifier.scale(scale)
+                                )
+                            }
+                            else -> {
+                                // 仅图标 (默认)
+                                Box(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .scale(scale),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CompositionLocalProvider(LocalContentColor provides iconColor) {
+                                        if (isSelected) item.selectedIcon() else item.unselectedIcon()
+                                    }
+                                }
                             }
                         }
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = item.label,
-                            fontSize = 12.sp,  // 🍎 增大字号
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,  // 🍎 未选中也使用 Medium
-                            color = iconColor
-                        )
                     }
                 }
             }

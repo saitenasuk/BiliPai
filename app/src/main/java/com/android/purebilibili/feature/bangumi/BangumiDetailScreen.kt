@@ -139,7 +139,7 @@ private fun BangumiDetailContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
+                        .height(320.dp)  // 🔥 [修复] 增大高度防止文字被裁切
                 ) {
                     // 封面背景（模糊）
                     AsyncImage(

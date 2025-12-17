@@ -42,14 +42,37 @@ fun LoginScreen(
     val scope = rememberCoroutineScope()
     val view = LocalView.current
     
-    // 🔥 设置沉浸式状态栏和导航栏
-    LaunchedEffect(Unit) {
-        val window = (context as? Activity)?.window ?: return@LaunchedEffect
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.statusBarColor = Color.Transparent.toArgb()
-        window.navigationBarColor = Color.Transparent.toArgb()
-        WindowInsetsControllerCompat(window, view).isAppearanceLightStatusBars = false
-        WindowInsetsControllerCompat(window, view).isAppearanceLightNavigationBars = false
+    // 🔥 设置沉浸式状态栏和导航栏（进入时修改，离开时恢复）
+    DisposableEffect(Unit) {
+        val window = (context as? Activity)?.window
+        val insetsController = if (window != null) {
+            WindowInsetsControllerCompat(window, view)
+        } else null
+        
+        // 保存原始配置
+        val originalStatusBarColor = window?.statusBarColor ?: android.graphics.Color.TRANSPARENT
+        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
+        val originalLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: true
+        val originalDecorFits = window?.decorView?.fitsSystemWindows ?: true
+        
+        // 设置沉浸式
+        if (window != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.statusBarColor = Color.Transparent.toArgb()
+            window.navigationBarColor = Color.Transparent.toArgb()
+            insetsController?.isAppearanceLightStatusBars = false
+            insetsController?.isAppearanceLightNavigationBars = false
+        }
+        
+        onDispose {
+            // 离开时恢复原始配置
+            if (window != null && insetsController != null) {
+                WindowCompat.setDecorFitsSystemWindows(window, originalDecorFits)
+                window.statusBarColor = originalStatusBarColor
+                window.navigationBarColor = originalNavBarColor
+                insetsController.isAppearanceLightStatusBars = originalLightStatusBars
+            }
+        }
     }
 
     // 第一次进入加载二维码

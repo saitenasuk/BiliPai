@@ -364,6 +364,7 @@ fun AppearanceSettingsScreen(
                     )
                     Divider()
                     
+                    // 🔥 底栏磨砂效果 (moved up)
                     SettingSwitchItem(
                         icon = Icons.Outlined.BlurCircular,
                         title = "底栏磨砂效果",
@@ -372,6 +373,79 @@ fun AppearanceSettingsScreen(
                         onCheckedChange = { viewModel.toggleBottomBarBlur(it) },
                         iconTint = iOSBlue
                     )
+                    
+                    Divider()
+                    
+                    // 🔥 底栏显示模式选择 (moved down)
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Outlined.Dashboard,
+                                contentDescription = null,
+                                tint = iOSPurple,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = "底栏标签样式",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = when(state.bottomBarLabelMode) {
+                                        0 -> "图标 + 文字"
+                                        2 -> "仅文字"
+                                        else -> "仅图标"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            // 三种模式选择按钮
+                            listOf(
+                                Triple(0, "图标+文字", Icons.Outlined.Dashboard),
+                                Triple(1, "仅图标", Icons.Outlined.Apps),
+                                Triple(2, "仅文字", Icons.Outlined.TextFields)
+                            ).forEach { (mode, label, icon) ->
+                                val isSelected = state.bottomBarLabelMode == mode
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { viewModel.setBottomBarLabelMode(mode) }
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                            else Color.Transparent
+                                        )
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(
+                                        icon,
+                                        contentDescription = null,
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             

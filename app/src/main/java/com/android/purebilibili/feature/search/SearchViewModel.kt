@@ -10,6 +10,8 @@ import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.SearchUpItem
 import com.android.purebilibili.data.model.response.SearchType
 import com.android.purebilibili.data.repository.SearchRepository
+import com.android.purebilibili.data.repository.SearchOrder
+import com.android.purebilibili.data.repository.SearchDuration
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +36,10 @@ data class SearchUiState(
     // 🔥 搜索发现 / 猜你想搜
     val discoverList: List<String> = listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰"),
     val discoverTitle: String = "搜索发现",
-    val error: String? = null
+    val error: String? = null,
+    // 🔥 搜索过滤条件
+    val searchOrder: SearchOrder = SearchOrder.TOTALRANK,
+    val searchDuration: SearchDuration = SearchDuration.ALL
 )
 
 class SearchViewModel(application: Application) : AndroidViewModel(application) {
@@ -81,6 +86,22 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             search(_uiState.value.query)
         }
     }
+    
+    // 🔥 设置搜索排序
+    fun setSearchOrder(order: SearchOrder) {
+        _uiState.update { it.copy(searchOrder = order) }
+        if (_uiState.value.query.isNotBlank() && _uiState.value.showResults) {
+            search(_uiState.value.query)
+        }
+    }
+    
+    // 🔥 设置时长筛选
+    fun setSearchDuration(duration: SearchDuration) {
+        _uiState.update { it.copy(searchDuration = duration) }
+        if (_uiState.value.query.isNotBlank() && _uiState.value.showResults) {
+            search(_uiState.value.query)
+        }
+    }
 
     fun search(keyword: String) {
         if (keyword.isBlank()) return
@@ -88,13 +109,18 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         // 🔥 清空建议列表
         _uiState.update { it.copy(query = keyword, isSearching = true, showResults = true, suggestions = emptyList(), error = null) }
         saveHistory(keyword)
+        
+        // 📊 记录搜索事件
+        com.android.purebilibili.core.util.AnalyticsHelper.logSearch(keyword)
 
         viewModelScope.launch {
             val searchType = _uiState.value.searchType
             
             when (searchType) {
                 SearchType.VIDEO -> {
-                    val result = SearchRepository.search(keyword)
+                    val order = _uiState.value.searchOrder
+                    val duration = _uiState.value.searchDuration
+                    val result = SearchRepository.search(keyword, order, duration)
                     result.onSuccess { videos ->
                         _uiState.update { it.copy(isSearching = false, searchResults = videos, upResults = emptyList()) }
                     }.onFailure { e ->

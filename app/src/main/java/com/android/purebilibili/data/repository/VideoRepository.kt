@@ -261,6 +261,10 @@ object VideoRepository {
             val viewResp = api.getVideoInfo(bvid)
             val info = viewResp.data ?: throw Exception("视频详情为空: ${viewResp.code}")
             val cid = info.cid
+            
+            // 🔥🔥 [调试] 记录视频信息
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", "🎬 getVideoDetails: bvid=${info.bvid}, aid=${info.aid}, cid=$cid, title=${info.title.take(20)}...")
+            
             if (cid == 0L) throw Exception("CID 获取失败")
 
             // 🔥🔥 [优化] 使用缓存加速重复播放
@@ -374,8 +378,12 @@ object VideoRepository {
     // 🔥🔥 [稳定版核心修复] 获取评论列表
     suspend fun getComments(aid: Long, page: Int, ps: Int = 20): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
+            // 🔥🔥 [修复] 确保 buvid3 已初始化，解决未登录用户无法加载评论的问题
+            ensureBuvid3FromSpi()
+            
             // 🔥 使用缓存 Keys
             val (imgKey, subKey) = getWbiKeys()
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔥 getComments: aid=$aid, page=$page, imgKey=${imgKey.take(8)}..., buvid3=${TokenManager.buvid3Cache?.take(10)}...")
 
             // 🔥 使用 TreeMap 保证签名顺序绝对正确
             val params = TreeMap<String, String>()
@@ -387,14 +395,28 @@ object VideoRepository {
 
             val signedParams = WbiUtils.sign(params, imgKey, subKey)
             val response = api.getReplyList(signedParams)
+            
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔥 getComments response: code=${response.code}, message=${response.message}, replies=${response.data?.replies?.size ?: 0}")
 
             if (response.code == 0) {
                 Result.success(response.data ?: ReplyData())
             } else {
-                Result.failure(Exception("B站接口错误: ${response.code} - ${response.message}"))
+                // 🔥🔥 [改进] 更友好的错误提示
+                val errorMsg = when (response.code) {
+                    -352 -> "请求频率过高，请稍后再试"
+                    -111 -> "签名验证失败"
+                    -101 -> "需要登录后才能查看评论"
+                    -400 -> "请求参数错误"
+                    -412 -> "请求被拦截，请稍后再试"
+                    12002 -> "评论区已关闭"
+                    12009 -> "评论内容不存在"
+                    else -> "加载评论失败 (${response.code})"
+                }
+                android.util.Log.e("VideoRepo", "❌ getComments failed: ${response.code} - ${response.message}")
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("VideoRepo", "❌ getComments exception: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -402,20 +424,28 @@ object VideoRepository {
     // 🔥🔥 [新增] 获取二级评论 (楼中楼)
     suspend fun getSubComments(aid: Long, rootId: Long, page: Int, ps: Int = 20): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
-            // 注意：需要在 ApiClient.kt 中定义 getReplyReply 接口
+            // 🔥🔥 [修复] 确保 buvid3 已初始化
+            ensureBuvid3FromSpi()
+            
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔥 getSubComments: aid=$aid, rootId=$rootId, page=$page")
+            
             val response = api.getReplyReply(
                 oid = aid,
                 root = rootId,
                 pn = page,
                 ps = ps
             )
+            
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔥 getSubComments response: code=${response.code}, replies=${response.data?.replies?.size ?: 0}")
+            
             if (response.code == 0) {
                 Result.success(response.data ?: ReplyData())
             } else {
-                Result.failure(Exception("接口错误: ${response.code}"))
+                android.util.Log.e("VideoRepo", "❌ getSubComments failed: ${response.code} - ${response.message}")
+                Result.failure(Exception("加载回复失败 (${response.code})"))
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("VideoRepo", "❌ getSubComments exception: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -658,8 +688,29 @@ object VideoRepository {
         try { api.getRelatedVideos(bvid).data ?: emptyList() } catch (e: Exception) { emptyList() }
     }
 
+    // 🔥🔥 [新增] 弹幕数据缓存 - 避免横竖屏切换时重复下载
+    private val danmakuCache = LinkedHashMap<Long, ByteArray>(5, 0.75f, true)
+    private const val MAX_DANMAKU_CACHE_SIZE = 5  // 最多缓存5个视频的弹幕
+    
+    /**
+     * 清除弹幕缓存
+     */
+    fun clearDanmakuCache() {
+        danmakuCache.clear()
+        com.android.purebilibili.core.util.Logger.d("VideoRepo", "🧹 Danmaku cache cleared")
+    }
+
     suspend fun getDanmakuRawData(cid: Long): ByteArray? = withContext(Dispatchers.IO) {
         com.android.purebilibili.core.util.Logger.d("VideoRepo", "🎯 getDanmakuRawData: cid=$cid")
+        
+        // 🔥🔥 [优化] 先检查缓存
+        synchronized(danmakuCache) {
+            danmakuCache[cid]?.let {
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Danmaku cache hit for cid=$cid, size=${it.size}")
+                return@withContext it
+            }
+        }
+        
         try {
             val responseBody = api.getDanmakuXml(cid)
             val bytes = responseBody.bytes() // 下载所有数据
@@ -670,39 +721,58 @@ object VideoRepository {
                 return@withContext null
             }
 
+            val result: ByteArray?
+            
             // 检查首字节 判断是否压缩
             // XML 以 '<' 开头 (0x3C)
             if (bytes[0] == 0x3C.toByte()) {
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Danmaku is plain XML, size=${bytes.size}")
-                return@withContext bytes
-            }
-
-            // 尝试 Deflate 解压
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔄 Danmaku appears compressed, attempting deflate...")
-            try {
-                val inflater = java.util.zip.Inflater(true) // nowrap=true
-                inflater.setInput(bytes)
-                val buffer = ByteArray(1024 * 1024 * 4) // max 4MB buffer? 自动扩容较麻烦，先用 simple approach
-                val outputStream = java.io.ByteArrayOutputStream(bytes.size * 3)
-                val tempBuffer = ByteArray(1024)
-                while (!inflater.finished()) {
-                    val count = inflater.inflate(tempBuffer)
-                    if (count == 0) {
-                         if (inflater.needsInput()) break
-                         if (inflater.needsDictionary()) break
+                result = bytes
+            } else {
+                // 尝试 Deflate 解压
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔄 Danmaku appears compressed, attempting deflate...")
+                result = try {
+                    val inflater = java.util.zip.Inflater(true) // nowrap=true
+                    inflater.setInput(bytes)
+                    val outputStream = java.io.ByteArrayOutputStream(bytes.size * 3)
+                    val tempBuffer = ByteArray(1024)
+                    while (!inflater.finished()) {
+                        val count = inflater.inflate(tempBuffer)
+                        if (count == 0) {
+                             if (inflater.needsInput()) break
+                             if (inflater.needsDictionary()) break
+                        }
+                        outputStream.write(tempBuffer, 0, count)
                     }
-                    outputStream.write(tempBuffer, 0, count)
+                    inflater.end()
+                    val decompressed = outputStream.toByteArray()
+                    com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Danmaku decompressed: ${bytes.size} → ${decompressed.size} bytes")
+                    decompressed
+                } catch (e: Exception) {
+                    android.util.Log.e("VideoRepo", "❌ Deflate failed: ${e.message}")
+                    e.printStackTrace()
+                    // 如果解压失败，返回原始数据
+                    bytes
                 }
-                inflater.end()
-                val result = outputStream.toByteArray()
-                com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Danmaku decompressed: ${bytes.size} → ${result.size} bytes")
-                return@withContext result
-            } catch (e: Exception) {
-                android.util.Log.e("VideoRepo", "❌ Deflate failed: ${e.message}")
-                e.printStackTrace()
-                // 如果解压失败，返回原始数据（万一是普通 XML 但只有空格在前？）
-                return@withContext bytes
             }
+            
+            // 🔥🔥 [优化] 存入缓存
+            if (result != null) {
+                synchronized(danmakuCache) {
+                    // 如果缓存已满，移除最老的条目
+                    while (danmakuCache.size >= MAX_DANMAKU_CACHE_SIZE) {
+                        val oldestKey = danmakuCache.keys.firstOrNull()
+                        if (oldestKey != null) {
+                            danmakuCache.remove(oldestKey)
+                            com.android.purebilibili.core.util.Logger.d("VideoRepo", "🗑️ Danmaku cache evicted: cid=$oldestKey")
+                        }
+                    }
+                    danmakuCache[cid] = result
+                    com.android.purebilibili.core.util.Logger.d("VideoRepo", "💾 Danmaku cached: cid=$cid, size=${result.size}, cacheSize=${danmakuCache.size}")
+                }
+            }
+            
+            result
         } catch (e: Exception) {
             android.util.Log.e("VideoRepo", "❌ getDanmakuRawData failed: ${e.message}")
             e.printStackTrace()

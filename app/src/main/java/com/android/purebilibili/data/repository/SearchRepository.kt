@@ -18,27 +18,44 @@ object SearchRepository {
     
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
-    // 🔥 视频搜索
-    suspend fun search(keyword: String): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
+    // 🔥 视频搜索 - 支持排序和时长过滤
+    suspend fun search(
+        keyword: String,
+        order: SearchOrder = SearchOrder.TOTALRANK,
+        duration: SearchDuration = SearchDuration.ALL
+    ): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
         try {
             val navResp = navApi.getNavInfo()
             val wbiImg = navResp.data?.wbi_img
             val imgKey = wbiImg?.img_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
             val subKey = wbiImg?.sub_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
 
-            val params = mapOf(
+            // 🔥🔥 [修复] 使用 search/type API 的正确参数格式
+            val params = mutableMapOf(
                 "keyword" to keyword,
-                "search_type" to "video"
+                "search_type" to "video",  // 搜索类型
+                "order" to order.value,     // 排序方式
+                "duration" to duration.value.toString(),  // 时长筛选
+                "page" to "1",              // 页码
+                "pagesize" to "30"          // 每页数量
             )
+            
+            // 🔥 调试日志 - 检查搜索参数
+            com.android.purebilibili.core.util.Logger.d("SearchRepo", "🔍 Search params BEFORE sign: keyword=$keyword, order=${order.value}, duration=${duration.value}")
+            
             val signedParams = if (imgKey.isNotEmpty()) WbiUtils.sign(params, imgKey, subKey) else params
+            
+            // 🔥 调试日志 - 检查签名后的参数
+            com.android.purebilibili.core.util.Logger.d("SearchRepo", "🔍 Search params AFTER sign: $signedParams")
 
             val response = api.search(signedParams)
-
+            
+            // 🔥🔥 [修复] search/type API 直接返回 result 列表，不需要查找 result_type
             val videoList = response.data?.result
-                ?.find { it.result_type == "video" }
-                ?.data
                 ?.map { it.toVideoItem() }
                 ?: emptyList()
+            
+            com.android.purebilibili.core.util.Logger.d("SearchRepo", "🔍 Search result: ${videoList.size} videos found")
 
             Result.success(videoList)
         } catch (e: Exception) {
@@ -61,7 +78,8 @@ object SearchRepository {
             )
             val signedParams = if (imgKey.isNotEmpty()) WbiUtils.sign(params, imgKey, subKey) else params
 
-            val response = api.search(signedParams)
+            // 🔥🔥 [修复] UP主搜索使用 searchAll 端点
+            val response = api.searchAll(signedParams)
             
             // 提取 bili_user 分类的数据
             val upList = response.data?.result
@@ -154,4 +172,22 @@ object SearchRepository {
             Result.success("搜索发现" to listOf("黑神话悟空", "原神", "初音未来", "JOJO", "罗翔说刑法", "何同学", "毕业季", "猫咪", "我的世界", "战鹰"))
         }
     }
+}
+
+// 🔥 搜索排序选项
+enum class SearchOrder(val value: String, val displayName: String) {
+    TOTALRANK("totalrank", "综合排序"),
+    PUBDATE("pubdate", "最新发布"),
+    CLICK("click", "播放最多"),
+    DM("dm", "弹幕最多"),
+    STOW("stow", "收藏最多")
+}
+
+// 🔥 搜索时长筛选
+enum class SearchDuration(val value: Int, val displayName: String) {
+    ALL(0, "全部时长"),
+    UNDER_10MIN(1, "10分钟以下"),
+    TEN_TO_30MIN(2, "10-30分钟"),
+    THIRTY_TO_60MIN(3, "30-60分钟"),
+    OVER_60MIN(4, "60分钟以上")
 }

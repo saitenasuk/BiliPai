@@ -42,6 +42,23 @@ data class SearchResultCategory(
     val data: List<SearchVideoItem>? = null
 )
 
+// 🔥🔥 [新增] 分类搜索响应 (search/type API)
+@Serializable
+data class SearchTypeResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: SearchTypeData? = null
+)
+
+@Serializable
+data class SearchTypeData(
+    val page: Int = 1,
+    val pagesize: Int = 20,
+    val numResults: Int = 0,
+    val numPages: Int = 0,
+    val result: List<SearchVideoItem>? = null  // 直接返回视频列表
+)
+
 @Serializable
 data class SearchVideoItem(
     val id: Long = 0,
@@ -51,7 +68,9 @@ data class SearchVideoItem(
     val author: String = "",
     val play: Int = 0,
     val video_review: Int = 0,
-    val duration: String = ""
+    val duration: String = "",
+    // 🔥 新增：发布时间戳（秒）
+    val pubdate: Long = 0
 ) {
     fun toVideoItem(): VideoItem {
         return VideoItem(
@@ -67,7 +86,9 @@ data class SearchVideoItem(
             pic = if (pic.startsWith("//")) "https:$pic" else pic,
             owner = Owner(name = author),
             stat = Stat(view = play, danmaku = video_review),
-            duration = parseDuration(duration)
+            duration = parseDuration(duration),
+            // 🔥 传递发布时间
+            pubdate = pubdate
         )
     }
 

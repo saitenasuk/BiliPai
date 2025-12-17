@@ -215,6 +215,15 @@ interface BilibiliApi {
     suspend fun hasCoined(
         @Query("aid") aid: Long
     ): HasCoinedResponse
+    
+    // 🔥🔥 [新增] 获取关注列表（用于首页显示"已关注"标签）
+    @GET("x/relation/followings")
+    suspend fun getFollowings(
+        @Query("vmid") vmid: Long,        // 用户 mid
+        @Query("pn") pn: Int = 1,         // 页码
+        @Query("ps") ps: Int = 50,        // 每页数量（最大 50）
+        @Query("order") order: String = "desc"  // 排序
+    ): FollowingsResponse
 }
 
 // 🔥 [新增] Buvid SPI 响应模型 (用于获取正确的设备指纹)
@@ -247,8 +256,13 @@ interface SearchApi {
     @GET("x/web-interface/search/square")
     suspend fun getHotSearch(@Query("limit") limit: Int = 10): HotSearchResponse
 
+    // 🔥 综合搜索 (不支持排序)
     @GET("x/web-interface/search/all/v2")
-    suspend fun search(@QueryMap params: Map<String, String>): SearchResponse
+    suspend fun searchAll(@QueryMap params: Map<String, String>): SearchResponse
+    
+    // 🔥🔥 [修复] 分类搜索 - 支持排序和时长筛选
+    @GET("x/web-interface/wbi/search/type")
+    suspend fun search(@QueryMap params: Map<String, String>): SearchTypeResponse
     
     // 🔥 搜索建议/联想
     @GET("https://s.search.bilibili.com/main/suggest")

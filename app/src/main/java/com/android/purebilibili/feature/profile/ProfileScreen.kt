@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Login
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -67,16 +68,36 @@ fun ProfileScreen(
     val context = LocalContext.current
     val view = LocalView.current
 
-    // 🔥 设置沉浸式状态栏和导航栏
-    LaunchedEffect(state) {
-        val window = (context as? Activity)?.window ?: return@LaunchedEffect
+    // 🔥 设置沉浸式状态栏和导航栏（进入时修改，离开时恢复）
+    DisposableEffect(state) {
+        val window = (context as? Activity)?.window
+        val insetsController = if (window != null) {
+            WindowInsetsControllerCompat(window, view)
+        } else null
         val isLoggedOut = state is ProfileUiState.LoggedOut
-        if (isLoggedOut) {
+        
+        // 保存原始配置
+        val originalStatusBarColor = window?.statusBarColor ?: android.graphics.Color.TRANSPARENT
+        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
+        val originalLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: true
+        val originalDecorFits = window?.decorView?.fitsSystemWindows ?: true
+        
+        if (isLoggedOut && window != null) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             window.statusBarColor = Color.Transparent.toArgb()
             window.navigationBarColor = Color.Transparent.toArgb()
-            WindowInsetsControllerCompat(window, view).isAppearanceLightStatusBars = false
-            WindowInsetsControllerCompat(window, view).isAppearanceLightNavigationBars = false
+            insetsController?.isAppearanceLightStatusBars = false
+            insetsController?.isAppearanceLightNavigationBars = false
+        }
+        
+        onDispose {
+            // 离开时恢复原始配置
+            if (isLoggedOut && window != null && insetsController != null) {
+                WindowCompat.setDecorFitsSystemWindows(window, originalDecorFits)
+                window.statusBarColor = originalStatusBarColor
+                window.navigationBarColor = originalNavBarColor
+                insetsController.isAppearanceLightStatusBars = originalLightStatusBars
+            }
         }
     }
 

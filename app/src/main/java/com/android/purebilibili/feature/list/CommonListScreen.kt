@@ -17,7 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.VideoGridItemSkeleton
-import com.android.purebilibili.feature.home.components.ElegantVideoCard
+import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -37,13 +37,13 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.theme.PureBiliBiliTheme
 import com.android.purebilibili.feature.settings.AppThemeMode
-import com.android.purebilibili.feature.video.FullscreenPlayerOverlay
+import com.android.purebilibili.feature.video.ui.overlay.FullscreenPlayerOverlay
 import com.android.purebilibili.navigation.AppNavigation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 import com.android.purebilibili.feature.video.MiniPlayerManager
-import com.android.purebilibili.feature.video.MiniPlayerOverlay
+import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
 import coil.compose.AsyncImage
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 

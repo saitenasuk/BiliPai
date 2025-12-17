@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -46,6 +47,30 @@ import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ViewInfo
+// Refactored UI components
+import com.android.purebilibili.feature.video.ui.section.VideoTitleSection
+import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
+import com.android.purebilibili.feature.video.ui.section.UpInfoSection
+import com.android.purebilibili.feature.video.ui.section.DescriptionSection
+import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
+import com.android.purebilibili.feature.video.ui.section.ActionButton
+import com.android.purebilibili.feature.video.ui.components.RelatedVideosHeader
+import com.android.purebilibili.feature.video.ui.components.RelatedVideoItem
+import com.android.purebilibili.feature.video.ui.components.CoinDialog
+import com.android.purebilibili.feature.video.ui.components.PagesSelector
+// Imports for moved classes
+import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
+import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
+import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import com.android.purebilibili.feature.video.state.VideoPlayerState
+import com.android.purebilibili.feature.video.state.rememberVideoPlayerState
+import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
+import com.android.purebilibili.feature.video.ui.components.SubReplySheet
+import com.android.purebilibili.feature.video.ui.components.ReplyHeader
+import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.ui.components.LikeBurstAnimation
+import com.android.purebilibili.feature.video.ui.components.TripleSuccessAnimation
+import com.android.purebilibili.feature.video.ui.components.VideoDetailSkeleton
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -73,11 +98,35 @@ fun VideoDetailScreen(
     // 🔥 监听评论状态
     val commentState by commentViewModel.commentState.collectAsState()
     val subReplyState by commentViewModel.subReplyState.collectAsState()
+    
+    // 🚀 空降助手状态
+    val sponsorSegment by viewModel.currentSponsorSegment.collectAsState()
+    val showSponsorSkipButton by viewModel.showSkipButton.collectAsState()
+    val sponsorBlockEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getSponsorBlockEnabled(context)
+        .collectAsState(initial = false)
 
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     var isPipMode by remember { mutableStateOf(isInPipMode) }
     LaunchedEffect(isInPipMode) { isPipMode = isInPipMode }
+    
+    // 🚀 空降助手：检查播放位置（🔧 性能优化：自适应检查间隔）
+    LaunchedEffect(sponsorBlockEnabled, uiState) {
+        if (sponsorBlockEnabled && uiState is PlayerUiState.Success) {
+            while (true) {
+                // 🚀 根据是否有即将到来的片段动态调整检查频率
+                // 无片段或远离片段时：1000ms；接近片段时：300ms
+                val interval = if (sponsorSegment != null || (viewModel.sponsorSegments.value.isNotEmpty())) {
+                    300L  // 有活跃片段或片段列表非空时，更频繁检查
+                } else {
+                    1000L // 无片段时降低检查频率，节省 CPU
+                }
+                kotlinx.coroutines.delay(interval)
+                viewModel.checkAndSkipSponsor(context)
+            }
+        }
+    }
     
     // 🔥 从小窗展开时自动进入横屏全屏
     LaunchedEffect(startInFullscreen) {
@@ -88,13 +137,42 @@ fun VideoDetailScreen(
         }
     }
 
-    // 退出重置亮度
+    // 退出重置亮度 + 🔥 屏幕常亮管理 + 状态栏恢复
     DisposableEffect(Unit) {
+        val activity = context.findActivity()
+        val window = activity?.window
+        
+        // 🔥🔥 [修复] 保存进入前的状态栏配置
+        val originalStatusBarColor = window?.statusBarColor ?: android.graphics.Color.TRANSPARENT
+        val insetsController = if (window != null && activity != null) {
+            WindowCompat.getInsetsController(window, window.decorView)
+        } else null
+        val originalLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: true
+        
+        // 🔥🔥 [沉浸式] 启用边到边显示，让内容延伸到状态栏下方
+        if (window != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+        }
+        
+        // 🔥🔥 [修复] 进入视频页时保持屏幕常亮，防止自动熄屏
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        
         onDispose {
-            val window = context.findActivity()?.window
             val layoutParams = window?.attributes
             layoutParams?.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             window?.attributes = layoutParams
+            
+            // 🔥🔥 [修复] 离开视频页时取消屏幕常亮
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            
+            // 🔥🔥 [注意] 不再恢复 setDecorFitsSystemWindows，因为首页也保持边到边显示
+            // 这样可以避免返回首页时的布局跳动
+            
+            // 🔥🔥 [修复] 离开视频页时恢复状态栏外观（恢复到进入前的状态）
+            if (window != null && insetsController != null) {
+                insetsController.isAppearanceLightStatusBars = originalLightStatusBars
+                window.statusBarColor = originalStatusBarColor
+            }
         }
     }
     
@@ -107,6 +185,11 @@ fun VideoDetailScreen(
             kotlinx.coroutines.delay(2000)
             popupMessage = null
         }
+    }
+    
+    // 🔥 初始化进度持久化存储
+    LaunchedEffect(Unit) {
+        viewModel.initWithContext(context)
     }
 
     // 初始化播放器状态
@@ -200,20 +283,23 @@ fun VideoDetailScreen(
     val backgroundColor = MaterialTheme.colorScheme.background
     val isLightBackground = remember(backgroundColor) { backgroundColor.luminance() > 0.5f }
 
+    // 🔥🔥 iOS风格：竖屏时状态栏黑色背景（与播放器融为一体）
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context.findActivity())?.window ?: return@SideEffect
             val insetsController = WindowCompat.getInsetsController(window, view)
 
             if (isLandscape) {
+                // 全屏隐藏状态栏
                 insetsController.hide(WindowInsetsCompat.Type.systemBars())
                 insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 window.statusBarColor = Color.Black.toArgb()
                 window.navigationBarColor = Color.Black.toArgb()
             } else {
+                // 🔥🔥 [沉浸式] 竖屏时状态栏透明，让视频延伸到状态栏下方
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
-                insetsController.isAppearanceLightStatusBars = isLightBackground
-                window.statusBarColor = Color.Transparent.toArgb()
+                insetsController.isAppearanceLightStatusBars = false  // 白色图标（视频区域是深色的）
+                window.statusBarColor = Color.Transparent.toArgb()  // 透明状态栏
                 window.navigationBarColor = Color.Transparent.toArgb()
             }
         }
@@ -247,20 +333,35 @@ fun VideoDetailScreen(
                     onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                     onBack = { toggleOrientation() },
                     // 🧪 实验性功能：双击点赞
-                    onDoubleTapLike = { viewModel.toggleLike() }
+                    onDoubleTapLike = { viewModel.toggleLike() },
+                    // 🚀 空降助手
+                    sponsorSegment = sponsorSegment,
+                    showSponsorSkipButton = showSponsorSkipButton,
+                    onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                    onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
                 )
             } else {
-                // 🔥🔥 B站风格布局：视频 + 内容区域
+                // 🔥🔥 沉浸式布局：状态栏黑色 + 视频精确16:9 + 内容区域
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // 1. 播放器区域（4:3 比例，更接近官方 B站 App 竖屏播放器大小）
+                    // 🔥🔥 [沉浸式] 获取状态栏高度
+                    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                     val screenWidthDp = configuration.screenWidthDp.dp
-                    val playerHeight = screenWidthDp * 3f / 4f  // 🔥 使用 4:3 比例，让播放器更大
+                    val videoHeight = screenWidthDp * 9f / 16f  // 精确 16:9
                     
+                    // ✅ 第1层：状态栏黑色背景区域
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(statusBarHeight)
+                            .background(Color.Black)
+                    )
+                    
+                    // ✅ 第2层：视频播放器区域（精确16:9，无额外黑边）
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(playerHeight)
-                            .background(Color.Black)
+                            .height(videoHeight)
+                            .clipToBounds()
                     ) {
                         VideoPlayerSection(
                             playerState = playerState,
@@ -270,12 +371,15 @@ fun VideoDetailScreen(
                             onToggleFullscreen = { toggleOrientation() },
                             onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                             onBack = onBack,
-                            // 🧪 实验性功能：双击点赞
-                            onDoubleTapLike = { viewModel.toggleLike() }
+                            onDoubleTapLike = { viewModel.toggleLike() },
+                            sponsorSegment = sponsorSegment,
+                            showSponsorSkipButton = showSponsorSkipButton,
+                            onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                            onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
                         )
                     }
 
-                    // 2. 内容区域（填充剩余空间）
+                    // ✅ 第3层：内容区域
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -506,15 +610,24 @@ fun VideoContentSection(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
-        // 1. 标题和统计行 (置顶)
+        // 🔥🔥 [官方布局] 1. UP主信息 (置顶)
         item {
-            VideoTitleSection(
+            UpInfoSection(
                 info = info,
+                isFollowing = isFollowing,
+                onFollowClick = onFollowClick,
                 onUpClick = onUpClick
             )
         }
 
-        // 2. 操作按钮行
+        // 🔥🔥 [官方布局] 2. 标题 + 统计 + 描述 (紧凑排列)
+        item {
+            VideoTitleWithDesc(
+                info = info
+            )
+        }
+
+        // 🔥🔥 [官方布局] 3. 操作按钮行
         item {
             ActionButtonsRow(
                 info = info,
@@ -527,68 +640,91 @@ fun VideoContentSection(
                 onTripleClick = onTripleClick,
                 onCommentClick = {
                     selectedTabIndex = 1 // 切换到评论 Tab
-                    // 可选：滚动到评论位置
                 }
             )
         }
 
-        // 3. Tab 栏
-        item { // 使用 stickyHeader 如果想吸顶，但这里普通 item 即可，或者 lazyColumn 外面套 column
-             Column {
-                TabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = BiliPink,
-                    indicator = { tabPositions ->
-                        TabRowDefaults.SecondaryIndicator(
-                            Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                            color = BiliPink
-                        )
-                    }
+        // 🔥🔥 [官方布局] 4. Tab 栏（简介/评论 + 发弹幕入口）
+        item {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // 左侧 Tab 按钮
                     tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = {
-                                Text(
-                                    title,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            selectedContentColor = BiliPink,
-                            unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        val isSelected = selectedTabIndex == index
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clickable { selectedTabIndex = index }
+                                .padding(vertical = 6.dp, horizontal = 6.dp)
+                        ) {
+                            Text(
+                                text = title,
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) BiliPink else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            // 下划线指示器
+                            Box(
+                                modifier = Modifier
+                                    .width(24.dp)
+                                    .height(2.dp)
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(1.dp))
+                                    .background(if (isSelected) BiliPink else Color.Transparent)
+                            )
+                        }
+                        if (index < tabs.lastIndex) {
+                            Spacer(modifier = Modifier.width(16.dp))
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.weight(1f))
+                    
+                    // 右侧发弹幕入口
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .clickable { /* TODO: 打开弹幕发送框 */ }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "点我发弹幕",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        // 弹幕图标
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                .background(BiliPink),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "弹",
+                                fontSize = 10.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
             }
         }
 
-        // 4. Tab 内容
+        // 5. Tab 内容
         if (selectedTabIndex == 0) {
             // === 简介 Tab 内容 ===
-
-            // UP主信息
-            item {
-                UpInfoSection(
-                    info = info,
-                    isFollowing = isFollowing,
-                    onFollowClick = onFollowClick,
-                    onUpClick = onUpClick
-                )
-            }
-
-            item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                )
-            }
-
-            // 视频简介
-            item { DescriptionSection(desc = info.desc) }
 
             // 分P选择器 (仅多P视频显示)
             if (info.pages.size > 1) {
@@ -601,10 +737,9 @@ fun VideoContentSection(
                 }
             }
 
-
             // 相关视频推荐
             item { 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 VideoRecommendationHeader() 
             }
 

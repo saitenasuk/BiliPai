@@ -71,7 +71,13 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         TokenManager.init(this)
         createNotificationChannel()
         
-        // 🚀🚀 [冷启动优化] 延迟非关键初始化到主线程空闲时
+        // 🔥 初始化 Firebase Crashlytics
+        initCrashlytics()
+        
+        // 📊 初始化 Firebase Analytics
+        initAnalytics()
+        
+        // 🚀🚀🚀 [冷启动优化] 延迟非关键初始化到主线程空闲时
         Handler(Looper.getMainLooper()).post {
             // 🔥 恢复 WBI 密钥缓存
             WbiKeyManager.restoreFromStorage(this)
@@ -88,7 +94,58 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         }
     }
     
-    // 🚀🚀 [后台内存优化] 响应系统内存警告
+    // 🔥 初始化 Firebase Crashlytics
+    private fun initCrashlytics() {
+        try {
+            // 🔥 读取用户设置（默认开启）
+            val prefs = getSharedPreferences("crash_tracking", Context.MODE_PRIVATE)
+            val enabled = prefs.getBoolean("enabled", true)  // 默认开启
+            
+            // 🔥 根据用户设置启用/禁用 Crashlytics
+            com.android.purebilibili.core.util.CrashReporter.setEnabled(enabled)
+            
+            if (enabled) {
+                // 设置应用版本信息
+                val packageInfo = packageManager.getPackageInfo(packageName, 0)
+                com.android.purebilibili.core.util.CrashReporter.setCustomKey("app_version", packageInfo.versionName ?: "unknown")
+                com.android.purebilibili.core.util.CrashReporter.setCustomKey("version_code", packageInfo.versionCode)
+                
+                // 设置设备信息
+                com.android.purebilibili.core.util.CrashReporter.setCustomKey("device_model", android.os.Build.MODEL)
+                com.android.purebilibili.core.util.CrashReporter.setCustomKey("android_version", android.os.Build.VERSION.SDK_INT)
+            }
+            
+            Logger.d(TAG, "🔥 Firebase Crashlytics initialized (enabled=$enabled)")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to init Crashlytics", e)
+        }
+    }
+    
+    // � 初始化 Firebase Analytics
+    private fun initAnalytics() {
+        try {
+            // 初始化 AnalyticsHelper
+            com.android.purebilibili.core.util.AnalyticsHelper.init(this)
+            
+            // 🔥 读取用户设置（默认开启）
+            val prefs = getSharedPreferences("analytics_tracking", Context.MODE_PRIVATE)
+            val enabled = prefs.getBoolean("enabled", true)  // 默认开启
+            
+            // 🔥 根据用户设置启用/禁用 Analytics
+            com.android.purebilibili.core.util.AnalyticsHelper.setEnabled(enabled)
+            
+            if (enabled) {
+                // 记录应用打开事件
+                com.android.purebilibili.core.util.AnalyticsHelper.logAppOpen()
+            }
+            
+            Logger.d(TAG, "📊 Firebase Analytics initialized (enabled=$enabled)")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to init Analytics", e)
+        }
+    }
+    
+    // �🚀🚀 [后台内存优化] 响应系统内存警告
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         when (level) {

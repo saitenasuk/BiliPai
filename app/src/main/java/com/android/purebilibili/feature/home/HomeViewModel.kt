@@ -2,66 +2,15 @@
 package com.android.purebilibili.feature.home
 
 import android.app.Application
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.Stable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.android.purebilibili.data.model.response.VideoItem
-import com.android.purebilibili.data.model.response.LiveRoom
 import com.android.purebilibili.data.repository.VideoRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-// 🚀 性能优化：@Immutable 告诉 Compose 此类不可变，减少不必要的重组
-@Immutable
-data class UserState(
-    val isLogin: Boolean = false,
-    val face: String = "",
-    val name: String = "",
-    val mid: Long = 0,
-    val level: Int = 0,
-    val coin: Double = 0.0,
-    val bcoin: Double = 0.0,
-    val following: Int = 0,
-    val follower: Int = 0,
-    val dynamic: Int = 0,
-    val isVip: Boolean = false,
-    val vipLabel: String = ""
-)
-
-// 🔥🔥 [新增] 首页分类枚举（含 Bilibili 分区 ID）
-enum class HomeCategory(val label: String, val tid: Int = 0) {
-    RECOMMEND("推荐", 0),
-    POPULAR("热门", 0),
-    LIVE("直播", 0),
-    ANIME("追番", 13),     // 番剧分区
-    MOVIE("影视", 181),    // 影视分区
-    // 🔥 新增分类
-    GAME("游戏", 4),       // 游戏分区
-    KNOWLEDGE("知识", 36), // 知识分区
-    TECH("科技", 188)      // 科技分区
-}
-
-// 🔥🔥 [新增] 直播子分类
-enum class LiveSubCategory(val label: String) {
-    FOLLOWED("关注"),
-    POPULAR("热门")
-}
-
-// 🚀 性能优化：@Stable 告诉 Compose 此类字段变化可被追踪，优化重组
-@Stable
-data class HomeUiState(
-    val videos: List<VideoItem> = emptyList(),
-    val liveRooms: List<LiveRoom> = emptyList(),  // 🔥 直播列表
-    val isLoading: Boolean = false,
-    val error: String? = null,
-    val user: UserState = UserState(),
-    val currentCategory: HomeCategory = HomeCategory.RECOMMEND,  // 🔥 当前分类
-    val liveSubCategory: LiveSubCategory = LiveSubCategory.FOLLOWED,  // 🔥 直播子分类
-    val refreshKey: Long = 0L  // 🔥 刷新标识符，用于强制重置动画
-)
+// 状态类已移至 HomeUiState.kt
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
@@ -300,11 +249,81 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         isVip = isVip
                     )
                 )
+                
+                // 🔥 获取关注列表（异步，不阻塞主流程）
+                fetchFollowingList(navData.mid)
             } else {
                 com.android.purebilibili.core.store.TokenManager.isVipCache = false
                 com.android.purebilibili.core.store.TokenManager.midCache = null
-                _uiState.value = _uiState.value.copy(user = UserState(isLogin = false))
+                _uiState.value = _uiState.value.copy(
+                    user = UserState(isLogin = false),
+                    followingMids = emptySet()
+                )
             }
+        }
+    }
+    
+    // 🔥 获取关注列表（并行分页获取，支持更多关注，带本地缓存）
+    private suspend fun fetchFollowingList(mid: Long) {
+        val context = getApplication<android.app.Application>()
+        val prefs = context.getSharedPreferences("following_cache", android.content.Context.MODE_PRIVATE)
+        val cacheKey = "following_mids_$mid"
+        val cacheTimeKey = "following_time_$mid"
+        
+        // 🔥 检查缓存（1小时内有效）
+        val cachedTime = prefs.getLong(cacheTimeKey, 0)
+        val cacheValidDuration = 60 * 60 * 1000L  // 1小时
+        if (System.currentTimeMillis() - cachedTime < cacheValidDuration) {
+            val cachedMids = prefs.getStringSet(cacheKey, null)
+            if (!cachedMids.isNullOrEmpty()) {
+                val mids = cachedMids.mapNotNull { it.toLongOrNull() }.toSet()
+                _uiState.value = _uiState.value.copy(followingMids = mids)
+                com.android.purebilibili.core.util.Logger.d("HomeVM", "📋 Loaded ${mids.size} following mids from cache")
+                return
+            }
+        }
+        
+        // 🔥 动态获取所有关注列表（无上限）
+        try {
+            val allMids = mutableSetOf<Long>()
+            
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                var page = 1
+                while (true) {  // 🔥 无限循环，直到获取完所有关注
+                    try {
+                        val result = com.android.purebilibili.core.network.NetworkModule.api.getFollowings(mid, page, 50)
+                        if (result.code == 0 && result.data != null) {
+                            val list = result.data.list ?: break
+                            if (list.isEmpty()) break
+                            
+                            list.forEach { user -> allMids.add(user.mid) }
+                            
+                            // 如果这一页不满50，说明已经获取完所有关注
+                            if (list.size < 50) {
+                                com.android.purebilibili.core.util.Logger.d("HomeVM", "📋 Reached end at page $page, total: ${allMids.size}")
+                                break
+                            }
+                            page++
+                        } else {
+                            break
+                        }
+                    } catch (e: Exception) {
+                        com.android.purebilibili.core.util.Logger.e("HomeVM", "📋 Error at page $page", e)
+                        break
+                    }
+                }
+            }
+            
+            // 🔥 保存到本地缓存
+            prefs.edit()
+                .putStringSet(cacheKey, allMids.map { it.toString() }.toSet())
+                .putLong(cacheTimeKey, System.currentTimeMillis())
+                .apply()
+            
+            _uiState.value = _uiState.value.copy(followingMids = allMids.toSet())
+            com.android.purebilibili.core.util.Logger.d("HomeVM", "📋 Total following mids fetched and cached: ${allMids.size}")
+        } catch (e: Exception) {
+            com.android.purebilibili.core.util.Logger.e("HomeVM", "📋 Error fetching following list", e)
         }
     }
 }

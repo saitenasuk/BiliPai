@@ -45,6 +45,9 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.BangumiDetail
 import com.android.purebilibili.data.model.response.BangumiEpisode
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import com.android.purebilibili.feature.video.ui.components.SponsorSkipButton
+import com.android.purebilibili.feature.video.danmaku.DanmakuManager
+import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 
 /**
  * 番剧播放页面
@@ -62,6 +65,13 @@ fun BangumiPlayerScreen(
     val view = LocalView.current
     val configuration = LocalConfiguration.current
     val uiState by viewModel.uiState.collectAsState()
+    
+    // 🚀 空降助手状态
+    val sponsorSegment by viewModel.currentSponsorSegment.collectAsState()
+    val showSponsorSkipButton by viewModel.showSkipButton.collectAsState()
+    val sponsorBlockEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getSponsorBlockEnabled(context)
+        .collectAsState(initial = false)
     
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     
@@ -82,15 +92,68 @@ fun BangumiPlayerScreen(
         viewModel.loadBangumiPlay(seasonId, epId)
     }
     
+    // 🚀 空降助手：定期检查播放位置
+    LaunchedEffect(sponsorBlockEnabled, uiState) {
+        if (sponsorBlockEnabled && uiState is BangumiPlayerState.Success) {
+            while (true) {
+                kotlinx.coroutines.delay(500)
+                viewModel.checkAndSkipSponsor(context)
+            }
+        }
+    }
+    
+    // 🔥🔥 [重构] 弹幕管理器 - 使用单例确保横竖屏切换时保持状态
+    val danmakuManager = rememberDanmakuManager()
+    
+    // 弹幕开关设置
+    val danmakuEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuEnabled(context)
+        .collectAsState(initial = true)
+    
+    // 获取当前剧集 cid
+    val currentCid = (uiState as? BangumiPlayerState.Success)?.currentEpisode?.cid ?: 0L
+    
+    // 加载弹幕 - 在父级组件管理
+    LaunchedEffect(currentCid, danmakuEnabled) {
+        android.util.Log.d("BangumiPlayer", "🎯 Parent Danmaku LaunchedEffect: cid=$currentCid, enabled=$danmakuEnabled")
+        if (currentCid > 0 && danmakuEnabled) {
+            danmakuManager.isEnabled = true
+            danmakuManager.loadDanmaku(currentCid)
+        } else {
+            danmakuManager.isEnabled = false
+        }
+    }
+    
+    // 绑定 Player
+    DisposableEffect(exoPlayer) {
+        danmakuManager.attachPlayer(exoPlayer)
+        onDispose { /* Player 在另一个 DisposableEffect 中释放 */ }
+    }
+    
+    // 清理弹幕管理器（解绑视图但不释放数据，单例会保持状态）
+    DisposableEffect(Unit) {
+        onDispose {
+            danmakuManager.detachView()
+        }
+    }
+    
     // 注意：视频播放由 ViewModel.playVideo 处理，不在这里设置 MediaItem
     
-    // 清理播放器
+    // 清理播放器 + 🔥 屏幕常亮管理
     DisposableEffect(Unit) {
+        val window = context.findActivity()?.window
+        
+        // 🔥🔥 [修复] 进入番剧播放页时保持屏幕常亮，防止自动熄屏
+        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        
         onDispose {
             exoPlayer.release()
             // 🔥 恢复默认方向，避免离开播放器后卡在横屏
             context.findActivity()?.requestedOrientation = 
                 ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            
+            // 🔥🔥 [修复] 离开番剧播放页时取消屏幕常亮
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
     
@@ -191,15 +254,21 @@ fun BangumiPlayerScreen(
             // 全屏播放
             BangumiPlayerView(
                 exoPlayer = exoPlayer,
+                danmakuManager = danmakuManager,  // 🔥 传入父级的弹幕管理器
+                danmakuEnabled = danmakuEnabled,
                 modifier = Modifier.fillMaxSize(),
                 isFullscreen = true,
-                currentCid = currentCid,
                 currentQuality = successState?.quality ?: 0,
                 acceptQuality = successState?.acceptQuality ?: emptyList(),
                 acceptDescription = successState?.acceptDescription ?: emptyList(),
                 onQualityChange = { viewModel.changeQuality(it) },
                 onBack = { toggleOrientation() },
-                onToggleFullscreen = { toggleOrientation() }
+                onToggleFullscreen = { toggleOrientation() },
+                // 🚀 空降助手
+                sponsorSegment = sponsorSegment,
+                showSponsorSkipButton = showSponsorSkipButton,
+                onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
             )
         } else {
             // 竖屏：播放器 + 内容
@@ -216,15 +285,21 @@ fun BangumiPlayerScreen(
                 ) {
                     BangumiPlayerView(
                         exoPlayer = exoPlayer,
+                        danmakuManager = danmakuManager,  // 🔥 传入父级的弹幕管理器
+                        danmakuEnabled = danmakuEnabled,
                         modifier = Modifier.fillMaxSize(),
                         isFullscreen = false,
-                        currentCid = successState?.currentEpisode?.cid ?: 0L,
                         currentQuality = successState?.quality ?: 0,
                         acceptQuality = successState?.acceptQuality ?: emptyList(),
                         acceptDescription = successState?.acceptDescription ?: emptyList(),
                         onQualityChange = { viewModel.changeQuality(it) },
                         onBack = onBack,
-                        onToggleFullscreen = { toggleOrientation() }
+                        onToggleFullscreen = { toggleOrientation() },
+                        // 🚀 空降助手
+                        sponsorSegment = sponsorSegment,
+                        showSponsorSkipButton = showSponsorSkipButton,
+                        onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                        onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
                     )
                 }
                 
@@ -284,19 +359,24 @@ fun BangumiPlayerScreen(
 @Composable
 private fun BangumiPlayerView(
     exoPlayer: ExoPlayer,
+    danmakuManager: DanmakuManager,  // 🔥 从父级传入
+    danmakuEnabled: Boolean,  // 🔥 从父级传入
     modifier: Modifier = Modifier,
     isFullscreen: Boolean = false,
-    currentCid: Long = 0L,
     // 🔥 新增：清晰度相关参数
     currentQuality: Int = 0,
     acceptQuality: List<Int> = emptyList(),
     acceptDescription: List<String> = emptyList(),
     onQualityChange: (Int) -> Unit = {},
     onBack: () -> Unit,
-    onToggleFullscreen: () -> Unit
+    onToggleFullscreen: () -> Unit,
+    // 🚀 空降助手
+    sponsorSegment: com.android.purebilibili.data.model.response.SponsorSegment? = null,
+    showSponsorSkipButton: Boolean = false,
+    onSponsorSkip: () -> Unit = {},
+    onSponsorDismiss: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     
     // 音频管理
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager }
@@ -327,32 +407,6 @@ private fun BangumiPlayerView(
     var currentProgress by remember { mutableFloatStateOf(0f) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(1L) }
-    
-    // 弹幕管理器
-    val danmakuManager = remember(context, scope) { 
-        com.android.purebilibili.feature.video.DanmakuManager(context, scope) 
-    }
-    
-    // 弹幕开关设置
-    val danmakuEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getDanmakuEnabled(context)
-        .collectAsState(initial = true)
-    
-    // 加载弹幕
-    LaunchedEffect(currentCid, danmakuEnabled) {
-        if (currentCid > 0 && danmakuEnabled) {
-            danmakuManager.isEnabled = true
-            danmakuManager.loadDanmaku(currentCid)
-        } else {
-            danmakuManager.isEnabled = false
-        }
-    }
-    
-    // 绑定 Player
-    DisposableEffect(exoPlayer) {
-        danmakuManager.attachPlayer(exoPlayer)
-        onDispose { danmakuManager.release() }
-    }
     
     // 监听播放器状态
     LaunchedEffect(exoPlayer) {
@@ -402,21 +456,9 @@ private fun BangumiPlayerView(
                                 showControls = true
                                 lastInteractionTime = System.currentTimeMillis()
                                 dragDelta = 0f
-                                
-                                gestureMode = when {
-                                    offset.x < screenWidth * 0.3f -> {
-                                        gestureValue = currentBrightness
-                                        BangumiGestureMode.Brightness
-                                    }
-                                    offset.x > screenWidth * 0.7f -> {
-                                        gestureValue = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-                                        BangumiGestureMode.Volume
-                                    }
-                                    else -> {
-                                        seekPreviewPosition = currentPosition
-                                        BangumiGestureMode.Seek
-                                    }
-                                }
+                                seekPreviewPosition = currentPosition
+                                // 🔥🔥 [修复] 暂不设置模式，等待第一次拖动确定方向
+                                gestureMode = BangumiGestureMode.None
                             },
                             onDragEnd = {
                                 if (gestureMode == BangumiGestureMode.Seek && kotlin.math.abs(dragDelta) > 20f) {
@@ -427,6 +469,24 @@ private fun BangumiPlayerView(
                             onDragCancel = { gestureMode = BangumiGestureMode.None },
                             onDrag = { change, dragAmount ->
                                 change.consume()
+                                
+                                // 🔥🔥 [修复] 第一次拖动时根据方向决定模式
+                                if (gestureMode == BangumiGestureMode.None) {
+                                    gestureMode = if (kotlin.math.abs(dragAmount.x) > kotlin.math.abs(dragAmount.y)) {
+                                        // 水平拖动 -> 进度调节
+                                        BangumiGestureMode.Seek
+                                    } else {
+                                        // 垂直拖动 -> 根据起始位置决定亮度或音量
+                                        if (change.position.x < screenWidth * 0.5f) {
+                                            gestureValue = currentBrightness
+                                            BangumiGestureMode.Brightness
+                                        } else {
+                                            gestureValue = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+                                            BangumiGestureMode.Volume
+                                        }
+                                    }
+                                }
+                                
                                 when (gestureMode) {
                                     BangumiGestureMode.Brightness -> {
                                         gestureValue = (gestureValue - dragAmount.y / screenHeight).coerceIn(0f, 1f)
@@ -465,6 +525,7 @@ private fun BangumiPlayerView(
                 PlayerView(ctx).apply {
                     player = exoPlayer
                     useController = false
+                    keepScreenOn = true  // 🔥 确保屏幕常亮
                     setBackgroundColor(android.graphics.Color.BLACK)
                 }
             },
@@ -620,6 +681,15 @@ private fun BangumiPlayerView(
                 onDismiss = { showQualityMenu = false }
             )
         }
+        
+        // 🚀 空降助手跳过按钮
+        SponsorSkipButton(
+            segment = sponsorSegment,
+            visible = showSponsorSkipButton,
+            onSkip = onSponsorSkip,
+            onDismiss = onSponsorDismiss,
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
     }
 }
 
@@ -674,7 +744,7 @@ private fun BangumiGestureIndicator(
 }
 
 /**
- * 🔥 始终可见的迷你进度条（竖屏模式）
+ * 🔥 可拖动的迷你进度条（竖屏模式） - 紧凑样式
  */
 @Composable
 private fun BangumiMiniProgressBar(
@@ -683,11 +753,13 @@ private fun BangumiMiniProgressBar(
 ) {
     var progress by remember { mutableFloatStateOf(0f) }
     var bufferedProgress by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    var dragProgress by remember { mutableFloatStateOf(0f) }
     
     // 定期更新进度
     LaunchedEffect(player) {
         while (true) {
-            if (player.duration > 0) {
+            if (player.duration > 0 && !isDragging) {
                 progress = player.currentPosition.toFloat() / player.duration
                 bufferedProgress = player.bufferedPosition.toFloat() / player.duration
             }
@@ -695,25 +767,58 @@ private fun BangumiMiniProgressBar(
         }
     }
     
+    // 🔥 使用 Box + pointerInput 实现紧凑的可拖动进度条
     Box(
         modifier = modifier
-            .height(3.dp)
-            .background(Color.DarkGray.copy(alpha = 0.5f))
+            .height(12.dp)  // 可点击区域扩大
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                    val seekPosition = (fraction * player.duration).toLong()
+                    player.seekTo(seekPosition)
+                }
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        isDragging = true
+                        dragProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                    },
+                    onDragEnd = {
+                        val seekPosition = (dragProgress * player.duration).toLong()
+                        player.seekTo(seekPosition)
+                        isDragging = false
+                    },
+                    onDragCancel = { isDragging = false },
+                    onDrag = { _, dragAmount ->
+                        dragProgress = (dragProgress + dragAmount.x / size.width).coerceIn(0f, 1f)
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
     ) {
-        // 缓冲进度
+        // 进度条容器 - 实际显示的细条
         Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(bufferedProgress.coerceIn(0f, 1f))
-                .background(Color.White.copy(alpha = 0.3f))
-        )
-        // 播放进度
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                .background(MaterialTheme.colorScheme.primary)
-        )
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(Color.DarkGray.copy(alpha = 0.5f))
+        ) {
+            // 缓冲进度
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(bufferedProgress.coerceIn(0f, 1f))
+                    .background(Color.White.copy(alpha = 0.3f))
+            )
+            // 播放进度
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth((if (isDragging) dragProgress else progress).coerceIn(0f, 1f))
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+        }
     }
 }
 

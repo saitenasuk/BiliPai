@@ -66,6 +66,28 @@ data class CoinedData(
     val multiply: Int = 0   // 已投币数量 (0/1/2)
 )
 
+// --- 0.5 关注列表响应 ---
+@Serializable
+data class FollowingsResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: FollowingsData? = null
+)
+
+@Serializable
+data class FollowingsData(
+    val list: List<FollowingUser>? = null,
+    val total: Int = 0
+)
+
+@Serializable
+data class FollowingUser(
+    val mid: Long = 0,
+    val uname: String = "",
+    val face: String = "",
+    val sign: String = ""
+)
+
 // --- 1. 核心通用视频模型 (UI层使用) ---
 @Serializable
 data class VideoItem(
@@ -79,7 +101,9 @@ data class VideoItem(
     val duration: Int = 0,
     // 🔥 新增：历史记录进度字段
     val progress: Int = -1,
-    val view_at: Long = 0
+    val view_at: Long = 0,
+    // 🔥 新增：发布时间戳（秒），用于搜索结果显示
+    val pubdate: Long = 0
 )
 
 @Serializable

@@ -1,20 +1,15 @@
 // 文件路径: feature/bangumi/BangumiPlayerViewModel.kt
 package com.android.purebilibili.feature.bangumi
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.MergingMediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.data.repository.BangumiRepository
-import com.android.purebilibili.data.repository.VideoRepository
+import com.android.purebilibili.feature.player.BasePlayerViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -37,31 +32,40 @@ sealed class BangumiPlayerState {
     data class Error(
         val message: String,
         val isVipRequired: Boolean = false,
-        val isLoginRequired: Boolean = false,  // 🔥 新增：需要登录
+        val isLoginRequired: Boolean = false,
         val canRetry: Boolean = true
     ) : BangumiPlayerState()
 }
 
 /**
  * 番剧播放器 ViewModel
+ * 
+ * 🔥🔥 [重构] 继承 BasePlayerViewModel，复用空降助手、DASH 播放、弹幕等公共功能
  */
-class BangumiPlayerViewModel : ViewModel() {
+class BangumiPlayerViewModel : BasePlayerViewModel() {
     
     private val _uiState = MutableStateFlow<BangumiPlayerState>(BangumiPlayerState.Loading)
     val uiState = _uiState.asStateFlow()
     
-    private val _danmakuData = MutableStateFlow<ByteArray?>(null)
-    val danmakuData = _danmakuData.asStateFlow()
+    // 🔥 Toast 事件通道
+    private val _toastEvent = Channel<String>()
+    val toastEvent = _toastEvent.receiveAsFlow()
     
-    private var player: ExoPlayer? = null
     private var currentSeasonId: Long = 0
     private var currentEpId: Long = 0
     
+    // 🔥🔥 [重构] 覆盖基类的空降跳过回调，显示 toast
+    override fun onSponsorSkipped(segment: SponsorSegment) {
+        viewModelScope.launch {
+            _toastEvent.send("已跳过: ${segment.categoryName}")
+        }
+    }
+    
     /**
-     * 附加播放器
+     * 绑定播放器
      */
-    fun attachPlayer(exoPlayer: ExoPlayer) {
-        this.player = exoPlayer
+    override fun attachPlayer(player: ExoPlayer) {
+        super.attachPlayer(player)
     }
     
     /**
@@ -148,68 +152,24 @@ class BangumiPlayerViewModel : ViewModel() {
                 acceptDescription = playData.acceptDescription ?: emptyList()
             )
             
-            // 播放视频
-            playVideo(videoUrl, audioUrl)
+            // 🔥🔥 [重构] 使用基类方法播放视频
+            playDashVideo(videoUrl, audioUrl)
             
-            // 加载弹幕
+            // 🔥🔥 [重构] 使用基类方法加载弹幕
             loadDanmaku(episode.cid)
+            
+            // 🔥 [重构] 使用基类方法加载空降片段
+            episode.bvid?.let { loadSponsorSegments(it) }
             
         }.onFailure { e ->
             val isVip = e.message?.contains("大会员") == true
-            val isLogin = e.message?.contains("登录") == true  // 🔥 检测是否需要登录
+            val isLogin = e.message?.contains("登录") == true
             _uiState.value = BangumiPlayerState.Error(
                 message = e.message ?: "获取播放地址失败",
                 isVipRequired = isVip,
                 isLoginRequired = isLogin,
                 canRetry = !isVip && !isLogin
             )
-        }
-    }
-    
-    /**
-     * 播放视频
-     * 🔥🔥 使用 OkHttpDataSource 配置 Referer 头，解决 B站 CDN 403 问题
-     */
-    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    private fun playVideo(videoUrl: String, audioUrl: String?) {
-        val exoPlayer = player ?: return
-        
-        android.util.Log.d("BangumiPlayer", "🎬 playVideo: video=$videoUrl")
-        android.util.Log.d("BangumiPlayer", "🔊 playVideo: audio=$audioUrl")
-        
-        // 🔥🔥 配置带 Referer 的数据源，解决 B站 CDN 403 拒绝问题
-        val headers = mapOf(
-            "Referer" to "https://www.bilibili.com",
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        )
-        val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.okHttpClient)
-            .setDefaultRequestProperties(headers)
-        val mediaSourceFactory = ProgressiveMediaSource.Factory(dataSourceFactory)
-        
-        val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(videoUrl))
-        
-        val finalSource = if (!audioUrl.isNullOrEmpty()) {
-            // DASH: 使用 MergingMediaSource 合并视频和音频
-            val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(audioUrl))
-            MergingMediaSource(videoSource, audioSource)
-        } else {
-            videoSource
-        }
-        
-        exoPlayer.setMediaSource(finalSource)
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
-    }
-    
-    /**
-     * 加载弹幕
-     */
-    private fun loadDanmaku(cid: Long) {
-        viewModelScope.launch {
-            val data = VideoRepository.getDanmakuRawData(cid)
-            if (data != null) {
-                _danmakuData.value = data
-            }
         }
     }
     
@@ -235,7 +195,7 @@ class BangumiPlayerViewModel : ViewModel() {
      */
     fun changeQuality(qualityId: Int) {
         val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
-        val currentPos = player?.currentPosition ?: 0L
+        val currentPos = getPlayerCurrentPosition()
         
         viewModelScope.launch {
             val playUrlResult = BangumiRepository.getBangumiPlayUrl(currentState.currentEpisode.id, qualityId)
@@ -264,9 +224,8 @@ class BangumiPlayerViewModel : ViewModel() {
                     quality = playData.quality
                 )
                 
-                // 从当前位置继续播放
-                playVideo(videoUrl, audioUrl)
-                player?.seekTo(currentPos)
+                // 🔥🔥 [修复] 切换清晰度时使用 resetPlayer=false 减少闪烁
+                playDashVideo(videoUrl, audioUrl, currentPos, resetPlayer = false)
             }
         }
     }
@@ -300,10 +259,5 @@ class BangumiPlayerViewModel : ViewModel() {
      */
     fun retry() {
         loadBangumiPlay(currentSeasonId, currentEpId)
-    }
-    
-    override fun onCleared() {
-        super.onCleared()
-        player = null
     }
 }
