@@ -17,7 +17,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,23 +54,16 @@ fun DynamicScreen(
     viewModel: DynamicViewModel = viewModel(),
     onVideoClick: (String) -> Unit,
     onUserClick: (Long) -> Unit = {},
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onLoginClick: () -> Unit = {}  // 🔥 添加登录回调
 ) {
     val state by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val pullRefreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
     
     val density = LocalDensity.current
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
-
-    // 触发刷新
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(true) { viewModel.refresh() }
-    }
-    LaunchedEffect(isRefreshing) {
-        if (!isRefreshing) pullRefreshState.endRefresh()
-    }
+    val pullRefreshState = rememberPullToRefreshState()
     
     // 加载更多
     val shouldLoadMore by remember {
@@ -87,11 +80,14 @@ fun DynamicScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Box(
+        // 🔥 使用 PullToRefreshBox 包裹内容
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            state = pullRefreshState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .nestedScroll(pullRefreshState.nestedScrollConnection)
         ) {
             LazyColumn(
                 state = listState,
@@ -155,14 +151,6 @@ fun DynamicScreen(
                 onBack = onBack,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
-
-            // 刷新指示器
-            PullToRefreshContainer(
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = statusBarHeight + 56.dp),
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary
-            )
             
             // 错误提示 - 使用现代化按钮
             if (state.error != null && state.items.isEmpty()) {
@@ -172,10 +160,18 @@ fun DynamicScreen(
                 ) {
                     Text(state.error ?: "", color = MaterialTheme.colorScheme.error)
                     Spacer(modifier = Modifier.height(16.dp))
-                    BiliGradientButton(
-                        text = "重试",
-                        onClick = { viewModel.refresh() }
-                    )
+                    // 🔥 如果是未登录错误，显示"去登录"按钮；否则显示"重试"按钮
+                    if (state.error?.contains("未登录") == true) {
+                        BiliGradientButton(
+                            text = "去登录",
+                            onClick = onLoginClick
+                        )
+                    } else {
+                        BiliGradientButton(
+                            text = "重试",
+                            onClick = { viewModel.refresh() }
+                        )
+                    }
                 }
             }
         }

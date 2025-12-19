@@ -105,7 +105,7 @@ fun VideoTitleWithDesc(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
             .clickable { expanded = !expanded }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 4.dp)  // 🔥 紧凑布局：减小 vertical padding
     ) {
         // 标题行 (可展开)
         Row(
@@ -135,7 +135,7 @@ fun VideoTitleWithDesc(
             )
         }
         
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))  // 🔥 紧凑布局
         
         // 统计行 (官方样式：播放量 • 弹幕 • 日期)
         Row(
@@ -151,7 +151,7 @@ fun VideoTitleWithDesc(
         
         // 🔥🔥 描述（动态）- 紧接在统计后面
         if (info.desc.isNotBlank()) {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))  // 🔥 紧凑布局
             Text(
                 text = info.desc,
                 style = MaterialTheme.typography.bodySmall.copy(
@@ -180,7 +180,7 @@ fun UpInfoSection(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
             .clickable { onUpClick(info.owner.mid) }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),  // 🔥 紧凑布局
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 头像
@@ -191,7 +191,7 @@ fun UpInfoSection(
                 .build(),
             contentDescription = null,
             modifier = Modifier
-                .size(40.dp)
+                .size(36.dp)  // 🔥 紧凑布局：稍微缩小头像
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         )
@@ -274,7 +274,7 @@ fun ActionButtonsRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+            .padding(horizontal = 4.dp, vertical = 2.dp),  // 🔥 紧凑布局
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -591,7 +591,7 @@ fun RelatedVideoItem(video: RelatedVideo, onClick: () -> Unit) {
                     interactionSource = interactionSource,
                     indication = null
                 ) { onClick() }
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp, vertical = 6.dp)  // 🔥 紧凑布局
         ) {
             // 视频封面
             Box(

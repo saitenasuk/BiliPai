@@ -75,7 +75,14 @@ import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+// 🔥 共享元素过渡
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun VideoDetailScreen(
@@ -87,6 +94,7 @@ fun VideoDetailScreen(
     isInPipMode: Boolean = false,
     isVisible: Boolean = true,
     startInFullscreen: Boolean = false,  // 🔥 从小窗展开时自动进入全屏
+    transitionEnabled: Boolean = false,  // 🔥 卡片过渡动画开关
     viewModel: PlayerViewModel = viewModel(),
     commentViewModel: VideoCommentViewModel = viewModel() // 🔥
 ) {
@@ -137,18 +145,41 @@ fun VideoDetailScreen(
         }
     }
 
-    // 退出重置亮度 + 🔥 屏幕常亮管理 + 状态栏恢复
-    DisposableEffect(Unit) {
-        val activity = context.findActivity()
-        val window = activity?.window
-        
-        // 🔥🔥 [修复] 保存进入前的状态栏配置
-        val originalStatusBarColor = window?.statusBarColor ?: android.graphics.Color.TRANSPARENT
-        val insetsController = if (window != null && activity != null) {
+    // 🔥🔥 用于跟踪组件是否正在退出，防止 SideEffect 覆盖恢复操作
+    var isScreenActive by remember { mutableStateOf(true) }
+    
+    // 🔥🔥 [关键] 保存进入前的状态栏配置（在 DisposableEffect 外部定义以便复用）
+    val activity = remember { context.findActivity() }
+    val window = remember { activity?.window }
+    val insetsController = remember {
+        if (window != null && activity != null) {
             WindowCompat.getInsetsController(window, window.decorView)
         } else null
-        val originalLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: true
-        
+    }
+    val originalStatusBarColor = remember { window?.statusBarColor ?: android.graphics.Color.TRANSPARENT }
+    val originalLightStatusBars = remember { insetsController?.isAppearanceLightStatusBars ?: true }
+    
+    // 🔥🔥 [新增] 恢复状态栏的函数（可复用）
+    val restoreStatusBar = remember {
+        {
+            if (window != null && insetsController != null) {
+                insetsController.isAppearanceLightStatusBars = originalLightStatusBars
+                window.statusBarColor = originalStatusBarColor
+            }
+        }
+    }
+    
+    // 🔥🔥 [新增] 包装的 onBack，在导航之前立即恢复状态栏
+    val handleBack = remember(onBack) {
+        {
+            isScreenActive = false  // 标记页面正在退出
+            restoreStatusBar()      // 🔥 立即恢复状态栏（动画开始前）
+            onBack()                // 执行实际的返回导航
+        }
+    }
+    
+    // 退出重置亮度 + 🔥 屏幕常亮管理 + 状态栏恢复（作为安全网）
+    DisposableEffect(Unit) {
         // 🔥🔥 [沉浸式] 启用边到边显示，让内容延伸到状态栏下方
         if (window != null) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -158,6 +189,9 @@ fun VideoDetailScreen(
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         
         onDispose {
+            // 🔥🔥 [关键] 标记页面正在退出，防止 SideEffect 覆盖
+            isScreenActive = false
+            
             val layoutParams = window?.attributes
             layoutParams?.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             window?.attributes = layoutParams
@@ -165,14 +199,8 @@ fun VideoDetailScreen(
             // 🔥🔥 [修复] 离开视频页时取消屏幕常亮
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             
-            // 🔥🔥 [注意] 不再恢复 setDecorFitsSystemWindows，因为首页也保持边到边显示
-            // 这样可以避免返回首页时的布局跳动
-            
-            // 🔥🔥 [修复] 离开视频页时恢复状态栏外观（恢复到进入前的状态）
-            if (window != null && insetsController != null) {
-                insetsController.isAppearanceLightStatusBars = originalLightStatusBars
-                window.statusBarColor = originalStatusBarColor
-            }
+            // 🔥🔥 [安全网] 确保状态栏被恢复（以防 handleBack 未被调用，如系统返回）
+            restoreStatusBar()
         }
     }
     
@@ -284,7 +312,8 @@ fun VideoDetailScreen(
     val isLightBackground = remember(backgroundColor) { backgroundColor.luminance() > 0.5f }
 
     // 🔥🔥 iOS风格：竖屏时状态栏黑色背景（与播放器融为一体）
-    if (!view.isInEditMode) {
+    // 🔥🔥 只在页面活跃时修改状态栏，避免退出时覆盖恢复操作
+    if (!view.isInEditMode && isScreenActive) {
         SideEffect {
             val window = (view.context.findActivity())?.window ?: return@SideEffect
             val insetsController = WindowCompat.getInsetsController(window, view)
@@ -341,42 +370,73 @@ fun VideoDetailScreen(
                     onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
                 )
             } else {
-                // 🔥🔥 沉浸式布局：状态栏黑色 + 视频精确16:9 + 内容区域
+                // 🔥🔥 沉浸式布局：视频延伸到状态栏 + 内容区域
                 Column(modifier = Modifier.fillMaxSize()) {
                     // 🔥🔥 [沉浸式] 获取状态栏高度
                     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                     val screenWidthDp = configuration.screenWidthDp.dp
-                    val videoHeight = screenWidthDp * 9f / 16f  // 精确 16:9
+                    val videoHeight = screenWidthDp * 9f / 16f  // 16:9 比例
                     
-                    // ✅ 第1层：状态栏黑色背景区域
-                    Spacer(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(statusBarHeight)
-                            .background(Color.Black)
-                    )
+                    // 🔥🔥 注意：移除了状态栏黑色 Spacer
+                    // 播放器将延伸到状态栏下方，共享元素过渡更流畅
                     
-                    // ✅ 第2层：视频播放器区域（精确16:9，无额外黑边）
+                    // ✅ 视频播放器区域 - 包含状态栏高度
+                    // 🔥 尝试获取共享元素作用域
+                    val sharedTransitionScope = LocalSharedTransitionScope.current
+                    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+                    
+                    // 🔥 为播放器容器添加共享元素标记（受开关控制）
+                    val playerContainerModifier = if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier
+                                .sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "video_cover_$bvid"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    // 🔥 添加回弹效果的 spring 动画
+                                    boundsTransform = { _, _ ->
+                                        spring(
+                                            dampingRatio = 0.7f,   // 轻微回弹
+                                            stiffness = 300f       // 适中速度
+                                        )
+                                    },
+                                    clipInOverlayDuringTransition = OverlayClip(
+                                        RoundedCornerShape(0.dp)  // 🔥 播放器无圆角
+                                    )
+                                )
+                        }
+                    } else {
+                        Modifier
+                    }
+                    
+                    // 🔥🔥 播放器容器包含状态栏高度，让视频延伸到顶部
                     Box(
-                        modifier = Modifier
+                        modifier = playerContainerModifier
                             .fillMaxWidth()
-                            .height(videoHeight)
+                            .height(videoHeight + statusBarHeight)  // 🔥 包含状态栏高度
+                            .background(Color.Black)  // 黑色背景
                             .clipToBounds()
                     ) {
-                        VideoPlayerSection(
-                            playerState = playerState,
-                            uiState = uiState,
-                            isFullscreen = false,
-                            isInPipMode = isPipMode,
-                            onToggleFullscreen = { toggleOrientation() },
-                            onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
-                            onBack = onBack,
-                            onDoubleTapLike = { viewModel.toggleLike() },
-                            sponsorSegment = sponsorSegment,
-                            showSponsorSkipButton = showSponsorSkipButton,
-                            onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
-                            onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
-                        )
+                        // 🔥 播放器内部使用 padding 避开状态栏
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = statusBarHeight)  // 🔥 顶部 padding 避开状态栏
+                        ) {
+                            VideoPlayerSection(
+                                playerState = playerState,
+                                uiState = uiState,
+                                isFullscreen = false,
+                                isInPipMode = isPipMode,
+                                onToggleFullscreen = { toggleOrientation() },
+                                onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
+                                onBack = handleBack,
+                                onDoubleTapLike = { viewModel.toggleLike() },
+                                sponsorSegment = sponsorSegment,
+                                showSponsorSkipButton = showSponsorSkipButton,
+                                onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                                onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
+                            )
+                        }
                     }
 
                     // ✅ 第3层：内容区域

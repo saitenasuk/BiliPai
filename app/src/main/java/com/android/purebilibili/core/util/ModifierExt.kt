@@ -276,3 +276,72 @@ fun Modifier.iOSTapScale(
         scaleY = animatedScale
     }
 }
+
+/**
+ * 🍎 iOS 风格卡片点击效果 Modifier（增强版）
+ * 
+ * 特性：
+ * - 按压时：缩放 + 轻微下沉 + 透明度微调
+ * - 释放时：弹性回弹 + 过冲效果
+ * - 符合物理规律的动画曲线
+ * 
+ * @param pressScale 按压时的缩放比例，默认 0.96f
+ * @param pressTranslationY 按压时的下沉距离，默认 4dp
+ * @param hapticEnabled 是否启用触觉反馈
+ * @param onClick 点击回调
+ */
+fun Modifier.iOSCardTapEffect(
+    pressScale: Float = 0.96f,
+    pressTranslationY: Float = 8f,
+    hapticEnabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier = composed {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val haptic = rememberHapticFeedback()
+    
+    // 🍎 多维度动画状态
+    val animatedScale by animateFloatAsState(
+        targetValue = if (isPressed) pressScale else 1f,
+        animationSpec = spring(
+            dampingRatio = if (isPressed) 0.75f else 0.55f,  // 按压快速响应，释放时弹性更强
+            stiffness = if (isPressed) 600f else 300f       // 按压快，释放慢
+        ),
+        label = "card_tap_scale"
+    )
+    
+    val animatedTranslationY by animateFloatAsState(
+        targetValue = if (isPressed) pressTranslationY else 0f,
+        animationSpec = spring(
+            dampingRatio = if (isPressed) 0.85f else 0.5f,   // 释放时过冲效果
+            stiffness = if (isPressed) 800f else 250f
+        ),
+        label = "card_tap_translationY"
+    )
+    
+    val animatedAlpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = tween(
+            durationMillis = if (isPressed) 80 else 200,
+            easing = FastOutSlowInEasing
+        ),
+        label = "card_tap_alpha"
+    )
+    
+    this
+        .graphicsLayer {
+            scaleX = animatedScale
+            scaleY = animatedScale
+            translationY = animatedTranslationY
+            alpha = animatedAlpha
+        }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = null
+        ) {
+            if (hapticEnabled) {
+                haptic(HapticType.LIGHT)
+            }
+            onClick()
+        }
+}

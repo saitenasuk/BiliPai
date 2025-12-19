@@ -23,18 +23,37 @@ import kotlinx.coroutines.launch
  * @param index: 列表项的索引，用于计算延迟时间
  * @param key: 用于触发重置动画的键值 (通常传视频ID)
  * @param initialOffsetY: 初始 Y 偏移量
+ * @param animationEnabled: 是否启用动画 (设置开关)
  */
 fun Modifier.animateEnter(
     index: Int = 0,
     key: Any? = Unit,
-    initialOffsetY: Float = 80f
+    initialOffsetY: Float = 80f,
+    animationEnabled: Boolean = true
 ): Modifier = composed {
-    // 动画状态
+    // 🔥 如果动画被禁用，直接返回无动画效果
+    if (!animationEnabled) {
+        return@composed this
+    }
+    
+    // 动画状态 - 始终初始化为需要动画的状态
     val alpha = remember(key) { Animatable(0f) }
     val translationY = remember(key) { Animatable(initialOffsetY) }
     val scale = remember(key) { Animatable(0.85f) }
 
     LaunchedEffect(key) {
+        // 🔥🔥 在 LaunchedEffect 内部检查，确保每次执行时都检查最新状态
+        if (CardPositionManager.isReturningFromDetail) {
+            // 🔥 直接设置为最终值，不播放动画
+            alpha.snapTo(1f)
+            translationY.snapTo(0f)
+            scale.snapTo(1f)
+            // 延迟清除标记，确保所有卡片都读取到
+            delay(100)
+            CardPositionManager.clearReturning()
+            return@LaunchedEffect
+        }
+        
         // 🔥 交错延迟：每个卡片延迟 40ms，最多 300ms
         val delayMs = (index * 40L).coerceAtMost(300L)
         delay(delayMs)

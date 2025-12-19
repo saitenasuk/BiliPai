@@ -14,7 +14,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -22,9 +26,16 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.iOSTapEffect
+import com.android.purebilibili.core.util.iOSCardTapEffect
 import com.android.purebilibili.core.util.animateEnter
+import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.VideoItem
+// 🔥 共享元素过渡
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.spring
+
+import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 
 /**
  * 🎬 故事卡片 - Apple TV+ 风格
@@ -35,22 +46,65 @@ import com.android.purebilibili.data.model.response.VideoItem
  * - 标题叠加在封面底部
  * - 沉浸电影感
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun StoryVideoCard(
     video: VideoItem,
     index: Int = 0,  // 🔥🔥 [新增] 索引用于动画延迟
+    animationEnabled: Boolean = true,  // 🔥 卡片动画开关
+    transitionEnabled: Boolean = false, // 🔥 卡片过渡动画开关
     onClick: (String, Long) -> Unit
 ) {
     val coverUrl = remember(video.bvid) {
         FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic)
     }
+    
+    // 🔥 获取屏幕尺寸用于计算归一化坐标
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    
+    // 🔥 记录卡片位置
+    var cardBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    
+    // 🔥 尝试获取共享元素作用域
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    
+    // 🔥 卡片容器 - 支持共享元素过渡（受开关控制）
+    val cardModifier = if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier
+                .sharedBounds(
+                    sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    // 🔥 添加回弹效果的 spring 动画
+                    boundsTransform = { _, _ ->
+                        spring(
+                            dampingRatio = 0.7f,   // 轻微回弹
+                            stiffness = 300f       // 适中速度
+                        )
+                    },
+                    clipInOverlayDuringTransition = OverlayClip(
+                        RoundedCornerShape(20.dp)  // 🔥 过渡时保持圆角
+                    )
+                )
+        }
+    } else {
+        Modifier
+    }
 
     Box(
-        modifier = Modifier
+        modifier = cardModifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            // 🔥🔥 [新增] 进场动画 - 交错缩放+滑入
-            .animateEnter(index = index, key = video.bvid)
+            // 🔥🔥 [新增] 进场动画 - 支持开关控制
+            .animateEnter(index = index, key = video.bvid, animationEnabled = animationEnabled)
+            // 🔥🔥 [新增] 记录卡片位置
+            .onGloballyPositioned { coordinates ->
+                cardBounds = coordinates.boundsInRoot()
+            }
             .shadow(
                 elevation = 12.dp,
                 shape = RoundedCornerShape(20.dp),
@@ -59,7 +113,18 @@ fun StoryVideoCard(
             )
             .clip(RoundedCornerShape(20.dp))
             .background(Color.Black)
-            .iOSTapEffect(scale = 0.98f, hapticEnabled = true) {
+            .iOSCardTapEffect(
+                pressScale = 0.97f,
+                pressTranslationY = 10f,
+                hapticEnabled = true
+            ) {
+                // 🔥🔥 点击时保存卡片位置（开启过渡时不标记为单列，使用共享元素）
+                cardBounds?.let { bounds ->
+                    CardPositionManager.recordCardPosition(
+                        bounds, screenWidthPx, screenHeightPx, 
+                        isSingleColumn = !transitionEnabled  // 仅关闭过渡时使用垂直滑动
+                    )
+                }
                 onClick(video.bvid, 0)
             }
     ) {

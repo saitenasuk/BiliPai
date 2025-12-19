@@ -58,7 +58,9 @@ fun BottomControlBar(
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .padding(bottom = 4.dp)
-            .navigationBarsPadding()
+            // 🔥🔥 只在全屏横屏时才需要避开导航栏
+            // 竖屏时导航栏在页面底部，不在播放器区域内
+            .let { if (isFullscreen) it.navigationBarsPadding() else it }
     ) {
         VideoProgressBar(
             currentPosition = progress.current,

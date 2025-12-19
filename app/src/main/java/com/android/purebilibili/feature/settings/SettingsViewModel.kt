@@ -26,6 +26,8 @@ data class SettingsUiState(
     val headerBlurEnabled: Boolean = true,
     val bottomBarBlurEnabled: Boolean = true,
     val displayMode: Int = 0,
+    val cardAnimationEnabled: Boolean = false,     // 🔥 卡片进场动画（默认关闭）
+    val cardTransitionEnabled: Boolean = false,    // 🔥 卡片过渡动画（默认关闭）
     val cacheSize: String = "计算中...",
     val cacheBreakdown: CacheUtils.CacheBreakdown? = null,  // 🚀 详细缓存统计
     // 🧪 实验性功能
@@ -54,7 +56,9 @@ data class ExtraSettings(
     val bottomBarLabelMode: Int,
     val headerBlurEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
-    val displayMode: Int
+    val displayMode: Int,
+    val cardAnimationEnabled: Boolean,
+    val cardTransitionEnabled: Boolean
 )
 
 // 🧪 实验性功能设置
@@ -80,7 +84,9 @@ private data class BaseSettings(
     val bottomBarLabelMode: Int,
     val headerBlurEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
-    val displayMode: Int // 🔥 新增
+    val displayMode: Int, // 🔥 新增
+    val cardAnimationEnabled: Boolean, // 🔥 卡片进场动画
+    val cardTransitionEnabled: Boolean // 🔥 卡片过渡动画
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -113,13 +119,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val uiSettingsFlow2 = combine(
         SettingsManager.getBottomBarFloating(context),
         SettingsManager.getBottomBarLabelMode(context),
-        SettingsManager.getDisplayMode(context)
-    ) { isBottomBarFloating, labelMode, displayMode ->
-        Triple(isBottomBarFloating, labelMode, displayMode)
+        SettingsManager.getDisplayMode(context),
+        SettingsManager.getCardAnimationEnabled(context),
+        SettingsManager.getCardTransitionEnabled(context)
+    ) { isBottomBarFloating, labelMode, displayMode, cardAnimation, cardTransition ->
+        listOf(isBottomBarFloating, labelMode, displayMode, cardAnimation, cardTransition)
     }
     
     private val uiSettingsFlow = combine(uiSettingsFlow1, uiSettingsFlow2) { ui1, ui2 ->
-        listOf(ui1.first, ui1.second, ui1.third, ui2.first, ui2.second, ui2.third)
+        listOf(ui1.first, ui1.second, ui1.third, ui2[0], ui2[1], ui2[2], ui2[3], ui2[4])
     }
     
     // 第 3 步：合并模糊设置 (2个)
@@ -140,7 +148,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             bottomBarLabelMode = ui[4] as Int,
             displayMode = ui[5] as Int,
             headerBlurEnabled = blur.first,
-            bottomBarBlurEnabled = blur.second
+            bottomBarBlurEnabled = blur.second,
+            cardAnimationEnabled = ui[6] as Boolean,
+            cardTransitionEnabled = ui[7] as Boolean
         )
     }
     
@@ -177,7 +187,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             bottomBarLabelMode = extra.bottomBarLabelMode,
             headerBlurEnabled = extra.headerBlurEnabled,
             bottomBarBlurEnabled = extra.bottomBarBlurEnabled,
-            displayMode = extra.displayMode
+            displayMode = extra.displayMode,
+            cardAnimationEnabled = extra.cardAnimationEnabled,
+            cardTransitionEnabled = extra.cardTransitionEnabled
         )
     }
 
@@ -204,6 +216,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             headerBlurEnabled = settings.headerBlurEnabled,
             bottomBarBlurEnabled = settings.bottomBarBlurEnabled,
             displayMode = settings.displayMode,
+            cardAnimationEnabled = settings.cardAnimationEnabled,
+            cardTransitionEnabled = settings.cardTransitionEnabled,
             cacheSize = cache.first,
             cacheBreakdown = cache.second,  // 🚀 详细缓存统计
             // 🧪 实验性功能
@@ -308,6 +322,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // 🔥🔥 [新增] 模糊效果开关
     fun toggleHeaderBlur(value: Boolean) { viewModelScope.launch { SettingsManager.setHeaderBlurEnabled(context, value) } }
     fun toggleBottomBarBlur(value: Boolean) { viewModelScope.launch { SettingsManager.setBottomBarBlurEnabled(context, value) } }
+    
+    // 🔥 [新增] 卡片进场动画开关
+    fun toggleCardAnimation(value: Boolean) { viewModelScope.launch { SettingsManager.setCardAnimationEnabled(context, value) } }
+    
+    // 🔥 [新增] 卡片过渡动画开关
+    fun toggleCardTransition(value: Boolean) { viewModelScope.launch { SettingsManager.setCardTransitionEnabled(context, value) } }
     
     // 🔥🔥 [新增] 首页展示模式
     fun setDisplayMode(mode: Int) { 

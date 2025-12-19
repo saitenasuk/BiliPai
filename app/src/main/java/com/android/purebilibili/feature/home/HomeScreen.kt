@@ -12,7 +12,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.*  // 🌊 瀑布流布局
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -26,6 +26,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.luminance  // 🔥 状态栏亮度计算
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.theme.BiliPink
@@ -37,6 +38,7 @@ import com.android.purebilibili.feature.home.components.FluidHomeTopBar
 import com.android.purebilibili.feature.home.components.FrostedBottomBar
 import com.android.purebilibili.feature.home.components.CategoryTabRow
 import com.android.purebilibili.feature.home.components.iOSHomeHeader  // 🍎 iOS 大标题头部
+import com.android.purebilibili.feature.home.components.iOSRefreshIndicator  // 🍎 iOS 下拉刷新指示器
 // 🔥 从 cards 子包导入卡片组件
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.LiveRoomCard
@@ -105,13 +107,29 @@ fun HomeScreen(
     val isHeaderBlurEnabled = homeSettings.isHeaderBlurEnabled
     val isBottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled
     val crashTrackingConsentShown = homeSettings.crashTrackingConsentShown
+    val cardAnimationEnabled = homeSettings.cardAnimationEnabled      // 🔥 卡片进场动画开关
+    val cardTransitionEnabled = homeSettings.cardTransitionEnabled    // 🔥 卡片过渡动画开关
     
     // 🔥🔥 [修复] 根据展示模式动态设置网格列数
     // 故事卡片需要单列全宽，网格和玻璃使用双列
     val gridColumns = if (displayMode == 1) 1 else 2
 
-    // 🔥 状态栏样式由 MainActivity.enableEdgeToEdge() 根据主题自动管理
-    // 不再在这里手动设置，避免覆盖主题感知的状态栏配置
+    // 🔥🔥 [修复] 恢复状态栏样式：确保从视频详情页返回后状态栏正确
+    // 当使用滑动动画时，Theme.kt 的 SideEffect 可能不会重新执行
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val isLightBackground = remember(backgroundColor) { backgroundColor.luminance() > 0.5f }
+    
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (context as? android.app.Activity)?.window ?: return@SideEffect
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
+            // 🔥 根据背景亮度设置状态栏图标颜色
+            insetsController.isAppearanceLightStatusBars = isLightBackground
+            // 🔥 确保状态栏可见且透明
+            insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+        }
+    }
 
     val density = LocalDensity.current
     val navBarHeight = WindowInsets.navigationBars.getBottom(density).let { with(density) { it.toDp() } }
@@ -127,6 +145,24 @@ fun HomeScreen(
     
     // 🔥 当前选中的导航项
     var currentNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
+    
+    // 🔥🔥 [新增] 底栏可见性状态（初始隐藏，进入后显示触发动画）
+    var bottomBarVisible by remember { mutableStateOf(false) }
+    
+    // 🔥🔥 包装 onVideoClick：点击视频时先隐藏底栏再导航
+    val wrappedOnVideoClick: (String, Long, String) -> Unit = remember(onVideoClick) {
+        { bvid, cid, cover ->
+            bottomBarVisible = false  // 🔥 触发底栏下滑动画
+            onVideoClick(bvid, cid, cover)
+        }
+    }
+    
+    // 🔥🔥 进入/返回首页时触发底栏上滑动画
+    LaunchedEffect(Unit) {
+        // 短暂延迟确保组合完成后再显示，触发滑入动画
+        kotlinx.coroutines.delay(50)
+        bottomBarVisible = true
+    }
     
     // 🔥🔥 [修复] 使用 ViewModel 中的标签页显示索引（跨导航保持）
     // 当用户滑动到特殊分类时，标签页位置更新，但内容分类保持不变
@@ -207,15 +243,7 @@ fun HomeScreen(
     }
 
 
-    // 🔥🔥 [修复] 下拉刷新触发逻辑 - 使用正确的 key 确保每次都能触发
-    LaunchedEffect(pullRefreshState.isRefreshing) {
-        if (pullRefreshState.isRefreshing) {
-            viewModel.refresh()
-        }
-    }
-    LaunchedEffect(isRefreshing) {
-        if (!isRefreshing) pullRefreshState.endRefresh()
-    }
+    // 🔥🔥 PullToRefreshBox 自动处理下拉刷新逻辑
     
     // 🔥🔥 [已移除] 特殊分类（ANIME, MOVIE等）不再在首页切换，直接导航到独立页面
     
@@ -292,14 +320,49 @@ fun HomeScreen(
 
     Scaffold(
         bottomBar = {
-            if (isBottomBarFloating) {
-                // 悬浮式底栏
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 20.dp), // 悬浮距离
-                    contentAlignment = Alignment.Center
-                ) {
+            // 🔥🔥 底栏进入/退出动画：进入首页时从底部滑入，离开首页时向底部滑出
+            AnimatedVisibility(
+                visible = bottomBarVisible,  // 🔥 受状态控制
+                enter = slideInVertically(
+                    initialOffsetY = { it },  // 从底部滑入
+                    animationSpec = tween(350)
+                ) + fadeIn(animationSpec = tween(250)),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },   // 向底部滑出
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(200))
+            ) {
+                if (isBottomBarFloating) {
+                    // 悬浮式底栏
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 20.dp), // 悬浮距离
+                        contentAlignment = Alignment.Center
+                    ) {
+                        FrostedBottomBar(
+                            currentItem = currentNavItem,
+                            onItemClick = { item ->
+                                currentNavItem = item
+                                when(item) {
+                                    BottomNavItem.HOME -> {
+                                        coroutineScope.launch { gridState.animateScrollToItem(0) }
+                                    }
+                                    BottomNavItem.DYNAMIC -> onDynamicClick()
+                                    BottomNavItem.HISTORY -> onHistoryClick()
+                                    BottomNavItem.PROFILE -> onProfileClick()
+                                }
+                            },
+                            onHomeDoubleTap = {
+                                coroutineScope.launch { gridState.animateScrollToItem(0) }
+                            },
+                            hazeState = if (isBottomBarBlurEnabled) hazeState else null,
+                            isFloating = true,
+                            labelMode = bottomBarLabelMode
+                        )
+                    }
+                } else {
+                    // 贴底式底栏
                     FrostedBottomBar(
                         currentItem = currentNavItem,
                         onItemClick = { item ->
@@ -317,32 +380,10 @@ fun HomeScreen(
                             coroutineScope.launch { gridState.animateScrollToItem(0) }
                         },
                         hazeState = if (isBottomBarBlurEnabled) hazeState else null,
-                        isFloating = true,
+                        isFloating = false,
                         labelMode = bottomBarLabelMode
                     )
                 }
-            } else {
-                // 贴底式底栏
-                FrostedBottomBar(
-                    currentItem = currentNavItem,
-                    onItemClick = { item ->
-                        currentNavItem = item
-                        when(item) {
-                            BottomNavItem.HOME -> {
-                                coroutineScope.launch { gridState.animateScrollToItem(0) }
-                            }
-                            BottomNavItem.DYNAMIC -> onDynamicClick()
-                            BottomNavItem.HISTORY -> onHistoryClick()
-                            BottomNavItem.PROFILE -> onProfileClick()
-                        }
-                    },
-                    onHomeDoubleTap = {
-                        coroutineScope.launch { gridState.animateScrollToItem(0) }
-                    },
-                    hazeState = if (isBottomBarBlurEnabled) hazeState else null,
-                    isFloating = false,
-                    labelMode = bottomBarLabelMode
-                )
             }
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -350,7 +391,6 @@ fun HomeScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .nestedScroll(pullRefreshState.nestedScrollConnection)
                 .haze(state = hazeState)  // 🔥 Haze 源：整个内容区域
         ) {
             if (state.isLoading && state.videos.isEmpty() && state.liveRooms.isEmpty()) {
@@ -392,7 +432,23 @@ fun HomeScreen(
                 // 新：直接渲染，分类切换瞬间完成
                 val targetCategory = state.currentCategory
                 
-                // ✅ 对齐模式 (Regular Grid - 每行底部对齐)
+                // 🔥 使用 PullToRefreshBox 包裹内容
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = { viewModel.refresh() },
+                    state = pullRefreshState,
+                    modifier = Modifier.fillMaxSize(),
+                    // 🍎 iOS 风格下拉刷新指示器
+                    indicator = {
+                        iOSRefreshIndicator(
+                            state = pullRefreshState,
+                            isRefreshing = isRefreshing,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 120.dp)  // 🔥 在 Header 下方显示
+                        )
+                    }
+                ) {
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(gridColumns),
@@ -465,7 +521,9 @@ fun HomeScreen(
                                         StoryVideoCard(
                                             video = video,
                                             index = index,  // 🔥 动画索引
-                                            onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                            animationEnabled = cardAnimationEnabled,  // 🔥 动画开关
+                                            transitionEnabled = cardTransitionEnabled, // 🔥 过渡动画开关
+                                            onClick = { bvid, cid -> wrappedOnVideoClick(bvid, cid, video.pic) }
                                         )
                                     }
                                     2 -> {
@@ -473,7 +531,9 @@ fun HomeScreen(
                                         GlassVideoCard(
                                             video = video,
                                             index = index,  // 🔥 动画索引
-                                            onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                            animationEnabled = cardAnimationEnabled,  // 🔥 动画开关
+                                            transitionEnabled = cardTransitionEnabled, // 🔥 过渡动画开关
+                                            onClick = { bvid, cid -> wrappedOnVideoClick(bvid, cid, video.pic) }
                                         )
                                     }
                                     else -> {
@@ -482,7 +542,9 @@ fun HomeScreen(
                                             video = video,
                                             index = index,
                                             isFollowing = video.owner.mid in state.followingMids,  // 🔥 判断是否已关注
-                                            onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                            animationEnabled = cardAnimationEnabled,    // 🔥 进场动画开关
+                                            transitionEnabled = cardTransitionEnabled,  // 🔥 过渡动画开关
+                                            onClick = { bvid, cid -> wrappedOnVideoClick(bvid, cid, video.pic) }
                                         )
                                     }
                                 }
@@ -515,15 +577,8 @@ fun HomeScreen(
                         Box(modifier = Modifier.fillMaxWidth().height(20.dp))
                     }
                 }
+                }
             }
-
-            // 🔥 下拉刷新指示器
-            PullToRefreshContainer(
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 100.dp),
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary
-            )
 
             // 🍎 iOS 风格 Header (带滚动隐藏/显示动画)
             // 使用 zIndex 确保 header 始终在列表内容之上
@@ -559,7 +614,10 @@ fun HomeScreen(
                         coroutineScope.launch {
                             gridState.animateScrollToItem(0)
                         }
-                    }
+                    },
+                    // 🍎 [新增] 下拉刷新时收起标签页
+                    isRefreshing = isRefreshing,
+                    pullProgress = pullRefreshState.distanceFraction
                 )
             }
         }

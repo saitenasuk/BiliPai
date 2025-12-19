@@ -25,6 +25,8 @@ data class HomeSettings(
     val bottomBarLabelMode: Int = 1,       // (0=图标+文字, 1=仅图标, 2=仅文字)
     val isHeaderBlurEnabled: Boolean = true,
     val isBottomBarBlurEnabled: Boolean = true,
+    val cardAnimationEnabled: Boolean = false,    // 🔥 卡片进场动画（默认关闭）
+    val cardTransitionEnabled: Boolean = false,   // 🔥 卡片过渡动画（默认关闭）
     // 🔥🔥 [修复] 默认值改为 true，避免在 Flow 加载实际值之前错误触发弹窗
     // 当 Flow 加载完成后，如果实际值是 false，LaunchedEffect 会再次触发并显示弹窗
     val crashTrackingConsentShown: Boolean = true
@@ -51,6 +53,10 @@ object SettingsManager {
     private val KEY_BOTTOM_BAR_BLUR_ENABLED = booleanPreferencesKey("bottom_bar_blur_enabled")
     // 🚀 [合并] 首页展示模式 (0=Grid, 1=Story, 2=Glass)
     private val KEY_DISPLAY_MODE = intPreferencesKey("display_mode")
+    // 🔥 [新增] 卡片动画开关
+    private val KEY_CARD_ANIMATION_ENABLED = booleanPreferencesKey("card_animation_enabled")
+    // 🔥 [新增] 卡片过渡动画开关
+    private val KEY_CARD_TRANSITION_ENABLED = booleanPreferencesKey("card_transition_enabled")
     // 🚀 [合并] 崩溃追踪同意弹窗
     private val KEY_CRASH_TRACKING_CONSENT_SHOWN = booleanPreferencesKey("crash_tracking_consent_shown")
 
@@ -65,6 +71,8 @@ object SettingsManager {
         val headerBlurFlow = context.settingsDataStore.data.map { it[KEY_HEADER_BLUR_ENABLED] ?: true }
         val bottomBarBlurFlow = context.settingsDataStore.data.map { it[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: true }
         val crashConsentFlow = context.settingsDataStore.data.map { it[KEY_CRASH_TRACKING_CONSENT_SHOWN] ?: false }
+        val cardAnimationFlow = context.settingsDataStore.data.map { it[KEY_CARD_ANIMATION_ENABLED] ?: false }
+        val cardTransitionFlow = context.settingsDataStore.data.map { it[KEY_CARD_TRANSITION_ENABLED] ?: false }
         
         // 🔧 Kotlin combine() 最多支持 5 个参数，使用嵌套 combine
         val firstFiveFlow = combine(
@@ -80,12 +88,22 @@ object SettingsManager {
                 bottomBarLabelMode = labelMode,
                 isHeaderBlurEnabled = headerBlur,
                 isBottomBarBlurEnabled = bottomBlur,
+                cardAnimationEnabled = false, // 临时占位
+                cardTransitionEnabled = false, // 临时占位
                 crashTrackingConsentShown = false // 临时占位
             )
         }
         
-        return combine(firstFiveFlow, crashConsentFlow) { settings, consent ->
-            settings.copy(crashTrackingConsentShown = consent)
+        val extraFlow = combine(crashConsentFlow, cardAnimationFlow, cardTransitionFlow) { consent, cardAnim, cardTransition ->
+            Triple(consent, cardAnim, cardTransition)
+        }
+        
+        return combine(firstFiveFlow, extraFlow) { settings, extra ->
+            settings.copy(
+                crashTrackingConsentShown = extra.first,
+                cardAnimationEnabled = extra.second,
+                cardTransitionEnabled = extra.third
+            )
         }
     }
 
@@ -178,6 +196,22 @@ object SettingsManager {
         context.settingsDataStore.edit { preferences -> 
             preferences[KEY_DISPLAY_MODE] = mode
         }
+    }
+    
+    // 🔥 [新增] --- 卡片进场动画开关 ---
+    fun getCardAnimationEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_CARD_ANIMATION_ENABLED] ?: false }  // 默认关闭
+
+    suspend fun setCardAnimationEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_CARD_ANIMATION_ENABLED] = value }
+    }
+    
+    // 🔥 [新增] --- 卡片过渡动画开关 ---
+    fun getCardTransitionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] ?: false }  // 默认关闭
+
+    suspend fun setCardTransitionEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] = value }
     }
 
     // 🔥🔥 [新增] --- 应用图标 ---

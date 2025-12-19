@@ -44,6 +44,7 @@ import kotlinx.coroutines.runBlocking
 
 import com.android.purebilibili.feature.video.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
+import com.android.purebilibili.core.ui.SharedTransitionProvider
 import coil.compose.AsyncImage
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
@@ -126,19 +127,22 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        AppNavigation(
-                            navController = navController,
-                            miniPlayerManager = miniPlayerManager,
-                            isInPipMode = isInPipMode,
-                            onVideoDetailEnter = { 
-                                isInVideoDetail = true
-                                Logger.d(TAG, "🎬 进入视频详情页")
-                            },
-                            onVideoDetailExit = { 
-                                isInVideoDetail = false
-                                Logger.d(TAG, "🔙 退出视频详情页")
-                            }
-                        )
+                        // 🔥 SharedTransitionProvider 包裹导航，启用共享元素过渡
+                        SharedTransitionProvider {
+                            AppNavigation(
+                                navController = navController,
+                                miniPlayerManager = miniPlayerManager,
+                                isInPipMode = isInPipMode,
+                                onVideoDetailEnter = { 
+                                    isInVideoDetail = true
+                                    Logger.d(TAG, "🎬 进入视频详情页")
+                                },
+                                onVideoDetailExit = { 
+                                    isInVideoDetail = false
+                                    Logger.d(TAG, "🔙 退出视频详情页")
+                                }
+                            )
+                        }
                         
                         // 🔥 首次启动欢迎弹窗
                         if (showWelcome) {

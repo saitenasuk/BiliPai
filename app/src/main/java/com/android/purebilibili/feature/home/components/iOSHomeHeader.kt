@@ -54,14 +54,20 @@ fun iOSHomeHeader(
     isScrollingUp: Boolean = true,
     collapseThreshold: androidx.compose.ui.unit.Dp = 60.dp,
     hazeState: HazeState? = null,  // 保留参数兼容性，但不用于模糊
-    onStatusBarDoubleTap: () -> Unit = {}
+    onStatusBarDoubleTap: () -> Unit = {},
+    // 🍎 [新增] 下拉刷新状态
+    isRefreshing: Boolean = false,
+    pullProgress: Float = 0f  // 0.0 ~ 1.0+ 下拉进度
 ) {
     val haptic = rememberHapticFeedback()
     val density = LocalDensity.current
 
     // 计算滚动进度
     val maxOffsetPx = with(density) { 50.dp.toPx() }
-    val progress = (scrollOffset / maxOffsetPx).coerceIn(0f, 1f)
+    val scrollProgress = (scrollOffset / maxOffsetPx).coerceIn(0f, 1f)
+    
+    // 🍎 [下拉刷新] 合并滚动和下拉进度，下拉时也要收起标签页
+    val progress = maxOf(scrollProgress, (pullProgress * 1.5f).coerceIn(0f, 1f))
     
     // 状态栏高度
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()

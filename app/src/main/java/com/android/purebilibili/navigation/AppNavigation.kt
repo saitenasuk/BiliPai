@@ -3,11 +3,18 @@ package com.android.purebilibili.navigation
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState // 🔥 新增
 import androidx.compose.runtime.getValue // 🔥 新增
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -29,6 +36,8 @@ import com.android.purebilibili.feature.list.FavoriteViewModel
 import com.android.purebilibili.feature.video.VideoDetailScreen
 import com.android.purebilibili.feature.video.MiniPlayerManager
 import com.android.purebilibili.feature.dynamic.DynamicScreen
+import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.core.ui.ProvideAnimatedVisibilityScope
 
 // 定义路由参数结构
 object VideoRoute {
@@ -53,6 +62,11 @@ fun AppNavigation(
     onVideoDetailExit: () -> Unit = {}
 ) {
     val homeViewModel: HomeViewModel = viewModel()
+    
+    // 🔥 读取卡片过渡动画设置（在 Composable 作用域内）
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val cardTransitionEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getCardTransitionEnabled(context).collectAsState(initial = false)
 
     // 统一跳转逻辑
     fun navigateToVideo(bvid: String, cid: Long = 0L, coverUrl: String = "") {
@@ -71,31 +85,36 @@ fun AppNavigation(
         // --- 1. 首页 ---
         composable(
             route = ScreenRoutes.Home.route,
-            exitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
-            popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+            // 🔥 进入视频详情页时的退出动画
+            exitTransition = { fadeOut(animationSpec = tween(200)) },
+            // 🔥🔥 从视频详情页返回时不需要动画（卡片在原位置）
+            popEnterTransition = { fadeIn(animationSpec = tween(250)) }
         ) {
-            HomeScreen(
-                viewModel = homeViewModel,
-                onVideoClick = { bvid, cid, cover -> navigateToVideo(bvid, cid, cover) },
-                onSearchClick = { navController.navigate(ScreenRoutes.Search.route) },
-                onAvatarClick = { navController.navigate(ScreenRoutes.Login.route) },
-                onProfileClick = { navController.navigate(ScreenRoutes.Profile.route) },
-                onSettingsClick = { navController.navigate(ScreenRoutes.Settings.route) },
-                onDynamicClick = { navController.navigate(ScreenRoutes.Dynamic.route) },
-                onHistoryClick = { navController.navigate(ScreenRoutes.History.route) },
-                onPartitionClick = { navController.navigate(ScreenRoutes.Partition.route) },  // 🔥 分区点击
-                onLiveClick = { roomId, title, uname ->
-                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
-                },
-                // 🔥🔥 [修复] 番剧点击导航，接受类型参数
-                onBangumiClick = { initialType ->
-                    navController.navigate(ScreenRoutes.Bangumi.createRoute(initialType))
-                },
-                // 🔥 分类点击：跳转到分类详情页面
-                onCategoryClick = { tid, name ->
-                    navController.navigate(ScreenRoutes.Category.createRoute(tid, name))
-                }
-            )
+            // 🔥 提供 AnimatedVisibilityScope 给 HomeScreen 以支持共享元素过渡
+            ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
+                HomeScreen(
+                    viewModel = homeViewModel,
+                    onVideoClick = { bvid, cid, cover -> navigateToVideo(bvid, cid, cover) },
+                    onSearchClick = { navController.navigate(ScreenRoutes.Search.route) },
+                    onAvatarClick = { navController.navigate(ScreenRoutes.Login.route) },
+                    onProfileClick = { navController.navigate(ScreenRoutes.Profile.route) },
+                    onSettingsClick = { navController.navigate(ScreenRoutes.Settings.route) },
+                    onDynamicClick = { navController.navigate(ScreenRoutes.Dynamic.route) },
+                    onHistoryClick = { navController.navigate(ScreenRoutes.History.route) },
+                    onPartitionClick = { navController.navigate(ScreenRoutes.Partition.route) },  // 🔥 分区点击
+                    onLiveClick = { roomId, title, uname ->
+                        navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                    },
+                    // 🔥🔥 [修复] 番剧点击导航，接受类型参数
+                    onBangumiClick = { initialType ->
+                        navController.navigate(ScreenRoutes.Bangumi.createRoute(initialType))
+                    },
+                    // 🔥 分类点击：跳转到分类详情页面
+                    onCategoryClick = { tid, name ->
+                        navController.navigate(ScreenRoutes.Category.createRoute(tid, name))
+                    }
+                )
+            }
         }
 
         // --- 2. 视频详情页 ---
@@ -107,12 +126,76 @@ fun AppNavigation(
                 navArgument("cover") { type = NavType.StringType; defaultValue = "" },
                 navArgument("fullscreen") { type = NavType.BoolType; defaultValue = false }
             ),
-            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
-            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+            // 🔥🔥 进入动画：当卡片过渡开启时用缩放，关闭时用滑入
+            enterTransition = { 
+                if (cardTransitionEnabled) {
+                    // 🔥 从记录的卡片位置展开（缩放动画）
+                    val origin = CardPositionManager.lastClickedCardCenter?.let {
+                        TransformOrigin(it.x, it.y)
+                    } ?: TransformOrigin.Center
+                    
+                    scaleIn(
+                        initialScale = 0.85f,
+                        transformOrigin = origin,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) + fadeIn(animationSpec = tween(250))
+                } else {
+                    // 🔥 位置感知滑入动画
+                    if (CardPositionManager.isSingleColumnCard) {
+                        // 🎬 单列卡片（故事卡片）：从下往上滑入
+                        slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Up, tween(animDuration))
+                    } else {
+                        // 🔥 双列卡片：左边卡片从左滑入，右边卡片从右滑入
+                        val isCardOnLeft = (CardPositionManager.lastClickedCardCenter?.x ?: 0.5f) < 0.5f
+                        if (isCardOnLeft) {
+                            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration))
+                        } else {
+                            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration))
+                        }
+                    }
+                }
+            },
+            // 🔥🔥 返回动画：当卡片过渡开启时用缩放，关闭时用滑出
+            popExitTransition = { 
+                if (cardTransitionEnabled) {
+                    // 🔥 收缩回到记录的卡片位置（缩放动画）
+                    val origin = CardPositionManager.lastClickedCardCenter?.let {
+                        TransformOrigin(it.x, it.y)
+                    } ?: TransformOrigin.Center
+                    
+                    scaleOut(
+                        targetScale = 0.6f,
+                        transformOrigin = origin,
+                        animationSpec = spring(
+                            dampingRatio = 0.5f,
+                            stiffness = 200f
+                        )
+                    ) + fadeOut(animationSpec = tween(300))
+                } else {
+                    // 🔥 位置感知滑出动画
+                    if (CardPositionManager.isSingleColumnCard) {
+                        // 🎬 单列卡片（故事卡片）：往下滑出
+                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down, tween(animDuration))
+                    } else {
+                        // 🔥 双列卡片：返回到原来卡片的方向
+                        val isCardOnLeft = (CardPositionManager.lastClickedCardCenter?.x ?: 0.5f) < 0.5f
+                        if (isCardOnLeft) {
+                            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration))
+                        } else {
+                            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration))
+                        }
+                    }
+                }
+            }
         ) { backStackEntry ->
             val bvid = backStackEntry.arguments?.getString("bvid") ?: ""
             val coverUrl = backStackEntry.arguments?.getString("cover") ?: ""
             val startFullscreen = backStackEntry.arguments?.getBoolean("fullscreen") ?: false
+            
+            // 🔥 使用顶层定义的 cardTransitionEnabled（已在 line 68 定义）
 
             // 🔥 进入视频详情页时通知 MainActivity
             DisposableEffect(Unit) {
@@ -122,20 +205,26 @@ fun AppNavigation(
                 }
             }
 
-            VideoDetailScreen(
-                bvid = bvid,
-                coverUrl = coverUrl,
-                onUpClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },  // 🔥 点击UP跳转空间
-                miniPlayerManager = miniPlayerManager,
-                isInPipMode = isInPipMode,
-                isVisible = true,
-                startInFullscreen = startFullscreen,  // 🔥 传递全屏参数
-                onBack = { 
-                    // 🔥 返回时进入小窗模式（而非直接停止播放）
-                    miniPlayerManager?.enterMiniMode()
-                    navController.popBackStack() 
-                }
-            )
+            // 🔥 提供 AnimatedVisibilityScope 给 VideoDetailScreen 以支持共享元素过渡
+            ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
+                VideoDetailScreen(
+                    bvid = bvid,
+                    coverUrl = coverUrl,
+                    onUpClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },  // 🔥 点击UP跳转空间
+                    miniPlayerManager = miniPlayerManager,
+                    isInPipMode = isInPipMode,
+                    isVisible = true,
+                    startInFullscreen = startFullscreen,  // 🔥 传递全屏参数
+                    transitionEnabled = cardTransitionEnabled,  // 🔥 传递过渡动画开关
+                    onBack = { 
+                        // 🔥 标记正在返回，跳过首页卡片入场动画
+                        CardPositionManager.markReturning()
+                        // 🔥 返回时进入小窗模式（而非直接停止播放）
+                        miniPlayerManager?.enterMiniMode()
+                        navController.popBackStack() 
+                    }
+                )
+            }
         }
 
         // --- 3. 个人中心 ---
@@ -199,7 +288,8 @@ fun AppNavigation(
             DynamicScreen(
                 onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
                 onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onLoginClick = { navController.navigate(ScreenRoutes.Login.route) }  // 🔥 跳转登录
             )
         }
 

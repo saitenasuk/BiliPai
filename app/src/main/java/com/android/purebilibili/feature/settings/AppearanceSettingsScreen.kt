@@ -376,6 +376,30 @@ fun AppearanceSettingsScreen(
                     
                     Divider()
                     
+                    // 🔥 卡片进场动画开关
+                    SettingSwitchItem(
+                        icon = Icons.Outlined.Animation,
+                        title = "卡片进场动画",
+                        subtitle = "首页视频卡片的入场动画效果",
+                        checked = state.cardAnimationEnabled,
+                        onCheckedChange = { viewModel.toggleCardAnimation(it) },
+                        iconTint = iOSPink
+                    )
+                    
+                    Divider()
+                    
+                    // 🔥 卡片过渡动画开关
+                    SettingSwitchItem(
+                        icon = Icons.Outlined.SwapHoriz,
+                        title = "卡片过渡动画",
+                        subtitle = "点击卡片时的共享元素过渡效果",
+                        checked = state.cardTransitionEnabled,
+                        onCheckedChange = { viewModel.toggleCardTransition(it) },
+                        iconTint = iOSTeal
+                    )
+                    
+                    Divider()
+                    
                     // 🔥 底栏显示模式选择 (moved down)
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

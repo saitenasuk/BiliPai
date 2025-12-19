@@ -14,7 +14,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -24,9 +28,15 @@ import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.animateEnter
+import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.theme.iOSSystemGray
-import com.android.purebilibili.core.util.iOSTapEffect
+import com.android.purebilibili.core.util.iOSCardTapEffect
+// 🔥 共享元素过渡
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.spring
+import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 
 /**
  * 🔥 官方 B 站风格视频卡片
@@ -37,12 +47,15 @@ import com.android.purebilibili.core.util.iOSTapEffect
  * - 标题：2行
  * - 底部：「已关注」标签 + UP主名称
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ElegantVideoCard(
     video: VideoItem,
     index: Int,
     refreshKey: Long = 0L,
     isFollowing: Boolean = false,  // 🔥 是否已关注该 UP 主
+    animationEnabled: Boolean = true,   // 🔥 卡片进场动画开关
+    transitionEnabled: Boolean = false, // 🔥 卡片过渡动画开关
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
@@ -55,22 +68,66 @@ fun ElegantVideoCard(
     // B站封面 URL 通常包含尺寸信息，如 width=X&height=Y
     // 简单方案：暂不显示竖屏标签（因推荐API不提供视频尺寸信息）
 
+    // 🔥 获取屏幕尺寸用于计算归一化坐标
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    
+    // 🔥 记录卡片位置
+    var cardBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // 🔥🔥 [新增] 进场动画 - 交错缩放+滑入
-            .animateEnter(index = index, key = video.bvid)
-            .iOSTapEffect(
-                scale = 0.97f,
+            // 🔥🔥 [新增] 进场动画 - 交错缩放+滑入，支持开关控制
+            .animateEnter(index = index, key = video.bvid, animationEnabled = animationEnabled)
+            // 🔥🔥 [新增] 记录卡片位置
+            .onGloballyPositioned { coordinates ->
+                cardBounds = coordinates.boundsInRoot()
+            }
+            .iOSCardTapEffect(
+                pressScale = 0.96f,
+                pressTranslationY = 6f,
                 hapticEnabled = true
             ) {
+                // 🔥🔥 点击时保存卡片位置
+                cardBounds?.let { bounds ->
+                    CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx)
+                }
                 onClick(video.bvid, 0)
             }
             .padding(bottom = 12.dp)
     ) {
-        // 🔥 封面容器 - 官方 B 站风格
+        // 🔥 尝试获取共享元素作用域
+        val sharedTransitionScope = LocalSharedTransitionScope.current
+        val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+        
+        // 🔥 封面容器 - 官方 B 站风格，支持共享元素过渡（受开关控制）
+        val coverModifier = if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier
+                    .sharedBounds(
+                        sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        // 🔥 添加回弹效果的 spring 动画
+                        boundsTransform = { _, _ ->
+                            spring(
+                                dampingRatio = 0.7f,   // 轻微回弹
+                                stiffness = 300f       // 适中速度
+                            )
+                        },
+                        clipInOverlayDuringTransition = OverlayClip(
+                            RoundedCornerShape(8.dp)  // 🔥 过渡时保持圆角
+                        )
+                    )
+            }
+        } else {
+            Modifier
+        }
+        
         Box(
-            modifier = Modifier
+            modifier = coverModifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 10f)
                 .shadow(
