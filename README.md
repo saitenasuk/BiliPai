@@ -30,16 +30,12 @@
     <td><img src="docs/images/screenshot_2.png" width="150"></td>
     <td><img src="docs/images/screenshot_3.png" width="150"></td>
     <td><img src="docs/images/screenshot_4.png" width="150"></td>
-    <td><img src="docs/images/screenshot_5.png" width="150"></td>
-    <td><img src="docs/images/screenshot_6.png" width="150"></td>
   </tr>
   <tr align="center">
     <td><sub>首页推荐</sub></td>
     <td><sub>直播分区</sub></td>
     <td><sub>视频播放</sub></td>
     <td><sub>设置页面</sub></td>
-    <td><sub>权限管理</sub></td>
-    <td><sub>外观设置</sub></td>
   </tr>
 </table>
 
