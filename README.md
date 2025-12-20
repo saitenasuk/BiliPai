@@ -1,10 +1,6 @@
 # BiliPai ( ゜- ゜)つロ 干杯~
 
 <p align="center">
-  <img src="docs/images/app_icon.png" alt="BiliPai" width="120" height="120">
-</p>
-
-<p align="center">
   <strong>🎬 纯净、流畅、无广告的 Bilibili 第三方客户端</strong>
 </p>
 
@@ -23,10 +19,6 @@
 ---
 
 ## 📸 应用预览
-
-<p align="center">
-  <img src="docs/images/app_preview_banner.png" alt="App Preview" width="100%">
-</p>
 
 <p align="center">
   <img src="docs/images/screenshot_1_home.png" alt="首页" height="500">
