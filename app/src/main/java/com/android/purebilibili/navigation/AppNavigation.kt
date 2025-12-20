@@ -90,7 +90,7 @@ fun AppNavigation(
             // 🔥🔥 从视频详情页返回时不需要动画（卡片在原位置）
             popEnterTransition = { fadeIn(animationSpec = tween(250)) }
         ) {
-            // 🔥 提供 AnimatedVisibilityScope 给 HomeScreen 以支持共享元素过渡
+            // 🔥 提供 AnimatedVisibilityScope 给 HomeScreen 以支持共享元素过渡i l
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 HomeScreen(
                     viewModel = homeViewModel,
@@ -364,7 +364,8 @@ fun AppNavigation(
                 onOpenSourceLicensesClick = { navController.navigate(ScreenRoutes.OpenSourceLicenses.route) },
                 onAppearanceClick = { navController.navigate(ScreenRoutes.AppearanceSettings.route) },
                 onPlaybackClick = { navController.navigate(ScreenRoutes.PlaybackSettings.route) },
-                onPermissionClick = { navController.navigate(ScreenRoutes.PermissionSettings.route) }
+                onPermissionClick = { navController.navigate(ScreenRoutes.PermissionSettings.route) },
+                onPluginsClick = { navController.navigate(ScreenRoutes.PluginsSettings.route) }
             )
         }
 
@@ -422,6 +423,17 @@ fun AppNavigation(
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
         ) {
             com.android.purebilibili.feature.settings.PermissionSettingsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        
+        // --- 🔌 插件中心页面 ---
+        composable(
+            route = ScreenRoutes.PluginsSettings.route,
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) {
+            com.android.purebilibili.feature.settings.PluginsScreen(
                 onBack = { navController.popBackStack() }
             )
         }

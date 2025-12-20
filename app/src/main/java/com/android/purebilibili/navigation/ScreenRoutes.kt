@@ -31,6 +31,7 @@ sealed class ScreenRoutes(val route: String) {
     object AppearanceSettings : ScreenRoutes("appearance_settings")
     object PlaybackSettings : ScreenRoutes("playback_settings")
     object PermissionSettings : ScreenRoutes("permission_settings")  // 🔐 权限管理
+    object PluginsSettings : ScreenRoutes("plugins_settings")  // 🔌 插件中心
 
     object VideoPlayer : ScreenRoutes("video_player/{bvid}?cid={cid}") {
         fun createRoute(bvid: String, cid: Long = 0): String {

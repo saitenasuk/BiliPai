@@ -331,66 +331,72 @@ fun VideoPlayerSection(
             // 🔥 非全屏时的顶部偏移量
             val topOffset = if (isFullscreen) 0 else statusBarHeightPx + 20
             
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clipToBounds()
-                    .graphicsLayer { clip = true }
-            ) {
-                AndroidView(
-                    factory = { ctx ->
-                        // 🔥🔥 使用 ClipRect 容器强制裁剪
-                        object : android.widget.FrameLayout(ctx) {
-                            private val clipBounds = android.graphics.Rect()
-                            
-                            override fun dispatchDraw(canvas: android.graphics.Canvas) {
-                                // 🔥 强制裁剪：只在安全区域内绘制
-                                canvas.save()
-                                clipBounds.set(0, 0, width, height)
-                                canvas.clipRect(clipBounds)
-                                super.dispatchDraw(canvas)
-                                canvas.restore()
-                            }
-                            
-                            override fun onDraw(canvas: android.graphics.Canvas) {
-                                canvas.save()
-                                canvas.clipRect(0, 0, width, height)
-                                super.onDraw(canvas)
-                                canvas.restore()
-                            }
-                        }.apply {
-                            clipChildren = true
-                            clipToPadding = true
-                            setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null) // 🔥 使用软件渲染以确保裁剪生效
-                            
-                            // 🔥🔥 使用 OutlineProvider 进行硬件裁剪
-                            outlineProvider = object : android.view.ViewOutlineProvider() {
-                                override fun getOutline(view: android.view.View, outline: android.graphics.Outline) {
-                                    outline.setRect(0, 0, view.width, view.height)
+            // 🔥🔥 [关键修复] 使用 key(isFullscreen) 强制在横竖屏切换时重新创建 DanmakuView
+            key(isFullscreen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clipToBounds()
+                        .graphicsLayer { clip = true }
+                ) {
+                    AndroidView(
+                        factory = { ctx ->
+                            // 🔥🔥 使用 ClipRect 容器强制裁剪
+                            object : android.widget.FrameLayout(ctx) {
+                                private val clipBounds = android.graphics.Rect()
+                                
+                                override fun dispatchDraw(canvas: android.graphics.Canvas) {
+                                    // 🔥 强制裁剪：只在安全区域内绘制
+                                    canvas.save()
+                                    clipBounds.set(0, 0, width, height)
+                                    canvas.clipRect(clipBounds)
+                                    super.dispatchDraw(canvas)
+                                    canvas.restore()
                                 }
+                                
+                                override fun onDraw(canvas: android.graphics.Canvas) {
+                                    canvas.save()
+                                    canvas.clipRect(0, 0, width, height)
+                                    super.onDraw(canvas)
+                                    canvas.restore()
+                                }
+                            }.apply {
+                                clipChildren = true
+                                clipToPadding = true
+                                setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null) // 🔥 使用软件渲染以确保裁剪生效
+                                
+                                // 🔥🔥 使用 OutlineProvider 进行硬件裁剪
+                                outlineProvider = object : android.view.ViewOutlineProvider() {
+                                    override fun getOutline(view: android.view.View, outline: android.graphics.Outline) {
+                                        outline.setRect(0, 0, view.width, view.height)
+                                    }
+                                }
+                                clipToOutline = true
+                                
+                                // 🔥🔥 设置顶部 padding
+                                setPadding(0, topOffset, 0, 0)
+                                
+                                val danmakuView = master.flame.danmaku.ui.widget.DanmakuView(ctx).apply {
+                                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                    layoutParams = android.widget.FrameLayout.LayoutParams(
+                                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                                    )
+                                }
+                                addView(danmakuView)
+                                danmakuViewRef.value = danmakuView
+                                danmakuManager.attachView(danmakuView)
+                                android.util.Log.d("VideoPlayerSection", "✅ DanmakuView created, isFullscreen=$isFullscreen, topOffset=$topOffset")
                             }
-                            clipToOutline = true
-                            
-                            val danmakuView = master.flame.danmaku.ui.widget.DanmakuView(ctx).apply {
-                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                layoutParams = android.widget.FrameLayout.LayoutParams(
-                                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT
-                                )
-                            }
-                            addView(danmakuView)
-                            danmakuViewRef.value = danmakuView
-                            danmakuManager.attachView(danmakuView)
-                            android.util.Log.d("VideoPlayerSection", "✅ DanmakuView created, topOffset=$topOffset")
-                        }
-                    },
-                    update = { frameLayout ->
-                        // 🔥🔥 [关键] 更新顶部 padding 推开弹幕区域
-                        frameLayout.setPadding(0, topOffset, 0, 0)
-                        frameLayout.requestLayout()
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
+                        },
+                        update = { frameLayout ->
+                            // 🔥🔥 [关键] 更新顶部 padding 推开弹幕区域
+                            frameLayout.setPadding(0, topOffset, 0, 0)
+                            frameLayout.requestLayout()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
 
@@ -479,9 +485,11 @@ fun VideoPlayerSection(
                 danmakuOpacity = danmakuManager.opacity,
                 danmakuFontScale = danmakuManager.fontScale,
                 danmakuSpeed = danmakuManager.speedFactor,
+                danmakuDisplayArea = danmakuManager.displayArea,
                 onDanmakuOpacityChange = { danmakuManager.opacity = it },
                 onDanmakuFontScaleChange = { danmakuManager.fontScale = it },
                 onDanmakuSpeedChange = { danmakuManager.speedFactor = it },
+                onDanmakuDisplayAreaChange = { danmakuManager.displayArea = it },
                 // 🔥 视频比例调节
                 currentAspectRatio = currentAspectRatio,
                 onAspectRatioChange = { currentAspectRatio = it }

@@ -11,7 +11,7 @@
         <!-- 🖼️ Splash Screen 图标背景 -->
         <item name="windowSplashScreenIconBackgroundColor">@color/splash_background</item>
         <!-- 🖼️ Splash Screen 图标 -->
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_blue_round</item>
         <!-- ⏱️ 图标动画时长 -->
         <item name="windowSplashScreenAnimationDuration">300</item>
         <!-- 🔄 Splash 结束后的主题 -->

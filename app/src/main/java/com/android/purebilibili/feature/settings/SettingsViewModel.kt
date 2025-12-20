@@ -261,7 +261,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleHwDecode(value: Boolean) { viewModelScope.launch { SettingsManager.setHwDecode(context, value) } }
-    fun setThemeMode(mode: AppThemeMode) { viewModelScope.launch { SettingsManager.setThemeMode(context, mode) } }
+    fun setThemeMode(mode: AppThemeMode) { 
+        viewModelScope.launch { 
+            SettingsManager.setThemeMode(context, mode)
+        } 
+    }
     fun toggleDynamicColor(value: Boolean) { viewModelScope.launch { SettingsManager.setDynamicColor(context, value) } }
     fun toggleBgPlay(value: Boolean) { viewModelScope.launch { SettingsManager.setBgPlay(context, value) } }
     // 🔥🔥 [新增] 手势灵敏度和主题色
@@ -292,24 +296,36 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 "Blue" to "${packageName}.MainActivityAliasBlue",
                 "Retro" to "${packageName}.MainActivityAliasRetro",
                 "Flat" to "${packageName}.MainActivityAliasFlat",
-                "Neon" to "${packageName}.MainActivityAliasNeon"
+                "Neon" to "${packageName}.MainActivityAliasNeon",
+                "Telegram Blue" to "${packageName}.MainActivityAliasTelegramBlue",
+                "Pink" to "${packageName}.MainActivityAliasPink",
+                "Purple" to "${packageName}.MainActivityAliasPurple",
+                "Green" to "${packageName}.MainActivityAliasGreen",
+                "Dark" to "${packageName}.MainActivityAliasDark"
             )
             
             // 找到需要启用的 alias
             val targetAlias = allAliases.find { it.first == iconKey }?.second
                 ?: "${packageName}.MainActivityAlias3D" // 默认3D
             
-            // 禁用所有其他 alias，启用目标 alias
+            // 🔥🔥 [修复] 先禁用所有 alias，再启用目标 alias
+            // 避免出现多个启动器图标
+            
+            // 第一步：禁用所有 alias
             allAliases.forEach { (_, aliasFullName) ->
                 pm.setComponentEnabledSetting(
                     android.content.ComponentName(packageName, aliasFullName),
-                    if (aliasFullName == targetAlias) 
-                        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED 
-                    else 
-                        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                     android.content.pm.PackageManager.DONT_KILL_APP
                 )
             }
+            
+            // 第二步：启用目标 alias
+            pm.setComponentEnabledSetting(
+                android.content.ComponentName(packageName, targetAlias),
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                android.content.pm.PackageManager.DONT_KILL_APP
+            )
         }
     }
 

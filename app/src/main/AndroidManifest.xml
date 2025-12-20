@@ -34,7 +34,12 @@
             android:enabled="true"
             android:theme="@style/Theme.PureBiliBili"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density">
-            <!-- Launcher category removed, handled by aliases -->
+            <!-- 🔥 不在 Launcher 显示，只通过 activity-alias 启动 -->
+            <!-- Android Studio 需要在 Run Configuration 中选择 "Default Activity" -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <!-- Default Alias (3D - 默认) -->
@@ -46,7 +51,8 @@
             android:roundIcon="@mipmap/ic_launcher_3d_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
-            <intent-filter>
+            <!-- 🔥 高优先级：启动器显示此图标 -->
+            <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
@@ -60,7 +66,7 @@
             android:roundIcon="@mipmap/ic_launcher_blue_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
-            <intent-filter>
+            <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
@@ -75,7 +81,7 @@
             android:roundIcon="@mipmap/ic_launcher_retro_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
-            <intent-filter>
+            <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
@@ -89,7 +95,7 @@
             android:roundIcon="@mipmap/ic_launcher_flat_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
-            <intent-filter>
+            <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
@@ -103,12 +109,83 @@
             android:roundIcon="@mipmap/ic_launcher_neon_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
-            <intent-filter>
+            <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
 
+
+        <!-- Telegram Style Aliases -->
+        <activity-alias
+            android:name=".MainActivityAliasTelegramBlue"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_telegram_blue"
+            android:roundIcon="@mipmap/ic_launcher_telegram_blue_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasPink"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_telegram_pink"
+            android:roundIcon="@mipmap/ic_launcher_telegram_pink_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        
+        <activity-alias
+            android:name=".MainActivityAliasPurple"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_telegram_purple"
+            android:roundIcon="@mipmap/ic_launcher_telegram_purple_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasGreen"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_telegram_green"
+            android:roundIcon="@mipmap/ic_launcher_telegram_green_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAliasDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_telegram_dark"
+            android:roundIcon="@mipmap/ic_launcher_telegram_dark_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <activity
             android:name=".feature.video.VideoActivity"

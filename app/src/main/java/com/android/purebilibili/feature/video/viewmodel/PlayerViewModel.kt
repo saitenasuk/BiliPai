@@ -9,12 +9,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.core.cache.PlayUrlCache
+import com.android.purebilibili.core.plugin.PluginManager
+import com.android.purebilibili.core.plugin.SkipAction
 import com.android.purebilibili.core.util.AnalyticsHelper
 import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.VideoLoadError
 import com.android.purebilibili.data.model.response.*
-import com.android.purebilibili.data.repository.SponsorBlockRepository
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.video.controller.QualityManager
 import com.android.purebilibili.feature.video.controller.QualityPermissionResult
@@ -73,8 +74,10 @@ class PlayerViewModel : ViewModel() {
     // UseCases
     private val playbackUseCase = VideoPlaybackUseCase()
     private val interactionUseCase = VideoInteractionUseCase()
-    private val sponsorBlockUseCase = SponsorBlockUseCase()
     private val qualityManager = QualityManager()
+    
+    // 🔌 插件系统（替代旧的SponsorBlockUseCase）
+    private var pluginCheckJob: Job? = null
     
     // State
     private val _uiState = MutableStateFlow<PlayerUiState>(PlayerUiState.Loading.Initial)
@@ -94,10 +97,11 @@ class PlayerViewModel : ViewModel() {
     private val _coinDialogVisible = MutableStateFlow(false)
     val coinDialogVisible = _coinDialogVisible.asStateFlow()
     
-    // SponsorBlock
-    val sponsorSegments = sponsorBlockUseCase.segments
-    val currentSponsorSegment = sponsorBlockUseCase.currentSegment
-    val showSkipButton = sponsorBlockUseCase.showSkipButton
+    // 🔌 SponsorBlock (via Plugin)
+    private val _showSkipButton = MutableStateFlow(false)
+    val showSkipButton = _showSkipButton.asStateFlow()
+    private val _currentSkipReason = MutableStateFlow<String?>( null)
+    val currentSkipReason = _currentSkipReason.asStateFlow()
     
     // 🔥 Download state
     private val _downloadProgress = MutableStateFlow(-1f)
@@ -192,7 +196,19 @@ class PlayerViewModel : ViewModel() {
                     )
                     
                     startHeartbeat()
-                    sponsorBlockUseCase.loadSegments(bvid)
+                    
+                    // 🔌 通知插件系统：视频已加载
+                    PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
+                        try {
+                            plugin.onVideoLoad(bvid, currentCid)
+                        } catch (e: Exception) {
+                            Logger.e("PlayerVM", "Plugin ${plugin.name} onVideoLoad failed", e)
+                        }
+                    }
+                    
+                    // 🔌 启动插件检查定时器
+                    startPluginCheck()
+                    
                     AnalyticsHelper.logVideoPlay(bvid, result.info.title, result.info.owner.name)
                 }
                 is VideoLoadResult.Error -> {
@@ -478,26 +494,44 @@ class PlayerViewModel : ViewModel() {
                 toast("\u5206P\u5207\u6362\u5931\u8d25")
             } catch (e: Exception) {
                 _uiState.value = current.copy(isQualitySwitching = false)
-                toast("\u5206P\u5207\u6362\u5931\u8d25: ${e.message}")
             }
         }
     }
     
-    // ========== SponsorBlock ==========
+    // ========== 🔌 Plugin System (SponsorBlock等) ==========
     
-    suspend fun checkAndSkipSponsor(context: android.content.Context): Boolean {
-        val pos = playbackUseCase.getCurrentPosition()
-        val result = sponsorBlockUseCase.checkAndSkip(context, pos) { playbackUseCase.seekTo(it) }
-        if (result == SkipResult.SKIPPED) toast("\u5df2\u8df3\u8fc7\u7a7a\u964d\u7247\u6bb5")
-        return result == SkipResult.SKIPPED
+    /**
+     * 定期检查插件（约500ms一次）
+     */
+    private fun startPluginCheck() {
+        pluginCheckJob?.cancel()
+        pluginCheckJob = viewModelScope.launch {
+            while (true) {
+                delay(500)  // 每500ms检查一次
+                val plugins = PluginManager.getEnabledPlayerPlugins()
+                if (plugins.isEmpty()) continue
+                
+                val currentPos = playbackUseCase.getCurrentPosition()
+                
+                for (plugin in plugins) {
+                    try {
+                        when (val action = plugin.onPositionUpdate(currentPos)) {
+                            is SkipAction.SkipTo -> {
+                                playbackUseCase.seekTo(action.positionMs)
+                                toast(action.reason)
+                                Logger.d("PlayerVM", "🔌 Plugin ${plugin.name} skipped to ${action.positionMs}ms")
+                            }
+                            else -> {}
+                        }
+                    } catch (e: Exception) {
+                        Logger.e("PlayerVM", "Plugin ${plugin.name} onPositionUpdate failed", e)
+                    }
+                }
+            }
+        }
     }
     
-    fun skipCurrentSponsorSegment() {
-        sponsorBlockUseCase.skipCurrent { playbackUseCase.seekTo(it) }
-        viewModelScope.launch { toast("\u5df2\u8df3\u8fc7\u7a7a\u964d\u7247\u6bb5") }
-    }
-    
-    fun dismissSponsorSkipButton() { sponsorBlockUseCase.dismiss() }
+    fun dismissSponsorSkipButton() { _showSkipButton.value = false }
     
     // ========== Playback Control ==========
     
@@ -532,6 +566,17 @@ class PlayerViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         heartbeatJob?.cancel()
+        pluginCheckJob?.cancel()
+        
+        // 🔌 通知插件系统：视频结束
+        PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
+            try {
+                plugin.onVideoEnd()
+            } catch (e: Exception) {
+                Logger.e("PlayerVM", "Plugin ${plugin.name} onVideoEnd failed", e)
+            }
+        }
+        
         exoPlayer = null
     }
 }

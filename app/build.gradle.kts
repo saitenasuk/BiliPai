@@ -22,8 +22,8 @@ android {
         targetSdk = 34
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：versionCode +1, versionName 递增
         // 更新日志：CHANGELOG.md
-        versionCode = 9
-        versionName = "3.0.6"
+        versionCode = 10
+        versionName = "3.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -102,11 +102,11 @@ android {
     }
 }
 
-// 🔥 Compose 编译器性能指标 (生成重组分析报告)
-composeCompiler {
-    reportsDestination = layout.buildDirectory.dir("compose_reports")
-    metricsDestination = layout.buildDirectory.dir("compose_metrics")
-}
+// 🔥 Compose 编译器性能指标 (仅在需要分析时启用，会拖慢编译速度)
+// composeCompiler {
+//     reportsDestination = layout.buildDirectory.dir("compose_reports")
+//     metricsDestination = layout.buildDirectory.dir("compose_metrics")
+// }
 
 dependencies {
     // --- 1. Compose UI ---

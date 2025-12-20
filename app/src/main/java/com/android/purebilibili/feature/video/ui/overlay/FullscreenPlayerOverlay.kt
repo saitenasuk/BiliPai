@@ -288,11 +288,13 @@ fun FullscreenPlayerOverlay(
         }
         
         // 🔥 绑定 Player（不在 onDispose 中释放，单例会保持状态）
+        // 🔥🔥 [修复] 移除 detachView 调用，避免横竖屏切换时弹幕消失
+        // attachView 会自动暂停旧视图，不需要手动 detach
         DisposableEffect(player) {
             player?.let { danmakuManager.attachPlayer(it) }
             onDispose {
-                // 解绑视图但不释放弹幕数据
-                danmakuManager.detachView()
+                // 🔥 不再调用 detachView()
+                // 单例模式下，视图引用会在下次 attachView 时自动更新
             }
         }
         
@@ -496,11 +498,13 @@ fun FullscreenPlayerOverlay(
             var localOpacity by remember { mutableFloatStateOf(danmakuManager.opacity) }
             var localFontScale by remember { mutableFloatStateOf(danmakuManager.fontScale) }
             var localSpeed by remember { mutableFloatStateOf(danmakuManager.speedFactor) }
+            var localDisplayArea by remember { mutableFloatStateOf(danmakuManager.displayArea) }
             
             DanmakuSettingsPanel(
                 opacity = localOpacity,
                 fontScale = localFontScale,
                 speed = localSpeed,
+                displayArea = localDisplayArea,
                 onOpacityChange = { 
                     localOpacity = it
                     danmakuManager.opacity = it 
@@ -512,6 +516,10 @@ fun FullscreenPlayerOverlay(
                 onSpeedChange = { 
                     localSpeed = it
                     danmakuManager.speedFactor = it 
+                },
+                onDisplayAreaChange = {
+                    localDisplayArea = it
+                    danmakuManager.displayArea = it
                 },
                 onDismiss = { showDanmakuSettings = false }
             )

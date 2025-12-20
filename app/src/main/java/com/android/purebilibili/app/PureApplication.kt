@@ -16,8 +16,12 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiKeyManager
+import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.feature.plugin.AdFilterPlugin
+import com.android.purebilibili.feature.plugin.DanmakuEnhancePlugin
+import com.android.purebilibili.feature.plugin.SponsorBlockPlugin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -70,6 +74,14 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         NetworkModule.init(this)
         TokenManager.init(this)
         com.android.purebilibili.feature.download.DownloadManager.init(this)  // 🔥 下载管理器
+        
+        // 🔌 插件系统初始化
+        PluginManager.initialize(this)
+        PluginManager.register(SponsorBlockPlugin())
+        PluginManager.register(AdFilterPlugin())
+        PluginManager.register(DanmakuEnhancePlugin())
+        Logger.d(TAG, "🔌 Plugin system initialized with 3 built-in plugins")
+        
         createNotificationChannel()
         
         // 🔥 初始化 Firebase Crashlytics
@@ -82,6 +94,9 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         Handler(Looper.getMainLooper()).post {
             // 🔥 恢复 WBI 密钥缓存
             WbiKeyManager.restoreFromStorage(this)
+            
+            // 🔥 同步应用图标状态（确保只有一个图标在桌面显示）
+            syncAppIconState()
             
             // 🔥 异步预热 WBI Keys，减少首次视频加载延迟
             CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
@@ -219,5 +234,62 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(nightMode)
         Logger.d(TAG, "🎨 Applied theme mode: $themeModeValue -> nightMode=$nightMode")
+    }
+    
+    /**
+     * 🔥 同步应用图标状态 - 确保桌面只显示一个图标
+     * 
+     * 这解决了：切换图标后重新安装或更新应用导致多个图标出现的问题。
+     * 在应用启动时读取用户保存的图标偏好，然后同步所有 alias 的启用状态。
+     */
+    private fun syncAppIconState() {
+        try {
+            val pm = packageManager
+            val currentIcon = com.android.purebilibili.core.store.SettingsManager.getAppIconSync(this)
+            
+            // alias 映射
+            val allAliases = listOf(
+                "3D" to "${packageName}.MainActivityAlias3D",
+                "Blue" to "${packageName}.MainActivityAliasBlue",
+                "Retro" to "${packageName}.MainActivityAliasRetro",
+                "Flat" to "${packageName}.MainActivityAliasFlat",
+                "Neon" to "${packageName}.MainActivityAliasNeon",
+                "Telegram Blue" to "${packageName}.MainActivityAliasTelegramBlue",
+                "Pink" to "${packageName}.MainActivityAliasPink",
+                "Purple" to "${packageName}.MainActivityAliasPurple",
+                "Green" to "${packageName}.MainActivityAliasGreen",
+                "Dark" to "${packageName}.MainActivityAliasDark"
+            )
+            
+            // 找到需要启用的 alias
+            val targetAlias = allAliases.find { it.first == currentIcon }?.second
+                ?: "${packageName}.MainActivityAlias3D" // 默认3D
+            
+            // 同步所有 alias 状态：只有目标启用，其他禁用
+            allAliases.forEach { (_, aliasFullName) ->
+                val currentState = pm.getComponentEnabledSetting(
+                    android.content.ComponentName(packageName, aliasFullName)
+                )
+                val shouldBeEnabled = aliasFullName == targetAlias
+                val targetState = if (shouldBeEnabled) {
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                } else {
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                }
+                
+                // 只在状态不一致时修改，减少不必要的操作
+                if (currentState != targetState) {
+                    pm.setComponentEnabledSetting(
+                        android.content.ComponentName(packageName, aliasFullName),
+                        targetState,
+                        android.content.pm.PackageManager.DONT_KILL_APP
+                    )
+                }
+            }
+            
+            Logger.d(TAG, "🎨 Synced app icon state: $currentIcon")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to sync app icon state", e)
+        }
     }
 }

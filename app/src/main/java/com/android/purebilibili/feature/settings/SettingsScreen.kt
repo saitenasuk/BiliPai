@@ -63,7 +63,8 @@ fun SettingsScreen(
     onOpenSourceLicensesClick: () -> Unit,
     onAppearanceClick: () -> Unit = {},    // 🔥 外观设置
     onPlaybackClick: () -> Unit = {},      // 🔥 播放设置
-    onPermissionClick: () -> Unit = {}     // 🔐 权限管理
+    onPermissionClick: () -> Unit = {},    // 🔐 权限管理
+    onPluginsClick: () -> Unit = {}        // 🔌 插件中心
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -177,6 +178,15 @@ fun SettingsScreen(
                         onClick = onPermissionClick,
                         iconTint = iOSTeal
                     )
+                    Divider()
+                    // 🔌 插件中心
+                    SettingClickableItem(
+                        icon = Icons.Outlined.Extension,
+                        title = "插件中心",
+                        value = "${com.android.purebilibili.core.plugin.PluginManager.getEnabledCount()} 个已启用",
+                        onClick = onPluginsClick,
+                        iconTint = iOSPurple
+                    )
                 }
             }
             item { SettingsSectionTitle("高级选项") }
@@ -186,6 +196,9 @@ fun SettingsScreen(
                     .getCrashTrackingEnabled(context).collectAsState(initial = true)
                 val analyticsEnabled by com.android.purebilibili.core.store.SettingsManager
                     .getAnalyticsEnabled(context).collectAsState(initial = true)
+                // 🔒 隐私无痕模式
+                val privacyModeEnabled by com.android.purebilibili.core.store.SettingsManager
+                    .getPrivacyModeEnabled(context).collectAsState(initial = false)
                 val scope = rememberCoroutineScope()
                 
                 SettingsGroup {
@@ -195,6 +208,21 @@ fun SettingsScreen(
                         value = state.cacheSize,
                         onClick = { showCacheDialog = true },
                         iconTint = iOSPink
+                    )
+                    Divider()
+                    // 🔒 隐私无痕模式开关
+                    SettingSwitchItem(
+                        icon = Icons.Outlined.VisibilityOff,
+                        title = "隐私无痕模式",
+                        subtitle = "启用后不记录播放历史和搜索历史",
+                        checked = privacyModeEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setPrivacyModeEnabled(context, enabled)
+                            }
+                        },
+                        iconTint = iOSPurple
                     )
                     Divider()
                     // 🔥 崩溃追踪开关
@@ -294,40 +322,6 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.toggleDoubleTapLike(it) },
                         iconTint = iOSPink
                     )
-                }
-            }
-            
-            // 🚀 空降助手 (SponsorBlock)
-            item { SettingsSectionTitle("空降助手") }
-            item {
-                SettingsGroup {
-                    SettingSwitchItem(
-                        icon = Icons.Outlined.RocketLaunch,
-                        title = "启用空降助手",
-                        subtitle = "自动跳过视频中的广告/恰饭片段",
-                        checked = state.sponsorBlockEnabled,
-                        onCheckedChange = { viewModel.toggleSponsorBlock(it) },
-                        iconTint = iOSTeal
-                    )
-                    if (state.sponsorBlockEnabled) {
-                        Divider()
-                        SettingSwitchItem(
-                            icon = Icons.Outlined.FlashOn,
-                            title = "自动跳过",
-                            subtitle = "关闭后将显示跳过按钮而非自动跳过",
-                            checked = state.sponsorBlockAutoSkip,
-                            onCheckedChange = { viewModel.toggleSponsorBlockAutoSkip(it) },
-                            iconTint = iOSOrange
-                        )
-                        Divider()
-                        SettingClickableItem(
-                            icon = Icons.Outlined.Info,
-                            title = "关于空降助手",
-                            value = "BilibiliSponsorBlock",
-                            onClick = { uriHandler.openUri("https://github.com/hanydd/BilibiliSponsorBlock") },
-                            iconTint = iOSBlue
-                        )
-                    }
                 }
             }
             

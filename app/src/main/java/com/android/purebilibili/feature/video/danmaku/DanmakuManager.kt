@@ -119,6 +119,10 @@ class DanmakuManager private constructor(
         get() = config.topMarginPx
         set(value) = config.updateTopMargin(danmakuContext, value)
     
+    var displayArea: Float
+        get() = config.displayAreaRatio
+        set(value) = config.updateDisplayArea(danmakuContext, value)
+    
     /**
      * 获取或创建弹幕上下文（只创建一次，复用）
      */
@@ -167,19 +171,43 @@ class DanmakuManager private constructor(
         
         view.setCallback(object : DrawHandler.Callback {
             override fun prepared() {
-                Log.d(TAG, "✅ DanmakuView prepared, hashCode=${view.hashCode()}, cachedCid=$cachedCid")
+                Log.d(TAG, "✅ DanmakuView prepared, hashCode=${view.hashCode()}, cachedCid=$cachedCid, cachedData=${cachedRawData?.size ?: 0}")
                 isPrepared = true
                 
-                // 🔥🔥 只同步播放状态，不添加弹幕
-                // 弹幕将由 loadDanmaku 在视图 prepared 后添加
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    player?.let { p ->
-                        if (p.isPlaying && config.isEnabled) {
-                            val position = p.currentPosition
-                            view.seekTo(position)
-                            view.start()
-                            view.resume()
-                            Log.d(TAG, "🚀 Synced to position ${position}ms (danmaku will be loaded by loadDanmaku)")
+                // 🔥🔥 [关键修复] 横竖屏切换时：重新添加缓存的弹幕
+                if (cachedRawData != null && cachedCid > 0) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        try {
+                            val rawData = cachedRawData ?: return@post
+                            val danmakuList = DanmakuParser.parse(rawData, ctx)
+                            Log.d(TAG, "📎 Re-adding ${danmakuList.size} cached danmakus on orientation change")
+                            danmakuList.forEach { view.addDanmaku(it) }
+                            
+                            // 同步到当前播放位置
+                            player?.let { p ->
+                                if (p.isPlaying && config.isEnabled) {
+                                    val position = p.currentPosition
+                                    view.seekTo(position)
+                                    view.start()
+                                    view.resume()
+                                    Log.d(TAG, "🚀 Synced to position ${position}ms after re-adding danmakus")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "⚠️ Failed to re-add cached danmakus: ${e.message}")
+                        }
+                    }
+                } else {
+                    // 没有缓存数据时，只同步播放状态
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        player?.let { p ->
+                            if (p.isPlaying && config.isEnabled) {
+                                val position = p.currentPosition
+                                view.seekTo(position)
+                                view.start()
+                                view.resume()
+                                Log.d(TAG, "🚀 Synced to position ${position}ms (no cached data)")
+                            }
                         }
                     }
                 }
@@ -568,14 +596,10 @@ fun rememberDanmakuManager(): DanmakuManager {
         onDispose { }
     }
     
-    // 🔥🔥 [内存泄漏修复] 在 Composable 离开组合时清理视图引用
-    DisposableEffect(Unit) {
-        onDispose {
-            // 🔥 调用 clearViewReference 而非 release
-            // 这样可以清理 View 引用但保持弹幕数据缓存
-            manager.clearViewReference()
-        }
-    }
+    // 🔥🔥 [修复] 移除 DisposableEffect 中的 clearViewReference 调用
+    // 因为横竖屏切换时 Composable 会重新组合，导致弹幕状态被错误清除
+    // 单例模式下由外部（如 ViewModel 或 Activity）控制生命周期
+    // 视图引用会在 attachView 时自动更新
     
     return manager
 }

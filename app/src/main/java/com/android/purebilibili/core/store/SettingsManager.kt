@@ -222,6 +222,15 @@ object SettingsManager {
         context.settingsDataStore.edit { preferences -> 
             preferences[KEY_APP_ICON] = iconKey
         }
+        // 🔥 同步到 SharedPreferences，供 Application 同步读取
+        context.getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
+            .edit().putString("current_icon", iconKey).apply()
+    }
+    
+    // 🔥 同步读取当前图标设置（用于 Application 启动时同步）
+    fun getAppIconSync(context: Context): String {
+        return context.getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
+            .getString("current_icon", "3D") ?: "3D"
     }
 
     // 🔥🔥 [新增] --- 底部栏样式 ---
@@ -292,9 +301,9 @@ object SettingsManager {
         }
     }
     
-    // --- 弹幕速度 (0.5 ~ 2.0, 默认 1.2) ---
+    // --- 弹幕速度 (0.5 ~ 2.0, 默认 1.5 较慢) ---
     fun getDanmakuSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_DANMAKU_SPEED] ?: 1.2f }
+        .map { preferences -> preferences[KEY_DANMAKU_SPEED] ?: 1.5f }
 
     suspend fun setDanmakuSpeed(context: Context, value: Float) {
         context.settingsDataStore.edit { preferences -> 
@@ -409,5 +418,26 @@ object SettingsManager {
         // 🔥 同步到 SharedPreferences，供 Application 同步读取
         context.getSharedPreferences("analytics_tracking", Context.MODE_PRIVATE)
             .edit().putBoolean("enabled", value).apply()
+    }
+    
+    // ========== 🔒 隐私无痕模式 ==========
+    
+    private val KEY_PRIVACY_MODE_ENABLED = booleanPreferencesKey("privacy_mode_enabled")
+    
+    // --- 隐私无痕模式开关 (启用后不记录播放历史和搜索历史) ---
+    fun getPrivacyModeEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PRIVACY_MODE_ENABLED] ?: false }  // 默认关闭
+
+    suspend fun setPrivacyModeEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_PRIVACY_MODE_ENABLED] = value }
+        // 🔥 同步到 SharedPreferences，供同步读取使用 (VideoRepository 等)
+        context.getSharedPreferences("privacy_mode", Context.MODE_PRIVATE)
+            .edit().putBoolean("enabled", value).apply()
+    }
+    
+    // 🔥 同步读取隐私模式状态（用于非协程环境）
+    fun isPrivacyModeEnabledSync(context: Context): Boolean {
+        return context.getSharedPreferences("privacy_mode", Context.MODE_PRIVATE)
+            .getBoolean("enabled", false)
     }
 }

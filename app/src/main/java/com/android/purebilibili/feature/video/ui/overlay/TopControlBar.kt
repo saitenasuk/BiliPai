@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.SubtitlesOff
 import androidx.compose.material3.*
@@ -64,8 +65,7 @@ fun TopControlBar(
             maxLines = 1,
             modifier = Modifier.weight(1f)
         )
-        // Danmaku toggle button
-        Spacer(modifier = Modifier.width(8.dp))
+        // Danmaku toggle button with settings indicator
         Spacer(modifier = Modifier.width(8.dp))
         Surface(
             modifier = Modifier
@@ -77,15 +77,34 @@ fun TopControlBar(
             color = Color.White.copy(alpha = 0.2f),
             shape = RoundedCornerShape(4.dp)
         ) {
-            Box(
+            Row(
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                contentAlignment = Alignment.Center
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = if (danmakuEnabled) Icons.Rounded.Subtitles else Icons.Rounded.SubtitlesOff,
                     contentDescription = if (danmakuEnabled) "Disable danmaku" else "Enable danmaku",
                     tint = if (danmakuEnabled) Color(0xFFFB7299) else Color.White.copy(alpha = 0.6f),
                     modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        // 🔥 独立的弹幕设置按钮，更直观
+        Spacer(modifier = Modifier.width(4.dp))
+        Surface(
+            onClick = onDanmakuSettingsClick,
+            color = Color.White.copy(alpha = 0.2f),
+            shape = RoundedCornerShape(4.dp)
+        ) {
+            Box(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "弹幕设置",
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }

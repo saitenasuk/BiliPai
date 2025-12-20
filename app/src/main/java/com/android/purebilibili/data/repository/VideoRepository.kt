@@ -118,6 +118,13 @@ object VideoRepository {
     // 🔥🔥 [新增] 上报播放心跳（记录到历史记录）
     suspend fun reportPlayHeartbeat(bvid: String, cid: Long, playedTime: Long = 0) = withContext(Dispatchers.IO) {
         try {
+            // 🔒 隐私无痕模式检查：如果启用则跳过上报
+            val context = com.android.purebilibili.core.network.NetworkModule.appContext
+            if (context != null && com.android.purebilibili.core.store.SettingsManager.isPrivacyModeEnabledSync(context)) {
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔒 Privacy mode enabled, skipping heartbeat report")
+                return@withContext true  // 返回成功但不实际上报
+            }
+            
             com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔴 Reporting heartbeat: bvid=$bvid, cid=$cid, playedTime=$playedTime")
             val resp = api.reportHeartbeat(bvid = bvid, cid = cid, playedTime = playedTime, realPlayedTime = playedTime)
             com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔴 Heartbeat response: code=${resp.code}, msg=${resp.message}")

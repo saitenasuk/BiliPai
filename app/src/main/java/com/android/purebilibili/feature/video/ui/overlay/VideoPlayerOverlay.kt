@@ -63,10 +63,12 @@ fun VideoPlayerOverlay(
     onDanmakuToggle: () -> Unit = {},
     danmakuOpacity: Float = 0.85f,
     danmakuFontScale: Float = 1.2f,
-    danmakuSpeed: Float = 1.2f,
+    danmakuSpeed: Float = 1.5f,
+    danmakuDisplayArea: Float = 0.5f,
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
     onDanmakuSpeedChange: (Float) -> Unit = {},
+    onDanmakuDisplayAreaChange: (Float) -> Unit = {},
     // 🧪🧪 [实验性功能] 双击点赞
     doubleTapLikeEnabled: Boolean = true,
     onDoubleTapLike: () -> Unit = {},
@@ -334,9 +336,11 @@ fun VideoPlayerOverlay(
                 opacity = danmakuOpacity,
                 fontScale = danmakuFontScale,
                 speed = danmakuSpeed,
+                displayArea = danmakuDisplayArea,
                 onOpacityChange = onDanmakuOpacityChange,
                 onFontScaleChange = onDanmakuFontScaleChange,
                 onSpeedChange = onDanmakuSpeedChange,
+                onDisplayAreaChange = onDanmakuDisplayAreaChange,
                 onDismiss = { showDanmakuSettings = false }
             )
         }

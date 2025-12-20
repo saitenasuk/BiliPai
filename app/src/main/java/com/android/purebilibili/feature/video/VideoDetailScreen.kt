@@ -107,34 +107,17 @@ fun VideoDetailScreen(
     val commentState by commentViewModel.commentState.collectAsState()
     val subReplyState by commentViewModel.subReplyState.collectAsState()
     
-    // 🚀 空降助手状态
-    val sponsorSegment by viewModel.currentSponsorSegment.collectAsState()
-    val showSponsorSkipButton by viewModel.showSkipButton.collectAsState()
-    val sponsorBlockEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getSponsorBlockEnabled(context)
-        .collectAsState(initial = false)
+    // 🚀 空降助手 - 已由插件系统自动处理
+    // val sponsorSegment by viewModel.currentSponsorSegment.collectAsState()
+    // val showSponsorSkipButton by viewModel.showSkipButton.collectAsState()
+    // val sponsorBlockEnabled by com.android.purebilibili.core.store.SettingsManager
+    //     .getSponsorBlockEnabled(context)
+    //     .collectAsState(initial = false)
 
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     var isPipMode by remember { mutableStateOf(isInPipMode) }
     LaunchedEffect(isInPipMode) { isPipMode = isInPipMode }
-    
-    // 🚀 空降助手：检查播放位置（🔧 性能优化：自适应检查间隔）
-    LaunchedEffect(sponsorBlockEnabled, uiState) {
-        if (sponsorBlockEnabled && uiState is PlayerUiState.Success) {
-            while (true) {
-                // 🚀 根据是否有即将到来的片段动态调整检查频率
-                // 无片段或远离片段时：1000ms；接近片段时：300ms
-                val interval = if (sponsorSegment != null || (viewModel.sponsorSegments.value.isNotEmpty())) {
-                    300L  // 有活跃片段或片段列表非空时，更频繁检查
-                } else {
-                    1000L // 无片段时降低检查频率，节省 CPU
-                }
-                kotlinx.coroutines.delay(interval)
-                viewModel.checkAndSkipSponsor(context)
-            }
-        }
-    }
     
     // 🔥 从小窗展开时自动进入横屏全屏
     LaunchedEffect(startInFullscreen) {
@@ -362,12 +345,12 @@ fun VideoDetailScreen(
                     onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                     onBack = { toggleOrientation() },
                     // 🧪 实验性功能：双击点赞
-                    onDoubleTapLike = { viewModel.toggleLike() },
-                    // 🚀 空降助手
-                    sponsorSegment = sponsorSegment,
-                    showSponsorSkipButton = showSponsorSkipButton,
-                    onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
-                    onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
+                    onDoubleTapLike = { viewModel.toggleLike() }
+                    // 🚀 空降助手 - 已由插件系统自动处理
+                    // sponsorSegment = sponsorSegment,
+                    // showSponsorSkipButton = showSponsorSkipButton,
+                    // onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                    // onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
                 )
             } else {
                 // 🔥🔥 沉浸式布局：视频延伸到状态栏 + 内容区域
@@ -430,11 +413,12 @@ fun VideoDetailScreen(
                                 onToggleFullscreen = { toggleOrientation() },
                                 onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                                 onBack = handleBack,
-                                onDoubleTapLike = { viewModel.toggleLike() },
-                                sponsorSegment = sponsorSegment,
-                                showSponsorSkipButton = showSponsorSkipButton,
-                                onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
-                                onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
+                                onDoubleTapLike = { viewModel.toggleLike() }
+                                // 🚀 空降助手 - 已由插件系统自动处理
+                                // sponsorSegment = sponsorSegment,
+                                // showSponsorSkipButton = showSponsorSkipButton,
+                                // onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                                // onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
                             )
                         }
                     }

@@ -279,7 +279,12 @@ fun AppearanceSettingsScreen(
                             IconOption("Blue", "经典蓝", "原版"),
                             IconOption("Retro", "复古怀旧", "80年代"),
                             IconOption("Flat", "扁平现代", "Material"),
-                            IconOption("Neon", "霜虹发光", "赛博朋克")
+                            IconOption("Neon", "霜虹发光", "赛博朋克"),
+                            IconOption("Telegram Blue", "纸飞机蓝", "Telegram"),
+                            IconOption("Pink", "樱花粉", "可爱"),
+                            IconOption("Purple", "香芋紫", "梦幻"),
+                            IconOption("Green", "薄荷绿", "清新"),
+                            IconOption("Dark", "暗夜蓝", "深色模式")
                         )
                         
                         LazyRow(
@@ -309,6 +314,11 @@ fun AppearanceSettingsScreen(
                                             "Retro" -> com.android.purebilibili.R.mipmap.ic_launcher_retro
                                             "Flat" -> com.android.purebilibili.R.mipmap.ic_launcher_flat
                                             "Neon" -> com.android.purebilibili.R.mipmap.ic_launcher_neon
+                                            "Telegram Blue" -> com.android.purebilibili.R.mipmap.ic_launcher_telegram_blue
+                                            "Pink" -> com.android.purebilibili.R.mipmap.ic_launcher_telegram_pink
+                                            "Purple" -> com.android.purebilibili.R.mipmap.ic_launcher_telegram_purple
+                                            "Green" -> com.android.purebilibili.R.mipmap.ic_launcher_telegram_green
+                                            "Dark" -> com.android.purebilibili.R.mipmap.ic_launcher_telegram_dark
                                             else -> com.android.purebilibili.R.mipmap.ic_launcher
                                         }
                                         AsyncImage(

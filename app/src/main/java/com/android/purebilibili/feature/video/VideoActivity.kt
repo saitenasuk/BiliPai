@@ -119,22 +119,22 @@ class VideoActivity : ComponentActivity() {
             MaterialTheme {
                 val uiState = viewModel.uiState.collectAsStateWithLifecycle().value
                 
-                // 🚀 空降助手状态
-                val sponsorSegment by viewModel.currentSponsorSegment.collectAsStateWithLifecycle()
-                val showSponsorSkipButton by viewModel.showSkipButton.collectAsStateWithLifecycle()
-                val sponsorBlockEnabled by com.android.purebilibili.core.store.SettingsManager
-                    .getSponsorBlockEnabled(this@VideoActivity)
-                    .collectAsStateWithLifecycle(initialValue = false)
+                // 🚀 空降助手状态 - 已由插件系统自动处理，无需UI
+                // val sponsorSegment by viewModel.currentSponsorSegment.collectAsStateWithLifecycle()
+                // val showSponsorSkipButton by viewModel.showSkipButton.collectAsStateWithLifecycle()
+                // val sponsorBlockEnabled by com.android.purebilibili.core.store.SettingsManager
+                //     .getSponsorBlockEnabled(this@VideoActivity)
+                //     .collectAsStateWithLifecycle(initialValue = false)
                 
-                // 🚀 空降助手：定期检查播放位置
-                androidx.compose.runtime.LaunchedEffect(sponsorBlockEnabled, uiState) {
-                    if (sponsorBlockEnabled && uiState is PlayerUiState.Success) {
-                        while (true) {
-                            kotlinx.coroutines.delay(500)
-                            viewModel.checkAndSkipSponsor(this@VideoActivity)
-                        }
-                    }
-                }
+                // 🚀 空降助手：已由插件系统后台处理
+                // androidx.compose.runtime.LaunchedEffect(sponsorBlockEnabled, uiState) {
+                //     if (sponsorBlockEnabled && uiState is PlayerUiState.Success) {
+                //         while (true) {
+                //             kotlinx.coroutines.delay(500)
+                //             viewModel.checkAndSkipSponsor(this@VideoActivity)
+                //         }
+                //     }
+                // }
 
                 // 初始化播放器 (VideoPlayerState 内部已包含自动元数据更新逻辑)
                 val playerState = rememberVideoPlayerState(
@@ -168,12 +168,12 @@ class VideoActivity : ComponentActivity() {
                                 if (isFullscreen) toggleFullscreen() else finish()
                             },
                             // 🧪 实验性功能：双击点赞
-                            onDoubleTapLike = { viewModel.toggleLike() },
-                            // 🚀 空降助手
-                            sponsorSegment = sponsorSegment,
-                            showSponsorSkipButton = showSponsorSkipButton,
-                            onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
-                            onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
+                            onDoubleTapLike = { viewModel.toggleLike() }
+                            // 🚀 空降助手 - 已由插件系统自动处理
+                            // sponsorSegment = sponsorSegment,
+                            // showSponsorSkipButton = showSponsorSkipButton,
+                            // onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
+                            // onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
                         )
                     }
 

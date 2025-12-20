@@ -23,7 +23,7 @@ class DanmakuConfig {
     var fontScale = 1.0f
     
     // 滚动速度因子 (数值越大弹幕越慢)
-    var speedFactor = 1.2f
+    var speedFactor = 1.5f
     
     // 显示区域比例 (0.25, 0.5, 0.75, 1.0)
     var displayAreaRatio = 0.5f
@@ -77,6 +77,11 @@ class DanmakuConfig {
     fun updateTopMargin(ctx: DanmakuContext?, value: Int) {
         topMarginPx = value
         ctx?.setDanmakuMargin(value)
+    }
+    
+    fun updateDisplayArea(ctx: DanmakuContext?, value: Float) {
+        displayAreaRatio = value
+        ctx?.setMaximumLines(getMaxLines())
     }
     
     private fun getMaxLines(): Map<Int, Int> {

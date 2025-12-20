@@ -4,6 +4,8 @@ package com.android.purebilibili.feature.home
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.android.purebilibili.core.plugin.PluginManager
+import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.repository.VideoRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -157,9 +159,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         videoResult.onSuccess { videos ->
             val validVideos = videos.filter { it.bvid.isNotEmpty() && it.title.isNotEmpty() }
-            if (validVideos.isNotEmpty()) {
+            
+            // 🔌 应用FeedPlugin过滤器
+            val filteredVideos = validVideos.filter { video ->
+                val plugins = PluginManager.getEnabledFeedPlugins()
+                if (plugins.isEmpty()) return@filter true
+                
+                plugins.all { plugin ->
+                    try {
+                        plugin.shouldShowItem(video)
+                    } catch (e: Exception) {
+                        Logger.e("HomeVM", "Plugin ${plugin.name} filter failed", e)
+                        true  // 过滤器失败时默认显示
+                    }
+                }
+            }
+            
+            if (filteredVideos.isNotEmpty()) {
                 _uiState.value = _uiState.value.copy(
-                    videos = if (isLoadMore) _uiState.value.videos + validVideos else validVideos,
+                    videos = if (isLoadMore) _uiState.value.videos + filteredVideos else filteredVideos,
                     liveRooms = emptyList(),  // 清空直播列表
                     isLoading = false,
                     error = null

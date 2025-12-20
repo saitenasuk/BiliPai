@@ -182,6 +182,13 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun saveHistory(keyword: String) {
         viewModelScope.launch {
+            // 🔒 隐私无痕模式检查：如果启用则跳过保存搜索历史
+            val context = getApplication<android.app.Application>()
+            if (com.android.purebilibili.core.store.SettingsManager.isPrivacyModeEnabledSync(context)) {
+                com.android.purebilibili.core.util.Logger.d("SearchVM", "🔒 Privacy mode enabled, skipping search history save")
+                return@launch
+            }
+            
             // 🔥 使用 keyword 主键，重复搜索自动更新时间戳
             searchDao.insert(SearchHistory(keyword = keyword, timestamp = System.currentTimeMillis()))
         }
