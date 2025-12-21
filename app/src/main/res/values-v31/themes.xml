@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PureBiliBili" parent="Theme.SplashScreen.IconBackground">
+        <!-- 🎨 Splash Screen 背景色 - 浅色模式使用白色 -->
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <!-- 🖼️ Splash Screen 图标背景 -->
+        <item name="windowSplashScreenIconBackgroundColor">@color/background</item>
+        <!-- 🖼️ Splash Screen 图标 -->
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_flat</item>
+        <!-- ⏱️ 图标动画时长 -->
+        <item name="windowSplashScreenAnimationDuration">300</item>
+        <!-- 🔄 Splash 结束后的主题 -->
+        <item name="postSplashScreenTheme">@style/Theme.PureBiliBili.Main</item>
+    </style>
+</resources>
