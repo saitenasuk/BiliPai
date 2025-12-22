@@ -361,9 +361,14 @@ data class LiveResponse(
 @Serializable
 data class LiveData(
     val list: List<LiveRoom>? = null,
+    // 🔥 新 API 可能使用 list_by_area 字段
+    @SerialName("list_by_area") val listByArea: List<LiveRoom>? = null,
     val count: Int = 0,
-    val has_more: Int = 0
-)
+    @SerialName("has_more") val hasMore: Int = 0
+) {
+    // 🔥 统一获取直播列表
+    fun getAllRooms(): List<LiveRoom> = list ?: listByArea ?: emptyList()
+}
 
 @Serializable
 data class LiveRoom(

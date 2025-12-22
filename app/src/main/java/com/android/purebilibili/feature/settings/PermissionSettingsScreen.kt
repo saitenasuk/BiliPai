@@ -48,6 +48,23 @@ fun PermissionSettingsScreen(
 ) {
     val context = LocalContext.current
     
+    // 🔥🔥 [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
+        
+        if (window != null) {
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        }
+        
+        onDispose {
+            if (window != null) {
+                window.navigationBarColor = originalNavBarColor
+            }
+        }
+    }
+    
     // 权限列表数据
     val permissions = remember {
         listOf(
@@ -142,13 +159,16 @@ fun PermissionSettingsScreen(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        // 🔥🔥 [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，避免底部填充
+        contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 32.dp)
+            // 🔥🔥 [修复] 添加底部导航栏内边距，确保沉浸式效果
+            contentPadding = WindowInsets.navigationBars.asPaddingValues()
         ) {
             // 说明文字
             item {

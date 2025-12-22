@@ -322,14 +322,14 @@ fun FullscreenPlayerOverlay(
                 modifier = Modifier.fillMaxSize()
             )
             
-            // 🔥🔥 [新增] DanmakuView (覆盖在 PlayerView 上方)
+            // 🔥🔥 [新增] DanmakuView (覆盖在 PlayerView 上方) - 使用 DanmakuRenderEngine
             if (danmakuEnabled) {
                 AndroidView(
                     factory = { ctx ->
-                        master.flame.danmaku.ui.widget.DanmakuView(ctx).apply {
+                        com.bytedance.danmaku.render.engine.DanmakuView(ctx).apply {
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
                             danmakuManager.attachView(this)
-                            com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", "🎨 DanmakuView created for fullscreen")
+                            com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", "🎨 DanmakuView (RenderEngine) created for fullscreen")
                         }
                     },
                     modifier = Modifier.fillMaxSize()

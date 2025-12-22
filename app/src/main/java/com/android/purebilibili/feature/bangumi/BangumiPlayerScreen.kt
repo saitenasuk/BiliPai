@@ -532,11 +532,11 @@ private fun BangumiPlayerView(
             modifier = Modifier.fillMaxSize()
         )
         
-        // 弹幕层
+        // 弹幕层 - 使用 DanmakuRenderEngine
         if (danmakuEnabled) {
             AndroidView(
                 factory = { ctx ->
-                    master.flame.danmaku.ui.widget.DanmakuView(ctx).apply {
+                    com.bytedance.danmaku.render.engine.DanmakuView(ctx).apply {
                         setBackgroundColor(android.graphics.Color.TRANSPARENT)
                         danmakuManager.attachView(this)
                     }

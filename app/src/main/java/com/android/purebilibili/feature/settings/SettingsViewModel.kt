@@ -5,6 +5,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.util.CacheUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,6 +26,7 @@ data class SettingsUiState(
     val bottomBarLabelMode: Int = 1,  // 0=图标+文字, 1=仅图标, 2=仅文字
     val headerBlurEnabled: Boolean = true,
     val bottomBarBlurEnabled: Boolean = true,
+    val blurIntensity: BlurIntensity = BlurIntensity.THIN,  // 🔥🔥 模糊强度
     val displayMode: Int = 0,
     val cardAnimationEnabled: Boolean = false,     // 🔥 卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = false,    // 🔥 卡片过渡动画（默认关闭）
@@ -56,6 +58,7 @@ data class ExtraSettings(
     val bottomBarLabelMode: Int,
     val headerBlurEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
+    val blurIntensity: BlurIntensity,  // 🔥🔥 添加模糊强度
     val displayMode: Int,
     val cardAnimationEnabled: Boolean,
     val cardTransitionEnabled: Boolean
@@ -84,6 +87,7 @@ private data class BaseSettings(
     val bottomBarLabelMode: Int,
     val headerBlurEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
+    val blurIntensity: BlurIntensity,  // 🔥🔥 模糊强度
     val displayMode: Int, // 🔥 新增
     val cardAnimationEnabled: Boolean, // 🔥 卡片进场动画
     val cardTransitionEnabled: Boolean // 🔥 卡片过渡动画
@@ -130,12 +134,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         listOf(ui1.first, ui1.second, ui1.third, ui2[0], ui2[1], ui2[2], ui2[3], ui2[4])
     }
     
-    // 第 3 步：合并模糊设置 (2个)
+    // 第 3 步：合并模糊设置 (3个)
     private val blurSettingsFlow = combine(
         SettingsManager.getHeaderBlurEnabled(context),
-        SettingsManager.getBottomBarBlurEnabled(context)
-    ) { headerBlur, bottomBarBlur ->
-        Pair(headerBlur, bottomBarBlur)
+        SettingsManager.getBottomBarBlurEnabled(context),
+        SettingsManager.getBlurIntensity(context)  // 🔥🔥 添加模糊强度
+    ) { headerBlur, bottomBarBlur, blurIntensity ->
+        Triple(headerBlur, bottomBarBlur, blurIntensity)
     }
     
     // 第 4 步：合并 UI 和 模糊设置
@@ -149,6 +154,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             displayMode = ui[5] as Int,
             headerBlurEnabled = blur.first,
             bottomBarBlurEnabled = blur.second,
+            blurIntensity = blur.third,  // 🔥🔥 模糊强度
             cardAnimationEnabled = ui[6] as Boolean,
             cardTransitionEnabled = ui[7] as Boolean
         )
@@ -187,6 +193,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             bottomBarLabelMode = extra.bottomBarLabelMode,
             headerBlurEnabled = extra.headerBlurEnabled,
             bottomBarBlurEnabled = extra.bottomBarBlurEnabled,
+            blurIntensity = extra.blurIntensity,  // 🔥🔥 模糊强度
             displayMode = extra.displayMode,
             cardAnimationEnabled = extra.cardAnimationEnabled,
             cardTransitionEnabled = extra.cardTransitionEnabled
@@ -215,6 +222,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             bottomBarLabelMode = settings.bottomBarLabelMode,
             headerBlurEnabled = settings.headerBlurEnabled,
             bottomBarBlurEnabled = settings.bottomBarBlurEnabled,
+            blurIntensity = settings.blurIntensity,  // 🔥🔥 模糊强度
             displayMode = settings.displayMode,
             cardAnimationEnabled = settings.cardAnimationEnabled,
             cardTransitionEnabled = settings.cardTransitionEnabled,
@@ -339,6 +347,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // 🔥🔥 [新增] 模糊效果开关
     fun toggleHeaderBlur(value: Boolean) { viewModelScope.launch { SettingsManager.setHeaderBlurEnabled(context, value) } }
     fun toggleBottomBarBlur(value: Boolean) { viewModelScope.launch { SettingsManager.setBottomBarBlurEnabled(context, value) } }
+    fun setBlurIntensity(intensity: BlurIntensity) { viewModelScope.launch { SettingsManager.setBlurIntensity(context, intensity) } }  // 🔥🔥 模糊强度设置
     
     // 🔥 [新增] 卡片进场动画开关
     fun toggleCardAnimation(value: Boolean) { viewModelScope.launch { SettingsManager.setCardAnimationEnabled(context, value) } }

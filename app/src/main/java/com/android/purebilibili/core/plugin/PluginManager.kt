@@ -47,6 +47,9 @@ object PluginManager {
         Logger.d(TAG, "🔌 PluginManager initialized")
     }
     
+    /** 获取Application Context供插件使用 */
+    fun getContext(): Context = appContext
+    
     /**
      * 注册插件
      * 内置插件在 Application 中注册
@@ -134,6 +137,19 @@ object PluginManager {
      * 获取所有 FeedPlugin
      */
     fun getEnabledFeedPlugins(): List<FeedPlugin> = getEnabledPlugins(FeedPlugin::class)
+    
+    /**
+     * 🔥🔥 使用所有启用的 FeedPlugin 过滤视频列表
+     * 用于首页推荐和搜索结果
+     */
+    fun filterFeedItems(items: List<com.android.purebilibili.data.model.response.VideoItem>): List<com.android.purebilibili.data.model.response.VideoItem> {
+        val feedPlugins = getEnabledFeedPlugins()
+        if (feedPlugins.isEmpty()) return items
+        
+        return items.filter { item ->
+            feedPlugins.all { plugin -> plugin.shouldShowItem(item) }
+        }
+    }
     
     /**
      * 获取已启用插件数量

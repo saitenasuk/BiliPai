@@ -45,6 +45,7 @@ import kotlinx.coroutines.runBlocking
 import com.android.purebilibili.feature.video.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
 import com.android.purebilibili.core.ui.SharedTransitionProvider
+import com.android.purebilibili.feature.plugin.EyeProtectionOverlay
 import coil.compose.AsyncImage
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.animation.doOnEnd
@@ -190,6 +191,9 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+                    
+                    // 🌙 护眼模式覆盖层（最顶层，应用于所有内容）
+                    EyeProtectionOverlay()
                 }
             }
         }

@@ -63,7 +63,7 @@ interface BilibiliApi {
         @Query("ps") ps: Int = 30
     ): DynamicRegionResponse
     
-    // 🔥🔥 [新增] 直播列表 - 使用正确的 API 端点
+    // 🔥🔥 [修复] 直播列表 - 使用 v3 API (经测试确认可用)
     @GET("https://api.live.bilibili.com/room/v3/area/getRoomList")
     suspend fun getLiveList(
         @Query("parent_area_id") parentAreaId: Int = 0,  // 0=全站
@@ -140,6 +140,14 @@ interface BilibiliApi {
     // 🔥🔥 [修复] 使用 comment.bilibili.com 弹幕端点，避免 412 错误
     @GET("https://comment.bilibili.com/{cid}.xml")
     suspend fun getDanmakuXml(@retrofit2.http.Path("cid") cid: Long): ResponseBody
+    
+    // 🔥🔥 [新增] Protobuf 弹幕 API - 分段加载 (每段 6 分钟)
+    @GET("https://api.bilibili.com/x/v2/dm/web/seg.so")
+    suspend fun getDanmakuSeg(
+        @Query("type") type: Int = 1,              // 视频类型: 1=视频
+        @Query("oid") oid: Long,                   // cid
+        @Query("segment_index") segmentIndex: Int  // 分段索引 (从 1 开始)
+    ): ResponseBody
 
     // 🔥🔥 [核心修改] 改为 wbi 路径，并接收 Map 参数以支持签名
     @GET("x/v2/reply/wbi/main")
@@ -229,6 +237,13 @@ interface BilibiliApi {
         @Query("ps") ps: Int = 50,        // 每页数量（最大 50）
         @Query("order") order: String = "desc"  // 排序
     ): FollowingsResponse
+    
+    // 🔥🔥🔥 [官方适配] 获取视频在线观看人数
+    @GET("x/player/online/total")
+    suspend fun getOnlineCount(
+        @Query("bvid") bvid: String,
+        @Query("cid") cid: Long
+    ): OnlineResponse
 }
 
 // 🔥 [新增] Buvid SPI 响应模型 (用于获取正确的设备指纹)

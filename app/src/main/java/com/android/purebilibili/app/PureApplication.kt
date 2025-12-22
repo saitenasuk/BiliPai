@@ -22,6 +22,7 @@ import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.feature.plugin.AdFilterPlugin
 import com.android.purebilibili.feature.plugin.DanmakuEnhancePlugin
+import com.android.purebilibili.feature.plugin.EyeProtectionPlugin
 import com.android.purebilibili.feature.plugin.SponsorBlockPlugin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,7 +84,17 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         PluginManager.register(SponsorBlockPlugin())
         PluginManager.register(AdFilterPlugin())
         PluginManager.register(DanmakuEnhancePlugin())
-        Logger.d(TAG, "🔌 Plugin system initialized with 3 built-in plugins")
+        PluginManager.register(EyeProtectionPlugin())
+        Logger.d(TAG, "🔌 Plugin system initialized with 4 built-in plugins")
+        
+        // 🔥🔥 [修复] 同步SettingsManager中的空降助手开关到PluginStore
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            val sponsorBlockEnabled = com.android.purebilibili.core.store.SettingsManager
+                .getSponsorBlockEnabled(this@PureApplication)
+                .first()
+            PluginManager.setEnabled("sponsor_block", sponsorBlockEnabled)
+            Logger.d(TAG, "🔌 SponsorBlock plugin synced: enabled=$sponsorBlockEnabled")
+        }
         
         createNotificationChannel()
         

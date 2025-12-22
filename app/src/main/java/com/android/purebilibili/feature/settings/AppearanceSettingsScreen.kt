@@ -32,6 +32,7 @@ import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.core.ui.blur.BlurIntensity
 
 /**
  * 🍎 外观设置二级页面
@@ -47,6 +48,23 @@ fun AppearanceSettingsScreen(
     val state by viewModel.state.collectAsState()
     
     var showThemeDialog by remember { mutableStateOf(false) }
+    
+    // 🔥🔥 [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
+        
+        if (window != null) {
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        }
+        
+        onDispose {
+            if (window != null) {
+                window.navigationBarColor = originalNavBarColor
+            }
+        }
+    }
     
     // 主题模式弹窗
     if (showThemeDialog) {
@@ -108,12 +126,16 @@ fun AppearanceSettingsScreen(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        // 🔥🔥 [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，避免底部填充
+        contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize()
+                .fillMaxSize(),
+            // 🔥🔥 [修复] 添加底部导航栏内边距，确保沉浸式效果
+            contentPadding = WindowInsets.navigationBars.asPaddingValues()
         ) {
             // 🍎 首页展示
             item { SettingsSectionTitle("首页展示") }
@@ -386,6 +408,15 @@ fun AppearanceSettingsScreen(
                         iconTint = iOSBlue
                     )
                     
+                    // 🔥🔥 [新增] 模糊强度选择
+                    if (state.bottomBarBlurEnabled) {
+                        Divider()
+                        BlurIntensitySelector(
+                            selectedIntensity = state.blurIntensity,
+                            onIntensityChange = { viewModel.setBlurIntensity(it) }
+                        )
+                    }
+                    
                     Divider()
                     
                     // 🔥 卡片进场动画开关
@@ -484,8 +515,106 @@ fun AppearanceSettingsScreen(
                     }
                 }
             }
-            
-            item { Spacer(modifier = Modifier.height(32.dp)) }
+        }
+    }
+}
+/**
+ * 🔥 模糊强度选择器
+ */
+@Composable
+fun BlurIntensitySelector(
+    selectedIntensity: BlurIntensity,
+    onIntensityChange: (BlurIntensity) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Outlined.BlurOn,
+                contentDescription = null,
+                tint = iOSBlue,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = "模糊强度",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "选择模糊效果的强烈程度",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // 三个选项
+        BlurIntensityOption(
+            title = "轻盈",
+            description = "通透感强，性能最佳",
+            isSelected = selectedIntensity == BlurIntensity.ULTRA_THIN,
+            onClick = { onIntensityChange(BlurIntensity.ULTRA_THIN) }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        BlurIntensityOption(
+            title = "标准",
+            description = "平衡美观与性能（推荐）",
+            isSelected = selectedIntensity == BlurIntensity.THIN,
+            onClick = { onIntensityChange(BlurIntensity.THIN) }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        BlurIntensityOption(
+            title = "浓郁",
+            description = "强烈磨砂质感",
+            isSelected = selectedIntensity == BlurIntensity.THICK,
+            onClick = { onIntensityChange(BlurIntensity.THICK) }
+        )
+    }
+}
+
+@Composable
+fun BlurIntensityOption(
+    title: String,
+    description: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                else Color.Transparent
+            )
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = isSelected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = MaterialTheme.colorScheme.primary
+            )
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

@@ -122,7 +122,10 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     val duration = _uiState.value.searchDuration
                     val result = SearchRepository.search(keyword, order, duration)
                     result.onSuccess { videos ->
-                        _uiState.update { it.copy(isSearching = false, searchResults = videos, upResults = emptyList()) }
+                        // 🔥🔥 [修复] 应用插件过滤（UP主拉黑、关键词屏蔽等）
+                        val filteredVideos = com.android.purebilibili.core.plugin.PluginManager
+                            .filterFeedItems(videos)
+                        _uiState.update { it.copy(isSearching = false, searchResults = filteredVideos, upResults = emptyList()) }
                     }.onFailure { e ->
                         _uiState.update { it.copy(isSearching = false, error = e.message ?: "搜索失败") }
                     }

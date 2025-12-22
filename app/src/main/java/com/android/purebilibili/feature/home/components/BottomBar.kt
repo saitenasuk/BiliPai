@@ -140,9 +140,10 @@ fun FrostedBottomBar(
                         Modifier
                     }
                 ),
-            // 🔥 背景色：模糊开启时透明让 Haze 负责，关闭时使用实心背景
+            // 🔥 背景色：模糊开启时添加半透明背景增强可读性，关闭时使用实心背景
             color = if (hazeState != null) {
-                Color.Transparent  // Haze 全权负责模糊和着色
+                // 🔥🔥 [优化] 添加半透明背景增强复杂背景下的文字可读性
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
             } else {
                 // 无模糊时使用实心背景
                 MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)

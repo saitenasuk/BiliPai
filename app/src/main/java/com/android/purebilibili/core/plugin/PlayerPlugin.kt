@@ -43,9 +43,16 @@ sealed class SkipAction {
     /** 不执行跳过 */
     object None : SkipAction()
     
-    /** 跳转到指定位置 */
+    /** 跳转到指定位置（自动跳过） */
     data class SkipTo(
         val positionMs: Long,
         val reason: String
+    ) : SkipAction()
+    
+    /** 显示跳过按钮（手动跳过模式） */
+    data class ShowButton(
+        val skipToMs: Long,
+        val label: String,           // 按钮文字，如"跳过广告"
+        val segmentId: String        // 片段标识，用于防止重复显示
     ) : SkipAction()
 }

@@ -331,26 +331,31 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.Search.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
-            exitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
-            popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) },
+            // 🔥 进入视频详情页时的退出动画（与首页一致）
+            exitTransition = { fadeOut(animationSpec = tween(200)) },
+            // 🔥🔥 从视频详情页返回时的动画（与首页一致，让卡片回到原位）
+            popEnterTransition = { fadeIn(animationSpec = tween(250)) },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
         ) {
             // 🔥 从 homeViewModel 获取最新的用户状态 (包括头像)
             val homeState by homeViewModel.uiState.collectAsState()
 
-            SearchScreen(
-                userFace = homeState.user.face, // 传入头像 URL
-                onBack = { navController.popBackStack() },
-                onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") },
-                onAvatarClick = {
-                    // 如果已登录 -> 去个人中心，未登录 -> 去登录页
-                    if (homeState.user.isLogin) {
-                        navController.navigate(ScreenRoutes.Profile.route)
-                    } else {
-                        navController.navigate(ScreenRoutes.Login.route)
+            // 🔥🔥 提供 AnimatedVisibilityScope 给 SearchScreen 以支持共享元素过渡
+            ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
+                SearchScreen(
+                    userFace = homeState.user.face, // 传入头像 URL
+                    onBack = { navController.popBackStack() },
+                    onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") },
+                    onAvatarClick = {
+                        // 如果已登录 -> 去个人中心，未登录 -> 去登录页
+                        if (homeState.user.isLogin) {
+                            navController.navigate(ScreenRoutes.Profile.route)
+                        } else {
+                            navController.navigate(ScreenRoutes.Login.route)
+                        }
                     }
-                }
-            )
+                )
+            }
         }
 
         // --- Settings & Login ---

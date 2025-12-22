@@ -51,6 +51,24 @@ fun PluginsScreen(
     // 展开状态追踪
     var expandedPluginId by remember { mutableStateOf<String?>(null) }
     
+    // 🔥🔥 [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
+        
+        if (window != null) {
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        }
+        
+        onDispose {
+            if (window != null) {
+                window.navigationBarColor = originalNavBarColor
+            }
+        }
+    }
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -67,7 +85,9 @@ fun PluginsScreen(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        // 🔥🔥 [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，避免底部填充
+        contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
         LazyColumn(
             modifier = Modifier

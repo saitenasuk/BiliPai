@@ -46,7 +46,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.ui.LoadingAnimation
-import com.android.purebilibili.feature.home.components.cards.VideoGridItem
+import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard  // 🔥 使用首页卡片
+import com.android.purebilibili.core.store.SettingsManager  // 🔥 读取动画设置
 import com.android.purebilibili.data.repository.SearchOrder
 import com.android.purebilibili.data.repository.SearchDuration
 import com.android.purebilibili.data.model.response.VideoItem
@@ -80,6 +81,11 @@ fun SearchScreen(
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
     val topBarHeight = 64.dp // 搜索栏高度
     val contentTopPadding = statusBarHeight + topBarHeight
+    
+    // 🔥 读取动画设置开关
+    val context = LocalContext.current
+    val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
+    val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = false)
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -127,7 +133,15 @@ fun SearchScreen(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             itemsIndexed(state.searchResults) { index, video ->
-                                SearchResultCard(video, index) { bvid -> onVideoClick(bvid, 0) }
+                                // 🔥🔥 使用首页卡片组件，支持动画和过渡
+                                ElegantVideoCard(
+                                    video = video,
+                                    index = index,
+                                    animationEnabled = cardAnimationEnabled,
+                                    transitionEnabled = cardTransitionEnabled,
+                                    showPublishTime = true,  // 搜索结果显示发布时间
+                                    onClick = { bvid, _ -> onVideoClick(bvid, 0) }
+                                )
                             }
                         }
                     }

@@ -14,12 +14,12 @@ plugins {
 
 android {
     namespace = "com.android.purebilibili"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.android.purebilibili"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：versionCode +1, versionName 递增
         // 更新日志：CHANGELOG.md
         versionCode = 10
@@ -110,8 +110,8 @@ android {
 
 dependencies {
     // --- 1. Compose UI ---
-    implementation(platform("androidx.compose:compose-bom:2024.12.01"))  // 🔥 更新到最新版本
-    implementation("androidx.activity:activity-compose:1.8.2")
+    implementation(platform("androidx.compose:compose-bom:2025.12.00"))  // 🔥 更新到最新版本
+    implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.appcompat:appcompat:1.6.1")  // 🚀 For AppCompatDelegate night mode
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -127,18 +127,18 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     // --- 3. Image (图片加载) ---
-    implementation("io.coil-kt:coil-compose:2.6.0")
-    implementation("io.coil-kt:coil-gif:2.6.0")  // 🔥 GIF 动图支持
+    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt:coil-gif:2.7.0")  // 🔥 GIF 动图支持
     
     // --- 3.1 Palette (颜色提取 - 动态取色) ---
     implementation("androidx.palette:palette-ktx:1.0.0")
     
     // --- 3.2 Lottie (动画效果) ---
-    implementation("com.airbnb.android:lottie-compose:6.3.0")
+    implementation("com.airbnb.android:lottie-compose:6.6.2")
     
     // --- 3.3 Haze (毛玻璃效果) ---
-    implementation("dev.chrisbanes.haze:haze:0.9.0-beta01")
-    implementation("dev.chrisbanes.haze:haze-materials:0.9.0-beta01")
+    implementation("dev.chrisbanes.haze:haze:1.7.1")
+    implementation("dev.chrisbanes.haze:haze-materials:1.7.1")
     
     // --- 3.4 Shimmer (骨架屏加载) ---
     implementation("com.valentinilk.shimmer:compose-shimmer:1.2.0")
@@ -158,15 +158,13 @@ dependencies {
     implementation("androidx.media:media:1.7.0")
 
     // --- 5. Danmaku (弹幕引擎) ---
-    // 🔥 旧版弹幕引擎 (保留作为 fallback)
-    implementation("com.github.bilibili:DanmakuFlameMaster:0.9.25")
-    // 🔥 新版弹幕引擎 (ByteDance DanmakuRenderEngine - 高性能)
+    // 🔥 使用 ByteDance DanmakuRenderEngine - 轻量级高性能弹幕渲染引擎
     implementation("com.github.bytedance:DanmakuRenderEngine:v0.1.0")
     
     // 注：FFmpegKit 已于 2025 年停止维护，改用 ExoPlayer 直接播放分离音视频
 
     // --- 6. Database (Room 数据库) ---
-    val roomVersion = "2.6.1"
+    val roomVersion = "2.7.0"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
@@ -178,21 +176,21 @@ dependencies {
     // 二维码生成
     implementation("com.google.zxing:core:3.5.3")
     // Core KTX
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
 
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.navigation:navigation-compose:2.9.0")
     
     // --- 9. SplashScreen (启动屏支持) ---
-    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.core:core-splashscreen:1.2.0-alpha02")
     
     // --- 10. ProfileInstaller (启动优化) ---
     implementation("androidx.profileinstaller:profileinstaller:1.3.1")
     
     // --- 11. Firebase (崩溃追踪和分析) ---
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation(platform("com.google.firebase:firebase-bom:33.11.0"))
     implementation("com.google.firebase:firebase-crashlytics-ktx")
     implementation("com.google.firebase:firebase-analytics-ktx")
 

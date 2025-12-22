@@ -90,16 +90,15 @@ fun VideoPlayerOverlay(
 
     val progressState by produceState(initialValue = PlayerProgress(), key1 = player) {
         while (true) {
-            if (player.isPlaying) {
-                value = PlayerProgress(
-                    current = player.currentPosition,
-                    duration = if (player.duration < 0) 0L else player.duration,
-                    buffered = player.bufferedPosition
-                )
-                isPlaying = true
-            } else {
-                isPlaying = false
-            }
+            // 🔥🔥 [修复] 始终更新进度，不仅在播放时
+            // 这样横竖屏切换后也能显示正确的进度
+            val duration = if (player.duration < 0) 0L else player.duration
+            value = PlayerProgress(
+                current = player.currentPosition,
+                duration = duration,
+                buffered = player.bufferedPosition
+            )
+            isPlaying = player.isPlaying
             delay(200)
         }
     }

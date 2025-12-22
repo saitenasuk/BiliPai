@@ -171,7 +171,9 @@ fun FluidHomeTopBar(
  */
 @Composable
 fun CategoryTabRow(
-    categories: List<String> = listOf("推荐", "热门", "直播", "追番", "影视", "游戏", "知识", "科技"),  // 🔥 更多分类
+    // 🔥🔥 [修复] 分类列表必须与 HomeCategory 枚举顺序完全匹配！
+    // HomeCategory: RECOMMEND, FOLLOW, POPULAR, LIVE, ANIME, MOVIE, GAME, KNOWLEDGE, TECH
+    categories: List<String> = listOf("推荐", "关注", "热门", "直播", "追番", "影视", "游戏", "知识", "科技"),
     selectedIndex: Int = 0,
     onCategorySelected: (Int) -> Unit = {},
     onPartitionClick: () -> Unit = {}  // 🔥 新增：分区按钮回调

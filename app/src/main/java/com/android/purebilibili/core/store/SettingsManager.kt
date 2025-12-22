@@ -6,7 +6,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.feature.settings.AppThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -51,7 +53,9 @@ object SettingsManager {
     // 🔥🔥 [新增] 模糊效果开关
     private val KEY_HEADER_BLUR_ENABLED = booleanPreferencesKey("header_blur_enabled")
     private val KEY_BOTTOM_BAR_BLUR_ENABLED = booleanPreferencesKey("bottom_bar_blur_enabled")
-    // 🚀 [合并] 首页展示模式 (0=Grid, 1=Story, 2=Glass)
+    // �🔥 [新增] 模糊强度 (ULTRA_THIN, THIN, THICK)
+    private val KEY_BLUR_INTENSITY = stringPreferencesKey("blur_intensity")
+    // �🚀 [合并] 首页展示模式 (0=Grid, 1=Story, 2=Glass)
     private val KEY_DISPLAY_MODE = intPreferencesKey("display_mode")
     // 🔥 [新增] 卡片动画开关
     private val KEY_CARD_ANIMATION_ENABLED = booleanPreferencesKey("card_animation_enabled")
@@ -265,6 +269,22 @@ object SettingsManager {
         context.settingsDataStore.edit { preferences -> preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] = value }
     }
     
+    // 🔥🔥 [新增] --- 模糊强度 (ULTRA_THIN, THIN, THICK) ---
+    fun getBlurIntensity(context: Context): Flow<BlurIntensity> = context.settingsDataStore.data
+        .map { preferences ->
+            when (preferences[KEY_BLUR_INTENSITY]) {
+                "ULTRA_THIN" -> BlurIntensity.ULTRA_THIN
+                "THICK" -> BlurIntensity.THICK
+                else -> BlurIntensity.THIN  // 默认标准
+            }
+        }
+
+    suspend fun setBlurIntensity(context: Context, intensity: BlurIntensity) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_BLUR_INTENSITY] = intensity.name
+        }
+    }
+    
     // ========== 🔥🔥 弹幕设置 ==========
     
     private val KEY_DANMAKU_ENABLED = booleanPreferencesKey("danmaku_enabled")
@@ -301,13 +321,13 @@ object SettingsManager {
         }
     }
     
-    // --- 弹幕速度 (0.5 ~ 2.0, 默认 1.5 较慢) ---
+    // --- 弹幕速度 (0.5 ~ 3.0, 默认 2.5 较慢) ---
     fun getDanmakuSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_DANMAKU_SPEED] ?: 1.5f }
+        .map { preferences -> preferences[KEY_DANMAKU_SPEED] ?: 2.5f }
 
     suspend fun setDanmakuSpeed(context: Context, value: Float) {
         context.settingsDataStore.edit { preferences -> 
-            preferences[KEY_DANMAKU_SPEED] = value.coerceIn(0.5f, 2.0f)
+            preferences[KEY_DANMAKU_SPEED] = value.coerceIn(0.5f, 3.0f)
         }
     }
     
@@ -371,6 +391,8 @@ object SettingsManager {
 
     suspend fun setSponsorBlockEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_SPONSOR_BLOCK_ENABLED] = value }
+        // 🔥🔥 [修复] 同步到PluginStore，使插件系统能正确识别空降助手状态
+        com.android.purebilibili.core.plugin.PluginManager.setEnabled("sponsor_block", value)
     }
     
     // --- 自动跳过（true=自动跳过, false=显示提示按钮）---

@@ -76,6 +76,24 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         viewModel.refreshCacheSize()
     }
+    
+    // 🔥🔥 [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
+        
+        if (window != null) {
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        }
+        
+        onDispose {
+            // 离开时恢复原始配置
+            if (window != null) {
+                window.navigationBarColor = originalNavBarColor
+            }
+        }
+    }
 
     // 缓存清理弹窗
     if (showCacheDialog) {
@@ -115,12 +133,16 @@ fun SettingsScreen(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        // 🔥🔥 [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，避免底部白色填充
+        contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize()
+                .fillMaxSize(),
+            // 🔥🔥 [修复] 添加底部导航栏内边距，确保沉浸式效果
+            contentPadding = WindowInsets.navigationBars.asPaddingValues()
         ) {
             // 🔥 作者联系方式 (置顶)
             item { SettingsSectionTitle("关注作者") }

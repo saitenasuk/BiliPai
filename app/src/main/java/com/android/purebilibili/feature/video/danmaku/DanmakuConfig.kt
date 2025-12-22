@@ -2,14 +2,13 @@
 package com.android.purebilibili.feature.video.danmaku
 
 import android.content.Context
-import master.flame.danmaku.danmaku.model.BaseDanmaku
-import master.flame.danmaku.danmaku.model.IDisplayer
-import master.flame.danmaku.danmaku.model.android.DanmakuContext
+import com.bytedance.danmaku.render.engine.control.DanmakuConfig as EngineConfig
 
 /**
  * 弹幕配置管理
  * 
  * 管理弹幕的样式、速度、透明度等设置
+ * 适配 ByteDance DanmakuRenderEngine
  */
 class DanmakuConfig {
     
@@ -32,69 +31,38 @@ class DanmakuConfig {
     var topMarginPx = 0
     
     /**
-     * 应用配置到 DanmakuContext
+     * 应用配置到 DanmakuRenderEngine 的 DanmakuConfig
+     * 
+     * DanmakuRenderEngine 的配置结构:
+     * - config.text: TextConfig (size, color, strokeWidth, strokeColor)
+     * - config.scroll: ScrollLayerConfig (moveTime, lineHeight, lineMargin, margin)
+     * - config.common: CommonConfig (alpha, bufferSize, bufferDiscardRule)
      */
-    fun applyTo(ctx: DanmakuContext, context: Context) {
-        ctx.apply {
-            // 描边样式
-            setDanmakuStyle(IDisplayer.DANMAKU_STYLE_STROKEN, 3.5f)
-            // 合并重复弹幕
-            setDuplicateMergingEnabled(true)
-            // 滚动速度
-            setScrollSpeedFactor(speedFactor)
-            // 字体大小
-            setScaleTextSize(fontScale)
-            // 透明度
-            setDanmakuTransparency(opacity)
-            // 禁用粗体
-            setDanmakuBold(false)
-            // 顶部边距
-            val margin = if (topMarginPx > 0) topMarginPx else getStatusBarHeight(context) + 20
-            setDanmakuMargin(margin)
-            // 最大行数
-            setMaximumLines(getMaxLines())
+    fun applyTo(engineConfig: EngineConfig) {
+        engineConfig.apply {
+            // 通用配置 - 透明度 (0-255 Int)
+            common.alpha = (opacity * 255).toInt()
+            
+            // 文字配置 - 字体大小 (增大基准值以提高可见性)
+            text.size = 42f * fontScale
+            
+            // 滚动层配置
+            // moveTime: 弹幕滚过屏幕的时间（毫秒），越大越慢
+            // 默认大约 8000ms，根据 speedFactor 调整
+            scroll.moveTime = (8000 * speedFactor).toLong()
         }
     }
     
     /**
-     * 更新单项配置
+     * 根据显示区域比例计算最大行数
+     * 注意：DanmakuRenderEngine 使用不同的方式控制显示区域
+     * 可能需要通过 lineHeight 和 margin 参数来控制
      */
-    fun updateOpacity(ctx: DanmakuContext?, value: Float) {
-        opacity = value
-        ctx?.setDanmakuTransparency(value)
-    }
-    
-    fun updateFontScale(ctx: DanmakuContext?, value: Float) {
-        fontScale = value
-        ctx?.setScaleTextSize(value)
-    }
-    
-    fun updateSpeedFactor(ctx: DanmakuContext?, value: Float) {
-        speedFactor = value
-        ctx?.setScrollSpeedFactor(value)
-    }
-    
-    fun updateTopMargin(ctx: DanmakuContext?, value: Int) {
-        topMarginPx = value
-        ctx?.setDanmakuMargin(value)
-    }
-    
-    fun updateDisplayArea(ctx: DanmakuContext?, value: Float) {
-        displayAreaRatio = value
-        ctx?.setMaximumLines(getMaxLines())
-    }
-    
-    private fun getMaxLines(): Map<Int, Int> {
-        val maxLines = when {
-            displayAreaRatio <= 0.25f -> 3
-            displayAreaRatio <= 0.5f -> 5
-            displayAreaRatio <= 0.75f -> 8
-            else -> Int.MAX_VALUE
-        }
-        return mapOf(
-            BaseDanmaku.TYPE_SCROLL_RL to maxLines,
-            BaseDanmaku.TYPE_SCROLL_LR to maxLines
-        )
+    private fun getMaxLines(): Int = when {
+        displayAreaRatio <= 0.25f -> 3
+        displayAreaRatio <= 0.5f -> 5
+        displayAreaRatio <= 0.75f -> 8
+        else -> Int.MAX_VALUE
     }
     
     companion object {

@@ -151,24 +151,61 @@ fun HomeScreen(
     // 🔥🔥 [新增] 底栏可见性状态
     var bottomBarVisible by remember { mutableStateOf(true) }  // 🔥 默认可见
     
+    // 🔥🔥 [修复] 跟踪是否正在导航到/从视频页
+    // 如果为 true，底栏使用 overlay（即使可见也使用，因为返回动画需要）
+    var isVideoNavigating by remember { mutableStateOf(false) }
+    
+    // 🔥🔥 [修复] 用于取消延迟协程的 Job 引用
+    var bottomBarRestoreJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    
     // 🔥🔥 包装 onVideoClick：点击视频时先隐藏底栏再导航
     val wrappedOnVideoClick: (String, Long, String) -> Unit = remember(onVideoClick) {
         { bvid, cid, cover ->
+            // 🔥 取消之前的恢复协程，防止竞态条件
+            bottomBarRestoreJob?.cancel()
+            bottomBarRestoreJob = null
+            
             bottomBarVisible = false  // 🔥 触发底栏下滑动画
+            isVideoNavigating = true  // 🔥 标记正在导航到视频
             onVideoClick(bvid, cid, cover)
         }
     }
     
-    // 🔥🔥 [优化] 使用 ON_START 事件恢复底栏（比 ON_RESUME 更快）
+    // 🔥🔥 [修复] 使用生命周期事件控制底栏可见性
+    // ON_START: 恢复底栏（仅在从视频页返回时）
+    // ON_STOP: 隐藏底栏（导航到其他页面时，避免影响导航栏区域）
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
-                bottomBarVisible = true
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    // 🔥🔥 关键修复：只在底栏当前隐藏时才恢复可见
+                    if (!bottomBarVisible && isVideoNavigating) {
+                        // 🔥🔥 [同步动画] 延迟后再显示底栏，让进入动画与卡片返回动画同步
+                        bottomBarRestoreJob = kotlinx.coroutines.MainScope().launch {
+                            kotlinx.coroutines.delay(100)  // 等待返回动画开始
+                            bottomBarVisible = true
+                            // 延迟重置导航状态，确保进入动画完成
+                            kotlinx.coroutines.delay(400)
+                            isVideoNavigating = false
+                        }
+                    } else if (!bottomBarVisible && !isVideoNavigating) {
+                        // 🔥🔥 [新增] 从设置等非视频页面返回时，立即显示底栏（无延迟）
+                        bottomBarVisible = true
+                    }
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
+                    // 🔥🔥 [新增] 导航离开首页时隐藏底栏，避免影响其他页面的导航栏区域
+                    bottomBarRestoreJob?.cancel()
+                    bottomBarRestoreJob = null
+                    bottomBarVisible = false
+                }
+                else -> { /* 其他事件不处理 */ }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            bottomBarRestoreJob?.cancel()
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
@@ -332,9 +369,9 @@ fun HomeScreen(
             // 🔥 尝试获取共享过渡作用域
             val sharedTransitionScope = LocalSharedTransitionScope.current
             
-            // 🔥🔥 底栏进入/退出动画：进入首页时从底部滑入，离开首页时向底部滑出
-            // 🔥 使用 renderInSharedTransitionScopeOverlay 保持底栏在共享过渡之上
-            val bottomBarModifier = if (sharedTransitionScope != null) {
+            // 🔥🔥 [修复] 只在导航到/从视频页时使用 overlay
+            // isVideoNavigating 在点击视频时设为 true，动画完成后重置为 false
+            val bottomBarModifier = if (sharedTransitionScope != null && isVideoNavigating) {
                 with(sharedTransitionScope) {
                     Modifier.renderInSharedTransitionScopeOverlay(zIndexInOverlay = 1f)
                 }
@@ -433,25 +470,10 @@ fun HomeScreen(
                         VideoCardSkeleton(index = index)
                     }
                 }
-            } else if (state.isLoading && state.videos.isEmpty()) {
-                 // 骨架屏 - 使用 LazyVerticalGrid 显示多个骨架卡片
-                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(
-                        top = 156.dp,  // 🔥 与主内容保持一致
-                        bottom = if (isBottomBarFloating) 100.dp else padding.calculateBottomPadding() + 20.dp,
-                        start = 8.dp,
-                        end = 8.dp
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(8) { index ->
-                        VideoCardSkeleton(index = index)
-                    }
-                }
-            } else if (state.error != null && state.videos.isEmpty()) {
+            // 🔥🔥 [修复] 根据分类类型判断是否有内容
+            } else if (state.error != null && 
+                ((state.currentCategory == HomeCategory.LIVE && state.liveRooms.isEmpty()) ||
+                 (state.currentCategory != HomeCategory.LIVE && state.videos.isEmpty()))) {
                 ModernErrorState(
                     message = state.error ?: "未知错误",
                     onRetry = { viewModel.refresh() },

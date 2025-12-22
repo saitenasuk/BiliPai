@@ -56,6 +56,7 @@ fun ElegantVideoCard(
     isFollowing: Boolean = false,  // 🔥 是否已关注该 UP 主
     animationEnabled: Boolean = true,   // 🔥 卡片进场动画开关
     transitionEnabled: Boolean = false, // 🔥 卡片过渡动画开关
+    showPublishTime: Boolean = false,   // 🔥 是否显示发布时间（搜索结果用）
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
@@ -288,8 +289,17 @@ fun ElegantVideoCard(
                 color = iOSSystemGray,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f, fill = false)
             )
+            
+            // 🔥 发布时间（搜索结果显示）
+            if (showPublishTime && video.pubdate > 0) {
+                Text(
+                    text = " · ${FormatUtils.formatPublishTime(video.pubdate)}",
+                    fontSize = 11.sp,
+                    color = iOSSystemGray.copy(alpha = 0.7f)
+                )
+            }
         }
     }
 }

@@ -135,17 +135,20 @@ object VideoRepository {
         }
     }
     
-    // 🔥🔥 [新增] 直播列表
+    // 🔥🔥 [更新] 直播列表 - 使用新 API
     suspend fun getLiveRooms(page: Int = 1): Result<List<LiveRoom>> = withContext(Dispatchers.IO) {
         try {
             val resp = api.getLiveList(page = page)
-            val list = resp.data?.list ?: emptyList()
-            // 🔥 DEBUG: 打印热门直播数据以对比
+            // 🔥 使用 getAllRooms() 兼容新旧 API 格式
+            val list = resp.data?.getAllRooms() ?: emptyList()
+            // 🔥 DEBUG: 打印热门直播数据
             list.firstOrNull()?.let {
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", "🟢 Popular Live Item: roomid=${it.roomid}, title=${it.title}, online=${it.online}")
             }
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔴 getLiveRooms page=$page, count=${list.size}")
             Result.success(list)
         } catch (e: Exception) {
+            com.android.purebilibili.core.util.Logger.e("VideoRepo", "❌ getLiveRooms failed", e)
             e.printStackTrace()
             Result.failure(e)
         }
@@ -867,6 +870,65 @@ object VideoRepository {
             e.printStackTrace()
             null
         }
+    }
+    
+    // 🔥🔥 [新增] Protobuf 弹幕分段缓存
+    private val danmakuSegmentCache = LinkedHashMap<Long, List<ByteArray>>(5, 0.75f, true)
+    
+    /**
+     * 🔥🔥 [新增] 获取 Protobuf 格式弹幕 (分段加载)
+     * 
+     * @param cid 视频 cid
+     * @param durationMs 视频时长 (毫秒)，用于计算所需分段数
+     * @return 所有分段的 Protobuf 数据列表
+     */
+    suspend fun getDanmakuSegments(cid: Long, durationMs: Long): List<ByteArray> = withContext(Dispatchers.IO) {
+        com.android.purebilibili.core.util.Logger.d("VideoRepo", "🎯 getDanmakuSegments: cid=$cid, duration=${durationMs}ms")
+        
+        // 检查缓存
+        synchronized(danmakuSegmentCache) {
+            danmakuSegmentCache[cid]?.let {
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Protobuf danmaku cache hit: cid=$cid, segments=${it.size}")
+                return@withContext it
+            }
+        }
+        
+        // 计算所需分段数 (每段 6 分钟 = 360000ms)
+        val segmentDurationMs = 360000L
+        val segmentCount = ((durationMs + segmentDurationMs - 1) / segmentDurationMs).toInt().coerceAtLeast(1)
+        
+        com.android.purebilibili.core.util.Logger.d("VideoRepo", "📊 Fetching $segmentCount segments for ${durationMs}ms video")
+        
+        // 顺序获取所有分段 (简化版，避免复杂的 async 类型推断问题)
+        val results = mutableListOf<ByteArray>()
+        for (index in 1..segmentCount) {
+            try {
+                val response = api.getDanmakuSeg(oid = cid, segmentIndex = index)
+                val bytes = response.bytes()
+                if (bytes.isNotEmpty()) {
+                    com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Segment $index: ${bytes.size} bytes")
+                    results.add(bytes)
+                } else {
+                    com.android.purebilibili.core.util.Logger.d("VideoRepo", "⚠️ Segment $index is empty")
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("VideoRepo", "❌ Segment $index failed: ${e.message}")
+            }
+        }
+        
+        com.android.purebilibili.core.util.Logger.d("VideoRepo", "📊 Got ${results.size}/$segmentCount segments for cid=$cid")
+        
+        // 缓存结果
+        if (results.isNotEmpty()) {
+            synchronized(danmakuSegmentCache) {
+                while (danmakuSegmentCache.size >= MAX_DANMAKU_CACHE_SIZE) {
+                    danmakuSegmentCache.keys.firstOrNull()?.let { danmakuSegmentCache.remove(it) }
+                }
+                danmakuSegmentCache[cid] = results.toList()
+            }
+        }
+        
+        results.toList()
     }
 
     // 🔥🔥 [新增] API 错误码分类，提供用户友好的错误提示

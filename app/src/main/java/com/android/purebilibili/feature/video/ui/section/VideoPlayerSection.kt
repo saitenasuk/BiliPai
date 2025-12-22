@@ -109,7 +109,7 @@ fun VideoPlayerSection(
     }
 
     // 控制器显示状态
-    var showControls by remember { mutableStateOf(true) }
+        var showControls by remember { mutableStateOf(true) }
 
     var gestureMode by remember { mutableStateOf<VideoGestureMode>(VideoGestureMode.None) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
@@ -262,16 +262,26 @@ fun VideoPlayerSection(
             .getDanmakuEnabled(context)
             .collectAsState(initial = true)
         
-        // 🔥🔥 [修复] 存储DanmakuView引用，确保在配置变化时能重新绑定
-        val danmakuViewRef = remember { mutableStateOf<master.flame.danmaku.ui.widget.DanmakuView?>(null) }
-        
         // 🔥 当视频加载成功时加载弹幕（不再依赖 isFullscreen，单例会保持弹幕）
         val cid = (uiState as? PlayerUiState.Success)?.info?.cid ?: 0L
+        // 🔥 监听 player 状态，等待 duration 可用后加载弹幕
         LaunchedEffect(cid) {
             if (cid > 0) {
-                android.util.Log.d("VideoPlayerSection", "🎯 Loading danmaku for cid=$cid")
                 danmakuManager.isEnabled = danmakuEnabled
-                danmakuManager.loadDanmaku(cid)
+                
+                // 🔥🔥 [修复] 等待播放器准备好并获取 duration (最多等待 5 秒)
+                var durationMs = 0L
+                var retries = 0
+                while (durationMs <= 0 && retries < 50) {
+                    durationMs = playerState.player.duration.takeIf { it > 0 } ?: 0L
+                    if (durationMs <= 0) {
+                        kotlinx.coroutines.delay(100)
+                        retries++
+                    }
+                }
+                
+                android.util.Log.d("VideoPlayerSection", "🎯 Loading danmaku for cid=$cid, duration=${durationMs}ms (after $retries retries)")
+                danmakuManager.loadDanmaku(cid, durationMs)  // 🔥 传入时长启用 Protobuf API
             }
         }
         
@@ -279,9 +289,6 @@ fun VideoPlayerSection(
         LaunchedEffect(danmakuEnabled) {
             danmakuManager.isEnabled = danmakuEnabled
         }
-        
-        // 🔥🔥 [注意] 边距现在在 DanmakuView 的 AndroidView 中通过 padding 设置
-        // 不再使用 DanmakuContext.setDanmakuMargin，避免 ConcurrentModificationException
         
         // 🔥 绑定 Player（不在 onDispose 中释放，单例保持状态）
         DisposableEffect(playerState.player) {
@@ -291,9 +298,6 @@ fun VideoPlayerSection(
                 // 单例模式不需要释放
             }
         }
-        
-        // 🔥🔥 [注意] 移除了 DisposableEffect(isFullscreen) 的 detachView 调用
-        // 因为 attachView 已经会自动暂停旧视图，不需要额外 detach
         
         // 1. PlayerView (底层)
         AndroidView(
@@ -313,9 +317,10 @@ fun VideoPlayerSection(
             modifier = Modifier.fillMaxSize()
         )
         
-        // 2. DanmakuView (DanmakuFlameMaster - 覆盖在 PlayerView 上方)
-        // 🔥🔥 [关键修复] 非全屏时需要避开状态栏区域
-        if (!isInPipMode) {
+        // 2. DanmakuView (使用 ByteDance DanmakuRenderEngine - 覆盖在 PlayerView 上方)
+        android.util.Log.d("VideoPlayerSection", "🔍 DanmakuView check: isInPipMode=$isInPipMode, danmakuEnabled=$danmakuEnabled")
+        if (!isInPipMode && danmakuEnabled) {
+            android.util.Log.d("VideoPlayerSection", "✅ Conditions met, creating DanmakuView...")
             // 🔥 计算状态栏高度
             val statusBarHeightPx = remember(context) {
                 val resourceId = context.resources.getIdentifier(
@@ -331,68 +336,26 @@ fun VideoPlayerSection(
             // 🔥 非全屏时的顶部偏移量
             val topOffset = if (isFullscreen) 0 else statusBarHeightPx + 20
             
-            // 🔥🔥 [关键修复] 使用 key(isFullscreen) 强制在横竖屏切换时重新创建 DanmakuView
             key(isFullscreen) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .then(
+                            if (!isFullscreen) {
+                                Modifier.padding(top = with(LocalContext.current.resources.displayMetrics) {
+                                    (topOffset / density).dp
+                                })
+                            } else Modifier
+                        )
                         .clipToBounds()
-                        .graphicsLayer { clip = true }
                 ) {
                     AndroidView(
                         factory = { ctx ->
-                            // 🔥🔥 使用 ClipRect 容器强制裁剪
-                            object : android.widget.FrameLayout(ctx) {
-                                private val clipBounds = android.graphics.Rect()
-                                
-                                override fun dispatchDraw(canvas: android.graphics.Canvas) {
-                                    // 🔥 强制裁剪：只在安全区域内绘制
-                                    canvas.save()
-                                    clipBounds.set(0, 0, width, height)
-                                    canvas.clipRect(clipBounds)
-                                    super.dispatchDraw(canvas)
-                                    canvas.restore()
-                                }
-                                
-                                override fun onDraw(canvas: android.graphics.Canvas) {
-                                    canvas.save()
-                                    canvas.clipRect(0, 0, width, height)
-                                    super.onDraw(canvas)
-                                    canvas.restore()
-                                }
-                            }.apply {
-                                clipChildren = true
-                                clipToPadding = true
-                                setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null) // 🔥 使用软件渲染以确保裁剪生效
-                                
-                                // 🔥🔥 使用 OutlineProvider 进行硬件裁剪
-                                outlineProvider = object : android.view.ViewOutlineProvider() {
-                                    override fun getOutline(view: android.view.View, outline: android.graphics.Outline) {
-                                        outline.setRect(0, 0, view.width, view.height)
-                                    }
-                                }
-                                clipToOutline = true
-                                
-                                // 🔥🔥 设置顶部 padding
-                                setPadding(0, topOffset, 0, 0)
-                                
-                                val danmakuView = master.flame.danmaku.ui.widget.DanmakuView(ctx).apply {
-                                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                    layoutParams = android.widget.FrameLayout.LayoutParams(
-                                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT
-                                    )
-                                }
-                                addView(danmakuView)
-                                danmakuViewRef.value = danmakuView
-                                danmakuManager.attachView(danmakuView)
-                                android.util.Log.d("VideoPlayerSection", "✅ DanmakuView created, isFullscreen=$isFullscreen, topOffset=$topOffset")
+                            com.bytedance.danmaku.render.engine.DanmakuView(ctx).apply {
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                danmakuManager.attachView(this)
+                                android.util.Log.d("VideoPlayerSection", "✅ DanmakuView (RenderEngine) created, isFullscreen=$isFullscreen")
                             }
-                        },
-                        update = { frameLayout ->
-                            // 🔥🔥 [关键] 更新顶部 padding 推开弹幕区域
-                            frameLayout.setPadding(0, topOffset, 0, 0)
-                            frameLayout.requestLayout()
                         },
                         modifier = Modifier.fillMaxSize()
                     )
