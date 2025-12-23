@@ -214,7 +214,7 @@ fun PluginsScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "通过 URL 安装 .bpx 插件",
+                                text = "通过 URL 安装 JSON 规则插件",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -312,6 +312,12 @@ fun PluginsScreen(
                                 showImportDialog = false
                                 importUrl = ""
                                 importError = null
+                                // 🆕 显示成功 Toast
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "插件 \"${result.getOrNull()?.name}\" 安装成功！",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
                             } else {
                                 importError = result.exceptionOrNull()?.message ?: "安装失败"
                             }
