@@ -81,108 +81,120 @@ fun BottomControlBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 0.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            // 🔥 使用 SpaceBetween 确保两端元素始终可见
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            IconButton(
-                onClick = onPlayPauseClick,
-                modifier = Modifier.size(48.dp)
+            // 左侧：播放按钮和时间
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f, fill = false)
             ) {
-                Icon(
-                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    null,
-                    tint = Color.White,
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Text(
-                text = "${FormatUtils.formatDuration((progress.current / 1000).toInt())} / ${FormatUtils.formatDuration((progress.duration / 1000).toInt())}",
-                color = Color.White.copy(alpha = 0.9f),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-            
-            // Speed button
-            Surface(
-                onClick = onSpeedClick,
-                color = Color.White.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(4.dp)
-            ) {
-                Text(
-                    text = if (currentSpeed == 1.0f) "\u500d\u901f" else "${currentSpeed}x",
-                    color = if (currentSpeed != 1.0f) BiliPink else Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                )
-            }
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            // 🔥 Aspect Ratio button
-            Surface(
-                onClick = onRatioClick,
-                color = Color.White.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(4.dp)
-            ) {
-                Text(
-                    text = currentRatio.displayName,
-                    color = if (currentRatio != VideoAspectRatio.FIT) BiliPink else Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                )
-            }
-            
-            Spacer(modifier = Modifier.width(4.dp))
-            
-            // 🔥🔥 [新增] 竖屏模式弹幕开关
-            if (!isFullscreen) {
                 IconButton(
-                    onClick = onDanmakuToggle,
-                    modifier = Modifier.size(40.dp)
+                    onClick = onPlayPauseClick,
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
-                        if (danmakuEnabled) Icons.Rounded.Subtitles else Icons.Rounded.SubtitlesOff,
-                        contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
-                        tint = if (danmakuEnabled) BiliPink else Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(24.dp)
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        null,
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Text(
+                    text = "${FormatUtils.formatDuration((progress.current / 1000).toInt())} / ${FormatUtils.formatDuration((progress.duration / 1000).toInt())}",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
+            
+            // 中间：功能按钮（自适应空间）
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.weight(1f)
+            ) {
+                // Speed button
+                Surface(
+                    onClick = onSpeedClick,
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = if (currentSpeed == 1.0f) "倍速" else "${currentSpeed}x",
+                        color = if (currentSpeed != 1.0f) BiliPink else Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
                 
-                // 🔥🔥 [新增] 竖屏模式清晰度选择
-                if (currentQualityLabel.isNotEmpty()) {
-                    Surface(
-                        onClick = onQualityClick,
-                        color = Color.White.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(4.dp)
+                Spacer(modifier = Modifier.width(6.dp))
+                
+                // 🔥 Aspect Ratio button
+                Surface(
+                    onClick = onRatioClick,
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = currentRatio.displayName,
+                        color = if (currentRatio != VideoAspectRatio.FIT) BiliPink else Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                
+                // 🔥🔥 [新增] 竖屏模式弹幕开关和清晰度
+                if (!isFullscreen) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    
+                    IconButton(
+                        onClick = onDanmakuToggle,
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        Text(
-                            text = currentQualityLabel,
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        Icon(
+                            if (danmakuEnabled) Icons.Rounded.Subtitles else Icons.Rounded.SubtitlesOff,
+                            contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
+                            tint = if (danmakuEnabled) BiliPink else Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     
-                    Spacer(modifier = Modifier.width(4.dp))
+                    // 🔥🔥 清晰度选择 - 限制最大宽度防止截断
+                    if (currentQualityLabel.isNotEmpty()) {
+                        Surface(
+                            onClick = onQualityClick,
+                            color = Color.White.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = currentQualityLabel,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
-
+            
+            // 🔥 右侧：全屏按钮 - 始终显示，不会被挤出
             IconButton(
                 onClick = onToggleFullscreen,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
                     null,
                     tint = Color.White,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(32.dp)
                 )
             }
         }
