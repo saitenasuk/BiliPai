@@ -84,11 +84,11 @@ object RuleEngine {
             }
             is Condition.And -> {
                 // AND: 所有子条件都必须满足
-                condition.and.all { child -> evaluateCondition(child, fieldValueGetter) }
+                condition.conditions.all { child -> evaluateCondition(child, fieldValueGetter) }
             }
             is Condition.Or -> {
                 // OR: 任一子条件满足即可
-                condition.or.any { child -> evaluateCondition(child, fieldValueGetter) }
+                condition.conditions.any { child -> evaluateCondition(child, fieldValueGetter) }
             }
         }
     }

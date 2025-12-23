@@ -1,9 +1,13 @@
 // 文件路径: core/plugin/json/JsonRulePlugin.kt
 package com.android.purebilibili.core.plugin.json
 
-import kotlinx.serialization.SerialName
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.*
 
 /**
  * 🎯 JSON 规则插件数据模型
@@ -16,20 +20,20 @@ data class JsonRulePlugin(
     val version: String = "1.0.0",
     val author: String = "Unknown",
     val type: String,  // "feed" | "danmaku"
-    val iconUrl: String? = null,  // 🆕 插件图标 URL
+    val iconUrl: String? = null,
     val rules: List<Rule>
 )
 
 /**
  * 🆕 条件表达式（支持 AND/OR 嵌套）
+ * 
+ * 使用自定义序列化器根据 JSON 结构自动判断类型
  */
-@Serializable
+@Serializable(with = ConditionSerializer::class)
 sealed class Condition {
     /**
      * 简单条件：单个字段比较
      */
-    @Serializable
-    @SerialName("simple")
     data class Simple(
         val field: String,
         val op: String,
@@ -39,20 +43,116 @@ sealed class Condition {
     /**
      * AND 条件：所有子条件都必须满足
      */
-    @Serializable
-    @SerialName("and")
     data class And(
-        val and: List<Condition>
+        val conditions: List<Condition>
     ) : Condition()
     
     /**
      * OR 条件：任一子条件满足即可
      */
-    @Serializable
-    @SerialName("or")
     data class Or(
-        val or: List<Condition>
+        val conditions: List<Condition>
     ) : Condition()
+}
+
+/**
+ * 🔧 Condition 自定义序列化器
+ * 
+ * 根据 JSON 结构自动判断条件类型：
+ * - 包含 "and" 键 -> And
+ * - 包含 "or" 键 -> Or
+ * - 包含 "field" 键 -> Simple
+ */
+object ConditionSerializer : KSerializer<Condition> {
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("Condition")
+    
+    override fun deserialize(decoder: Decoder): Condition {
+        val jsonDecoder = decoder as? JsonDecoder
+            ?: throw IllegalStateException("只支持 JSON 解码")
+        val jsonElement = jsonDecoder.decodeJsonElement()
+        
+        return parseCondition(jsonElement)
+    }
+    
+    override fun serialize(encoder: Encoder, value: Condition) {
+        val jsonEncoder = encoder as? JsonEncoder
+            ?: throw IllegalStateException("只支持 JSON 编码")
+        
+        val jsonElement = when (value) {
+            is Condition.Simple -> buildJsonObject {
+                put("field", value.field)
+                put("op", value.op)
+                put("value", value.value)
+            }
+            is Condition.And -> buildJsonObject {
+                putJsonArray("and") {
+                    value.conditions.forEach { condition ->
+                        add(encodeConditionToJson(condition))
+                    }
+                }
+            }
+            is Condition.Or -> buildJsonObject {
+                putJsonArray("or") {
+                    value.conditions.forEach { condition ->
+                        add(encodeConditionToJson(condition))
+                    }
+                }
+            }
+        }
+        jsonEncoder.encodeJsonElement(jsonElement)
+    }
+    
+    private fun parseCondition(element: JsonElement): Condition {
+        if (element !is JsonObject) {
+            throw IllegalArgumentException("条件必须是 JSON 对象")
+        }
+        
+        return when {
+            // AND 条件
+            "and" in element -> {
+                val conditions = element["and"]?.jsonArray?.map { parseCondition(it) }
+                    ?: throw IllegalArgumentException("and 必须是数组")
+                Condition.And(conditions)
+            }
+            // OR 条件
+            "or" in element -> {
+                val conditions = element["or"]?.jsonArray?.map { parseCondition(it) }
+                    ?: throw IllegalArgumentException("or 必须是数组")
+                Condition.Or(conditions)
+            }
+            // 简单条件
+            "field" in element -> {
+                val field = element["field"]?.jsonPrimitive?.content
+                    ?: throw IllegalArgumentException("field 必须是字符串")
+                val op = element["op"]?.jsonPrimitive?.content
+                    ?: throw IllegalArgumentException("op 必须是字符串")
+                val value = element["value"]
+                    ?: throw IllegalArgumentException("value 不能为空")
+                Condition.Simple(field, op, value)
+            }
+            else -> throw IllegalArgumentException("无法识别的条件格式: $element")
+        }
+    }
+    
+    private fun encodeConditionToJson(condition: Condition): JsonElement {
+        return when (condition) {
+            is Condition.Simple -> buildJsonObject {
+                put("field", condition.field)
+                put("op", condition.op)
+                put("value", condition.value)
+            }
+            is Condition.And -> buildJsonObject {
+                putJsonArray("and") {
+                    condition.conditions.forEach { add(encodeConditionToJson(it)) }
+                }
+            }
+            is Condition.Or -> buildJsonObject {
+                putJsonArray("or") {
+                    condition.conditions.forEach { add(encodeConditionToJson(it)) }
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -125,4 +225,5 @@ object RuleAction {
     const val HIDE = "hide"
     const val HIGHLIGHT = "highlight"
 }
+
 
