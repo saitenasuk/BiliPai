@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.repository.VideoRepository
+import com.android.purebilibili.data.repository.LiveRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -98,7 +99,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             hasMoreLiveData = true  // 🔥 修复：刷新时重置分页标志
             fetchData(isLoadMore = false)
             // 🔥 数据加载完成后再更新 refreshKey，避免闪烁
-            _uiState.value = _uiState.value.copy(refreshKey = System.currentTimeMillis())
+            // 🥚 刷新成功后显示趣味提示
+            val refreshMessage = com.android.purebilibili.core.util.EasterEggs.getRefreshMessage()
+            _uiState.value = _uiState.value.copy(
+                refreshKey = System.currentTimeMillis(),
+                refreshMessage = refreshMessage
+            )
             _isRefreshing.value = false
         }
     }
@@ -288,8 +294,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         
         // 🔥 根据子分类选择不同的 API
         val result = when (subCategory) {
-            LiveSubCategory.FOLLOWED -> VideoRepository.getFollowedLive(page)
-            LiveSubCategory.POPULAR -> VideoRepository.getLiveRooms(page)
+            LiveSubCategory.FOLLOWED -> LiveRepository.getFollowedLive(page)
+            LiveSubCategory.POPULAR -> LiveRepository.getLiveRooms(page)
         }
         
         if (!isLoadMore) fetchUserInfo()

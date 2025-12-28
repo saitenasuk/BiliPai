@@ -384,6 +384,10 @@ fun PlaybackSettingsScreen(
             // 🍎 交互设置
             item { SettingsSectionTitle("交互") }
             item {
+                val scope = rememberCoroutineScope()
+                val swipeHidePlayerEnabled by com.android.purebilibili.core.store.SettingsManager
+                    .getSwipeHidePlayerEnabled(context).collectAsState(initial = false)
+                
                 SettingsGroup {
                     SettingSwitchItem(
                         icon = CupertinoIcons.Default.HeartCircle,
@@ -392,6 +396,20 @@ fun PlaybackSettingsScreen(
                         checked = state.doubleTapLike,
                         onCheckedChange = { viewModel.toggleDoubleTapLike(it) },
                         iconTint = com.android.purebilibili.core.theme.iOSPink
+                    )
+                    Divider()
+                    SettingSwitchItem(
+                        icon = CupertinoIcons.Default.HandDraw,  // 手势图标
+                        title = "上滑隐藏播放器",
+                        subtitle = "竖屏模式下拉评论区隐藏播放器",
+                        checked = swipeHidePlayerEnabled,
+                        onCheckedChange = { 
+                            scope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setSwipeHidePlayerEnabled(context, it)
+                            }
+                        },
+                        iconTint = com.android.purebilibili.core.theme.iOSBlue
                     )
                 }
             }

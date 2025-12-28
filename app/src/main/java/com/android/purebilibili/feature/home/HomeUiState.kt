@@ -65,5 +65,7 @@ data class HomeUiState(
     val refreshKey: Long = 0L,
     val followingMids: Set<Long> = emptySet(),
     // 🔥🔥 [新增] 标签页显示索引（独立于内容分类，用于特殊分类导航后保持标签位置）
-    val displayedTabIndex: Int = 0
+    val displayedTabIndex: Int = 0,
+    // 🥚 [彩蛋] 刷新成功后的趣味消息
+    val refreshMessage: String? = null
 )

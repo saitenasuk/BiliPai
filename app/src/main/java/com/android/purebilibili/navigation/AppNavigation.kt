@@ -33,8 +33,8 @@ import com.android.purebilibili.feature.settings.PlaybackSettingsScreen
 import com.android.purebilibili.feature.list.CommonListScreen
 import com.android.purebilibili.feature.list.HistoryViewModel
 import com.android.purebilibili.feature.list.FavoriteViewModel
-import com.android.purebilibili.feature.video.VideoDetailScreen
-import com.android.purebilibili.feature.video.MiniPlayerManager
+import com.android.purebilibili.feature.video.screen.VideoDetailScreen
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.dynamic.DynamicScreen
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.ProvideAnimatedVisibilityScope

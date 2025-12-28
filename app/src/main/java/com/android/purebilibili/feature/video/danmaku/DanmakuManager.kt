@@ -430,7 +430,7 @@ class DanmakuManager private constructor(
                 if (durationMs > 0) {
                     Log.w(TAG, "📥 Trying Protobuf API (seg.so)...")
                     try {
-                        val segments = VideoRepository.getDanmakuSegments(cid, durationMs)
+                        val segments = com.android.purebilibili.data.repository.DanmakuRepository.getDanmakuSegments(cid, durationMs)
                         if (segments.isNotEmpty()) {
                             danmakuList = DanmakuParser.parseProtobuf(segments)
                             Log.w(TAG, "✅ Protobuf parsed ${danmakuList.size} danmakus")
@@ -443,7 +443,7 @@ class DanmakuManager private constructor(
                 // 🔥🔥 [后备] 如果 Protobuf 失败或未提供 duration，使用 XML API
                 if (danmakuList == null || danmakuList.isEmpty()) {
                     Log.w(TAG, "📥 Trying XML API (fallback)...")
-                    val rawData = VideoRepository.getDanmakuRawData(cid)
+                    val rawData = com.android.purebilibili.data.repository.DanmakuRepository.getDanmakuRawData(cid)
                     if (rawData != null && rawData.isNotEmpty()) {
                         cachedRawData = rawData
                         danmakuList = DanmakuParser.parse(rawData)

@@ -757,4 +757,37 @@ object SettingsManager {
             prefs[KEY_BOTTOM_BAR_ITEM_COLORS] = colorMap.entries.joinToString(",") { "${it.key}:${it.value}" }
         }
     }
+    
+    // ========== 🥚 彩蛋设置 ==========
+    
+    private val KEY_EASTER_EGG_ENABLED = booleanPreferencesKey("easter_egg_enabled")
+    
+    // --- 彩蛋功能开关（控制下拉刷新趣味提示等）---
+    fun getEasterEggEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_EASTER_EGG_ENABLED] ?: false }  // 默认关闭
+
+    suspend fun setEasterEggEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_EASTER_EGG_ENABLED] = value }
+        // 🔥 同步到 SharedPreferences，供同步读取使用
+        context.getSharedPreferences("easter_egg", Context.MODE_PRIVATE)
+            .edit().putBoolean("enabled", value).apply()
+    }
+    
+    // 🔥 同步读取彩蛋开关（用于 ViewModel）
+    fun isEasterEggEnabledSync(context: Context): Boolean {
+        return context.getSharedPreferences("easter_egg", Context.MODE_PRIVATE)
+            .getBoolean("enabled", false)  // 默认关闭
+    }
+    
+    // ========== 🎬 播放器设置 ==========
+    
+    private val KEY_SWIPE_HIDE_PLAYER = booleanPreferencesKey("swipe_hide_player")
+    
+    // --- 上滑隐藏播放器开关 ---
+    fun getSwipeHidePlayerEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SWIPE_HIDE_PLAYER] ?: false }  // 默认关闭
+
+    suspend fun setSwipeHidePlayerEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_SWIPE_HIDE_PLAYER] = value }
+    }
 }

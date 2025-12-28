@@ -126,7 +126,7 @@ class VideoPlaybackUseCase(
             // 🔥🔥 [关键修复] 将用户画质设置传递给 Repository
             val detailResult = VideoRepository.getVideoDetails(bvid, defaultQuality)
             val relatedVideos = VideoRepository.getRelatedVideos(bvid)
-            val emoteMap = VideoRepository.getEmoteMap()
+            val emoteMap = com.android.purebilibili.data.repository.CommentRepository.getEmoteMap()
             
             return detailResult.fold(
                 onSuccess = { (info, playData) ->

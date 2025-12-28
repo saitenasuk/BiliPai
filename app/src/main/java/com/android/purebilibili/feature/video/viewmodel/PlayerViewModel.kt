@@ -30,9 +30,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import com.android.purebilibili.feature.video.PlaylistManager
-import com.android.purebilibili.feature.video.PlaylistItem
-import com.android.purebilibili.feature.video.PlayMode
+import com.android.purebilibili.feature.video.player.PlaylistManager
+import com.android.purebilibili.feature.video.player.PlaylistItem
+import com.android.purebilibili.feature.video.player.PlayMode
 
 // ========== UI State ==========
 sealed class PlayerUiState {
@@ -371,7 +371,13 @@ class PlayerViewModel : ViewModel() {
                 .onSuccess { 
                     val newStat = current.info.stat.copy(favorite = current.info.stat.favorite + if (it) 1 else -1)
                     _uiState.value = current.copy(info = current.info.copy(stat = newStat), isFavorited = it)
-                    toast(if (it) "\u5df2\u6536\u85cf" else "\u5df2\u53d6\u6d88\u6536\u85cf")
+                    // 🥚 彩蛋：使用趣味消息（如果设置开启）
+                    val message = if (it && appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
+                        com.android.purebilibili.core.util.EasterEggs.getFavoriteMessage()
+                    } else {
+                        if (it) "已收藏" else "已取消收藏"
+                    }
+                    toast(message)
                 }
                 .onFailure { toast(it.message ?: "\u64cd\u4f5c\u5931\u8d25") }
         }
@@ -385,7 +391,13 @@ class PlayerViewModel : ViewModel() {
                     val newStat = current.info.stat.copy(like = current.info.stat.like + if (it) 1 else -1)
                     _uiState.value = current.copy(info = current.info.copy(stat = newStat), isLiked = it)
                     if (it) _likeBurstVisible.value = true
-                    toast(if (it) "\u70b9\u8d5e\u6210\u529f" else "\u5df2\u53d6\u6d88\u70b9\u8d5e")
+                    // 🥚 彩蛋：使用趣味消息（如果设置开启）
+                    val message = if (it && appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
+                        com.android.purebilibili.core.util.EasterEggs.getLikeMessage()
+                    } else {
+                        if (it) "点赞成功" else "已取消点赞"
+                    }
+                    toast(message)
                 }
                 .onFailure { toast(it.message ?: "\u64cd\u4f5c\u5931\u8d25") }
         }
@@ -474,7 +486,13 @@ class PlayerViewModel : ViewModel() {
                     var newState = current.copy(coinCount = minOf(current.coinCount + count, 2))
                     if (alsoLike && !current.isLiked) newState = newState.copy(isLiked = true)
                     _uiState.value = newState
-                    toast("\u6295\u5e01\u6210\u529f")
+                    // 🥚 彩蛋：使用趣味消息（如果设置开启）
+                    val message = if (appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
+                        com.android.purebilibili.core.util.EasterEggs.getCoinMessage()
+                    } else {
+                        "投币成功"
+                    }
+                    toast(message)
                 }
                 .onFailure { toast(it.message ?: "\u6295\u5e01\u5931\u8d25") }
         }

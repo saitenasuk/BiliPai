@@ -41,7 +41,7 @@ import com.android.purebilibili.navigation.AppNavigation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
-import com.android.purebilibili.feature.video.MiniPlayerManager
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenPlayerOverlay
 import com.android.purebilibili.core.ui.SharedTransitionProvider

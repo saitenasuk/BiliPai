@@ -1,5 +1,5 @@
-// 文件路径: feature/video/VideoDetailScreen.kt
-package com.android.purebilibili.feature.video
+// 文件路径: feature/video/screen/VideoDetailScreen.kt
+package com.android.purebilibili.feature.video.screen
 
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -81,6 +82,8 @@ import com.android.purebilibili.feature.video.ui.components.TripleSuccessAnimati
 import com.android.purebilibili.feature.video.ui.components.VideoDetailSkeleton
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog  // 🔥 评论图片预览
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
+import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,6 +93,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -398,6 +402,21 @@ fun VideoDetailScreen(
                     val screenWidthDp = configuration.screenWidthDp.dp
                     val videoHeight = screenWidthDp * 9f / 16f  // 16:9 比例
                     
+                    // 🔥 读取上滑隐藏播放器设置
+                    val swipeHidePlayerEnabled by com.android.purebilibili.core.store.SettingsManager
+                        .getSwipeHidePlayerEnabled(context).collectAsState(initial = false)
+                    
+                    // 🔥 播放器隐藏状态（用于动画）
+                    var isPlayerHidden by remember { mutableStateOf(false) }
+                    val animatedPlayerHeight by androidx.compose.animation.core.animateDpAsState(
+                        targetValue = if (isPlayerHidden && swipeHidePlayerEnabled) 0.dp else videoHeight + statusBarHeight,
+                        animationSpec = spring(
+                            dampingRatio = 0.8f,
+                            stiffness = 300f
+                        ),
+                        label = "playerHeight"
+                    )
+                    
                     // 🔥🔥 注意：移除了状态栏黑色 Spacer
                     // 播放器将延伸到状态栏下方，共享元素过渡更流畅
                     
@@ -430,10 +449,11 @@ fun VideoDetailScreen(
                     }
                     
                     // 🔥🔥 播放器容器包含状态栏高度，让视频延伸到顶部
+                    // 🔥🔥 [修复] 始终保持播放器在 Composition 中，避免隐藏时重新创建导致重载
                     Box(
                         modifier = playerContainerModifier
                             .fillMaxWidth()
-                            .height(videoHeight + statusBarHeight)  // 🔥 包含状态栏高度
+                            .height(animatedPlayerHeight)  // 🔥 使用动画高度（包含0高度）
                             .background(Color.Black)  // 黑色背景
                             .clipToBounds()
                             // 🔥🔥 [PiP修复] 捕获视频播放器在屏幕上的位置
@@ -449,9 +469,11 @@ fun VideoDetailScreen(
                             }
                     ) {
                         // 🔥 播放器内部使用 padding 避开状态栏
+                        // 🔥🔥 [关键] 即使高度为0也保持播放器渲染，避免重载
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
+                                .height(videoHeight)  // 🔥 使用固定视频高度，不受动画影响
                                 .padding(top = statusBarHeight)  // 🔥 顶部 padding 避开状态栏
                         ) {
                             VideoPlayerSection(
@@ -473,12 +495,67 @@ fun VideoDetailScreen(
                             )
                         }
                     }
+                    
+                    // 🔥 播放器隐藏/恢复切换栏 - 仅在启用上滑隐藏功能时显示
+                    if (swipeHidePlayerEnabled) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isPlayerHidden = !isPlayerHidden },
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    if (isPlayerHidden) CupertinoIcons.Default.ChevronDown else CupertinoIcons.Default.ChevronUp,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    if (isPlayerHidden) "展开播放器" else "收起播放器",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
 
                     // ✅ 第3层：内容区域
+                    // 🔥 创建嵌套滚动连接用于监听内容滑动
+                    val nestedScrollConnection = remember {
+                        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                            override fun onPreScroll(
+                                available: androidx.compose.ui.geometry.Offset,
+                                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+                            ): androidx.compose.ui.geometry.Offset {
+                                // 只有开启设置时才处理
+                                if (swipeHidePlayerEnabled) {
+                                    // 向上滑动（正值）且超过阈值时隐藏播放器
+                                    if (available.y < -20f && !isPlayerHidden) {
+                                        isPlayerHidden = true
+                                    }
+                                    // 向下滑动（负值）且超过阈值时显示播放器
+                                    if (available.y > 40f && isPlayerHidden) {
+                                        isPlayerHidden = false
+                                    }
+                                }
+                                return androidx.compose.ui.geometry.Offset.Zero
+                            }
+                        }
+                    }
+                    
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
+                            .nestedScroll(nestedScrollConnection)
                     ) {
                         when (uiState) {
                             is PlayerUiState.Loading -> {
@@ -750,384 +827,5 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
-// VideoContentSection 保持原样，无需修改
-@Composable
-fun VideoContentSection(
-    info: ViewInfo,
-    relatedVideos: List<RelatedVideo>,
-    replies: List<ReplyItem>,
-    replyCount: Int,
-    emoteMap: Map<String, String>,
-    isRepliesLoading: Boolean,
-    isFollowing: Boolean,
-    isFavorited: Boolean,
-    isLiked: Boolean,
-    coinCount: Int,
-    currentPageIndex: Int,
-    downloadProgress: Float = -1f,  // 🔥 下载进度
-    isInWatchLater: Boolean = false,  // 🔥 稍后再看状态
-    followingMids: Set<Long> = emptySet(),  // 🔥 已关注用户 ID 列表
-    videoTags: List<VideoTag> = emptyList(),  // 🔥 视频标签列表
-    // 🔥🔥 [新增] 评论排序/筛选参数
-    sortMode: CommentSortMode = CommentSortMode.HOT,
-    upOnlyFilter: Boolean = false,
-    onSortModeChange: (CommentSortMode) -> Unit = {},
-    onUpOnlyToggle: () -> Unit = {},
-    onFollowClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
-    onLikeClick: () -> Unit,
-    onCoinClick: () -> Unit,
-    onTripleClick: () -> Unit,
-    onPageSelect: (Int) -> Unit,
-    onUpClick: (Long) -> Unit,
-    onRelatedVideoClick: (String) -> Unit,
-    onSubReplyClick: (ReplyItem) -> Unit,
-    onLoadMoreReplies: () -> Unit,
-    onDownloadClick: () -> Unit = {},  // 🔥 下载点击
-    onWatchLaterClick: () -> Unit = {},  // 🔥 稍后再看点击
-    onTimestampClick: ((Long) -> Unit)? = null  // 🔥🔥 [新增] 时间戳点击跳转
-) {
-    val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
-    
-    // Tab 状态
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("简介", "评论 $replyCount")
-    
-    // 🔥 评论图片预览状态
-    var showImagePreview by remember { mutableStateOf(false) }
-    var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
-    var previewInitialIndex by remember { mutableIntStateOf(0) }
-    
-    // 🔥🔥 [新增] 合集展开状态
-    var showCollectionSheet by remember { mutableStateOf(false) }
-
-    // 🔥 图片预览对话框
-    if (showImagePreview && previewImages.isNotEmpty()) {
-        ImagePreviewDialog(
-            images = previewImages,
-            initialIndex = previewInitialIndex,
-            onDismiss = { showImagePreview = false }
-        )
-    }
-    
-    // 🔥🔥 [新增] 合集底部弹窗 - 必须在 LazyColumn 外部调用
-    info.ugc_season?.let { season ->
-        if (showCollectionSheet) {
-            CollectionSheet(
-                ugcSeason = season,
-                currentBvid = info.bvid,
-                onDismiss = { showCollectionSheet = false },
-                onEpisodeClick = { episode ->
-                    showCollectionSheet = false
-                    onRelatedVideoClick(episode.bvid)
-                }
-            )
-        }
-    }
-    
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp)
-    ) {
-        // 🔥🔥 [官方布局] 1. UP主信息 (置顶)
-        item {
-            UpInfoSection(
-                info = info,
-                isFollowing = isFollowing,
-                onFollowClick = onFollowClick,
-                onUpClick = onUpClick
-            )
-        }
-
-        // 🔥🔥 [官方布局] 2. 标题 + 统计 + 描述 + 标签 (紧凑排列，默认隐藏)
-        item {
-            VideoTitleWithDesc(
-                info = info,
-                videoTags = videoTags  // 🔥 传递标签，展开后显示
-            )
-        }
-
-        // 🔥🔥 [官方布局] 3. 操作按钮行
-        item {
-            ActionButtonsRow(
-                info = info,
-                isFavorited = isFavorited,
-                isLiked = isLiked,
-                coinCount = coinCount,
-                downloadProgress = downloadProgress,
-                isInWatchLater = isInWatchLater,  // 🔥 稍后再看状态
-                onFavoriteClick = onFavoriteClick,
-                onLikeClick = onLikeClick,
-                onCoinClick = onCoinClick,
-                onTripleClick = onTripleClick,
-                onCommentClick = {},  // 已有评论 Tab
-                onDownloadClick = onDownloadClick,
-                onWatchLaterClick = onWatchLaterClick  // 🔥 稍后再看点击
-            )
-        }
-        
-        // 🔥🔥 [新增] 视频合集展示
-        info.ugc_season?.let { season ->
-            item {
-                CollectionRow(
-                    ugcSeason = season,
-                    currentBvid = info.bvid,
-                    onClick = { showCollectionSheet = true }
-                )
-            }
-        }
-
-        // 🔥🔥 [官方布局] 4. Tab 栏（简介/评论 + 发弹幕入口）
-        item {
-            Column {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 左侧 Tab 按钮
-                    tabs.forEachIndexed { index, title ->
-                        val isSelected = selectedTabIndex == index
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .clickable { selectedTabIndex = index }
-                                .padding(vertical = 6.dp, horizontal = 6.dp)
-                        ) {
-                            Text(
-                                text = title,
-                                fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            // 下划线指示器
-                            Box(
-                                modifier = Modifier
-                                    .width(24.dp)
-                                    .height(2.dp)
-                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(1.dp))
-                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            )
-                        }
-                        if (index < tabs.lastIndex) {
-                            Spacer(modifier = Modifier.width(16.dp))
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.weight(1f))
-                    
-                    // 右侧发弹幕入口
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .clickable { /* TODO: 打开弹幕发送框 */ }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = "点我发弹幕",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        // 弹幕图标
-                        androidx.compose.foundation.layout.Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "弹",
-                                fontSize = 10.sp,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
-            }
-        }
-
-        // 5. Tab 内容
-        if (selectedTabIndex == 0) {
-            // === 简介 Tab 内容 ===
-
-            // 分P选择器 (仅多P视频显示)
-            if (info.pages.size > 1) {
-                item {
-                    PagesSelector(
-                        pages = info.pages,
-                        currentPageIndex = currentPageIndex,
-                        onPageSelect = onPageSelect
-                    )
-                }
-            }
-
-            // 相关视频推荐
-            item { 
-                Spacer(Modifier.height(4.dp))
-                VideoRecommendationHeader() 
-            }
-
-            items(relatedVideos, key = { it.bvid }) { video ->
-                RelatedVideoItem(
-                    video = video, 
-                    isFollowed = video.owner.mid in followingMids,  // 🔥 判断是否已关注
-                    onClick = { onRelatedVideoClick(video.bvid) }
-                )
-            }
-            
-        } else {
-            // === 评论 Tab 内容 ===
-            // 🔥🔥 [替换] 使用新的排序筛选栏
-            item { 
-                CommentSortFilterBar(
-                    count = replyCount,
-                    sortMode = sortMode,
-                    upOnlyFilter = upOnlyFilter,
-                    onSortModeChange = onSortModeChange,
-                    onUpOnlyToggle = onUpOnlyToggle
-                )
-            }
-            
-            if (isRepliesLoading && replies.isEmpty()) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        CupertinoActivityIndicator()
-                    }
-                }
-            } else if (replies.isEmpty()) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = if (upOnlyFilter) "这个视频没有 UP 主的评论" else "暂无评论",
-                            color = Color.Gray
-                        )
-                    }
-                }
-            } else {
-                items(items = replies, key = { it.rpid }) { reply ->
-                    ReplyItemView(
-                        item = reply,
-                        upMid = info.owner.mid,  // 🔥 传递 UP 主 mid 用于显示 UP 标签
-                        emoteMap = emoteMap,
-                        onClick = {},
-                        onSubClick = { onSubReplyClick(reply) },
-                        onTimestampClick = onTimestampClick,
-                        onImagePreview = { images, index ->
-                            previewImages = images
-                            previewInitialIndex = index
-                            showImagePreview = true
-                        }
-                    )
-                }
-                
-                // 加载更多提示
-                item {
-                    // 🔥🔥 [完全修复] 移除 LaunchedEffect，改用 derivedStateOf 检测滚动
-                    // 这样不会在 sortMode 切换时触发无限循环
-                    val shouldLoadMore by remember(replies.size, replyCount, isRepliesLoading) {
-                        derivedStateOf {
-                            !isRepliesLoading && 
-                            replies.isNotEmpty() && 
-                            replies.size < replyCount && 
-                            replyCount > 0
-                        }
-                    }
-                    
-                    // 🔥 只在首次发现需要加载更多时触发一次
-                    LaunchedEffect(shouldLoadMore) {
-                        if (shouldLoadMore) {
-                            onLoadMoreReplies()
-                        }
-                    }
-                    
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        when {
-                            isRepliesLoading -> {
-                                CupertinoActivityIndicator()
-                            }
-                            replies.size >= replyCount && replyCount > 0 -> {
-                                Text("—— end ——", color = Color.Gray, fontSize = 12.sp)
-                            }
-                            replyCount == 0 -> {
-                                // 无评论
-                            }
-                            else -> {
-                                // 等待加载
-                                CupertinoActivityIndicator()
-                            }
-                        }
-                    }
-                }
-    }
-        }
-    }
-}
-
-// 辅助组件：推荐视频标题
-@Composable
-private fun VideoRecommendationHeader() {
-    Row(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "相关推荐",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-/**
- * 🔥 视频标签行组件 - 使用 FlowRow 分列展示
- */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun VideoTagsRow(tags: List<VideoTag>) {
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        tags.take(10).forEach { tag ->
-            VideoTagChip(tagName = tag.tag_name)
-        }
-    }
-}
-
-/**
- * 🔥 视频标签芯片
- */
-@Composable
-private fun VideoTagChip(tagName: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Text(
-            text = tagName,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        )
-    }
-}
+// VideoContentSection 已提取到 VideoContentSection.kt
+// VideoTagsRow 和 VideoTagChip 也已提取到 VideoContentSection.kt

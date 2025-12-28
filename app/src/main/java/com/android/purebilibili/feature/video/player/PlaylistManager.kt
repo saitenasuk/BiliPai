@@ -1,5 +1,5 @@
-// 文件路径: feature/video/PlaylistManager.kt
-package com.android.purebilibili.feature.video
+// 文件路径: feature/video/player/PlaylistManager.kt
+package com.android.purebilibili.feature.video.player
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf

@@ -1,5 +1,5 @@
-// 文件路径: feature/video/PlaybackService.kt
-package com.android.purebilibili.feature.video
+// 文件路径: feature/video/player/PlaybackService.kt
+package com.android.purebilibili.feature.video.player
 
 import android.app.PendingIntent
 import android.content.Intent
@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.feature.video.VideoActivity
 
 // 这是一个标准的 MediaSessionService 实现
 // 目前你的 VideoPlayerState 主要使用本地 Player，这个 Service 暂时作为占位或未来后台播放升级使用

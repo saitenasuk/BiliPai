@@ -39,7 +39,9 @@ data class SearchUiState(
     val error: String? = null,
     // 🔥 搜索过滤条件
     val searchOrder: SearchOrder = SearchOrder.TOTALRANK,
-    val searchDuration: SearchDuration = SearchDuration.ALL
+    val searchDuration: SearchDuration = SearchDuration.ALL,
+    // 🥚 搜索彩蛋消息
+    val easterEggMessage: String? = null
 )
 
 class SearchViewModel(application: Application) : AndroidViewModel(application) {
@@ -106,8 +108,24 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun search(keyword: String) {
         if (keyword.isBlank()) return
 
-        // 🔥 清空建议列表
-        _uiState.update { it.copy(query = keyword, isSearching = true, showResults = true, suggestions = emptyList(), error = null) }
+        // 🥚 检查搜索彩蛋关键词
+        val context = getApplication<android.app.Application>()
+        val easterEggEnabled = com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(context)
+        val easterEggMessage = if (easterEggEnabled) {
+            com.android.purebilibili.core.util.EasterEggs.checkSearchEasterEgg(keyword)
+        } else null
+
+        // 🔥 清空建议列表，设置彩蛋消息
+        _uiState.update { 
+            it.copy(
+                query = keyword, 
+                isSearching = true, 
+                showResults = true, 
+                suggestions = emptyList(), 
+                error = null,
+                easterEggMessage = easterEggMessage
+            ) 
+        }
         saveHistory(keyword)
         
         // 📊 记录搜索事件

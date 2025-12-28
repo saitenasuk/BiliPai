@@ -3,7 +3,7 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
-import com.android.purebilibili.feature.video.MiniPlayerManager
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
 
 import android.app.Activity
 import android.content.Context

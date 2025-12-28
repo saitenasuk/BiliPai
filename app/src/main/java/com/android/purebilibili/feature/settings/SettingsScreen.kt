@@ -19,6 +19,8 @@ import coil.compose.AsyncImage
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,6 +43,7 @@ import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.core.theme.iOSYellow
 import com.android.purebilibili.core.ui.AppIcons
 import kotlinx.coroutines.launch
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
@@ -70,6 +73,10 @@ fun SettingsScreen(
     val state by viewModel.state.collectAsState()
     
     var showCacheDialog by remember { mutableStateOf(false) }
+    
+    // 🥚 版本号点击彩蛋
+    var versionClickCount by remember { mutableIntStateOf(0) }
+    var showEasterEggDialog by remember { mutableStateOf(false) }
     
     // 🔥🔥 [新增] 用于重播新手引导
     var showOnboardingReplay by remember { mutableStateOf(false) }
@@ -113,6 +120,64 @@ fun SettingsScreen(
                 ) { Text("确认清除") }
             },
             dismissButton = { TextButton(onClick = { showCacheDialog = false }) { Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+    
+    // 🥚 版本号彩蛋弹窗
+    if (showEasterEggDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showEasterEggDialog = false
+                versionClickCount = 0
+            },
+            title = { 
+                Text(
+                    "🥚 你发现了彩蛋！", 
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                ) 
+            },
+            text = { 
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "✨ BiliPai ✨",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "感谢你使用 BiliPai！\n\n" +
+                        "这是一个用爱发电的开源项目，\n" +
+                        "希望能为你带来更好的观影体验。\n\n" +
+                        "🌟 如果喜欢，欢迎 Star ⭐\n" +
+                        "🐛 遇到问题，欢迎反馈\n" +
+                        "💖 感谢每一位支持者！",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Made with ❤️ by Jay3-YY",
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { 
+                        showEasterEggDialog = false
+                        versionClickCount = 0
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) { Text("我知道了！") }
+            },
             containerColor = MaterialTheme.colorScheme.surface
         )
     }
@@ -429,21 +494,53 @@ fun SettingsScreen(
                             iconTint = iOSPurple
                         )
                         Divider()
+                        // 🥚 版本号彩蛋 - 点击 7 次触发
                         SettingClickableItem(
                             icon = CupertinoIcons.Default.InfoCircle,
                             title = "版本",
                             value = "v${com.android.purebilibili.BuildConfig.VERSION_NAME}",
-                            onClick = null,
+                            onClick = {
+                                versionClickCount++
+                                val message = com.android.purebilibili.core.util.EasterEggs
+                                    .getVersionClickMessage(versionClickCount)
+                                
+                                if (com.android.purebilibili.core.util.EasterEggs
+                                    .isVersionEasterEggTriggered(versionClickCount)) {
+                                    // 🎉 触发彩蛋！
+                                    showEasterEggDialog = true
+                                } else if (versionClickCount >= 3) {
+                                    // 显示提示，激发用户好奇心
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             iconTint = iOSTeal
                         )
                         Divider()
                         // 🌟 重播新手引导
                         SettingClickableItem(
-                            icon = CupertinoIcons.Default.Sparkles,
+                            icon = CupertinoIcons.Default.BookCircle,  // 更合适的引导/教程图标
                             title = "重播新手引导",
                             value = "了解应用功能",
                             onClick = { showOnboardingReplay = true },
                             iconTint = iOSPink
+                        )
+                        Divider()
+                        // 🥚 彩蛋开关
+                        val easterEggEnabled by com.android.purebilibili.core.store.SettingsManager
+                            .getEasterEggEnabled(context).collectAsState(initial = true)
+                        val coroutineScope = rememberCoroutineScope()
+                        SettingSwitchItem(
+                            icon = CupertinoIcons.Default.Gift,  // 礼物/惊喜图标更贴切
+                            title = "趣味彩蛋",
+                            subtitle = "刷新、点赞、投币、搜索时显示趣味提示",
+                            checked = easterEggEnabled,
+                            onCheckedChange = { enabled ->
+                                coroutineScope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setEasterEggEnabled(context, enabled)
+                                }
+                            },
+                            iconTint = iOSYellow
                         )
                     }
                 }

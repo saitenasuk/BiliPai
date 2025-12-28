@@ -20,6 +20,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -105,6 +106,60 @@ fun HomeScreen(
                 duration = SnackbarDuration.Short
             )
         }
+    }
+    
+    // 🥚 [彩蛋] 彩蛋开关设置
+    val easterEggEnabled by SettingsManager.getEasterEggEnabled(context).collectAsState(initial = true)
+    var showEasterEggDialog by remember { mutableStateOf(false) }
+    
+    // 🥚 [彩蛋] 下拉刷新成功后显示趣味提示（仅在开关开启时）
+    LaunchedEffect(state.refreshKey, easterEggEnabled) {
+        val message = state.refreshMessage
+        if (message != null && state.refreshKey > 0 && easterEggEnabled) {
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "关闭彩蛋",
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                showEasterEggDialog = true
+            }
+        }
+    }
+    
+    // 🥚 [彩蛋] 关闭确认对话框
+    if (showEasterEggDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showEasterEggDialog = false },
+            title = { 
+                Text(
+                    "关闭趣味提示？", 
+                    color = MaterialTheme.colorScheme.onSurface
+                ) 
+            },
+            text = { 
+                Text(
+                    "关闭后下拉刷新将不再显示趣味消息。\n\n你可以在「设置」中随时重新开启。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                ) 
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            SettingsManager.setEasterEggEnabled(context, false)
+                        }
+                        showEasterEggDialog = false
+                    }
+                ) { Text("关闭彩蛋", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showEasterEggDialog = false }
+                ) { Text("保留彩蛋", color = MaterialTheme.colorScheme.primary) }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     }
     
     // 🔥🔥 [修复] 确保首页显示时 WindowInsets 配置正确，防止从视频页返回时布局跳动
@@ -406,6 +461,23 @@ fun HomeScreen(
     // 🔥 记录滑动方向用于动画 (true = 向右/上一个分类, false = 向左/下一个分类)
     var swipeDirection by remember { mutableStateOf(true) }
     
+    // 🎬🎬 [改进] 水平滑动过渡动画状态 - 使用动画实现平滑过渡
+    var targetDragOffset by remember { mutableFloatStateOf(0f) }  // 目标偏移量
+    var isDragging by remember { mutableStateOf(false) }  // 是否正在拖拽
+    
+    // 🎬 使用 spring 动画实现平滑弹回效果（可被打断）
+    val animatedDragOffset by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = targetDragOffset,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = if (isDragging) 1f else 0.7f,  // 拖拽时无弹性，释放时有弹性
+            stiffness = if (isDragging) 10000f else 400f  // 拖拽时立即响应，释放时平滑
+        ),
+        label = "dragOffset"
+    )
+    
+    var isAnimatingTransition by remember { mutableStateOf(false) }  // 是否正在动画过渡
+    var transitionDirection by remember { mutableIntStateOf(0) }  // -1=左滑进入, 1=右滑进入, 0=无
+    
     // 🔥🔥 [修复] 特殊分类列表（有独立页面，不在首页显示内容）
     val specialCategories = listOf(
         HomeCategory.ANIME, 
@@ -649,25 +721,63 @@ fun HomeScreen(
                         .fillMaxSize()
                         // 🔥🔥 [修复] 底栏隐藏时不需要额外的导航栏 padding
                         .padding(bottom = if (isBottomBarFloating || !bottomBarVisible) 0.dp else navBarHeight)
-                        // 🔥 水平滑动手势切换分类
+                        // 🎬🎬 [改进] 水平滑动手势 + 平滑动画偏移
+                        .graphicsLayer {
+                            // 使用动画值实现平滑过渡
+                            translationX = animatedDragOffset
+                        }
                         .pointerInput(targetCategory) {
-                            var totalDragX = 0f
                             detectHorizontalDragGestures(
-                                onDragStart = { totalDragX = 0f },
-                                onDragEnd = {
-                                    // 滑动阈值：120px
-                                    if (totalDragX > 120f) {
-                                        // 右滑：切换到上一个分类
-                                        switchToPreviousCategory()
-                                    } else if (totalDragX < -120f) {
-                                        // 左滑：切换到下一个分类
-                                        switchToNextCategory()
-                                    }
+                                onDragStart = { 
+                                    // 🎬 开始拖拽
+                                    isDragging = true
+                                    isAnimatingTransition = false
+                                    transitionDirection = 0
                                 },
-                                onDragCancel = { totalDragX = 0f },
+                                onDragEnd = {
+                                    // 🎬 释放手指，开启动画
+                                    isDragging = false
+                                    val threshold = 100f
+                                    val currentOffset = targetDragOffset
+                                    
+                                    when {
+                                        currentOffset > threshold && displayedTabIndex > 0 -> {
+                                            // 右滑：切换到上一个分类
+                                            transitionDirection = 1
+                                            isAnimatingTransition = true
+                                            switchToPreviousCategory()
+                                        }
+                                        currentOffset < -threshold && displayedTabIndex < HomeCategory.entries.size - 1 -> {
+                                            // 左滑：切换到下一个分类
+                                            transitionDirection = -1
+                                            isAnimatingTransition = true
+                                            switchToNextCategory()
+                                        }
+                                        else -> {
+                                            // 未达阈值，不切换
+                                            transitionDirection = 0
+                                        }
+                                    }
+                                    // 🎬 使用动画平滑弹回原位
+                                    targetDragOffset = 0f
+                                },
+                                onDragCancel = { 
+                                    isDragging = false
+                                    targetDragOffset = 0f
+                                    transitionDirection = 0
+                                },
                                 onHorizontalDrag = { change, dragAmount ->
                                     change.consume()
-                                    totalDragX += dragAmount
+                                    // 🎬 实时更新目标偏移量（带阻尼效果）
+                                    val newOffset = targetDragOffset + dragAmount
+                                    val dampedOffset = when {
+                                        displayedTabIndex == 0 && newOffset > 0 -> 
+                                            newOffset * 0.3f  // 第一个分类，右滑阻尼
+                                        displayedTabIndex == HomeCategory.entries.size - 1 && newOffset < 0 ->
+                                            newOffset * 0.3f  // 最后一个分类，左滑阻尼
+                                        else -> newOffset
+                                    }
+                                    targetDragOffset = dampedOffset.coerceIn(-size.width * 0.5f, size.width * 0.5f)
                                 }
                             )
                         }

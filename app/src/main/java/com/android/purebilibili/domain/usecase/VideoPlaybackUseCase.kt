@@ -62,7 +62,7 @@ class VideoPlaybackUseCase {
             // 并行获取视频详情、相关视频和表情包
             val detailResult = VideoRepository.getVideoDetails(bvid)
             val relatedVideos = VideoRepository.getRelatedVideos(bvid)
-            val emoteMap = VideoRepository.getEmoteMap()
+            val emoteMap = com.android.purebilibili.data.repository.CommentRepository.getEmoteMap()
             
             detailResult.map { (info, playData) ->
                 // 选择最佳视频和音频流

@@ -24,13 +24,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -44,6 +47,22 @@ import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.launch
 
 private const val TAG = "LivePlayerScreen"
+
+// 🔥 辅助函数：格式化在线人数
+private fun formatOnline(num: Int): String {
+    return when {
+        num >= 10000 -> String.format("%.1f万", num / 10000f)
+        else -> num.toString()
+    }
+}
+
+// 🔥 辅助函数：格式化粉丝数
+private fun formatFollowers(num: Long): String {
+    return when {
+        num >= 10000 -> String.format("%.1f万", num / 10000f)
+        else -> num.toString()
+    }
+}
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -84,17 +103,31 @@ fun LivePlayerScreen(
             onBack()
         }
     }    
-    // 🔥 创建带 Referer 的数据源
-    val dataSourceFactory = remember {
+    // 🔥🔥 [修复] 创建带 Cookie 认证的数据源 - 解决 403 错误
+    val dataSourceFactory = remember(roomId) {
+        // 🔥 从 TokenManager 获取 Cookie 信息，构建完整的 Cookie 字符串
+        val sessData = com.android.purebilibili.core.store.TokenManager.sessDataCache ?: ""
+        val buvid3 = com.android.purebilibili.core.store.TokenManager.buvid3Cache ?: ""
+        val cookies = buildString {
+            if (sessData.isNotEmpty()) append("SESSDATA=$sessData; ")
+            if (buvid3.isNotEmpty()) append("buvid3=$buvid3")
+        }.trimEnd(';', ' ')
+        Logger.d(TAG, "🔴 Creating dataSource with cookies: ${cookies.take(50)}...")
+        
         DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(mapOf(
-                "Referer" to "https://live.bilibili.com",
-                "User-Agent" to "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36"
+                "Referer" to "https://live.bilibili.com/$roomId",  // 🔥 使用完整直播间 URL
+                "User-Agent" to "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+                "Cookie" to cookies,  // 🔥🔥 关键：添加 Cookie 认证
+                "Origin" to "https://live.bilibili.com"
             ))
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(15000)
     }
     
-    // 🔥 ExoPlayer 实例 - 使用自定义数据源
-    val exoPlayer = remember {
+    // 🔥 ExoPlayer 实例 - 使用自定义数据源（依赖 dataSourceFactory 重建）
+    val exoPlayer = remember(dataSourceFactory) {
+        Logger.d(TAG, "🔴 Creating new ExoPlayer instance")
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .build().apply {
@@ -104,36 +137,95 @@ fun LivePlayerScreen(
     
     // 🔥 播放直播流
     fun playLiveStream(url: String) {
-        Logger.d(TAG, "Playing live stream: $url")
+        Logger.d(TAG, "🔴 === playLiveStream called ===")
+        Logger.d(TAG, "🔴 URL: $url")
+        Logger.d(TAG, "🔴 URL length: ${url.length}")
+        Logger.d(TAG, "🔴 URL contains m3u8: ${url.contains(".m3u8")}")
+        Logger.d(TAG, "🔴 URL contains hls: ${url.contains("hls")}")
         
-        // 🔥 根据 URL 后缀判断格式并创建合适的 MediaSource
-        val mediaSource = if (url.contains(".m3u8") || url.contains("hls")) {
-            // HLS 格式
-            HlsMediaSource.Factory(dataSourceFactory)
-                .createMediaSource(MediaItem.fromUri(url))
-        } else {
-            // FLV 或其他格式 - 让 ExoPlayer 自动识别
-            DefaultMediaSourceFactory(dataSourceFactory)
-                .createMediaSource(MediaItem.Builder()
-                    .setUri(url)
-                    .setMimeType("video/x-flv")  // 🔥 明确指定 FLV MIME 类型
-                    .build())
+        try {
+            // 🔥 根据 URL 后缀判断格式并创建合适的 MediaSource
+            val mediaSource = if (url.contains(".m3u8") || url.contains("hls")) {
+                Logger.d(TAG, "🔴 Creating HLS MediaSource")
+                // HLS 格式
+                HlsMediaSource.Factory(dataSourceFactory)
+                    .createMediaSource(MediaItem.fromUri(url))
+            } else {
+                Logger.d(TAG, "🔴 Creating FLV/default MediaSource")
+                // FLV 或其他格式 - 让 ExoPlayer 自动识别
+                DefaultMediaSourceFactory(dataSourceFactory)
+                    .createMediaSource(MediaItem.Builder()
+                        .setUri(url)
+                        .setMimeType("video/x-flv")  // 🔥 明确指定 FLV MIME 类型
+                        .build())
+            }
+            
+            Logger.d(TAG, "🔴 Setting media source...")
+            exoPlayer.setMediaSource(mediaSource)
+            Logger.d(TAG, "🔴 Calling prepare()...")
+            exoPlayer.prepare()
+            Logger.d(TAG, "✅ Player prepared successfully")
+        } catch (e: Exception) {
+            Logger.e(TAG, "❌ Error in playLiveStream: ${e.message}", e)
         }
-        
-        exoPlayer.setMediaSource(mediaSource)
-        exoPlayer.prepare()
+    }
+    
+    // 🔥🔥 [改进] ExoPlayer 错误监听器 - 403 错误时自动切换 CDN
+    DisposableEffect(exoPlayer) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Logger.e(TAG, "❌ ExoPlayer Error: ${error.message}")
+                Logger.e(TAG, "❌ Error code: ${error.errorCode}")
+                Logger.e(TAG, "❌ Error cause: ${error.cause?.message}")
+                
+                // 🔥🔥 [关键修复] 403 错误时自动尝试下一个 CDN
+                val cause = error.cause
+                if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
+                    if (cause.responseCode == 403) {
+                        Logger.d(TAG, "🔄 Got 403, trying next CDN...")
+                        viewModel.tryNextUrl()
+                    }
+                }
+            }
+            
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                val stateName = when (playbackState) {
+                    androidx.media3.common.Player.STATE_IDLE -> "IDLE"
+                    androidx.media3.common.Player.STATE_BUFFERING -> "BUFFERING"
+                    androidx.media3.common.Player.STATE_READY -> "READY"
+                    androidx.media3.common.Player.STATE_ENDED -> "ENDED"
+                    else -> "UNKNOWN($playbackState)"
+                }
+                Logger.d(TAG, "🔴 Player state changed: $stateName")
+            }
+            
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                Logger.d(TAG, "🔴 isPlaying changed: $isPlaying")
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+        }
     }
     
     // 🔥 加载直播流 - 使用 ViewModel
     LaunchedEffect(roomId) {
+        Logger.d(TAG, "🔴 LaunchedEffect: Loading live stream for roomId=$roomId")
         viewModel.loadLiveStream(roomId)
     }
     
     // 🔥 监听 ViewModel 状态变化，播放新 URL
     LaunchedEffect(uiState) {
         val state = uiState
+        Logger.d(TAG, "🔴 uiState changed: ${state::class.simpleName}")
         if (state is LivePlayerState.Success) {
+            Logger.d(TAG, "🔴 Success state, playUrl: ${state.playUrl.take(80)}...")
+            Logger.d(TAG, "🔴 Current quality: ${state.currentQuality}")
+            Logger.d(TAG, "🔴 Quality list count: ${state.qualityList.size}")
             playLiveStream(state.playUrl)
+        } else if (state is LivePlayerState.Error) {
+            Logger.e(TAG, "❌ Error state: ${state.message}")
         }
     }
     
@@ -265,20 +357,40 @@ fun LivePlayerScreen(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
-                if (uname.isNotEmpty()) {
-                    Text(
-                        text = uname,
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 12.sp
-                    )
+                // 🔥 显示主播名和在线人数
+                val successState = uiState as? LivePlayerState.Success
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (uname.isNotEmpty()) {
+                        Text(
+                            text = uname,
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp
+                        )
+                    }
+                    // 🔥 在线人数
+                    if (successState != null && successState.roomInfo.online > 0) {
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            CupertinoIcons.Default.Eye,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = Color.White.copy(alpha = 0.6f)
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            text = formatOnline(successState.roomInfo.online),
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
             
             // 🔥 画质选择按钮
-            val successState = uiState as? LivePlayerState.Success
-            if (successState != null && successState.qualityList.isNotEmpty()) {
-                val currentQualityLabel = successState.qualityList.find { 
-                    it.qn == successState.currentQuality 
+            val successStateForQuality = uiState as? LivePlayerState.Success
+            if (successStateForQuality != null && successStateForQuality.qualityList.isNotEmpty()) {
+                val currentQualityLabel = successStateForQuality.qualityList.find { 
+                    it.qn == successStateForQuality.currentQuality 
                 }?.desc ?: "自动"
                 
                 Surface(
@@ -327,6 +439,88 @@ fun LivePlayerScreen(
                     tint = Color.White,
                     modifier = Modifier.padding(8.dp)
                 )
+            }
+        }
+        
+        // 🔥🔥 [新增] 底部主播信息卡片 (竖屏模式)
+        if (!isFullscreen) {
+            val successState = uiState as? LivePlayerState.Success
+            if (successState != null && successState.anchorInfo.uname.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                            )
+                        )
+                        .navigationBarsPadding()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 主播头像
+                        AsyncImage(
+                            model = successState.anchorInfo.face,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                        )
+                        
+                        Spacer(Modifier.width(12.dp))
+                        
+                        // 主播信息
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = successState.anchorInfo.uname,
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "${formatFollowers(successState.anchorInfo.followers)} 粉丝",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        
+                        // 🔥 关注按钮
+                        Surface(
+                            onClick = { viewModel.toggleFollow() },
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (successState.isFollowing) 
+                                Color.White.copy(alpha = 0.2f) 
+                            else 
+                                MaterialTheme.colorScheme.primary
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                if (!successState.isFollowing) {
+                                    Icon(
+                                        CupertinoIcons.Default.Plus,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = Color.White
+                                    )
+                                }
+                                Text(
+                                    text = if (successState.isFollowing) "已关注" else "关注",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         

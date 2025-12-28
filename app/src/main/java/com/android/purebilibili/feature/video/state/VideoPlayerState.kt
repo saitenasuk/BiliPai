@@ -1,7 +1,7 @@
 // 文件路径: feature/video/VideoPlayerState.kt
 package com.android.purebilibili.feature.video.state
 
-import com.android.purebilibili.feature.video.MiniPlayerManager
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.VideoActivity
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState

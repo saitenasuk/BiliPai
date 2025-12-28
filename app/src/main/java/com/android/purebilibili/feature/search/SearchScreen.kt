@@ -130,6 +130,32 @@ fun SearchScreen(
                             onDurationChange = { viewModel.setSearchDuration(it) }
                         )
                         
+                        // 🥚 搜索彩蛋消息横幅
+                        val easterEggMsg = state.easterEggMessage
+                        if (easterEggMsg != null) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = easterEggMsg,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
                         // 🔥 根据搜索类型显示不同结果
                         when (state.searchType) {
                             com.android.purebilibili.data.model.response.SearchType.VIDEO -> {

@@ -250,7 +250,7 @@ abstract class BasePlayerViewModel : ViewModel() {
      */
     protected fun loadDanmaku(cid: Long) {
         viewModelScope.launch {
-            val data = VideoRepository.getDanmakuRawData(cid)
+            val data = com.android.purebilibili.data.repository.DanmakuRepository.getDanmakuRawData(cid)
             if (data != null) {
                 _danmakuData.value = data
                 com.android.purebilibili.core.util.Logger.d(TAG, "📝 Danmaku loaded: ${data.size} bytes for cid=$cid")

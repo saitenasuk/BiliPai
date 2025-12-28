@@ -3,7 +3,7 @@ package com.android.purebilibili.feature.video.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.data.model.response.ReplyItem
-import com.android.purebilibili.data.repository.VideoRepository
+import com.android.purebilibili.data.repository.CommentRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -123,7 +123,7 @@ class VideoCommentViewModel : ViewModel() {
         viewModelScope.launch {
             val pageToLoad = currentState.nextPage
             // 🔥 使用当前排序模式
-            val result = VideoRepository.getComments(
+            val result = CommentRepository.getComments(
                 aid = currentAid, 
                 page = pageToLoad, 
                 ps = 20,
@@ -204,7 +204,7 @@ class VideoCommentViewModel : ViewModel() {
 
     private fun loadSubReplies(oid: Long, rootId: Long, page: Int) {
         viewModelScope.launch {
-            val result = VideoRepository.getSubComments(oid, rootId, page)
+            val result = CommentRepository.getSubComments(oid, rootId, page)
             result.onSuccess { data ->
                 val current = _subReplyState.value
                 val newItems = data.replies ?: emptyList()

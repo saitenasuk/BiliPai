@@ -1,4 +1,4 @@
-package com.android.purebilibili.feature.video
+package com.android.purebilibili.feature.video.player
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background

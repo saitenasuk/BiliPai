@@ -49,6 +49,9 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+// 🎬 Lottie 动画
+import com.airbnb.lottie.compose.*
+import com.android.purebilibili.core.ui.LottieUrls
 
 /**
  * 🍎 iOS 风格新手引导底部弹窗
@@ -312,19 +315,40 @@ private fun WelcomePage(hazeState: HazeState) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Logo - 动画项 0
-        AsyncImage(
-            model = R.mipmap.ic_launcher,
-            contentDescription = "BiliPai Logo",
+        // 🎬 Lottie 欢迎动画 - 动画项 0
+        val welcomeComposition by rememberLottieComposition(
+            LottieCompositionSpec.Url("https://assets9.lottiefiles.com/packages/lf20_touohxv0.json") // 欢迎/庆祝动画
+        )
+        val welcomeProgress by animateLottieCompositionAsState(
+            composition = welcomeComposition,
+            iterations = LottieConstants.IterateForever
+        )
+        
+        Box(
             modifier = Modifier
-                .size(100.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .size(120.dp)
                 .graphicsLayer {
                     alpha = animatedItems[0].value
                     scaleX = 0.5f + animatedItems[0].value * 0.5f
                     scaleY = 0.5f + animatedItems[0].value * 0.5f
-                }
-        )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            // 主 Logo
+            AsyncImage(
+                model = R.mipmap.ic_launcher,
+                contentDescription = "BiliPai Logo",
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(20.dp))
+            )
+            // 🎬 Lottie 装饰动画 (环绕效果)
+            LottieAnimation(
+                composition = welcomeComposition,
+                progress = { welcomeProgress },
+                modifier = Modifier.size(120.dp)
+            )
+        }
         
         Spacer(modifier = Modifier.height(24.dp))
         
@@ -435,6 +459,15 @@ private fun AppearanceSettingsPage(hazeState: HazeState) {
         label = "iconScale"
     )
     
+    // 🎬 Lottie 外观主题动画 - 彩虹渐变
+    val themeComposition by rememberLottieComposition(
+        LottieCompositionSpec.Url(LottieUrls.THEME_COLORS)
+    )
+    val themeProgress by animateLottieCompositionAsState(
+        composition = themeComposition,
+        iterations = LottieConstants.IterateForever
+    )
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -444,10 +477,10 @@ private fun AppearanceSettingsPage(hazeState: HazeState) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 图标 - 动画项 0 (毛玻璃效果)
+        // 🎬 Lottie 动画 - 动画项 0
         Box(
             modifier = Modifier
-                .size(80.dp)
+                .size(100.dp)
                 .graphicsLayer {
                     alpha = animatedItems[0].value
                     scaleX = iconScale * (0.5f + animatedItems[0].value * 0.5f)
@@ -455,43 +488,11 @@ private fun AppearanceSettingsPage(hazeState: HazeState) {
                 },
             contentAlignment = Alignment.Center
         ) {
-            // 🔥 毛玻璃光晕背景
-            Box(
-                modifier = Modifier
-                    .size(90.dp)
-                    .blur(20.dp)
-                    .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                                Color.Transparent
-                            )
-                        ),
-                        shape = CircleShape
-                    )
+            LottieAnimation(
+                composition = themeComposition,
+                progress = { themeProgress },
+                modifier = Modifier.size(100.dp)
             )
-            // 主图标容器
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
-                            )
-                        ),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    CupertinoIcons.Default.Paintbrush,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
         }
         
         Spacer(modifier = Modifier.height(24.dp))
@@ -596,6 +597,15 @@ private fun PlaybackSettingsPage(hazeState: HazeState) {
         label = "iconScale"
     )
     
+    // 🎬 Lottie 播放动画 - 视频播放按钮
+    val playComposition by rememberLottieComposition(
+        LottieCompositionSpec.Url(LottieUrls.VIDEO_PLAY)
+    )
+    val playProgress by animateLottieCompositionAsState(
+        composition = playComposition,
+        iterations = LottieConstants.IterateForever
+    )
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -605,10 +615,10 @@ private fun PlaybackSettingsPage(hazeState: HazeState) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 图标 - 动画项 0 (毛玻璃效果)
+        // 🎬 Lottie 动画 - 动画项 0
         Box(
             modifier = Modifier
-                .size(80.dp)
+                .size(100.dp)
                 .graphicsLayer {
                     alpha = animatedItems[0].value
                     scaleX = iconScale * (0.5f + animatedItems[0].value * 0.5f)
@@ -616,43 +626,11 @@ private fun PlaybackSettingsPage(hazeState: HazeState) {
                 },
             contentAlignment = Alignment.Center
         ) {
-            // 🔥 毛玻璃光晕背景
-            Box(
-                modifier = Modifier
-                    .size(90.dp)
-                    .blur(20.dp)
-                    .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f),
-                                Color.Transparent
-                            )
-                        ),
-                        shape = CircleShape
-                    )
+            LottieAnimation(
+                composition = playComposition,
+                progress = { playProgress },
+                modifier = Modifier.size(100.dp)
             )
-            // 主图标容器
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f),
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            )
-                        ),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    CupertinoIcons.Default.PlayCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.secondary
-                )
-            }
         }
         
         Spacer(modifier = Modifier.height(24.dp))

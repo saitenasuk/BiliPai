@@ -45,7 +45,7 @@ class DynamicViewModel : ViewModel() {
     fun loadFollowedUsers() {
         viewModelScope.launch {
             // 获取关注的直播用户（有 liveStatus 字段）
-            VideoRepository.getFollowedLive(page = 1).onSuccess { liveRooms ->
+            com.android.purebilibili.data.repository.LiveRepository.getFollowedLive(page = 1).onSuccess { liveRooms ->
                 // 提取所有关注用户信息
                 val users = extractUsersFromDynamics() + extractUsersFromLive(liveRooms)
                 // 🔥🔥 [修复] 过滤无效用户数据，避免真机崩溃

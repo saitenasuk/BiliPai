@@ -1,5 +1,5 @@
-// 文件路径: feature/video/MiniPlayerManager.kt
-package com.android.purebilibili.feature.video
+// 文件路径: feature/video/player/MiniPlayerManager.kt
+package com.android.purebilibili.feature.video.player
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -42,6 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
+import com.android.purebilibili.feature.video.VideoActivity
 
 private const val TAG = "MiniPlayerManager"
 private const val NOTIFICATION_ID = 1002

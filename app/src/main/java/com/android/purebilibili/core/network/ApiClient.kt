@@ -23,8 +23,20 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
+/**
+ * Bilibili 主 API 接口
+ * 
+ * 功能模块分区:
+ * - 用户信息 (L30-45): getNavInfo, getNavStat, getHistoryList, getFavFolders, getFavoriteList
+ * - 推荐/热门 (L50-70): getRecommendParams, getPopularVideos, getRegionVideos
+ * - 直播 (L75-140): getLiveList, getFollowedLive, getLivePlayUrl 等
+ * - 视频播放 (L145-185): getVideoInfo, getPlayUrl, getDanmakuXml 等
+ * - 评论 (L195-225): getReplyList, getEmotes, getReplyReply
+ * - 用户交互 (L230-295): 点赞/投币/收藏/关注 等
+ * - 稍后再看 (L300-320): getWatchLaterList, addToWatchLater, deleteFromWatchLater
+ */
 interface BilibiliApi {
-    // ... (保留 Nav, Stat, History, Fav 等接口) ...
+    // ==================== 用户信息模块 ====================
     @GET("x/web-interface/nav")
     suspend fun getNavInfo(): NavResponse
 
@@ -49,10 +61,10 @@ interface BilibiliApi {
         @Query("ps") ps: Int = 20
     ): ListResponse<FavoriteData>
 
+    // ==================== 推荐/热门模块 ====================
     @GET("x/web-interface/wbi/index/top/feed/rcmd")
     suspend fun getRecommendParams(@QueryMap params: Map<String, String>): RecommendResponse
     
-    // 🔥🔥 [新增] 热门视频 - 无需签名直接调用
     @GET("x/web-interface/popular")
     suspend fun getPopularVideos(
         @Query("pn") pn: Int = 1,
@@ -68,7 +80,8 @@ interface BilibiliApi {
         @Query("ps") ps: Int = 30
     ): DynamicRegionResponse
     
-    // 🔥🔥 [修复] 直播列表 - 使用 v3 API (经测试确认可用)
+    // ==================== 直播模块 ====================
+    // 直播列表 - 使用 v3 API (经测试确认可用)
     @GET("https://api.live.bilibili.com/room/v3/area/getRoomList")
     suspend fun getLiveList(
         @Query("parent_area_id") parentAreaId: Int = 0,  // 0=全站
@@ -83,6 +96,32 @@ interface BilibiliApi {
         @Query("page") page: Int = 1,
         @Query("page_size") pageSize: Int = 30
     ): FollowedLiveResponse
+    
+    // 🔥🔥 [新增] 获取直播分区列表
+    @GET("https://api.live.bilibili.com/room/v1/Area/getList")
+    suspend fun getLiveAreaList(): LiveAreaListResponse
+    
+    // 🔥🔥 [新增] 分区推荐直播列表 (xlive API)
+    @GET("https://api.live.bilibili.com/xlive/web-interface/v1/second/getList")
+    suspend fun getLiveSecondAreaList(
+        @Query("platform") platform: String = "web",
+        @Query("parent_area_id") parentAreaId: Int,
+        @Query("area_id") areaId: Int = 0,
+        @Query("page") page: Int = 1,
+        @Query("sort_type") sortType: String = "online"
+    ): LiveSecondAreaResponse
+    
+    // 🔥🔥 [新增] 获取直播间初始化信息 (真实房间号)
+    @GET("https://api.live.bilibili.com/room/v1/Room/room_init")
+    suspend fun getLiveRoomInit(
+        @Query("id") roomId: Long
+    ): LiveRoomInitResponse
+    
+    // 🔥🔥 [新增] 获取直播间详细信息 (含主播信息)
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom")
+    suspend fun getLiveRoomDetail(
+        @Query("room_id") roomId: Long
+    ): LiveRoomDetailResponse
     
     // 🔥🔥 [新增] 获取直播间详情（包含在线人数）
     @GET("https://api.live.bilibili.com/room/v1/Room/get_info")
@@ -101,7 +140,16 @@ interface BilibiliApi {
         @Query("platform") platform: String = "web",
         @Query("ptype") ptype: Int = 8
     ): LivePlayUrlResponse
+    
+    // 🔥🔥 [新增] 旧版直播流 API - 可靠返回 quality_description 画质列表
+    @GET("https://api.live.bilibili.com/room/v1/Room/playUrl")
+    suspend fun getLivePlayUrlLegacy(
+        @Query("cid") cid: Long,              // 房间号 (room_id)
+        @Query("qn") qn: Int = 10000,         // 画质: 10000最高, 150高清, 80流畅
+        @Query("platform") platform: String = "web"
+    ): LivePlayUrlResponse
 
+    // ==================== 视频播放模块 ====================
     @GET("x/web-interface/view")
     suspend fun getVideoInfo(@Query("bvid") bvid: String): VideoDetailResponse
     
@@ -158,7 +206,8 @@ interface BilibiliApi {
         @Query("segment_index") segmentIndex: Int  // 分段索引 (从 1 开始)
     ): ResponseBody
 
-    // 🔥🔥 [核心修改] 改为 wbi 路径，并接收 Map 参数以支持签名
+    // ==================== 评论模块 ====================
+    // 评论主列表 (需 WBI 签名)
     @GET("x/v2/reply/wbi/main")
     suspend fun getReplyList(@QueryMap params: Map<String, String>): ReplyResponse
     
@@ -186,7 +235,8 @@ interface BilibiliApi {
         @Query("ps") ps: Int = 20 // 每页数量
     ): ReplyResponse // 复用 ReplyResponse 结构
     
-    // 🔥🔥 [新增] 查询与 UP 主的关注关系
+    // ==================== 用户交互模块 ====================
+    // 查询与 UP 主的关注关系
     @GET("x/relation")
     suspend fun getRelation(
         @Query("fid") fid: Long  // UP 主 mid
@@ -265,7 +315,7 @@ interface BilibiliApi {
         @Query("cid") cid: Long
     ): OnlineResponse
     
-    // 🔥🔥 [新增] 稍后再看列表
+    // ==================== 稍后再看模块 ====================
     @GET("x/v2/history/toview")
     suspend fun getWatchLaterList(): WatchLaterResponse
     
