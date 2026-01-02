@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-3.1.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-3.3.6-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -50,6 +50,7 @@
 | **手势控制** | 左侧上下滑动调节亮度，右侧调节音量，左右滑动快进/快退 |
 | **倍速播放** | 0.5x / 0.75x / 1.0x / 1.25x / 1.5x / 2.0x |
 | **画中画** | 悬浮小窗播放，多任务无缝切换 |
+| **听视频模式** | 🆕 专属音频播放界面，支持沉浸式/黑胶唱片模式，歌词显示与播放列表管理 |
 | **后台播放** | 锁屏/切后台继续听，支持通知栏控制 |
 | **播放记忆** | 自动记录观看进度，下次打开继续播放 |
 | **TV 登录** | 支持 TV 端扫码登录，解锁大会员专属高画质 |
@@ -345,12 +346,12 @@ app/src/main/java/com/android/purebilibili/
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v3.0.6)
+### 最近更新 (v3.3.6)
 
-- 🎨 动态页面重构：Tab 切换、GIF 支持、@ 高亮
-- ✨ 首页卡片共享元素过渡动画
-- 🔧 iOS 风格下拉刷新指示器
-- 🐛 修复 DanmakuManager 内存泄漏
+- � **听视频模式**: 全新音频播放界面，支持封面/黑胶模式切换，沉浸式体验
+- 💄 **UI 优化**: 设置页返回首页新增 iOS 风格右滑过渡动画
+- 🐛 **Bug 修复**: 修复音频模式进度条拖拽声音消失、封面切换延迟等问题
+- ⚡ **性能优化**: 优化图片加载与内存占用
 
 ---
 
