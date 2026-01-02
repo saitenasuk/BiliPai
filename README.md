@@ -407,6 +407,9 @@ cd BiliPai
 | [Retrofit](https://github.com/square/retrofit) | HTTP 网络请求 |
 | [OkHttp](https://github.com/square/okhttp) | HTTP 客户端 |
 | [Firebase Crashlytics](https://firebase.google.com/docs/crashlytics) | 崩溃追踪分析 |
+| [Orbital](https://github.com/skydoves/Orbital) | 共享元素过渡动画 |
+| [AndroidX Palette](https://developer.android.com/training/material/palette-colors) | 动态取色引擎 |
+| [LeakCanary](https://github.com/square/leakcanary) | 内存泄漏检测 |
 
 ---
 
