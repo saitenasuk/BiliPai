@@ -44,44 +44,57 @@ fun PlaybackSettingsScreen(
     viewModel: SettingsViewModel = viewModel(),
     onBack: () -> Unit
 ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("播放设置", fontWeight = FontWeight.SemiBold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0.dp)
+    ) { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+             PlaybackSettingsSheetContent(viewModel = viewModel)
+        }
+    }
+}
+
+/**
+ * 播放设置内容 - 可在 BottomSheet 中复用
+ */
+@Composable
+fun PlaybackSettingsSheetContent(
+    viewModel: SettingsViewModel,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     
     var isStatsEnabled by remember { mutableStateOf(prefs.getBoolean("show_stats", false)) }
     var showPipPermissionDialog by remember { mutableStateOf(false) }
+    
+    // 获取动态圆角用于统一风格
+    // 注意：这里需要导入 LocalCornerRadiusScale，如果该文件没有导入，可能需要添加。
+    // 假设 iOSCornerRadius 和 LocalCornerRadiusScale 未在此文件导入，先使用硬编码或尝试导入
+    // 为了稳妥，这里先检查导入。原文件没有导入这些。
+    // 但为了保持原样，我先不做动态圆角修改，或者之后再做。
+    
     val miniPlayerMode by com.android.purebilibili.core.store.SettingsManager
         .getMiniPlayerMode(context).collectAsState(
             initial = com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY
         )
-    val pipLevel = when (miniPlayerMode) {
-        com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF -> 0.2f
-        com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY -> 0.45f
-        com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP -> 0.7f
-        com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.BACKGROUND -> 0.9f
-    }
-    val playbackInteractionLevel = (
-        pipLevel +
-            if (state.hwDecode) 0.15f else 0f +
-            if (isStatsEnabled) 0.1f else 0f
-        ).coerceIn(0f, 1f)
     
-    //  [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
-    val view = androidx.compose.ui.platform.LocalView.current
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        val window = (context as? android.app.Activity)?.window
-        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
-        
-        if (window != null) {
-            window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        }
-        
-        onDispose {
-            if (window != null) {
-                window.navigationBarColor = originalNavBarColor
-            }
-        }
-    }
+    // ... [保留原有逻辑: checkPipPermission, gotoPipSettings] ...
     
     // 检查画中画权限
     fun checkPipPermission(): Boolean {
@@ -123,7 +136,7 @@ fun PlaybackSettingsScreen(
         }
     }
     
-    // 权限弹窗
+    // 权限弹窗逻辑
     if (showPipPermissionDialog) {
         AlertDialog(
             onDismissRequest = { showPipPermissionDialog = false },
@@ -147,32 +160,10 @@ fun PlaybackSettingsScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("播放设置", fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        //  [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，避免底部填充
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            //  [修复] 添加底部导航栏内边距，确保沉浸式效果
-            contentPadding = WindowInsets.navigationBars.asPaddingValues()
-        ) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = WindowInsets.navigationBars.asPaddingValues()
+    ) {
             
             //  解码设置
             item { SettingsSectionTitle("解码") }
@@ -717,6 +708,5 @@ fun PlaybackSettingsScreen(
             }
             
             item { Spacer(modifier = Modifier.height(32.dp)) }
-        }
-    }
+}
 }

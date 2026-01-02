@@ -588,6 +588,57 @@ fun AppearanceSettingsScreen(
                     )
                 }
             }
+            
+            //  [新增] UI 自定义 - 圆角、字体、缩放
+            item { SettingsSectionTitle("界面自定义") }
+            item {
+                SettingsGroup {
+                    // 圆角大小 (0.5x - 1.5x)
+                    SliderSettingItem(
+                        title = "圆角大小",
+                        value = state.cornerRadiusScale,
+                        range = 0.5f..1.5f,
+                        onValueChange = { viewModel.setCornerRadiusScale(it) },
+                        steps = 19, // 0.05 per step
+                        icon = CupertinoIcons.Default.Crop
+                    )
+                    
+                    Divider()
+                    
+                    // 字体大小 (0.8x - 1.4x)
+                    SliderSettingItem(
+                        title = "字体大小",
+                        value = state.fontScale,
+                        range = 0.8f..1.4f,
+                        onValueChange = { viewModel.setFontScale(it) },
+                        steps = 11, // 0.05 per step
+                        icon = CupertinoIcons.Default.Character
+                    )
+
+                    Divider()
+
+                    // UI 缩放 (0.9x - 1.2x)
+                    SliderSettingItem(
+                        title = "UI 缩放",
+                        value = state.uiScale,
+                        range = 0.9f..1.2f,
+                        onValueChange = { viewModel.setUIScale(it) },
+                        steps = 5, // 0.05 per step
+                        icon = CupertinoIcons.Default.Gear
+                    )
+                    
+                    Divider()
+                    
+                    // 实时预览卡片
+                    Box(modifier = Modifier.padding(16.dp)) {
+                        UICustomizationPreviewCard(
+                            cornerRadiusScale = state.cornerRadiusScale,
+                            fontScale = state.fontScale,
+                            uiScale = state.uiScale
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -823,5 +874,99 @@ fun ColorPreviewItem(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+fun SliderSettingItem(
+    title: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+    steps: Int = 0,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = String.format("%.2fx", value),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = range,
+            steps = steps,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+/**
+ *  UI 自定义预览卡片
+ */
+@Composable
+fun UICustomizationPreviewCard(
+    cornerRadiusScale: Float,
+    fontScale: Float,
+    uiScale: Float
+) {
+    val cornerRadius = 12.dp * cornerRadiusScale * uiScale
+    val padding = 16.dp * uiScale
+    
+    // 使用 LocalFontScale 和 LocalUIScale 模拟效果已在 Theme 中集成
+    // 这里做个简单的视觉展示
+    Surface(
+        shape = RoundedCornerShape(cornerRadius),
+        color = iOSTeal.copy(alpha = 0.18f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(padding)
+        ) {
+            Text(
+                text = "预览效果",
+                style = MaterialTheme.typography.titleMedium,
+                fontSize = MaterialTheme.typography.titleMedium.fontSize * fontScale * uiScale,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp * uiScale))
+            Text(
+                text = "调整滑块查看实时变化。\n圆角：${String.format("%.1f", cornerRadius.value)}dp",
+                style = MaterialTheme.typography.bodyMedium,
+                fontSize = MaterialTheme.typography.bodyMedium.fontSize * fontScale * uiScale
+            )
+            Spacer(modifier = Modifier.height(12.dp * uiScale))
+            Button(
+                onClick = {},
+                shape = RoundedCornerShape(8.dp * cornerRadiusScale * uiScale),
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text(
+                    text = "确认",
+                    fontSize = MaterialTheme.typography.labelLarge.fontSize * fontScale * uiScale
+                )
+            }
+        }
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -55,10 +56,20 @@ fun PureBiliBiliTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     themeColorIndex: Int = 0, //  默认 0 = iOS 蓝色
+    cornerRadiusScale: Float = 1.0f,
+    fontScale: Float = 1.0f,
+    uiScale: Float = 1.0f,
     content: @Composable () -> Unit
 ) {
     //  获取自定义主题色 (默认 iOS 蓝)
     val customPrimaryColor = ThemeColors.getOrElse(themeColorIndex) { iOSSystemBlue }
+    
+    //  [新增] 提供动态圆角和缩放比例
+    val shapes = rememberDynamicShapes(cornerRadiusScale)
+    
+    //  [TODO] 字体缩放目前主要通过 UI 缩放配合字体大小调整来实现，
+    //  或者后续可以在 Typography 中应用 fontScale。
+    //  这里主要提供 CompositionLocal 供组件自适应。
     
     val colorScheme = when {
         // 如果开启了动态取色 且 系统版本 >= Android 12 (S)
@@ -83,9 +94,16 @@ fun PureBiliBiliTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = BiliTypography,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalCornerRadiusScale provides cornerRadiusScale,
+        LocalFontScale provides fontScale,
+        LocalUIScale provides uiScale
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = BiliTypography,
+            shapes = shapes, // 应用动态圆角
+            content = content
+        )
+    }
 }

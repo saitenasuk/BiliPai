@@ -811,4 +811,73 @@ object SettingsManager {
     suspend fun setSwipeHidePlayerEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_SWIPE_HIDE_PLAYER] = value }
     }
+    
+    // ==========  界面自定义设置 ==========
+    
+    private val KEY_CORNER_RADIUS_SCALE = floatPreferencesKey("corner_radius_scale")
+    private val KEY_FONT_SCALE = floatPreferencesKey("ui_font_scale")
+    private val KEY_UI_SCALE = floatPreferencesKey("ui_scale")
+    
+    /**
+     *  圆角大小比例 (0.5 ~ 1.5, 默认 1.0)
+     * 控制全局 UI 圆角大小
+     */
+    fun getCornerRadiusScale(context: Context): Flow<Float> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_CORNER_RADIUS_SCALE] ?: 1.0f }
+
+    suspend fun setCornerRadiusScale(context: Context, value: Float) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_CORNER_RADIUS_SCALE] = value.coerceIn(0.5f, 1.5f) 
+        }
+    }
+    
+    //  同步读取圆角比例
+    fun getCornerRadiusScaleSync(context: Context): Float {
+        return context.getSharedPreferences("ui_customization", Context.MODE_PRIVATE)
+            .getFloat("corner_radius_scale", 1.0f)
+    }
+    
+    /**
+     *  字体大小比例 (0.8 ~ 1.4, 默认 1.0)
+     * 控制全局字体大小
+     */
+    fun getFontScale(context: Context): Flow<Float> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FONT_SCALE] ?: 1.0f }
+
+    suspend fun setFontScale(context: Context, value: Float) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_FONT_SCALE] = value.coerceIn(0.8f, 1.4f) 
+        }
+        //  同步到 SharedPreferences
+        context.getSharedPreferences("ui_customization", Context.MODE_PRIVATE)
+            .edit().putFloat("font_scale", value).apply()
+    }
+    
+    //  同步读取字体比例
+    fun getFontScaleSync(context: Context): Float {
+        return context.getSharedPreferences("ui_customization", Context.MODE_PRIVATE)
+            .getFloat("font_scale", 1.0f)
+    }
+    
+    /**
+     *  UI 整体缩放比例 (0.9 ~ 1.2, 默认 1.0)
+     * 控制 UI 元素整体大小
+     */
+    fun getUIScale(context: Context): Flow<Float> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_UI_SCALE] ?: 1.0f }
+
+    suspend fun setUIScale(context: Context, value: Float) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_UI_SCALE] = value.coerceIn(0.9f, 1.2f) 
+        }
+        //  同步到 SharedPreferences
+        context.getSharedPreferences("ui_customization", Context.MODE_PRIVATE)
+            .edit().putFloat("ui_scale", value).apply()
+    }
+    
+    //  同步读取 UI 缩放
+    fun getUIScaleSync(context: Context): Float {
+        return context.getSharedPreferences("ui_customization", Context.MODE_PRIVATE)
+            .getFloat("ui_scale", 1.0f)
+    }
 }

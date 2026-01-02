@@ -51,6 +51,8 @@ import io.github.alexzhirkevich.cupertino.CupertinoSlider
 import io.github.alexzhirkevich.cupertino.CupertinoSliderDefaults
 import io.github.alexzhirkevich.cupertino.theme.CupertinoColors
 import com.android.purebilibili.feature.onboarding.OnboardingBottomSheet
+import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.iOSCornerRadius
 import dev.chrisbanes.haze.haze
 
 const val GITHUB_URL = "https://github.com/jay3-yy/BiliPai/"
@@ -65,6 +67,7 @@ fun SettingsScreen(
     onPlaybackClick: () -> Unit = {},      //  播放设置
     onPermissionClick: () -> Unit = {},    //  权限管理
     onPluginsClick: () -> Unit = {},       //  插件中心
+    onNavigateToBottomBarSettings: () -> Unit = {},
     mainHazeState: dev.chrisbanes.haze.HazeState? = null //  接收全局 Haze 状态
 ) {
     val context = LocalContext.current
@@ -80,6 +83,8 @@ fun SettingsScreen(
     
     //  [新增] 用于重播新手引导
     var showOnboardingReplay by remember { mutableStateOf(false) }
+    
+
     
     //  缓存清理动画状态
     var showCacheAnimation by remember { mutableStateOf(false) }
@@ -292,7 +297,7 @@ fun SettingsScreen(
                             icon = CupertinoIcons.Default.Paintpalette,
                             title = "外观设置",
                             value = "主题、图标、模糊效果",
-                            onClick = onAppearanceClick,
+                            onClick = onAppearanceClick,  // [改] 使用 BottomSheet
                             iconTint = iOSPink
                         )
                         Divider()
@@ -300,7 +305,7 @@ fun SettingsScreen(
                             icon = CupertinoIcons.Default.Play,
                             title = "播放设置",
                             value = "解码、手势、后台播放",
-                            onClick = onPlaybackClick,
+                            onClick = onPlaybackClick,  // [改] 使用 BottomSheet
                             iconTint = iOSGreen
                         )
                     }
@@ -593,6 +598,8 @@ fun SettingsScreen(
             onDismiss = { showOnboardingReplay = false },
             mainHazeState = settingsHazeState  // 使用设置页面本地的 haze 状态
         )
+        
+
     }
 }
 
@@ -610,12 +617,16 @@ fun SettingsSectionTitle(title: String) {
 
 @Composable
 fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+    // [新增] 获取圆角缩放比例
+    val cornerRadiusScale = LocalCornerRadiusScale.current
+    val groupCornerRadius = iOSCornerRadius.Medium * cornerRadiusScale  // 12.dp * scale
+    
     Surface(
         modifier = Modifier
             .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(12.dp)),  //  iOS 圆角
+            .clip(RoundedCornerShape(groupCornerRadius)),  // 动态圆角
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 0.dp,  //  iOS 不太使用阴影
+        shadowElevation = 0.dp,  // iOS 不太使用阴影
         tonalElevation = 1.dp
     ) {
         Column(content = content)
@@ -632,6 +643,10 @@ fun SettingSwitchItem(
     //  新增：图标颜色
     iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
+    // [新增] 获取圆角缩放比例
+    val cornerRadiusScale = LocalCornerRadiusScale.current
+    val iconCornerRadius = iOSCornerRadius.Small * cornerRadiusScale  // 10.dp * scale
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -644,7 +659,7 @@ fun SettingSwitchItem(
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(iconCornerRadius))  // 动态圆角
                     .background(iconTint.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -683,6 +698,10 @@ fun SettingClickableItem(
     //  新增：图标颜色
     iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
+    // [新增] 获取圆角缩放比例
+    val cornerRadiusScale = LocalCornerRadiusScale.current
+    val iconCornerRadius = iOSCornerRadius.Small * cornerRadiusScale  // 10.dp * scale
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -696,7 +715,7 @@ fun SettingClickableItem(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(iconCornerRadius))  // 动态圆角
                         .background(iconTint.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {

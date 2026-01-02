@@ -31,6 +31,8 @@ import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.theme.iOSSystemGray
+import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.util.iOSCardTapEffect
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -64,6 +66,11 @@ fun ElegantVideoCard(
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
+    
+    //  [新增] 获取圆角缩放比例
+    val cornerRadiusScale = LocalCornerRadiusScale.current
+    val cardCornerRadius = iOSCornerRadius.Small * cornerRadiusScale  // 10.dp * scale
+    val smallCornerRadius = iOSCornerRadius.Tiny * cornerRadiusScale  // 4.dp * scale
     
     //  [新增] 长按删除菜单状态
     var showDismissMenu by remember { mutableStateOf(false) }
@@ -147,7 +154,7 @@ fun ElegantVideoCard(
                             )
                         },
                         clipInOverlayDuringTransition = OverlayClip(
-                            RoundedCornerShape(8.dp)  //  过渡时保持圆角
+                            RoundedCornerShape(cardCornerRadius)  //  过渡时保持动态圆角
                         )
                     )
             }
@@ -161,11 +168,11 @@ fun ElegantVideoCard(
                 .aspectRatio(16f / 10f)
                 .shadow(
                     elevation = 1.dp,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(cardCornerRadius),
                     ambientColor = Color.Black.copy(alpha = 0.08f),
                     spotColor = Color.Black.copy(alpha = 0.10f)
                 )
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(cardCornerRadius))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             // 📉 [省流量] 根据省流量模式动态调整图片尺寸
@@ -211,7 +218,7 @@ fun ElegantVideoCard(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(6.dp),
-                shape = RoundedCornerShape(4.dp),
+                shape = RoundedCornerShape(smallCornerRadius),
                 color = Color.Black.copy(alpha = 0.7f)
             ) {
                 Text(

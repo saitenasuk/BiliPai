@@ -702,7 +702,7 @@ fun HomeScreen(
                             state = pullRefreshState,
                             isRefreshing = isRefreshing,
                             modifier = Modifier
-                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
                                 .padding(top = 100.dp)  //  刷新提示位置
                         )
                     }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -203,4 +204,282 @@ fun Modifier.bouncyClickable(
             indication = null,
             onClick = onClick
         )
+}
+
+// =============================================================================
+//  物理动画效果 - 符合真实物理规律的交互动画
+// =============================================================================
+
+/**
+ *  重力下落动画 (Gravity Drop)
+ * 
+ * 模拟物体从高处落下并反弹的效果，适用于：
+ * - 弹窗/对话框出现
+ * - 卡片入场
+ * - 删除确认动画
+ * 
+ * @param enabled 是否启用动画
+ * @param initialOffsetY 初始下落高度 (负值表示从上方落下)
+ * @param bounceCount 反弹次数
+ */
+fun Modifier.gravityDrop(
+    enabled: Boolean = true,
+    initialOffsetY: Float = -200f,
+    bounceCount: Int = 2
+): Modifier = composed {
+    if (!enabled) return@composed this
+    
+    val offsetY = remember { Animatable(initialOffsetY) }
+    val alpha = remember { Animatable(0f) }
+    
+    LaunchedEffect(Unit) {
+        // 淡入
+        launch { alpha.animateTo(1f, tween(150)) }
+        
+        // 模拟重力下落 + 反弹
+        // 使用递减的反弹高度模拟能量损耗
+        var currentBounce = 0
+        var bounceHeight = -initialOffsetY * 0.3f
+        
+        // 初始下落
+        offsetY.animateTo(
+            targetValue = 0f,
+            animationSpec = spring(
+                dampingRatio = 0.5f,  // 弹性
+                stiffness = 300f
+            )
+        )
+        
+        // 反弹循环
+        while (currentBounce < bounceCount && bounceHeight > 5f) {
+            offsetY.animateTo(
+                targetValue = -bounceHeight,
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f)
+            )
+            offsetY.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(dampingRatio = 0.6f, stiffness = 350f)
+            )
+            bounceHeight *= 0.5f  // 每次反弹高度减半
+            currentBounce++
+        }
+    }
+    
+    this.graphicsLayer {
+        translationY = offsetY.value
+        this.alpha = alpha.value
+    }
+}
+
+/**
+ *  橡皮筋效果 (Rubber Band)
+ * 
+ * 类似 iOS 滚动到边界时的弹性拉伸效果，适用于：
+ * - 边界滚动
+ * - 下拉刷新
+ * - 过度拖拽
+ * 
+ * @param dragOffset 当前拖拽偏移量
+ * @param resistance 阻力系数 (0-1)，越大阻力越强
+ */
+fun Modifier.rubberBand(
+    dragOffset: Float,
+    resistance: Float = 0.55f
+): Modifier = composed {
+    // 使用对数函数创建自然的阻力递增效果
+    val dampedOffset = remember(dragOffset, resistance) {
+        if (dragOffset == 0f) 0f
+        else {
+            val sign = if (dragOffset > 0) 1f else -1f
+            val absOffset = kotlin.math.abs(dragOffset)
+            sign * (1f - resistance) * absOffset * (1f - kotlin.math.exp(-absOffset / 300f))
+        }
+    }
+    
+    this.graphicsLayer {
+        translationY = dampedOffset
+    }
+}
+
+/**
+ *  钟摆摇摆动画 (Pendulum Swing)
+ * 
+ * 模拟钟摆的自然摇摆效果，适用于：
+ * - 通知提醒
+ * - 注意力引导
+ * - 错误提示
+ * 
+ * @param trigger 触发摇摆的标识 (变化时触发)
+ * @param initialAngle 初始摇摆角度
+ */
+fun Modifier.pendulumSwing(
+    trigger: Any,
+    initialAngle: Float = 15f
+): Modifier = composed {
+    val rotation = remember { Animatable(0f) }
+    
+    LaunchedEffect(trigger) {
+        // 使用渐衰的摇摆模拟钟摆
+        var angle = initialAngle
+        var direction = 1f
+        
+        while (angle > 0.5f) {
+            rotation.animateTo(
+                targetValue = angle * direction,
+                animationSpec = spring(
+                    dampingRatio = 0.3f,  // 低阻尼产生持续摇摆
+                    stiffness = 200f
+                )
+            )
+            direction *= -1  // 反向
+            angle *= 0.7f    // 衰减
+        }
+        
+        // 归位
+        rotation.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 300f))
+    }
+    
+    this.graphicsLayer {
+        rotationZ = rotation.value
+    }
+}
+
+/**
+ *  呼吸动画 (Breathing Effect)
+ * 
+ * 模拟生物呼吸的周期性缩放效果，适用于：
+ * - 录制中状态
+ * - 等待/加载提示
+ * - 引导用户注意
+ * 
+ * @param enabled 是否启用动画
+ * @param minScale 最小缩放
+ * @param maxScale 最大缩放
+ * @param durationMs 一个呼吸周期的时长
+ */
+fun Modifier.breathe(
+    enabled: Boolean = true,
+    minScale: Float = 0.95f,
+    maxScale: Float = 1.05f,
+    durationMs: Int = 2000
+): Modifier = composed {
+    if (!enabled) return@composed this
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "breathe")
+    
+    val scale by infiniteTransition.animateFloat(
+        initialValue = minScale,
+        targetValue = maxScale,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = durationMs / 2,
+                easing = FastOutSlowInEasing  // 自然的加速减速
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathe_scale"
+    )
+    
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = durationMs / 2, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathe_alpha"
+    )
+    
+    this.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
+        this.alpha = alpha
+    }
+}
+
+/**
+ *  3D 透视倾斜效果 (Perspective Tilt)
+ * 
+ * 根据按压位置产生 3D 倾斜效果，模拟真实卡片被按压的物理反馈，适用于：
+ * - 卡片点击
+ * - 按钮交互
+ * 
+ * @param pressOffset 按压点相对于中心的偏移 (Offset)
+ * @param isPressed 是否处于按压状态
+ * @param maxRotation 最大旋转角度
+ */
+fun Modifier.perspectiveTilt(
+    pressOffset: Offset = Offset.Zero,
+    isPressed: Boolean = false,
+    maxRotation: Float = 8f
+): Modifier = composed {
+    val rotationX by animateFloatAsState(
+        targetValue = if (isPressed) -pressOffset.y.coerceIn(-1f, 1f) * maxRotation else 0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 300f),
+        label = "tilt_rotationX"
+    )
+    
+    val rotationY by animateFloatAsState(
+        targetValue = if (isPressed) pressOffset.x.coerceIn(-1f, 1f) * maxRotation else 0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 300f),
+        label = "tilt_rotationY"
+    )
+    
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+        label = "tilt_scale"
+    )
+    
+    this.graphicsLayer {
+        this.rotationX = rotationX
+        this.rotationY = rotationY
+        scaleX = scale
+        scaleY = scale
+        // 增加透视感
+        cameraDistance = 12f * density
+    }
+}
+
+/**
+ *  弹跳入场动画 (Bounce In)
+ * 
+ * 元素从下方弹入并带有过冲效果，适用于：
+ * - 底栏图标切换
+ * - 列表项入场
+ * 
+ * @param visible 是否可见
+ * @param initialOffsetY 初始 Y 偏移
+ */
+fun Modifier.bounceIn(
+    visible: Boolean,
+    initialOffsetY: Float = 30f
+): Modifier = composed {
+    val offsetY by animateFloatAsState(
+        targetValue = if (visible) 0f else initialOffsetY,
+        animationSpec = spring(
+            dampingRatio = 0.4f,  // 明显过冲
+            stiffness = 350f
+        ),
+        label = "bounce_in_offset"
+    )
+    
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(200),
+        label = "bounce_in_alpha"
+    )
+    
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.8f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+        label = "bounce_in_scale"
+    )
+    
+    this.graphicsLayer {
+        translationY = offsetY
+        this.alpha = alpha
+        scaleX = scale
+        scaleY = scale
+    }
 }

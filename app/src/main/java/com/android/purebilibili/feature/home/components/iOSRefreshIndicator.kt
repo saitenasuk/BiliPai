@@ -50,10 +50,13 @@ fun iOSRefreshIndicator(
         else -> ""
     }
     
-    //  箭头旋转角度（下拉超过阈值时翻转）
+    //  箭头旋转角度（下拉超过阈值时翻转）- 使用低阻尼弹簧实现过冲
     val arrowRotation by animateFloatAsState(
         targetValue = if (isOverThreshold) 180f else 0f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 300f),
+        animationSpec = spring(
+            dampingRatio = 0.4f,  // 低阻尼 = 过冲弹跳
+            stiffness = 250f
+        ),
         label = "arrow_rotation"
     )
     
@@ -64,11 +67,32 @@ fun iOSRefreshIndicator(
         label = "alpha"
     )
     
-    //  缩放动画
+    //  缩放动画 - 增强弹性，释放时过冲
     val scale by animateFloatAsState(
-        targetValue = (progress.coerceIn(0f, 1f) * 0.4f + 0.6f).coerceAtMost(1f),
-        animationSpec = spring(dampingRatio = 0.8f),
+        targetValue = when {
+            isRefreshing -> 1f
+            isOverThreshold -> 1.1f  // 超过阈值时放大
+            else -> (progress.coerceIn(0f, 1f) * 0.4f + 0.6f).coerceAtMost(1f)
+        },
+        animationSpec = spring(
+            dampingRatio = 0.45f,  // 低阻尼产生过冲
+            stiffness = 300f
+        ),
         label = "scale"
+    )
+    
+    //  [新增] Y 轴弹跳偏移 - 模拟橡皮筋拉伸感
+    val bounceY by animateFloatAsState(
+        targetValue = when {
+            isRefreshing -> 0f
+            isOverThreshold -> -8f  // 超过阈值向上弹起
+            else -> 0f
+        },
+        animationSpec = spring(
+            dampingRatio = 0.35f,  // 强过冲
+            stiffness = 350f
+        ),
+        label = "bounceY"
     )
     
     Box(
@@ -78,13 +102,16 @@ fun iOSRefreshIndicator(
                 this.alpha = alpha
                 this.scaleX = scale
                 this.scaleY = scale
+                translationY = bounceY  // Y 轴弹跳
             },
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(vertical = 12.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp)
         ) {
             if (isRefreshing) {
                 //  iOS 风格转轮

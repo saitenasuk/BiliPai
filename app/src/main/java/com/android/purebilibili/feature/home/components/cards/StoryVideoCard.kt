@@ -40,6 +40,8 @@ import androidx.compose.animation.core.spring
 
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.iOSCornerRadius
 
 /**
  *  故事卡片 - Apple TV+ 风格
@@ -61,6 +63,11 @@ fun StoryVideoCard(
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
+    
+    // [新增] 获取圆角缩放比例
+    val cornerRadiusScale = LocalCornerRadiusScale.current
+    val cardCornerRadius = iOSCornerRadius.ExtraLarge * cornerRadiusScale  // 20.dp * scale
+    val smallCornerRadius = iOSCornerRadius.Small * cornerRadiusScale - 2.dp  // 8.dp * scale
     
     //  [新增] 长按删除菜单状态
     var showDismissMenu by remember { mutableStateOf(false) }
@@ -97,7 +104,7 @@ fun StoryVideoCard(
                         )
                     },
                     clipInOverlayDuringTransition = OverlayClip(
-                        RoundedCornerShape(20.dp)  //  过渡时保持圆角
+                        RoundedCornerShape(cardCornerRadius)  // 过渡时保持动态圆角
                     )
                 )
         }
@@ -117,11 +124,11 @@ fun StoryVideoCard(
             }
             .shadow(
                 elevation = 12.dp,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(cardCornerRadius),
                 ambientColor = Color.Black.copy(alpha = 0.2f),
                 spotColor = Color.Black.copy(alpha = 0.25f)
             )
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(cardCornerRadius))
             .background(Color.Black)
             //  [新增] 长按手势检测
             .pointerInput(onDismiss) {
@@ -173,7 +180,7 @@ fun StoryVideoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 1f)
-                .clip(RoundedCornerShape(20.dp)),  //  图片也要 clip
+                .clip(RoundedCornerShape(cardCornerRadius)),  // 图片也要 clip
             contentScale = ContentScale.Crop
         )
         
@@ -182,7 +189,7 @@ fun StoryVideoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 1f)
-                .clip(RoundedCornerShape(20.dp))  //  遮罩也要 clip
+                .clip(RoundedCornerShape(cardCornerRadius))  // 遮罩也要 clip
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
@@ -201,7 +208,7 @@ fun StoryVideoCard(
                 .align(Alignment.TopEnd)
                 .padding(12.dp),
             color = Color.Black.copy(alpha = 0.75f),
-            shape = RoundedCornerShape(8.dp)  //  稍大圆角
+            shape = RoundedCornerShape(smallCornerRadius)  // 动态圆角
         ) {
             Text(
                 text = FormatUtils.formatDuration(video.duration),

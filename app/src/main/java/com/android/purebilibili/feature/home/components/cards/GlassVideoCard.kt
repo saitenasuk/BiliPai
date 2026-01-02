@@ -36,6 +36,8 @@ import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -66,6 +68,13 @@ fun GlassVideoCard(
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
+    
+    // [新增] 获取圆角缩放比例
+    val cornerRadiusScale = LocalCornerRadiusScale.current
+    val cardCornerRadius = iOSCornerRadius.ExtraLarge * cornerRadiusScale  // 20.dp * scale
+    val coverCornerRadius = iOSCornerRadius.Large * cornerRadiusScale + 2.dp  // 16.dp * scale
+    val tagCornerRadius = iOSCornerRadius.Small * cornerRadiusScale  // 10.dp * scale
+    val smallTagRadius = iOSCornerRadius.ExtraSmall * cornerRadiusScale  // 6.dp * scale
     
     //  [新增] 长按删除菜单状态
     var showDismissMenu by remember { mutableStateOf(false) }
@@ -121,7 +130,7 @@ fun GlassVideoCard(
                         )
                     },
                     clipInOverlayDuringTransition = OverlayClip(
-                        RoundedCornerShape(20.dp)  //  过渡时保持圆角
+                        RoundedCornerShape(cardCornerRadius)  // 过渡时保持动态圆角
                     )
                 )
         }
@@ -148,14 +157,14 @@ fun GlassVideoCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                // 🌈 彩虹渐变边框
+                .clip(RoundedCornerShape(cardCornerRadius))
+                // 彩虹渐变边框
                 .border(
                     width = 1.5.dp,
                     brush = Brush.sweepGradient(
                         colors = rainbowColors.map { it.copy(alpha = 0.6f) }
                     ),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(cardCornerRadius)
                 )
                 // 单层轻量阴影
                 .background(glassBackground)
@@ -205,10 +214,10 @@ fun GlassVideoCard(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(coverCornerRadius))
                             .shadow(
                                 elevation = 8.dp,
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(coverCornerRadius),
                                 ambientColor = Color.Black.copy(alpha = 0.3f)
                             )
                     ) {
@@ -249,7 +258,7 @@ fun GlassVideoCard(
                                 .align(Alignment.BottomEnd)
                                 .padding(10.dp),
                             color = Color.Black.copy(alpha = 0.7f),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(tagCornerRadius)
                         ) {
                             Text(
                                 text = FormatUtils.formatDuration(video.duration),
@@ -267,7 +276,7 @@ fun GlassVideoCard(
                                     .align(Alignment.TopStart)
                                     .padding(10.dp),
                                 color = Color(0xFF00D1B2).copy(alpha = 0.9f),
-                                shape = RoundedCornerShape(6.dp)
+                                shape = RoundedCornerShape(smallTagRadius)
                             ) {
                                 Text(
                                     text = "竖屏",
@@ -308,7 +317,7 @@ fun GlassVideoCard(
                         // UP主名称 - 使用主题色 + 渐变背景
                         Surface(
                             color = primaryColor.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(6.dp)
+                            shape = RoundedCornerShape(smallTagRadius)
                         ) {
                             Text(
                                 text = video.owner.name,

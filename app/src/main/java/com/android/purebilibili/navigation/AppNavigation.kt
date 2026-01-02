@@ -89,8 +89,15 @@ fun AppNavigation(
             route = ScreenRoutes.Home.route,
             //  进入视频详情页时的退出动画
             exitTransition = { fadeOut(animationSpec = tween(200)) },
-            //  从视频详情页返回时不需要动画（卡片在原位置）
-            popEnterTransition = { fadeIn(animationSpec = tween(250)) }
+            //  [修复] 从设置页返回时使用右滑动画
+            popEnterTransition = { 
+                val fromSettings = initialState.destination.route == ScreenRoutes.Settings.route
+                if (fromSettings) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration))
+                } else {
+                    fadeIn(animationSpec = tween(250))
+                }
+            }
         ) {
             //  提供 AnimatedVisibilityScope 给 HomeScreen 以支持共享元素过渡i l
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
@@ -269,22 +276,14 @@ fun AppNavigation(
                 viewModel()
             }
             
-            //  获取原始进入音频模式时的 bvid（从父页面参数）
-            val originalBvid = parentEntry?.arguments?.getString("bvid") ?: ""
-            
             com.android.purebilibili.feature.video.screen.AudioModeScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
-                onVideoModeClick = { currentBvid ->
-                    //  如果当前播放的视频与原始视频相同，直接返回
-                    // 否则需要导航到正确的视频详情页
-                    if (currentBvid == originalBvid) {
-                        navController.popBackStack()
-                    } else {
-                        //  先返回到首页，再导航到新视频
-                        navController.popBackStack(ScreenRoutes.Home.route, false)
-                        navController.navigate(VideoRoute.createRoute(currentBvid, 0L, ""))
-                    }
+                onVideoModeClick = { _ ->
+                    //  [修复] 直接返回到 VideoDetailScreen
+                    // 由于 ViewModel 是共享的，VideoDetailScreen 会自动显示当前正在播放的视频
+                    // 不需要比较 bvid，因为播放器状态已同步
+                    navController.popBackStack()
                 }
             )
         }
@@ -473,6 +472,7 @@ fun AppNavigation(
                 onPlaybackClick = { navController.navigate(ScreenRoutes.PlaybackSettings.route) },
                 onPermissionClick = { navController.navigate(ScreenRoutes.PermissionSettings.route) },
                 onPluginsClick = { navController.navigate(ScreenRoutes.PluginsSettings.route) },
+                onNavigateToBottomBarSettings = { navController.navigate(ScreenRoutes.BottomBarSettings.route) },
                 mainHazeState = mainHazeState //  传递全局 Haze 状态
             )
         }

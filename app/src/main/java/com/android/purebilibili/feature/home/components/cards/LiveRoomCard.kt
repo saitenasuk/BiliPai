@@ -28,6 +28,8 @@ import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.data.model.response.LiveRoom
 import com.android.purebilibili.core.util.iOSTapEffect
+import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.iOSCornerRadius
 
 /**
  *  iOS 风格直播间卡片
@@ -39,6 +41,11 @@ fun LiveRoomCard(
     onClick: (Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
+    
+    // [新增] 获取圆角缩放比例
+    val cornerRadiusScale = LocalCornerRadiusScale.current
+    val cardCornerRadius = iOSCornerRadius.Large * cornerRadiusScale  // 14.dp * scale
+    val tagCornerRadius = iOSCornerRadius.Tiny * cornerRadiusScale   // 4.dp * scale
     
     val coverUrl = remember(room.roomid) {
         FormatUtils.fixImageUrl(room.cover.ifEmpty { room.keyframe.ifEmpty { room.userCover } })
@@ -63,11 +70,11 @@ fun LiveRoomCard(
                 .aspectRatio(16f / 10f)
                 .shadow(
                     elevation = 2.dp,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(cardCornerRadius),
                     ambientColor = Color.Black.copy(alpha = 0.08f),
                     spotColor = Color.Black.copy(alpha = 0.12f)
                 )
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(cardCornerRadius))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             // 封面图 -  优化
@@ -103,7 +110,7 @@ fun LiveRoomCard(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(8.dp),
-                shape = RoundedCornerShape(4.dp),
+                shape = RoundedCornerShape(tagCornerRadius),
                 color = Color(0xFFE02020)
             ) {
                 Text(
@@ -121,7 +128,7 @@ fun LiveRoomCard(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp),
-                    shape = RoundedCornerShape(4.dp),
+                    shape = RoundedCornerShape(tagCornerRadius),
                     color = Color.Black.copy(alpha = 0.5f)
                 ) {
                     Text(

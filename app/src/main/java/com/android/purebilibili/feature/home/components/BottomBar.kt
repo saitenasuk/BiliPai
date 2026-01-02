@@ -32,8 +32,10 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.theme.iOSSystemGray
-import com.android.purebilibili.core.theme.BottomBarColors  //  统一底栏颜色配置
-import com.android.purebilibili.core.theme.BottomBarColorPalette  //  调色板
+import com.android.purebilibili.core.theme.BottomBarColors  // 统一底栏颜色配置
+import com.android.purebilibili.core.theme.BottomBarColorPalette  // 调色板
+import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.iOSCornerRadius
 import kotlinx.coroutines.launch  //  延迟导航
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -128,14 +130,29 @@ fun FrostedBottomBar(
         else -> 56.dp // 仅图标
     }
     val dockedHeight = when (labelMode) {
-        0 -> 56.dp   // 图标+文字
+        0 -> 60.dp   // 图标+文字
         2 -> 44.dp   // 仅文字
         else -> 52.dp // 仅图标
     }
     
+    //  根据样式计算垂直偏移以确保视觉居中
+    //  正值向下偏移，负值向上偏移
+    val contentVerticalOffset = when {
+        isFloating && labelMode == 0 -> 3.dp   // 悬浮+图标文字：向下偏移
+        isFloating && labelMode == 1 -> 2.dp   // 悬浮+仅图标：向下偏移
+        isFloating && labelMode == 2 -> 2.dp   // 悬浮+仅文字：向下偏移
+        !isFloating && labelMode == 0 -> 4.dp  // 贴边+图标文字：向下偏移
+        !isFloating && labelMode == 1 -> 3.dp  // 贴边+仅图标：向下偏移
+        !isFloating && labelMode == 2 -> 2.dp  // 贴边+仅文字：向下偏移
+        else -> 0.dp
+    }
+    
     val barHorizontalPadding = if (isFloating) 24.dp else 0.dp
     val barBottomPadding = if (isFloating) 16.dp else 0.dp
-    val barShape = if (isFloating) RoundedCornerShape(36.dp) else androidx.compose.ui.graphics.RectangleShape  //  iOS 风格：紧贴底部无圆角
+    // [新增] 获取圆角缩放比例
+    val cornerRadiusScale = LocalCornerRadiusScale.current
+    val floatingCornerRadius = iOSCornerRadius.Floating * cornerRadiusScale  // 28.dp * scale + 8
+    val barShape = if (isFloating) RoundedCornerShape(floatingCornerRadius + 8.dp) else androidx.compose.ui.graphics.RectangleShape  // iOS 风格动态圆角
     
     Box(
         modifier = modifier
@@ -168,6 +185,7 @@ fun FrostedBottomBar(
                         Modifier.unifiedBlur(hazeState)  //  版本自适应模糊
                     } else {
                         Modifier
+                            .background(MaterialTheme.colorScheme.surface)
                     }
                 ),
             //  [修复] 根据模糊强度动态调整背景透明度
@@ -298,10 +316,20 @@ fun FrostedBottomBar(
                     val scale by animateFloatAsState(
                         targetValue = if (isSelected) 1.15f else 1.0f,
                         animationSpec = spring(
-                            dampingRatio = 0.4f,  //  更低阻尼创造明显弹跳
-                            stiffness = 350f
+                            dampingRatio = 0.35f,  //  更低阻尼 = 更明显过冲弹跳
+                            stiffness = 300f
                         ),
                         label = "scale"
+                    )
+                    
+                    //  [新增] Y 轴弹跳动画 - 选中时向上弹起
+                    val bounceY by animateFloatAsState(
+                        targetValue = if (isSelected) -4f else 0f,
+                        animationSpec = spring(
+                            dampingRatio = 0.3f,  // 低阻尼 = 明显弹跳过冲
+                            stiffness = 400f
+                        ),
+                        label = "bounceY"
                     )
                     
                     //  [新增] 点击时的晃动角度
@@ -311,8 +339,8 @@ fun FrostedBottomBar(
                     val animatedWobble by animateFloatAsState(
                         targetValue = wobbleAngle,
                         animationSpec = spring(
-                            dampingRatio = 0.25f,  // 非常低的阻尼 = 多次晃动
-                            stiffness = 800f       // 高刚度 = 快速响应
+                            dampingRatio = 0.2f,   // 极低阻尼 = 多次自然晃动
+                            stiffness = 600f       // 适中刚度 = 平滑响应
                         ),
                         label = "wobble"
                     )
@@ -329,6 +357,7 @@ fun FrostedBottomBar(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
+                            .offset(y = contentVerticalOffset) //  根据样式动态调整偏移以确保视觉居中
                             .then(
                                 if (item == BottomNavItem.HOME) {
                                     //  HOME 项支持双击回到顶部
@@ -379,8 +408,12 @@ fun FrostedBottomBar(
                                 Box(
                                     modifier = Modifier
                                         .size(24.dp)
-                                        .scale(scale)
-                                        .graphicsLayer { rotationZ = animatedWobble },  //  晃动效果
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                            rotationZ = animatedWobble
+                                            translationY = bounceY  // Y 轴弹跳
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     CompositionLocalProvider(LocalContentColor provides iconColor) {
@@ -403,8 +436,12 @@ fun FrostedBottomBar(
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     color = iconColor,
                                     modifier = Modifier
-                                        .scale(scale)
-                                        .graphicsLayer { rotationZ = animatedWobble }  //  晃动效果
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                            rotationZ = animatedWobble
+                                            translationY = bounceY
+                                        }
                                 )
                             }
                             else -> {
@@ -412,8 +449,12 @@ fun FrostedBottomBar(
                                 Box(
                                     modifier = Modifier
                                         .size(26.dp)
-                                        .scale(scale)
-                                        .graphicsLayer { rotationZ = animatedWobble },  //  晃动效果
+                                        .graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                            rotationZ = animatedWobble
+                                            translationY = bounceY  // Y 轴弹跳
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     CompositionLocalProvider(LocalContentColor provides iconColor) {

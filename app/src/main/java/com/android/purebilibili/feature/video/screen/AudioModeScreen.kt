@@ -112,18 +112,19 @@ fun AudioModeScreen(
                 val playlist by PlaylistManager.playlist.collectAsState()
                 val currentIndex by PlaylistManager.currentIndex.collectAsState()
                 
-                // 预加载相邻封面
+                // 预加载相邻封面 - 使用 Coil 单例
+                val imageLoader = coil.Coil.imageLoader(context)
                 LaunchedEffect(currentIndex, playlist) {
                     if (playlist.isNotEmpty()) {
                         val nextIndex = (currentIndex + 1).takeIf { it < playlist.size }
                         nextIndex?.let {
-                            ImageLoader(context).enqueue(
+                            imageLoader.enqueue(
                                 ImageRequest.Builder(context).data(FormatUtils.fixImageUrl(playlist[it].cover)).build()
                             )
                         }
                         val prevIndex = (currentIndex - 1).takeIf { it >= 0 }
                         prevIndex?.let {
-                            ImageLoader(context).enqueue(
+                            imageLoader.enqueue(
                                 ImageRequest.Builder(context).data(FormatUtils.fixImageUrl(playlist[it].cover)).build()
                             )
                         }
@@ -269,7 +270,11 @@ fun AudioModeScreen(
                             PlayerControls(
                                 player = player,
                                 onPlayPause = { if (player.isPlaying) player.pause() else player.play() },
-                                onSeek = { pos -> player.seekTo(pos) },
+                                onSeek = { pos -> 
+                                    player.seekTo(pos)
+                                    // [修复] 确保 seek 后音量正常
+                                    player.volume = 1.0f
+                                },
                                 onPrevious = { viewModel.playPreviousRecommended() },
                                 onNext = { viewModel.playNextRecommended() }
                             )
@@ -292,7 +297,7 @@ fun AudioModeScreen(
                                 state = pagerState,
                                 modifier = Modifier.fillMaxSize(),
                                 beyondViewportPageCount = 1,
-                                key = { playlist.getOrNull(it)?.bvid ?: it.toString() }
+                                key = { it }  // [修复] 使用索引作为 key，避免重复 bvid 导致崩溃
                             ) { page ->
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     AsyncImage(
@@ -332,9 +337,11 @@ fun AudioModeScreen(
                 } else {
                     // ==================== 居中模式 (Apple Music 风格) ====================
                     // 1. 底层：背景图 (模糊 + 遮罩)
+                    // [修复] 使用 pager 当前页的封面，确保切换时背景同步
+                    val currentCover = playlist.getOrNull(pagerState.currentPage)?.cover ?: info.pic
                     Box(modifier = Modifier.fillMaxSize()) {
                         AsyncImage(
-                            model = FormatUtils.fixImageUrl(info.pic),
+                            model = FormatUtils.fixImageUrl(currentCover),
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize().blur(60.dp),
                             contentScale = ContentScale.Crop,
@@ -360,7 +367,7 @@ fun AudioModeScreen(
                                     // 关键：不设置 contentPadding，让 Pager 占满宽度，这样旋转时不会在边界被裁剪
                                     contentPadding = PaddingValues(horizontal = 0.dp),
                                     beyondViewportPageCount = 1,
-                                    key = { playlist.getOrNull(it)?.bvid ?: it.toString() }
+                                    key = { it }  // [修复] 使用索引作为 key，避免重复 bvid 导致崩溃
                                 ) { page ->
                                     val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
                                     
@@ -500,19 +507,24 @@ private fun PlayerControls(
     var isDragging by remember { mutableStateOf(false) }
     var draggingProgress by remember { mutableFloatStateOf(0f) }
     
-    // 进度状态
-    var currentPos by remember { mutableLongStateOf(player.currentPosition) }
-    var duration by remember { mutableLongStateOf(player.duration.coerceAtLeast(0)) }
-    var isPlaying by remember { mutableStateOf(player.isPlaying) }
+    // [修复] 进度状态 - 使用 key 确保切换视频时重置
+    var currentPos by remember(player) { mutableLongStateOf(player.currentPosition) }
+    var duration by remember(player) { mutableLongStateOf(player.duration.coerceAtLeast(0)) }
+    var isPlaying by remember(player) { mutableStateOf(player.isPlaying) }
     
     LaunchedEffect(player) {
+        // [修复] 立即读取当前状态
+        currentPos = player.currentPosition
+        duration = player.duration.coerceAtLeast(0)
+        isPlaying = player.isPlaying
+        // 然后开始轮询
         while (isActive) {
+            delay(500)
             if (!isDragging) {
                 currentPos = player.currentPosition
                 duration = player.duration.coerceAtLeast(0)
             }
             isPlaying = player.isPlaying
-            delay(500)
         }
     }
     
@@ -526,7 +538,14 @@ private fun PlayerControls(
             },
             onValueChangeFinished = {
                 val target = (draggingProgress * duration).toLong()
+                // [修复] 记录 seek 前的播放状态
+                val wasPlaying = player.isPlaying || player.playbackState == Player.STATE_BUFFERING
                 onSeek(target)
+                // [修复] 确保 seek 后恢复播放状态和音量
+                player.volume = 1.0f
+                if (wasPlaying) {
+                    player.play()
+                }
                 isDragging = false
             },
             modifier = Modifier.height(20.dp),  // 减小整体高度
