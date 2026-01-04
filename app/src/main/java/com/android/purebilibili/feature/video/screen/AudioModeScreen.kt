@@ -36,6 +36,7 @@ import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.player.CoinDialog
 import com.android.purebilibili.feature.video.player.PlaylistManager
+import com.android.purebilibili.feature.video.ui.components.CollectionSheet  // 📂 [新增] 合集弹窗
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -89,6 +90,9 @@ fun AudioModeScreen(
 
     //  封面显示模式状态
     var isFullScreenCover by remember { mutableStateOf(false) }
+    
+    // 📂 [新增] 合集弹窗状态
+    var showCollectionSheet by remember { mutableStateOf(false) }
     
     Scaffold(
         containerColor = Color.Black,
@@ -236,6 +240,65 @@ fun AudioModeScreen(
                             textAlign = if (isFullScreenCover) TextAlign.Start else TextAlign.Center
                         )
                         
+                        // 🎵 [新增] 分P指示器 - 显示当前播放的分P
+                        val pages = info.pages
+                        if (pages.size > 1) {
+                            val currentPageIndex = pages.indexOfFirst { it.cid == info.cid }.coerceAtLeast(0)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "P${currentPageIndex + 1} / ${pages.size}",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = if (isFullScreenCover) TextAlign.Start else TextAlign.Center
+                            )
+                        }
+                        
+                        // 📂 [新增] 合集指示器 - 点击打开合集选择弹窗
+                        info.ugc_season?.let { season ->
+                            val allEpisodes = season.sections.flatMap { it.episodes }
+                            val currentEpIndex = allEpisodes.indexOfFirst { it.bvid == info.bvid }
+                            val currentPosition = if (currentEpIndex >= 0) currentEpIndex + 1 else 0
+                            val totalCount = allEpisodes.size.takeIf { it > 0 } ?: season.ep_count
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                onClick = { showCollectionSheet = true },
+                                shape = RoundedCornerShape(16.dp),
+                                color = Color.White.copy(alpha = 0.15f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "合集",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = season.title,
+                                        fontSize = 12.sp,
+                                        color = Color.White.copy(alpha = 0.9f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.widthIn(max = 150.dp)
+                                    )
+                                    if (currentPosition > 0 && totalCount > 0) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "$currentPosition/$totalCount",
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
                         Spacer(modifier = Modifier.height(32.dp))
                         
                         // 3. 互动按钮行
@@ -276,7 +339,8 @@ fun AudioModeScreen(
                                     player.volume = 1.0f
                                 },
                                 onPrevious = { viewModel.playPreviousRecommended() },
-                                onNext = { viewModel.playNextRecommended() }
+                                // 🎵 [修复] 使用分P优先播放方法
+                                onNext = { viewModel.playNextPageOrRecommended() }
                             )
                         } else {
                             Text("Connecting to player...", color = Color.White)
@@ -448,6 +512,22 @@ fun AudioModeScreen(
         onDismiss = { viewModel.closeCoinDialog() },
         onConfirm = { count, alsoLike -> viewModel.doCoin(count, alsoLike) }
     )
+    
+    // 📂 [新增] 合集选择弹窗
+    val currentInfo = (uiState as? PlayerUiState.Success)?.info
+    currentInfo?.ugc_season?.let { season ->
+        if (showCollectionSheet) {
+            CollectionSheet(
+                ugcSeason = season,
+                currentBvid = currentInfo.bvid,
+                onDismiss = { showCollectionSheet = false },
+                onEpisodeClick = { episode ->
+                    showCollectionSheet = false
+                    viewModel.loadVideo(episode.bvid)
+                }
+            )
+        }
+    }
 }
 
 @Composable

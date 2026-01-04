@@ -300,66 +300,79 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) { 0 }
     }
     
-    //  [新增] 获取直播间列表（支持关注/热门切换）
+    //  🔴 [改进] 获取直播间列表（同时获取关注和热门）
     private suspend fun fetchLiveRooms(isLoadMore: Boolean) {
         val page = if (isLoadMore) livePage else 1
-        val subCategory = _uiState.value.liveSubCategory
         
-        com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 fetchLiveRooms: isLoadMore=$isLoadMore, page=$page, livePage=$livePage, subCategory=$subCategory")
+        com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 fetchLiveRooms: isLoadMore=$isLoadMore, page=$page")
         
-        //  根据子分类选择不同的 API
-        val result = when (subCategory) {
-            LiveSubCategory.FOLLOWED -> LiveRepository.getFollowedLive(page)
-            LiveSubCategory.POPULAR -> LiveRepository.getLiveRooms(page)
-        }
-        
-        if (!isLoadMore) fetchUserInfo()
-        if (isLoadMore) delay(100)
-        
-        result.onSuccess { rooms ->
-            com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 Fetched ${rooms.size} rooms for page $page")
+        if (!isLoadMore) {
+            fetchUserInfo()
             
-            if (rooms.isNotEmpty()) {
-                //  修复：过滤重复的直播间
-                val existingRoomIds = _uiState.value.liveRooms.map { it.roomid }.toSet()
-                val newRooms = if (isLoadMore) {
-                    rooms.filter { it.roomid !in existingRoomIds }
+            // 🔴 [改进] 首次加载时同时获取关注和热门直播
+            val isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
+            
+            // 并行获取关注和热门直播
+            val followedResult = if (isLoggedIn) LiveRepository.getFollowedLive(1) else Result.success(emptyList())
+            val popularResult = LiveRepository.getLiveRooms(1)
+            
+            // 处理关注直播结果
+            val followedRooms = followedResult.getOrDefault(emptyList())
+            
+            // 处理热门直播结果
+            popularResult.onSuccess { rooms ->
+                if (rooms.isNotEmpty() || followedRooms.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        followedLiveRooms = followedRooms,
+                        liveRooms = rooms,
+                        videos = emptyList(),
+                        isLoading = false,
+                        error = null
+                    )
                 } else {
-                    rooms
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "暂无直播"
+                    )
                 }
-                
-                com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 New unique rooms: ${newRooms.size}")
-                
-                //  关键修复：如果没有新的唯一房间，标记为无更多数据
-                if (isLoadMore && newRooms.isEmpty()) {
-                    hasMoreLiveData = false
-                    com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 No more unique live data, stopping pagination")
-                    _uiState.value = _uiState.value.copy(isLoading = false)
-                    return@onSuccess
-                }
-                
+            }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
-                    liveRooms = if (isLoadMore) _uiState.value.liveRooms + newRooms else rooms,
-                    videos = emptyList(),  // 清空视频列表
+                    followedLiveRooms = followedRooms,
                     isLoading = false,
-                    error = null
-                )
-            } else {
-                //  没有更多数据时，不再触发加载更多
-                val message = when (subCategory) {
-                    LiveSubCategory.FOLLOWED -> "暂无关注的主播在直播"
-                    LiveSubCategory.POPULAR -> "没有直播"
-                }
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = if (!isLoadMore && _uiState.value.liveRooms.isEmpty()) message else null
+                    error = if (followedRooms.isEmpty()) e.message ?: "网络错误" else null
                 )
             }
-        }.onFailure { e ->
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                error = if (!isLoadMore && _uiState.value.liveRooms.isEmpty()) e.message ?: "网络错误" else null
-            )
+        } else {
+            // 加载更多时只加载热门直播（关注的主播数量有限，不需要分页）
+            val result = LiveRepository.getLiveRooms(page)
+            delay(100)
+            
+            result.onSuccess { rooms ->
+                if (rooms.isNotEmpty()) {
+                    val existingRoomIds = _uiState.value.liveRooms.map { it.roomid }.toSet()
+                    val newRooms = rooms.filter { it.roomid !in existingRoomIds }
+                    
+                    if (newRooms.isEmpty()) {
+                        hasMoreLiveData = false
+                        _uiState.value = _uiState.value.copy(isLoading = false)
+                        return@onSuccess
+                    }
+                    
+                    _uiState.value = _uiState.value.copy(
+                        liveRooms = _uiState.value.liveRooms + newRooms,
+                        isLoading = false,
+                        error = null
+                    )
+                } else {
+                    hasMoreLiveData = false
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                }
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = null  // 加载更多失败不显示错误
+                )
+            }
         }
     }
     
