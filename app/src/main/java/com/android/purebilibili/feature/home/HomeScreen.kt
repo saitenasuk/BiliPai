@@ -788,17 +788,48 @@ fun HomeScreen(
                         }
                 ) {
                     if (targetCategory == HomeCategory.LIVE) {
-                        item(span = { GridItemSpan(gridColumns) }) {
-                            LiveSubCategoryRow(
-                                selectedSubCategory = state.liveSubCategory,
-                                onSubCategorySelected = { viewModel.switchLiveSubCategory(it) }
-                            )
+                        // 🔴 [改进] 合并显示关注和热门直播（不分开切换）
+                        
+                        // 1. 关注的主播直播（如果有）
+                        if (state.followedLiveRooms.isNotEmpty()) {
+                            item(span = { GridItemSpan(gridColumns) }) {
+                                Text(
+                                    text = "关注",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                                )
+                            }
+                            
+                            itemsIndexed(
+                                items = state.followedLiveRooms,
+                                key = { _, room -> "followed_${room.roomid}" },
+                                contentType = { _, _ -> "live_room" }
+                            ) { index, room ->
+                                LiveRoomCard(
+                                    room = room,
+                                    index = index,
+                                    onClick = { onLiveClick(room.roomid, room.title, room.uname) } 
+                                )
+                            }
                         }
-
+                        
+                        // 2. 热门直播
                         if (state.liveRooms.isNotEmpty()) {
+                            item(span = { GridItemSpan(gridColumns) }) {
+                                Text(
+                                    text = "热门",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                                )
+                            }
+                            
                             itemsIndexed(
                                 items = state.liveRooms,
-                                key = { _, room -> room.roomid },
+                                key = { _, room -> "popular_${room.roomid}" },
                                 contentType = { _, _ -> "live_room" }
                             ) { index, room ->
                                 LiveRoomCard(

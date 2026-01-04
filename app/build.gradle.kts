@@ -22,8 +22,8 @@ android {
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：versionCode +1, versionName 递增
         // 更新日志：CHANGELOG.md
-        versionCode = 23
-        versionName = "3.4.0"
+        versionCode = 24
+        versionName = "3.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -99,6 +99,15 @@ android {
         }
         // 🔥 允许 Android 类在单元测试中返回默认值而非抛出异常
         unitTests.isReturnDefaultValues = true
+    }
+    
+    // 🔥 自定义 APK 输出文件名
+    applicationVariants.configureEach {
+        val variant = this
+        outputs.configureEach {
+            val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+            output.outputFileName = "BiliPai-${variant.versionName}.apk"
+        }
     }
 }
 

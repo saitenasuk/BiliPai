@@ -56,7 +56,8 @@ enum class LiveSubCategory(val label: String) {
 @Stable
 data class HomeUiState(
     val videos: List<VideoItem> = emptyList(),
-    val liveRooms: List<LiveRoom> = emptyList(),
+    val liveRooms: List<LiveRoom> = emptyList(),  // 热门直播
+    val followedLiveRooms: List<LiveRoom> = emptyList(),  // 🔴 [新增] 关注的主播直播
     val isLoading: Boolean = false,
     val error: String? = null,
     val user: UserState = UserState(),

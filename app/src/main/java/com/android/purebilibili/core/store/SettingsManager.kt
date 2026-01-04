@@ -126,6 +126,15 @@ object SettingsManager {
 
     suspend fun setAutoPlay(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_AUTO_PLAY] = value }
+        // 🔧 [修复] 同步到 SharedPreferences，供同步读取使用
+        context.getSharedPreferences("auto_play_cache", Context.MODE_PRIVATE)
+            .edit().putBoolean("auto_play_enabled", value).apply()
+    }
+    
+    // 🔧 [修复] 同步读取自动播放设置（用于 PlayerViewModel）
+    fun getAutoPlaySync(context: Context): Boolean {
+        return context.getSharedPreferences("auto_play_cache", Context.MODE_PRIVATE)
+            .getBoolean("auto_play_enabled", true)  // 默认开启
     }
 
     // --- HW Decode ---
