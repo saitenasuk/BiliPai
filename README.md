@@ -1,4 +1,4 @@
-# BiliPai <img src="docs/images/233娘.jpeg" height="40" align="center">
+# BiliPai <img src="docs/images/233娘.jpeg" height="80" align="center">
 
 <p align="center">
   <strong>原生、纯净、可扩展 —— 重新定义你的 B 站体验</strong>
