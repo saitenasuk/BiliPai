@@ -1,7 +1,7 @@
-# BiliPai ( ゜- ゜)つロ 干杯~
+# BiliPai <img src="docs/images/233娘.jpeg" height="40" align="center">
 
 <p align="center">
-  <strong>🎬 纯净、流畅、无广告的 Bilibili 第三方客户端</strong>
+  <strong>原生、纯净、可扩展 —— 重新定义你的 B 站体验</strong>
 </p>
 
 <p align="center">
