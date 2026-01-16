@@ -25,11 +25,6 @@
 
 ## 📸 应用预览
 
-<p align="center">
-  <img src="docs/images/screenshot_1_home_pip.png" alt="首页 (画中画)" height="500">
-  <img src="docs/images/screenshot_2_media_controls.png" alt="媒体控制" height="500">
-</p>
-
 ---
 
 ## ✨ 功能亮点
