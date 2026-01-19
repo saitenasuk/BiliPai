@@ -140,6 +140,7 @@ class PlayerViewModel : ViewModel() {
     private var exoPlayer: ExoPlayer? = null
     private var heartbeatJob: Job? = null
     private var appContext: android.content.Context? = null  //  [新增] 保存 Context 用于网络检测
+    private var hasUserStartedPlayback = false  // 🛡️ [修复] 用户是否主动开始播放（用于区分“加载已看完视频”和“自然播放结束”）
     
     //  Public Player Accessor
     val currentPlayer: Player?
@@ -234,7 +235,14 @@ class PlayerViewModel : ViewModel() {
     private val playbackEndListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED) {
-                // 🔧 [修复] 检查自动播放设置 - 使用 SettingsManager 同步读取
+                // �️ [修复] 仅当用户主动开始播放后才触发自动连播
+                // 防止从历史记录加载已看完视频时立即跳转
+                if (!hasUserStartedPlayback) {
+                    Logger.d("PlayerVM", "🛡️ STATE_ENDED but user hasn't started playback, skip auto-play")
+                    return
+                }
+                
+                // �🔧 [修复] 检查自动播放设置 - 使用 SettingsManager 同步读取
                 val context = appContext ?: return
                 val autoPlayEnabled = com.android.purebilibili.core.store.SettingsManager
                     .getAutoPlaySync(context)
@@ -247,6 +255,13 @@ class PlayerViewModel : ViewModel() {
                     // 播放器应该保持在完成状态，这样播放按钮可以重新开始播放
                     toast(" 播放完成")
                 }
+            }
+        }
+        
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                // 🛡️ [修复] 用户开始播放时设置标志
+                hasUserStartedPlayback = true
             }
         }
     }
@@ -421,6 +436,9 @@ class PlayerViewModel : ViewModel() {
         }
         
         if (currentBvid.isNotEmpty() && currentBvid != bvid) saveCurrentPosition()
+        
+        // 🛡️ [修复] 加载新视频时重置标志
+        hasUserStartedPlayback = false
         
         val cachedPosition = playbackUseCase.getCachedPosition(bvid)
         currentBvid = bvid

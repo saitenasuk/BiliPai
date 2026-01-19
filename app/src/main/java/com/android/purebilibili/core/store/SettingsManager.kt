@@ -55,7 +55,15 @@ object SettingsManager {
     //  [新增] 底部栏样式 (true=悬浮, false=贴底)
     private val KEY_BOTTOM_BAR_FLOATING = booleanPreferencesKey("bottom_bar_floating")
     //  [新增] 底栏显示模式 (0=图标+文字, 1=仅图标, 2=仅文字)
+    //  [新增] 底栏显示模式 (0=图标+文字, 1=仅图标, 2=仅文字)
     private val KEY_BOTTOM_BAR_LABEL_MODE = intPreferencesKey("bottom_bar_label_mode")
+    
+    object BottomBarLabelMode {
+        const val SELECTED = 0 // 兼容 AppNavigation 的调用
+        const val ICON_AND_TEXT = 0
+        const val ICON_ONLY = 1
+        const val TEXT_ONLY = 2
+    }
     //  [新增] 模糊效果开关
     private val KEY_HEADER_BLUR_ENABLED = booleanPreferencesKey("header_blur_enabled")
     private val KEY_BOTTOM_BAR_BLUR_ENABLED = booleanPreferencesKey("bottom_bar_blur_enabled")
@@ -345,6 +353,31 @@ object SettingsManager {
                 "APPLE_DOCK" -> BlurIntensity.APPLE_DOCK  //  修复：添加 APPLE_DOCK 支持
                 else -> BlurIntensity.THIN  // 默认标准
             }
+        }
+
+    //  [新增] 获取底栏可见项目
+    fun getVisibleBottomBarItems(context: Context): Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            val itemsString = preferences[KEY_BOTTOM_BAR_VISIBLE_TABS]
+            if (itemsString.isNullOrEmpty()) {
+                // 默认可见项
+                setOf("HOME", "DYNAMIC", "STORY", "HISTORY", "PROFILE") 
+            } else {
+                itemsString.split(",").toSet()
+            }
+        }
+
+    //  [新增] 获取底栏项目颜色配置
+    fun getBottomBarItemColors(context: Context): Flow<Map<String, Int>> = context.settingsDataStore.data
+        .map { preferences ->
+            val colorString = preferences[KEY_BOTTOM_BAR_ITEM_COLORS] ?: ""
+            // 解析 "HOME:0,DYNAMIC:1" 格式
+            colorString.split(",").mapNotNull { entry ->
+                val parts = entry.split(":")
+                if (parts.size == 2) {
+                    parts[0] to (parts[1].toIntOrNull() ?: 0)
+                } else null
+            }.toMap()
         }
 
     suspend fun setBlurIntensity(context: Context, intensity: BlurIntensity) {
@@ -910,24 +943,7 @@ object SettingsManager {
         order.filter { it in visibleSet }
     }
     
-    //  [新增] --- 底栏项目颜色自定义 ---
-    /**
-     * 获取所有底栏项目的颜色索引映射
-     * @return Map<项目ID, 颜色索引>
-     */
-    fun getBottomBarItemColors(context: Context): Flow<Map<String, Int>> = context.settingsDataStore.data.map { prefs ->
-        val colorsString = prefs[KEY_BOTTOM_BAR_ITEM_COLORS] ?: ""
-        if (colorsString.isBlank()) {
-            emptyMap()  // 返回空 Map，使用默认颜色
-        } else {
-            colorsString.split(",")
-                .filter { it.contains(":") }
-                .associate { pair ->
-                    val (id, index) = pair.split(":")
-                    id to (index.toIntOrNull() ?: 0)
-                }
-        }
-    }
+
     
     /**
      * 设置单个底栏项目的颜色索引

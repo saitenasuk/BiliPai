@@ -40,6 +40,30 @@ import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.ProvideAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.SharedTransitionProvider
 
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.currentBackStackEntryAsState
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import dev.chrisbanes.haze.hazeSource
+import androidx.compose.ui.platform.LocalConfiguration // [新增]
+// import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass (Removed)
+// import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass (Removed)
+// import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass (Removed)
+// import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi (Removed)
+import com.android.purebilibili.feature.home.components.FrostedBottomBar
+import com.android.purebilibili.feature.home.components.BottomNavItem
+import com.android.purebilibili.core.store.SettingsManager
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier // 确保 Modifier 被导入
+import androidx.compose.foundation.layout.Box // 确保 Box 被导入
+import androidx.compose.foundation.layout.fillMaxSize // 确保 fillMaxSize 被导入
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+
 // 定义路由参数结构
 object VideoRoute {
     const val base = "video"
@@ -53,6 +77,7 @@ object VideoRoute {
 }
 
 @androidx.media3.common.util.UnstableApi
+// @OptIn(ExperimentalMaterial3WindowSizeClassApi::class) (Removed)
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
@@ -118,7 +143,56 @@ fun AppNavigation(
     val startDestination = if (firstLaunchShown) ScreenRoutes.Home.route else ScreenRoutes.Onboarding.route
 
     SharedTransitionProvider {
-        NavHost(
+        // [新增] 全局底栏状态管理
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute = navBackStackEntry?.destination?.route
+        val currentBottomNavItem = BottomNavItem.entries.find { it.route == currentRoute } ?: BottomNavItem.HOME
+        val isTopLevelDestination = BottomNavItem.entries.any { it.route == currentRoute }
+
+        // 设置状态
+        val bottomBarVisibilityMode by SettingsManager.getBottomBarVisibilityMode(context).collectAsState(initial = SettingsManager.BottomBarVisibilityMode.ALWAYS_VISIBLE)
+        val isBottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(context).collectAsState(initial = true)
+        val bottomBarLabelMode by SettingsManager.getBottomBarLabelMode(context).collectAsState(initial = SettingsManager.BottomBarLabelMode.SELECTED)
+        val isBottomBarFloating by SettingsManager.getBottomBarFloating(context).collectAsState(initial = true)
+        
+        // [修复] 使用有序的可见项目列表
+        val orderedVisibleTabIds by SettingsManager.getOrderedVisibleTabs(context).collectAsState(initial = listOf("HOME", "DYNAMIC", "HISTORY", "PROFILE"))
+        val visibleBottomBarItems = remember(orderedVisibleTabIds) {
+            orderedVisibleTabIds.mapNotNull { id -> 
+                BottomNavItem.entries.find { it.name == id }
+            }
+        }
+        
+        val bottomBarItemColors by SettingsManager.getBottomBarItemColors(context).collectAsState(initial = emptyMap<String, Int>())
+
+        // 平板侧边栏模式 (替代 WindowSizeClass)
+        val configuration = LocalConfiguration.current
+        val screenWidthDp = configuration.screenWidthDp.dp
+        // Expanded width starts at 840dp according to Material Design 3
+        val useSideNavigation = screenWidthDp >= 840.dp
+
+        // 仅在非侧边栏模式且是一级页面(或设置页及其子页面)时显示底栏 (短视频页面专门隐藏)
+        val settingsRoutes = listOf(
+            ScreenRoutes.Settings.route,
+            ScreenRoutes.AppearanceSettings.route,
+            ScreenRoutes.PlaybackSettings.route,
+            ScreenRoutes.IconSettings.route,
+            ScreenRoutes.AnimationSettings.route,
+            ScreenRoutes.PermissionSettings.route,
+            ScreenRoutes.PluginsSettings.route,
+            ScreenRoutes.BottomBarSettings.route,
+            ScreenRoutes.OpenSourceLicenses.route
+        )
+        val showBottomBar = (isTopLevelDestination || currentRoute in settingsRoutes) && !useSideNavigation && currentRoute != ScreenRoutes.Story.route
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            // ===== 内容层 (hazeSource) =====
+            // 这个 Box 包裹所有 NavHost 内容，作为底栏模糊的源
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
+                NavHost(
             navController = navController,
             startDestination = startDestination
         ) {
@@ -182,7 +256,8 @@ fun AppNavigation(
                     onFavoriteClick = { navigateTo(ScreenRoutes.Favorite.route) },
                     onLiveListClick = { navigateTo(ScreenRoutes.LiveList.route) },
                     onWatchLaterClick = { navigateTo(ScreenRoutes.WatchLater.route) },
-                    onStoryClick = { navigateTo(ScreenRoutes.Story.route) }  //  [新增] 竖屏短视频
+                    onStoryClick = { navigateTo(ScreenRoutes.Story.route) },  //  [新增] 竖屏短视频
+                    globalHazeState = mainHazeState  // [新增] 全局底栏模糊状态
                 )
             }
         }
@@ -368,9 +443,11 @@ fun AppNavigation(
             }
             
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
+
                 CommonListScreen(
                     viewModel = historyViewModel,
                     onBack = { navController.popBackStack() },
+                    globalHazeState = mainHazeState, // [新增] 传入全局 HazeState
                     onVideoClick = { bvid, cid ->
                         // [修复] 根据历史记录类型导航到不同页面
                         val historyItem = historyViewModel.getHistoryItem(bvid)
@@ -421,6 +498,7 @@ fun AppNavigation(
                 CommonListScreen(
                     viewModel = favoriteViewModel,
                     onBack = { navController.popBackStack() },
+                    globalHazeState = mainHazeState, // [新增] 传入全局 HazeState
                     onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") }
                 )
             }
@@ -435,7 +513,8 @@ fun AppNavigation(
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 com.android.purebilibili.feature.watchlater.WatchLaterScreen(
                     onBack = { navController.popBackStack() },
-                    onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") }
+                    onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") },
+                    globalHazeState = mainHazeState // [新增] 传入全局 HazeState (WatchLaterScreen 需支持)
                 )
             }
         }
@@ -451,7 +530,8 @@ fun AppNavigation(
                     onBack = { navController.popBackStack() },
                     onLiveClick = { roomId, title, uname ->
                         navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
-                    }
+                    },
+                    globalHazeState = mainHazeState // [新增] 传入全局 HazeState (LiveListScreen 需支持)
                 )
             }
         }
@@ -520,7 +600,8 @@ fun AppNavigation(
                 },
                 onBack = { navController.popBackStack() },
                 onLoginClick = { navController.navigate(ScreenRoutes.Login.route) },  //  跳转登录
-                onHomeClick = { navController.popBackStack() }  //  返回首页
+                onHomeClick = { navController.popBackStack() },  //  返回首页
+                globalHazeState = mainHazeState  // [新增] 全局底栏模糊状态
             )
         }
         
@@ -871,6 +952,49 @@ fun AppNavigation(
                 onVideoClick = { bvid, cid, cover -> navigateToVideo(bvid, cid, cover) }
             )
         }
-    }
+        } // End of NavHost
+            } // End of Content Box
+
+            // ===== 全局底栏 (Global Bottom Bar) =====
+            if (showBottomBar) {
+                // 用于处理底栏悬浮时的点击穿透问题，底栏自身处理点击
+                Box(
+                    modifier = Modifier.align(Alignment.BottomCenter).zIndex(1f)
+                ) {
+                   if (isBottomBarFloating) {
+                        // 悬浮式底栏
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 20.dp), // 悬浮距离
+                            contentAlignment = Alignment.Center
+                        ) {
+                            FrostedBottomBar(
+                                currentItem = currentBottomNavItem,
+                                onItemClick = { item -> navigateTo(item.route) },
+                                onHomeDoubleTap = { /* TODO: Scroll Home to Top */ },
+                                hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
+                                isFloating = true,
+                                labelMode = bottomBarLabelMode,
+                                visibleItems = visibleBottomBarItems,
+                                itemColorIndices = bottomBarItemColors
+                            )
+                        }
+                    } else {
+                        // 贴底式底栏
+                        FrostedBottomBar(
+                            currentItem = currentBottomNavItem,
+                            onItemClick = { item -> navigateTo(item.route) },
+                            onHomeDoubleTap = { /* TODO: Scroll Home to Top */ },
+                            hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
+                            isFloating = false,
+                            labelMode = bottomBarLabelMode,
+                            visibleItems = visibleBottomBarItems,
+                            itemColorIndices = bottomBarItemColors
+                        )
+                    }
+                }
+            }
+        } // End of Main Box
     }
 }

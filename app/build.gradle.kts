@@ -22,8 +22,8 @@ android {
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：versionCode +1, versionName 递增
         // 更新日志：CHANGELOG.md
-        versionCode = 35
-        versionName = "4.0.3"
+        versionCode = 36
+        versionName = "4.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -126,6 +126,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3-window-size-class:1.3.1") // [新增] 窗口大小类
     // 图标扩展库 (全屏、设置图标等)
     implementation("androidx.compose.material:material-icons-extended")
 
@@ -165,6 +166,10 @@ dependencies {
     
     // --- 3.7 Startup (应用初始化) ---
     implementation("androidx.startup:startup-runtime:1.1.1")
+    
+    // --- 3.8 Backdrop (液态玻璃效果) ---
+    // 提供透镜折射、玻璃高光、连续圆角等 iOS/visionOS 风格视觉效果
+    implementation("io.github.kyant0:backdrop:1.0.0")
 
 
     // --- 4. Player (视频播放器 Media3) ---

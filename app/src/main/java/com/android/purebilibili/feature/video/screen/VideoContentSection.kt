@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.CoroutineScope
@@ -54,6 +55,8 @@ import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
+import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlin.math.abs
 
 /**
@@ -146,26 +149,7 @@ fun VideoContentSection(
         modifier = Modifier.fillMaxSize()
     ) {
         // 头部区域 (Header + TabBar)
-        VideoHeaderContent(
-            info = info,
-            videoTags = videoTags,
-            isFollowing = isFollowing,
-            isFavorited = isFavorited,
-            isLiked = isLiked,
-            coinCount = coinCount,
-            downloadProgress = downloadProgress,
-            isInWatchLater = isInWatchLater,
-            onFollowClick = onFollowClick,
-            onFavoriteClick = onFavoriteClick,
-            onLikeClick = onLikeClick,
-            onCoinClick = onCoinClick,
-            onTripleClick = onTripleClick,
-            onUpClick = onUpClick,
-            onOpenCollectionSheet = { showCollectionSheet = true },
-            onDownloadClick = onDownloadClick,
-            onWatchLaterClick = onWatchLaterClick,
-            onGloballyPositioned = { /* 不再需要测量高度用于滚动 */ }
-        )
+
 
         VideoContentTabBar(
             tabs = tabs,
@@ -208,7 +192,7 @@ fun VideoContentSection(
                     onOpenCollectionSheet = { showCollectionSheet = true },
                     onDownloadClick = onDownloadClick,
                     onWatchLaterClick = onWatchLaterClick,
-                    contentPadding = PaddingValues(bottom = 32.dp) // 不需要顶部 Padding
+                    contentPadding = PaddingValues(bottom = 84.dp) // 适配底部输入栏
                 )
                 1 -> VideoCommentTab(
                     listState = commentListState,
@@ -235,7 +219,7 @@ fun VideoContentSection(
                         showImagePreview = true
                     },
                     onTimestampClick = onTimestampClick,
-                    contentPadding = PaddingValues(bottom = 32.dp) // 不需要顶部 Padding
+                    contentPadding = PaddingValues(bottom = 84.dp) // 适配底部输入栏
                 )
             }
         }
@@ -277,6 +261,29 @@ private fun VideoIntroTab(
         modifier = modifier.fillMaxSize(),
         contentPadding = contentPadding
     ) {
+        // 1. 移入的 Header 区域
+        item {
+            VideoHeaderContent(
+                info = info,
+                videoTags = videoTags,
+                isFollowing = isFollowing,
+                isFavorited = isFavorited,
+                isLiked = isLiked,
+                coinCount = coinCount,
+                downloadProgress = downloadProgress,
+                isInWatchLater = isInWatchLater,
+                onFollowClick = onFollowClick,
+                onFavoriteClick = onFavoriteClick,
+                onLikeClick = onLikeClick,
+                onCoinClick = onCoinClick,
+                onTripleClick = onTripleClick,
+                onUpClick = onUpClick,
+                onOpenCollectionSheet = onOpenCollectionSheet,
+                onDownloadClick = onDownloadClick,
+                onWatchLaterClick = onWatchLaterClick,
+                onGloballyPositioned = { }
+            )
+        }
         if (info.pages.size > 1) {
             item {
                 PagesSelector(
@@ -323,79 +330,83 @@ private fun VideoCommentTab(
     onTimestampClick: ((Long) -> Unit)?,
     contentPadding: PaddingValues
 ) {
-    LazyColumn(
-        state = listState,
-        modifier = modifier.fillMaxSize(),
-        contentPadding = contentPadding
+    Box(
+        modifier = modifier.fillMaxSize()
     ) {
-        item {
-            CommentSortFilterBar(
-                count = replyCount,
-                sortMode = sortMode,
-                upOnlyFilter = upOnlyFilter,
-                onSortModeChange = onSortModeChange,
-                onUpOnlyToggle = onUpOnlyToggle
-            )
-        }
-
-        if (isRepliesLoading && replies.isEmpty()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = contentPadding
+        ) {
             item {
-                Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                    CupertinoActivityIndicator()
-                }
-            }
-        } else if (replies.isEmpty()) {
-            item {
-                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = if (upOnlyFilter) "这个视频没有 UP 主的评论" else "暂无评论",
-                        color = Color.Gray
-                    )
-                }
-            }
-        } else {
-            items(items = replies, key = { it.rpid }) { reply ->
-                ReplyItemView(
-                    item = reply,
-                    upMid = info.owner.mid,
-                    emoteMap = emoteMap,
-                    onClick = {},
-                    onSubClick = { onSubReplyClick(reply) },
-                    onTimestampClick = onTimestampClick,
-                    onImagePreview = { images, index, rect ->
-                        onImagePreview(images, index, rect)
-                    }
+                CommentSortFilterBar(
+                    count = replyCount,
+                    sortMode = sortMode,
+                    onSortModeChange = onSortModeChange,
+                    upOnly = upOnlyFilter,
+                    onUpOnlyToggle = onUpOnlyToggle
                 )
             }
 
-            // 加载更多
-            item {
-                val shouldLoadMore by remember(replies.size, replyCount, isRepliesLoading) {
-                    derivedStateOf {
-                        !isRepliesLoading &&
-                            replies.isNotEmpty() &&
-                            replies.size < replyCount &&
-                            replyCount > 0
+            if (isRepliesLoading && replies.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        CupertinoActivityIndicator()
                     }
                 }
-
-                LaunchedEffect(shouldLoadMore) {
-                    if (shouldLoadMore) {
-                        onLoadMoreReplies()
+            } else if (replies.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = if (upOnlyFilter) "这个视频没有 UP 主的评论" else "暂无评论",
+                            color = Color.Gray
+                        )
                     }
                 }
-
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    when {
-                        isRepliesLoading -> CupertinoActivityIndicator()
-                        isRepliesEnd || replies.size >= replyCount -> {
-                            Text("—— end ——", color = Color.Gray, fontSize = 12.sp)
+            } else {
+                items(items = replies, key = { it.rpid }) { reply ->
+                    ReplyItemView(
+                        item = reply,
+                        upMid = info.owner.mid,
+                        emoteMap = emoteMap,
+                        onClick = {},
+                        onSubClick = { onSubReplyClick(reply) },
+                        onTimestampClick = onTimestampClick,
+                        onImagePreview = { images, index, rect ->
+                            onImagePreview(images, index, rect)
                         }
-                        // 当 shouldLoadMore 为 true 时才显示加载指示器
-                        shouldLoadMore -> CupertinoActivityIndicator()
+                    )
+                }
+
+                // 加载更多
+                item {
+                    val shouldLoadMore by remember(replies.size, replyCount, isRepliesLoading) {
+                        derivedStateOf {
+                            !isRepliesLoading &&
+                                replies.isNotEmpty() &&
+                                replies.size < replyCount &&
+                                replyCount > 0
+                        }
+                    }
+
+                    LaunchedEffect(shouldLoadMore) {
+                        if (shouldLoadMore) {
+                            onLoadMoreReplies()
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when {
+                            isRepliesLoading -> CupertinoActivityIndicator()
+                            isRepliesEnd || replies.size >= replyCount -> {
+                                Text("—— end ——", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            // 当 shouldLoadMore 为 true 时才显示加载指示器
+                            shouldLoadMore -> CupertinoActivityIndicator()
+                        }
                     }
                 }
             }

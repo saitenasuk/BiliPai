@@ -139,14 +139,45 @@ class VideoPlaybackUseCase(
                     // 🚀 [修复] 当 defaultQuality >= 127 时（自动最高画质），选择 accept_quality 中的最高画质
                     val targetQn = if (defaultQuality >= 127) {
                         // 自动最高画质：使用 API 返回的 accept_quality 列表
-                        // 排除 127(8K), 126(杜比), 125(HDR) 等可能超出设备解码能力的画质
                         val acceptQualities = playData.accept_quality ?: emptyList()
-                        val deviceSafeQualities = acceptQualities.filter { it <= 120 }  // 最高支持 4K
-                        val maxAccept = deviceSafeQualities.maxOrNull() ?: 80
-                        Logger.d("VideoPlaybackUseCase", "🚀 自动最高画质: accept_quality=$acceptQualities, 设备安全画质=$deviceSafeQualities, 选择 $maxAccept")
+                        
+                        // 检测设备 HDR 支持能力
+                        val isHdrSupported = com.android.purebilibili.core.util.MediaUtils.isHdrSupported()
+                        val isDolbyVisionSupported = com.android.purebilibili.core.util.MediaUtils.isDolbyVisionSupported()
+                        
+                        // 根据设备能力过滤画质（不再硬编码 <= 120）
+                        val deviceSafeQualities = acceptQualities.filter { qn ->
+                            when (qn) {
+                                127 -> true  // 8K - 大多数设备可以软解或降级
+                                126 -> isDolbyVisionSupported  // 杜比视界需要硬件支持
+                                125 -> isHdrSupported  // HDR 需要硬件支持
+                                else -> true  // 其他画质都支持
+                            }
+                        }
+                        
+                        // 使用自定义优先级排序：考虑 HDR/60帧等特性
+                        // 优先级（从高到低）：8K > 杜比 > HDR > 4K > 1080P60 > 1080P+ > 1080P > 720P60 > 720P > 480P > 360P
+                        val qualityPriority = mapOf(
+                            127 to 100,  // 8K
+                            126 to 95,   // 杜比视界
+                            125 to 90,   // HDR
+                            120 to 85,   // 4K
+                            116 to 80,   // 1080P60
+                            112 to 75,   // 1080P+
+                            80 to 70,    // 1080P
+                            74 to 65,    // 720P60
+                            64 to 60,    // 720P
+                            32 to 50,    // 480P
+                            16 to 40     // 360P
+                        )
+                        
+                        val maxAccept = deviceSafeQualities.maxByOrNull { qualityPriority[it] ?: it } ?: 80
+                        Logger.d("VideoPlaybackUseCase", "🚀 自动最高画质: accept_quality=$acceptQualities, 设备支持HDR=$isHdrSupported, 杜比=$isDolbyVisionSupported, 选择 $maxAccept")
                         maxAccept
                     } else {
-                        playData.quality.takeIf { it > 0 } ?: defaultQuality
+                        // 🚀 [修复] 优先使用用户设置的 defaultQuality，而不是 API 返回的 playData.quality
+                        // API 返回的 quality 往往是服务器建议的默认值（如64/720P），这会导致即使 DASH 中有 80/1080P 也被忽略
+                        if (defaultQuality > 0) defaultQuality else playData.quality
                     }
                     
                     val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()

@@ -42,6 +42,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.*
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -234,10 +236,12 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+
 fun LiveListScreen(
     onBack: () -> Unit,
     onLiveClick: (Long, String, String) -> Unit,  // roomId, title, uname
-    viewModel: LiveListViewModel = viewModel()
+    viewModel: LiveListViewModel = viewModel(),
+    globalHazeState: HazeState? = null // [新增]
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -339,6 +343,7 @@ fun LiveListScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .responsiveContentWidth(maxWidth = 1000.dp) // 📐 [Tablet Adaptation] Limit content width
+                .then(if (globalHazeState != null) Modifier.hazeSource(globalHazeState) else Modifier) // [新增]
         ) {
             when {
                 state.isLoading -> {
@@ -415,7 +420,7 @@ private fun RecommendTab(
     } else {
         LazyVerticalGrid(
             columns = GridCells.Fixed(gridColumns),
-            contentPadding = PaddingValues(12.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + 80.dp), // [新增]
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -491,7 +496,7 @@ private fun AreaTab(
             else -> {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(12.dp),
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + 80.dp), // [新增]
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -521,7 +526,7 @@ private fun FollowTab(
     } else {
         LazyVerticalGrid(
             columns = GridCells.Fixed(gridColumns),
-            contentPadding = PaddingValues(12.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp + 80.dp), // [新增]
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {

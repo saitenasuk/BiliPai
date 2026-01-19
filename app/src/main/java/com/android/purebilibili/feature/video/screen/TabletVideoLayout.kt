@@ -37,11 +37,14 @@ import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
+import io.github.alexzhirkevich.cupertino.icons.outlined.*
 
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 
@@ -293,57 +296,88 @@ private fun TabletSecondaryContent(
                     if (shouldLoadMore) commentViewModel.loadComments()
                 }
                 
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(8.dp)
-                ) {
-                    // 排序/筛选栏
-                    item {
-                        CommentSortFilterBar(
-                            count = commentState.replyCount,
-                            sortMode = commentState.sortMode,
-                            upOnlyFilter = commentState.upOnlyFilter,
-                            onSortModeChange = { commentViewModel.setSortMode(it) },
-                            onUpOnlyToggle = { commentViewModel.toggleUpOnly() }
-                        )
-                    }
-                    
-                    // 评论列表
-                    items(
-                        items = commentState.replies,
-                        key = { "reply_${it.rpid}" }
-                    ) { reply ->
-                        ReplyItemView(
-                            item = reply,
-                            emoteMap = success.emoteMap,
-                            upMid = success.info.owner.mid,
-                            onClick = {},
-                            onSubClick = { commentViewModel.openSubReply(it) },
-                            onTimestampClick = { positionMs ->
-                                playerState.player.seekTo(positionMs)
-                                playerState.player.play()
-                            },
-                            onImagePreview = { images, index, rect ->
-                                previewImages = images
-                                previewInitialIndex = index
-                                sourceRect = rect
-                                showImagePreview = true
-                            }
-                        )
-                    }
-                    
-                    // 加载指示器
-                    if (commentState.isRepliesLoading) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(8.dp)
+                    ) {
+                        // 排序/筛选栏
                         item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CupertinoActivityIndicator()
+                            CommentSortFilterBar(
+                                count = commentState.replyCount,
+                                sortMode = commentState.sortMode,
+                                onSortModeChange = { commentViewModel.setSortMode(it) }
+                            )
+                        }
+                        
+                        // 评论列表
+                        items(
+                            items = commentState.replies,
+                            key = { "reply_${it.rpid}" }
+                        ) { reply ->
+                            ReplyItemView(
+                                item = reply,
+                                emoteMap = success.emoteMap,
+                                upMid = success.info.owner.mid,
+                                onClick = {},
+                                onSubClick = { commentViewModel.openSubReply(it) },
+                                onTimestampClick = { positionMs ->
+                                    playerState.player.seekTo(positionMs)
+                                    playerState.player.play()
+                                },
+                                onImagePreview = { images, index, rect ->
+                                    previewImages = images
+                                    previewInitialIndex = index
+                                    sourceRect = rect
+                                    showImagePreview = true
+                                }
+                            )
+                        }
+                        
+                        // 加载指示器
+                        if (commentState.isRepliesLoading) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CupertinoActivityIndicator()
+                                }
                             }
+                        }
+                    }
+
+                    // 🟢 [平板适配] "只看UP主" 悬浮按钮 (FAB)
+                    FloatingActionButton(
+                        onClick = { commentViewModel.toggleUpOnly() },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp), 
+                        containerColor = if (commentState.upOnlyFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = if (commentState.upOnlyFilter) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        elevation = FloatingActionButtonDefaults.elevation(8.dp)
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (commentState.upOnlyFilter) io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.CheckmarkCircle else io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "只看\nUP",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                lineHeight = 12.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
                         }
                     }
                 }

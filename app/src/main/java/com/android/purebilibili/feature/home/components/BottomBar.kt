@@ -1,6 +1,7 @@
 // 文件路径: feature/home/components/BottomBar.kt
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.navigation.ScreenRoutes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -15,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -24,9 +26,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import kotlin.math.abs
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeChild
 import com.android.purebilibili.core.ui.blur.unifiedBlur  //  统一模糊API
+import com.android.purebilibili.core.ui.blur.BlurStyles
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import com.android.purebilibili.core.util.HapticType
@@ -41,6 +48,15 @@ import kotlinx.coroutines.launch  //  延迟导航
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
+import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
+import com.android.purebilibili.core.ui.animation.horizontalDragGesture
+import com.android.purebilibili.feature.home.components.LiquidIndicator
+import com.android.purebilibili.feature.home.components.SimpleLiquidIndicator
+// [Removed] internal import for rememberLayerBackdrop
+import androidx.compose.ui.Modifier.Companion.then
+import com.kyant.backdrop.Backdrop  // Need this type for parameter
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop // [Restore] internal import
+import com.kyant.backdrop.backdrops.layerBackdrop
 
 /**
  * 底部导航项枚举 -  使用 iOS SF Symbols 风格图标
@@ -49,47 +65,62 @@ import io.github.alexzhirkevich.cupertino.icons.filled.*
 enum class BottomNavItem(
     val label: String,
     val selectedIcon: @Composable () -> Unit,
-    val unselectedIcon: @Composable () -> Unit
+    val unselectedIcon: @Composable () -> Unit,
+    val route: String // [新增] 路由地址
 ) {
     HOME(
         "首页",
         { Icon(CupertinoIcons.Filled.House, contentDescription = "首页") },
-        { Icon(CupertinoIcons.Outlined.House, contentDescription = "首页") }
+        { Icon(CupertinoIcons.Outlined.House, contentDescription = "首页") },
+        ScreenRoutes.Home.route
     ),
     DYNAMIC(
         "动态",
         { Icon(CupertinoIcons.Filled.BellBadge, contentDescription = "动态") },
-        { Icon(CupertinoIcons.Outlined.Bell, contentDescription = "动态") }
+        { Icon(CupertinoIcons.Outlined.Bell, contentDescription = "动态") },
+        ScreenRoutes.Dynamic.route
     ),
     STORY(
         "短视频",
         { Icon(CupertinoIcons.Filled.PlayCircle, contentDescription = "短视频") },
-        { Icon(CupertinoIcons.Outlined.PlayCircle, contentDescription = "短视频") }
+        { Icon(CupertinoIcons.Outlined.PlayCircle, contentDescription = "短视频") },
+        ScreenRoutes.Story.route
     ),
     HISTORY(
         "历史",
         { Icon(CupertinoIcons.Filled.Clock, contentDescription = "历史记录") },
-        { Icon(CupertinoIcons.Outlined.Clock, contentDescription = "历史记录") }
+        { Icon(CupertinoIcons.Outlined.Clock, contentDescription = "历史记录") },
+        ScreenRoutes.History.route
     ),
     PROFILE(
         "我的",
         { Icon(CupertinoIcons.Filled.PersonCircle, contentDescription = "个人中心") },
-        { Icon(CupertinoIcons.Outlined.Person, contentDescription = "个人中心") }
+        { Icon(CupertinoIcons.Outlined.Person, contentDescription = "个人中心") },
+        ScreenRoutes.Profile.route
     ),
     FAVORITE(
         "收藏",
         { Icon(CupertinoIcons.Filled.Star, contentDescription = "收藏夹") },
-        { Icon(CupertinoIcons.Outlined.Star, contentDescription = "收藏夹") }
+        { Icon(CupertinoIcons.Outlined.Star, contentDescription = "收藏夹") },
+        ScreenRoutes.Favorite.route
     ),
     LIVE(
         "直播",
         { Icon(CupertinoIcons.Filled.Video, contentDescription = "直播") },
-        { Icon(CupertinoIcons.Outlined.Video, contentDescription = "直播") }
+        { Icon(CupertinoIcons.Outlined.Video, contentDescription = "直播") },
+        ScreenRoutes.LiveList.route
     ),
     WATCHLATER(
         "稍后看",
         { Icon(CupertinoIcons.Filled.Bookmark, contentDescription = "稀后再看") },
-        { Icon(CupertinoIcons.Outlined.Bookmark, contentDescription = "稀后再看") }
+        { Icon(CupertinoIcons.Outlined.Bookmark, contentDescription = "稀后再看") },
+        ScreenRoutes.WatchLater.route
+    ),
+    SETTINGS(
+        "设置",
+        { Icon(CupertinoIcons.Filled.Gearshape, contentDescription = "设置") },
+        { Icon(CupertinoIcons.Default.Gearshape, contentDescription = "设置") },
+        ScreenRoutes.Settings.route
     )
 }
 
@@ -114,7 +145,8 @@ fun FrostedBottomBar(
     onHomeDoubleTap: () -> Unit = {},  //  双击首页回到顶部
     visibleItems: List<BottomNavItem> = listOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY, BottomNavItem.PROFILE),  //  [新增] 可配置的可见项目
     itemColorIndices: Map<String, Int> = emptyMap(),  //  [新增] 项目颜色索引映射
-    onToggleSidebar: (() -> Unit)? = null  // 📱 [平板适配] 切换到侧边栏
+    onToggleSidebar: (() -> Unit)? = null,  // 📱 [平板适配] 切换到侧边栏
+    backdrop: Backdrop? = null  // [新增] 外部传入的全屏折射源
 ) {
     val isDarkTheme = MaterialTheme.colorScheme.background.red < 0.5f
     val haptic = rememberHapticFeedback()  //  触觉反馈
@@ -140,18 +172,22 @@ fun FrostedBottomBar(
     val context = androidx.compose.ui.platform.LocalContext.current
     val blurIntensity by com.android.purebilibili.core.store.SettingsManager.getBlurIntensity(context)
         .collectAsState(initial = com.android.purebilibili.core.ui.blur.BlurIntensity.THIN)
-    val backgroundAlpha = com.android.purebilibili.core.ui.blur.BlurStyles.getBackgroundAlpha(blurIntensity)
+    val barColor = resolveBottomBarSurfaceColor(
+        surfaceColor = MaterialTheme.colorScheme.surface,
+        blurEnabled = hazeState != null,
+        blurIntensity = blurIntensity
+    )
 
     // 📐 [平板适配] 根据 labelMode 和屏幕尺寸动态计算高度
     val floatingHeight = when (labelMode) {
-        0 -> if (isTablet) 76.dp else 64.dp   // 图标+文字 (平板增大)
-        2 -> if (isTablet) 56.dp else 48.dp   // 仅文字
-        else -> if (isTablet) 68.dp else 56.dp // 仅图标 (平板增大)
+        0 -> if (isTablet) 76.dp else 70.dp   // 图标+文字 (加大: 64->70)
+        2 -> if (isTablet) 56.dp else 54.dp   // 仅文字 (加大: 48->54)
+        else -> if (isTablet) 68.dp else 62.dp // 仅图标 (加大: 56->62)
     }
     val dockedHeight = when (labelMode) {
-        0 -> if (isTablet) 72.dp else 60.dp   // 图标+文字
-        2 -> if (isTablet) 52.dp else 44.dp   // 仅文字
-        else -> if (isTablet) 64.dp else 52.dp // 仅图标
+        0 -> if (isTablet) 72.dp else 72.dp   // 图标+文字 (66 -> 72)
+        2 -> if (isTablet) 52.dp else 56.dp   // 仅文字 (50 -> 56)
+        else -> if (isTablet) 64.dp else 64.dp // 仅图标 (58 -> 64)
     }
     
     // 📐 [平板适配] 图标大小
@@ -164,9 +200,9 @@ fun FrostedBottomBar(
         isFloating && labelMode == 0 -> 3.dp   // 悬浮+图标文字：向下偏移
         isFloating && labelMode == 1 -> 2.dp   // 悬浮+仅图标：向下偏移
         isFloating && labelMode == 2 -> 2.dp   // 悬浮+仅文字：向下偏移
-        !isFloating && labelMode == 0 -> 4.dp  // 贴边+图标文字：向下偏移
-        !isFloating && labelMode == 1 -> 3.dp  // 贴边+仅图标：向下偏移
-        !isFloating && labelMode == 2 -> 2.dp  // 贴边+仅文字：向下偏移
+        !isFloating && labelMode == 0 -> 2.dp  // 贴边+图标文字：微调偏移 (4->2)
+        !isFloating && labelMode == 1 -> 0.dp  // 贴边+仅图标：完全居中 (3->0)
+        !isFloating && labelMode == 2 -> 0.dp  // 贴边+仅文字：完全居中 (2->0)
         else -> 0.dp
     }
     
@@ -177,6 +213,9 @@ fun FrostedBottomBar(
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val floatingCornerRadius = iOSCornerRadius.Floating * cornerRadiusScale  // 28.dp * scale + 8
     val barShape = if (isFloating) RoundedCornerShape(floatingCornerRadius + 8.dp) else androidx.compose.ui.graphics.RectangleShape  // iOS 风格动态圆角
+
+    // [Restore] 内部 backdropState，用于折射底栏自身内容（文字/图标）
+    // [修改] 使用外部传入的 backdrop （全屏内容折射源）
     
     Box(
         modifier = modifier
@@ -186,13 +225,14 @@ fun FrostedBottomBar(
             .then(if (isFloating) Modifier.navigationBarsPadding() else Modifier),
         contentAlignment = Alignment.BottomCenter // 确保内容居中
     ) {
-        //  主内容层
-        Surface(
+        //  [修复] hazeEffect 应用于外层 Box，绘制模糊背景
+        //  Surface 保持透明作为内容容器，这样模糊效果不会被遮盖
+        Box(
             modifier = Modifier
                 .then(
                     if (isFloating) {
                          Modifier
-                            .widthIn(max = 640.dp) // [平板适配] 限制最大宽度，防止按钮过分疏散
+                            .widthIn(max = 640.dp) // [平板适配] 限制最大宽度
                             .shadow(
                                 elevation = 8.dp,
                                 shape = barShape,
@@ -206,62 +246,55 @@ fun FrostedBottomBar(
                 )
                 .fillMaxWidth()
                 .clip(barShape)
-                .then(
-                    if (hazeState != null) {
-                        Modifier.unifiedBlur(hazeState)  //  版本自适应模糊
+                .then(if (hazeState != null) Modifier.unifiedBlur(hazeState) else Modifier)
+                .background(barColor)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                //  Surface 透明，让外层 Box 的 hazeEffect 显示
+                color = Color.Transparent,
+                shape = barShape,
+                shadowElevation = 0.dp,
+                border = if (hazeState != null) {
+                    //  iOS 风格边框
+                    if (!isFloating) {
+                        androidx.compose.foundation.BorderStroke(
+                            width = 0.5.dp,
+                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
                     } else {
-                        Modifier
-                            .background(MaterialTheme.colorScheme.surface)
+                        androidx.compose.foundation.BorderStroke(
+                            width = 0.5.dp,
+                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.35f),
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                )
+                            )
+                        )
                     }
-                ),
-            //  [修复] 根据模糊强度动态调整背景透明度
-            color = if (hazeState != null) {
-                MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha)
-            } else {
-                // 无模糊时使用实心背景
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-            },
-            shape = barShape,
-            shadowElevation = 0.dp,
-            border = if (hazeState != null) {
-                //  iOS 风格：非悬浮模式只显示顶部边框
-                if (!isFloating) {
+                } else {
                     androidx.compose.foundation.BorderStroke(
                         width = 0.5.dp,
-                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-                } else {
-                    //  [优化] 悬浮模式边框 0.5dp - 更精致的玻璃拟态风格
-                    androidx.compose.foundation.BorderStroke(
-                        width = 0.5.dp,  //  从 1dp 改为 0.5dp
-                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.35f),  //  顶部高光增强
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                            )
-                        )
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                     )
                 }
-            } else {
-                // 无模糊时使用更淡的边框
-                androidx.compose.foundation.BorderStroke(
-                    width = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                )
-            }
-        ) {
+            ) {
             //  Telegram 风格滑动指示器
             val itemCount = visibleItems.size  //  [修改] 使用可见项目数
             val selectedIndex = visibleItems.indexOf(currentItem)  //  [修改] 使用可见项目索引
             
             //  iOS 风格：内容区固定高度，导航栏区域作为 padding 包含在 Surface 内
             Column(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // [已移除] 移除 layerBackdrop 防止循环依赖和渲染闪烁
+                    // .layerBackdrop(backdropState)
             ) {
                 BoxWithConstraints(
                     modifier = Modifier
@@ -272,296 +305,97 @@ fun FrostedBottomBar(
                         )
                 ) {
                 //  考虑 Row 的 padding 后的实际可用宽度
-                val rowPadding = 12.dp
+                //  [调整] 增加 padding 以防止指示器贴边 (12dp -> 20dp)
+                //  指示器溢出宽度为 12dp (24dp/2), 所以 20dp padding 会留下 8dp 的间隙
+                val rowPadding = 20.dp
                 val actualContentWidth = maxWidth - (rowPadding * 2)
                 val itemWidth = actualContentWidth / itemCount
                 
-                //  Telegram 风格滑动胶囊指示器
-                val indicatorOffset by animateDpAsState(
-                    targetValue = rowPadding + (itemWidth * selectedIndex) + (itemWidth - 48.dp) / 2,  //  适配 48dp 胶囊
-                    animationSpec = spring(
-                        dampingRatio = 0.7f,  // 柔和阻尼
-                        stiffness = 400f       // 较快响应
-                    ),
-                    label = "indicator_offset"
+                //  Telegram 风格滑动指示器
+                //  [新增] 阻尼拖拽动画状态
+                val dampedDragState = rememberDampedDragAnimationState(
+                    initialIndex = if (selectedIndex >= 0) selectedIndex else 0,
+                    itemCount = itemCount,
+                    onIndexChanged = { index -> 
+                        if (index in visibleItems.indices) {
+                            onItemClick(visibleItems[index])
+                        }
+                    }
                 )
                 
-                //  [已移除] 指示器胶囊背景 - 用户要求去掉圆圈
+                // [修复] 当选中项不在底栏中时（如设置页面），隐藏指示器
+                val isValidSelection = selectedIndex >= 0
+                val indicatorAlpha by animateFloatAsState(
+                    targetValue = if (isValidSelection) 1f else 0f,
+                    label = "indicatorAlpha"
+                )
                 
-                // 导航项 Row
-                Row(
+                //  同步外部状态变化 (点击切换时)
+                LaunchedEffect(selectedIndex) {
+                    if (isValidSelection) {
+                        dampedDragState.updateIndex(selectedIndex)
+                    }
+                }
+
+                //  [重构] 布局结构：
+                //  1. 内容层 (Row) -> 标记为 backdrop 源
+                //  2. 滤镜层 (LiquidIndicator) -> 使用 backdrop 源进行折射
+                
+                // ----------------------------------------------------------------
+                // [简化] 液态玻璃指示器 - 不使用折射效果
+                // ----------------------------------------------------------------
+                // 由于折射效果会导致重复渲染和视觉伪影，现在改用简单的玻璃背景
+                // 指示器只显示半透明背景+高光+阴影，不进行任何内容折射
+                // ----------------------------------------------------------------
+
+                // [指示器层] 简化版液态玻璃 - 不传入 backdrop
+                LiquidIndicator(
+                    position = dampedDragState.value,
+                    itemWidth = itemWidth,
+                    itemCount = itemCount,
+                    isDragging = dampedDragState.isDragging,
+                    velocity = dampedDragState.velocity,
+                    backdrop = null, // [修复] 不使用折射，避免重复指示器
+                    startPadding = rowPadding,
+                    // [修复] 当无选中项时隐藏指示器
+                    // [修复] 垂直偏移: 必须与 BottomBarItem 内容的 contentVerticalOffset 保持一致，否则指示器会偏上
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = rowPadding),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 📱 [平板适配] 切换按钮集成在底栏内部 (作为第一项)
-                if (isTablet && onToggleSidebar != null) {
-                    // 追踪点击状态
-                    var isPending by remember { mutableStateOf(false) }
-                    
-                    // 颜色动画
-                    val primaryColor = MaterialTheme.colorScheme.primary
-                    val unselectedColor = if (hazeState != null) {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f) // 与其他图标一致的未选中颜色
-                    } else {
-                        BottomBarColors.UNSELECTED
-                    }
-                    
-                    val iconColor by animateColorAsState(
-                        targetValue = if (isPending) primaryColor else unselectedColor,
-                        animationSpec = spring(),
-                        label = "iconColor"
-                    )
+                        .offset(y = contentVerticalOffset) 
+                        .alpha(indicatorAlpha)
+                )
 
-                    Column(
-                        modifier = Modifier
-                            .weight(1f) // 均分宽度
-                            .fillMaxHeight()
-                            .offset(y = contentVerticalOffset)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null // 自定义动画
-                            ) {
-                                isPending = true
-                                haptic(HapticType.LIGHT)
-                                kotlinx.coroutines.MainScope().launch {
-                                    kotlinx.coroutines.delay(100)
-                                    onToggleSidebar()
-                                    isPending = false
-                                }
-                            },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            modifier = Modifier.size(iconSize) // 使用标准图标大小
-                        ) {
-                            Icon(
-                                imageVector = CupertinoIcons.Outlined.SidebarLeft,
-                                contentDescription = "侧边栏",
-                                tint = iconColor,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                        
-                         if (labelMode == 0) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "侧栏", // 简洁的标签
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = iconColor
-                            )
-                        }
-                    }
+                // 3. [交互层] 可见内容
+                // 放在最上层以接收点击事件，并正常显示
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    BottomBarContent(
+                       visibleItems = visibleItems,
+                       selectedIndex = selectedIndex,
+                       itemColorIndices = itemColorIndices,
+                       onItemClick = onItemClick,
+                       onToggleSidebar = onToggleSidebar,
+                       isTablet = isTablet,
+                       labelMode = labelMode,
+                       hazeState = hazeState,
+                       haptic = haptic,
+                       debounceClick = debounceClick,
+                       onHomeDoubleTap = onHomeDoubleTap,
+                       itemWidth = itemWidth,
+                       rowPadding = rowPadding,
+                       contentVerticalOffset = contentVerticalOffset,
+                       isInteractive = true,
+                       currentPosition = dampedDragState.value, // [新增] 动态位置 (可见层)
+                       // 将手势监听加在可见层
+                       dragModifier = Modifier.horizontalDragGesture(
+                            dragState = dampedDragState,
+                            itemWidthPx = with(LocalDensity.current) { itemWidth.toPx() }
+                       )
+                   )
                 }
-
-                visibleItems.forEach { item ->  //  [修改] 使用可配置的项目列表
-                    val isSelected = item == currentItem
-                    
-                    //  [新增] 追踪是否正在点击此项（动画播放中）
-                    var isPending by remember { mutableStateOf(false) }
-                    
-                    //  跟随主题色：选中时使用主题色，未选中时根据模糊状态调整颜色
-                    val primaryColor = MaterialTheme.colorScheme.primary
-                    //  [优化] 模糊模式下使用 onSurface 自适应深浅模式
-                    // 深色模式 -> onSurface 为浅色（白色系）；浅色模式 -> onSurface 为深色（黑色系）
-                    val unselectedColor = if (hazeState != null) {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    } else {
-                        BottomBarColors.UNSELECTED
-                    }
-                    
-                    val iconColor by animateColorAsState(
-                        targetValue = if (isSelected || isPending) primaryColor else unselectedColor,
-                        animationSpec = spring(),
-                        label = "iconColor"
-                    )
-                    
-                    //  [新增] Telegram 风格晃动动画状态
-                    var triggerWobble by remember { mutableStateOf(0) }
-                    
-                    //  晃动角度动画
-                    val rotation by animateFloatAsState(
-                        targetValue = 0f,
-                        animationSpec = spring(
-                            dampingRatio = 0.35f,  // 更低阻尼 = 更多晃动
-                            stiffness = 600f
-                        ),
-                        label = "rotation"
-                    )
-                    
-                    //  点击时触发晃动效果
-                    LaunchedEffect(triggerWobble) {
-                        if (triggerWobble > 0) {
-                            // 无需额外操作，rotation 动画会自动处理
-                        }
-                    }
-                    
-                    //  弹性缩放动画 (选中时放大并弹跳)
-                    val scale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.15f else 1.0f,
-                        animationSpec = spring(
-                            dampingRatio = 0.35f,  //  更低阻尼 = 更明显过冲弹跳
-                            stiffness = 300f
-                        ),
-                        label = "scale"
-                    )
-                    
-                    //  [新增] Y 轴弹跳动画 - 选中时向上弹起
-                    val bounceY by animateFloatAsState(
-                        targetValue = if (isSelected) -4f else 0f,
-                        animationSpec = spring(
-                            dampingRatio = 0.3f,  // 低阻尼 = 明显弹跳过冲
-                            stiffness = 400f
-                        ),
-                        label = "bounceY"
-                    )
-                    
-                    //  [新增] 点击时的晃动角度
-                    var wobbleAngle by remember { mutableFloatStateOf(0f) }
-                    val scope = rememberCoroutineScope()  //  用于延迟导航
-                    
-                    val animatedWobble by animateFloatAsState(
-                        targetValue = wobbleAngle,
-                        animationSpec = spring(
-                            dampingRatio = 0.2f,   // 极低阻尼 = 多次自然晃动
-                            stiffness = 600f       // 适中刚度 = 平滑响应
-                        ),
-                        label = "wobble"
-                    )
-                    
-                    //  晃动完成后重置角度
-                    LaunchedEffect(wobbleAngle) {
-                        if (wobbleAngle != 0f) {
-                            kotlinx.coroutines.delay(50)  // 短暂保持
-                            wobbleAngle = 0f  // 重置触发弹回晃动
-                        }
-                    }
-                    
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .offset(y = contentVerticalOffset) //  根据样式动态调整偏移以确保视觉居中
-                            .then(
-                                if (item == BottomNavItem.HOME) {
-                                    //  HOME 项支持双击回到顶部
-                                    Modifier.pointerInput(Unit) {
-                                        detectTapGestures(
-                                            onTap = {
-                                                // 🔒 [防抖] 使用防抖包装避免快速点击重复导航
-                                                debounceClick(item) {
-                                                    isPending = true  //  立即变色
-                                                    haptic(HapticType.LIGHT)
-                                                    //  颜色切换完成后再播放晃动动画，然后切换页面
-                                                    kotlinx.coroutines.MainScope().launch {
-                                                        kotlinx.coroutines.delay(100)  // 等待颜色动画
-                                                        wobbleAngle = 15f  //  触发晃动
-                                                        kotlinx.coroutines.delay(150)  // 等待晃动动画
-                                                        onItemClick(item)
-                                                    }
-                                                }
-                                            },
-                                            onDoubleTap = {
-                                                haptic(HapticType.MEDIUM)  // 双击用更强反馈
-                                                onHomeDoubleTap()
-                                            }
-                                        )
-                                    }
-                                } else {
-                                    // 其他项保持普通点击
-                                    Modifier.clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) { 
-                                        // 🔒 [防抖] 使用防抖包装避免快速点击重复导航
-                                        debounceClick(item) {
-                                            isPending = true  //  立即变色
-                                            haptic(HapticType.LIGHT)
-                                            //  颜色切换完成后再播放晃动动画，然后切换页面
-                                            kotlinx.coroutines.MainScope().launch {
-                                                kotlinx.coroutines.delay(100)  // 等待颜色动画
-                                                wobbleAngle = 15f  //  触发晃动
-                                                kotlinx.coroutines.delay(150)  // 等待晃动动画
-                                                onItemClick(item)
-                                            }
-                                        }
-                                    }
-                                }
-                            ),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        //  根据 labelMode 显示不同组合
-                        when (labelMode) {
-                            0 -> {
-                                // 图标 + 文字
-                                Box(
-                                    modifier = Modifier
-                                        .size(iconWithTextSize)  // 📐 响应式图标大小
-                                        .graphicsLayer {
-                                            scaleX = scale
-                                            scaleY = scale
-                                            rotationZ = animatedWobble
-                                            translationY = bounceY  // Y 轴弹跳
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CompositionLocalProvider(LocalContentColor provides iconColor) {
-                                        if (isSelected) item.selectedIcon() else item.unselectedIcon()
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = item.label,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                    color = iconColor
-                                )
-                            }
-                            2 -> {
-                                // 仅文字
-                                Text(
-                                    text = item.label,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = iconColor,
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            scaleX = scale
-                                            scaleY = scale
-                                            rotationZ = animatedWobble
-                                            translationY = bounceY
-                                        }
-                                )
-                            }
-                            else -> {
-                                // 仅图标 (默认)
-                                Box(
-                                    modifier = Modifier
-                                        .size(iconSize)  // 📐 响应式图标大小
-                                        .graphicsLayer {
-                                            scaleX = scale
-                                            scaleY = scale
-                                            rotationZ = animatedWobble
-                                            translationY = bounceY  // Y 轴弹跳
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CompositionLocalProvider(LocalContentColor provides iconColor) {
-                                        if (isSelected) item.selectedIcon() else item.unselectedIcon()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            }  //  BoxWithConstraints 闭合
+                
+                } // BoxWithConstraints 闭合
                 
                 //  iOS 风格：非悬浮模式时，导航栏区域作为 Spacer 包含在 Surface 内
                 if (!isFloating) {
@@ -572,6 +406,294 @@ fun FrostedBottomBar(
                     )
                 }
             }  //  Column 闭合
+        }
+    }
+    }
+}
+
+internal fun resolveBottomBarSurfaceColor(
+    surfaceColor: Color,
+    blurEnabled: Boolean,
+    blurIntensity: com.android.purebilibili.core.ui.blur.BlurIntensity
+): Color {
+    val alpha = if (blurEnabled) {
+        BlurStyles.getBackgroundAlpha(blurIntensity)
+    } else {
+        1f
+    }
+    return surfaceColor.copy(alpha = alpha)
+}
+
+@Composable
+private fun BottomBarContent(
+    visibleItems: List<BottomNavItem>,
+    selectedIndex: Int,
+    itemColorIndices: Map<String, Int>,
+    onItemClick: (BottomNavItem) -> Unit,
+    onToggleSidebar: (() -> Unit)?,
+    isTablet: Boolean,
+    labelMode: Int,
+    hazeState: HazeState?,
+    haptic: (HapticType) -> Unit,
+    debounceClick: (BottomNavItem, () -> Unit) -> Unit,
+    onHomeDoubleTap: () -> Unit,
+    itemWidth: Dp,
+    rowPadding: Dp,
+    contentVerticalOffset: Dp,
+    isInteractive: Boolean,
+    currentPosition: Float, // [新增] 当前指示器位置，用于动态插值
+    dragModifier: Modifier = Modifier
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = rowPadding)
+            .then(dragModifier),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // [平板适配] ... (保持不变，省略以简化 diff，实际需完整保留)
+        // 为保持 diff 简洁且正确，这里只修改 visibleItems 循环部分
+        // 平板侧边栏按钮逻辑可以保持现状，因为它不参与 currentPosition 计算（它是额外的）
+        // 但为了完整性，我们需要确保 BottomBarContent 的完整代码。
+        
+        // 由于 multi_replace 限制，我必须提供完整的 BottomBarContent。
+        // ... (平板按钮代码) 
+        if (isTablet && onToggleSidebar != null) {
+            // ... (复制原有逻辑)
+            // 简单复制：
+             var isPending by remember { mutableStateOf(false) }
+            val primaryColor = MaterialTheme.colorScheme.primary
+            val unselectedColor = if (hazeState != null) {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            } else {
+                BottomBarColors.UNSELECTED
+            }
+            val iconColor by animateColorAsState(targetValue = if (isPending) primaryColor else unselectedColor, label = "iconColor")
+
+            Column(
+                modifier = Modifier.weight(1f).fillMaxHeight().offset(y = contentVerticalOffset)
+                    .then(if (isInteractive) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { isPending = true; haptic(HapticType.LIGHT); kotlinx.coroutines.MainScope().launch { kotlinx.coroutines.delay(100); onToggleSidebar(); isPending = false } } else Modifier),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+            ) {
+                Box(modifier = Modifier.size(26.dp)) {
+                    Icon(imageVector = CupertinoIcons.Outlined.SidebarLeft, contentDescription = "侧边栏", tint = iconColor, modifier = Modifier.fillMaxSize())
+                }
+                if (labelMode == 0) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(text = "侧边栏", style = MaterialTheme.typography.labelSmall, color = iconColor, fontWeight = FontWeight.Medium, fontSize = 10.sp)
+                }
+            }
+        }
+        
+        visibleItems.forEachIndexed { index, item ->
+            val isSelected = selectedIndex == index
+            val itemColorIndex = itemColorIndices[item.name] ?: 0
+            
+            // [核心逻辑] 计算每个 Item 的选中分数 (0f..1f)
+            // 根据当前位置 currentPosition 和 item index 的距离计算
+            // 距离 < 1 时开始变色，距离 0 时完全变色
+            val distance = abs(currentPosition - index)
+            val selectionFraction = (1f - distance).coerceIn(0f, 1f)
+            
+            BottomBarItem(
+                item = item,
+                isSelected = isSelected, // 仅用于点击逻辑判断
+                selectionFraction = selectionFraction, // [新增] 用于驱动样式
+                onClick = { if (isInteractive) onItemClick(item) },
+                labelMode = labelMode,
+                colorIndex = itemColorIndex,
+                iconSize = if (labelMode == 0) 24.dp else 26.dp,
+                contentVerticalOffset = contentVerticalOffset,
+                modifier = Modifier.weight(1f),
+                hazeState = hazeState,
+                haptic = haptic,
+                debounceClick = debounceClick,
+                onHomeDoubleTap = onHomeDoubleTap
+            )
+        }
+    }
+}
+
+@Composable
+private fun BottomBarItem(
+    item: BottomNavItem,
+    isSelected: Boolean,
+    selectionFraction: Float, // [新增] 0f..1f
+    onClick: () -> Unit,
+    labelMode: Int,
+    colorIndex: Int,
+    iconSize: androidx.compose.ui.unit.Dp,
+    contentVerticalOffset: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+    hazeState: HazeState?,
+    haptic: (HapticType) -> Unit,
+    debounceClick: (BottomNavItem, () -> Unit) -> Unit,
+    onHomeDoubleTap: () -> Unit
+) {
+    var isPending by remember { mutableStateOf(false) }
+    
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val unselectedColor = if (hazeState != null) {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+    } else {
+        BottomBarColors.UNSELECTED
+    }
+    
+    // [修改] 颜色插值：根据 selectionFraction 在 unselected 和 selected 之间混合
+    // 还要考虑 isPending (点击态)
+    val targetIconColor = androidx.compose.ui.graphics.lerp(
+        unselectedColor, 
+        primaryColor, 
+        if (isPending) 1f else selectionFraction
+    )
+    
+    // 仍然使用 animateColorAsState 但目标值现在是动态插值的
+    // 使用较快的动画以跟手，或者直接使用 lerp 结果如果非常平滑
+    // 为了平滑过渡，这里使用 FastOutSlowIn 且时间短
+    val iconColor by animateColorAsState(
+        targetValue = targetIconColor,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 100), // 快速响应
+        label = "iconColor"
+    )
+    
+    // [修改] 缩放插值
+    val targetScale = androidx.compose.ui.util.lerp(1.0f, 1.15f, selectionFraction)
+    val scale by animateFloatAsState(
+        targetValue = targetScale,
+        animationSpec = spring(dampingRatio = 0.4f, stiffness = 400f),
+        label = "scale"
+    )
+    
+    // [修改] Y轴位移插值
+    val targetBounceY = androidx.compose.ui.util.lerp(0f, -4f, selectionFraction)
+    val bounceY by animateFloatAsState(
+        targetValue = targetBounceY,
+        animationSpec = spring(dampingRatio = 0.4f, stiffness = 400f),
+        label = "bounceY"
+    )
+    
+    //  晃动角度 (保持不变)
+    var wobbleAngle by remember { mutableFloatStateOf(0f) }
+    val animatedWobble by animateFloatAsState(
+        targetValue = wobbleAngle,
+        animationSpec = spring(dampingRatio = 0.2f, stiffness = 600f),
+        label = "wobble"
+    )
+    
+    LaunchedEffect(wobbleAngle) {
+        if (wobbleAngle != 0f) {
+            kotlinx.coroutines.delay(50)
+            wobbleAngle = 0f
+        }
+    }
+    
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .offset(y = contentVerticalOffset)
+            .then(
+                // 保持原样
+                if (item == BottomNavItem.HOME) {
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                debounceClick(item) {
+                                    isPending = true
+                                    haptic(HapticType.LIGHT)
+                                    kotlinx.coroutines.MainScope().launch {
+                                        kotlinx.coroutines.delay(100)
+                                        wobbleAngle = 15f
+                                        kotlinx.coroutines.delay(150)
+                                        onClick()
+                                        isPending = false
+                                    }
+                                }
+                            },
+                            onDoubleTap = {
+                                haptic(HapticType.MEDIUM)
+                                onHomeDoubleTap()
+                            }
+                        )
+                    }
+                } else {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { 
+                        debounceClick(item) {
+                            isPending = true
+                            haptic(HapticType.LIGHT)
+                            kotlinx.coroutines.MainScope().launch {
+                                kotlinx.coroutines.delay(100)
+                                wobbleAngle = 15f
+                                kotlinx.coroutines.delay(150)
+                                onClick()
+                                isPending = false
+                            }
+                        }
+                    }
+                }
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) { // ... (Icon/Text rendering 保持不变，使用 iconColor/scale 等变量)
+        when (labelMode) {
+            0 -> { // Icon + Text
+                Box(
+                    modifier = Modifier
+                        .size(iconSize)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            rotationZ = animatedWobble
+                            translationY = bounceY
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    CompositionLocalProvider(LocalContentColor provides iconColor) {
+                        if (isSelected) item.selectedIcon() else item.unselectedIcon()
+                    }
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = item.label,
+                    fontSize = 10.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = iconColor
+                )
+            }
+            2 -> { // Text Only
+                Text(
+                    text = item.label,
+                    fontSize = 14.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = iconColor,
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        rotationZ = animatedWobble
+                        translationY = bounceY
+                    }
+                )
+            }
+            else -> { // Icon Only
+                Box(
+                    modifier = Modifier
+                        .size(iconSize)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            rotationZ = animatedWobble
+                            translationY = bounceY
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    CompositionLocalProvider(LocalContentColor provides iconColor) {
+                        if (isSelected) item.selectedIcon() else item.unselectedIcon()
+                    }
+                }
+            }
         }
     }
 }

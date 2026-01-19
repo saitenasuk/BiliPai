@@ -189,6 +189,45 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
     private val _hasMoreState = MutableStateFlow(true)
     val hasMoreState = _hasMoreState.asStateFlow()
     
+    // 📁 [新增] 收藏夹列表
+    private val _folders = MutableStateFlow<List<com.android.purebilibili.data.model.response.FavFolder>>(emptyList())
+    val folders = _folders.asStateFlow()
+    
+    // 📁 [新增] 当前选中的收藏夹索引
+    private val _selectedFolderIndex = MutableStateFlow(0)
+    val selectedFolderIndex = _selectedFolderIndex.asStateFlow()
+    
+    /**
+     * 📁 [新增] 切换收藏夹
+     */
+    fun switchFolder(index: Int) {
+        if (index < 0 || index >= allFolderIds.size || index == currentFolderIndex) return
+        
+        currentFolderIndex = index
+        _selectedFolderIndex.value = index
+        currentPage = 1
+        
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, items = emptyList())
+            
+            try {
+                val listResult = com.android.purebilibili.data.repository.FavoriteRepository.getFavoriteList(
+                    mediaId = allFolderIds[index], 
+                    pn = 1
+                )
+                val items = listResult.getOrNull()?.map { it.toVideoItem() } ?: emptyList()
+                
+                hasMore = items.size >= 20
+                _hasMoreState.value = hasMore
+                
+                _uiState.value = _uiState.value.copy(isLoading = false, items = items)
+                com.android.purebilibili.core.util.Logger.d("FavoriteVM", "📁 Switched to folder $index, loaded ${items.size} items")
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+            }
+        }
+    }
+    
     override suspend fun fetchItems(): List<VideoItem> {
         val api = NetworkModule.api
 
@@ -201,19 +240,21 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
 
         // 2. 获取该用户的收藏夹列表
         val foldersResult = com.android.purebilibili.data.repository.FavoriteRepository.getFavFolders(mid)
-        val folders = foldersResult.getOrNull()
-        if (folders.isNullOrEmpty()) {
+        val foldersList = foldersResult.getOrNull()
+        if (foldersList.isNullOrEmpty()) {
             hasMore = false
             _hasMoreState.value = false
             return emptyList()
         }
 
-        // 3.  保存所有收藏夹 ID
-        allFolderIds = folders.map { it.id }
+        // 3.  保存所有收藏夹
+        _folders.value = foldersList
+        allFolderIds = foldersList.map { it.id }
         currentFolderIndex = 0
+        _selectedFolderIndex.value = 0
         currentPage = 1
         
-        com.android.purebilibili.core.util.Logger.d("FavoriteVM", " Found ${allFolderIds.size} folders: ${folders.map { "${it.title}(${it.media_count})" }}")
+        com.android.purebilibili.core.util.Logger.d("FavoriteVM", " Found ${allFolderIds.size} folders: ${foldersList.map { "${it.title}(${it.media_count})" }}")
 
         // 4. 获取第一个收藏夹内的视频（第一页）
         val listResult = com.android.purebilibili.data.repository.FavoriteRepository.getFavoriteList(
@@ -224,8 +265,8 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
         
         com.android.purebilibili.core.util.Logger.d("FavoriteVM", " First folder loaded ${items.size} items")
         
-        // 判断是否还有更多（本收藏夹还有更多，或还有其他收藏夹）
-        hasMore = items.size >= 20 || allFolderIds.size > 1
+        // 判断是否还有更多
+        hasMore = items.size >= 20
         _hasMoreState.value = hasMore
         
         return items

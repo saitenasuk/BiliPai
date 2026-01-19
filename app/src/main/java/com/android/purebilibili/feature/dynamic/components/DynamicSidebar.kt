@@ -36,7 +36,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-//  已改用 MaterialTheme.colorScheme.primary
+import androidx.compose.runtime.collectAsState
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.ui.blur.BlurStyles
+import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.feature.dynamic.SidebarUser
 
 /**
@@ -65,6 +71,14 @@ fun DynamicSidebar(
         label = "sidebarWidth"
     )
     
+    // 模糊状态
+    val sidebarHazeState = remember { HazeState() }
+    
+    // 读取模糊强度设置
+    val blurIntensity by SettingsManager.getBlurIntensity(LocalContext.current)
+        .collectAsState(initial = BlurIntensity.THIN)
+    val backgroundAlpha = BlurStyles.getBackgroundAlpha(blurIntensity)
+    
     // 侧边栏容器 - Glassmorphism 升级版
     Box(
         modifier = modifier
@@ -72,7 +86,7 @@ fun DynamicSidebar(
             .fillMaxHeight()
             .clip(RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp))
             .background(
-                MaterialTheme.colorScheme.background // 与主背景一致
+                MaterialTheme.colorScheme.surface // 纯白背景，减少割裂感
             )
             .border(
                 width = 0.5.dp,
@@ -80,75 +94,88 @@ fun DynamicSidebar(
                 shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
             )
     ) {
-        // 移除模拟的模糊层，使用纯净的深色玻璃感
-        
-        Column(modifier = Modifier.fillMaxSize()) {
-            Spacer(modifier = Modifier.height(topPadding))
+        // 内容层 - 使用 Box 重新组织布局以支持模糊
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 可滚动内容 - 作为模糊源
+            LazyColumn(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                contentPadding = PaddingValues(
+                    top = topPadding + 52.dp, // 为顶部返回按钮留出空间
+                    bottom = 16.dp
+                ),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(sidebarHazeState) // 设置模糊源
+            ) {
+                // 隐藏用户切换按钮 (胶囊样式)
+                if (hiddenCount > 0 || showHiddenUsers) {
+                    item(key = "hidden_toggle") {
+                        Box(
+                            modifier = Modifier
+                                .padding(bottom = 12.dp)
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (showHiddenUsers) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) 
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                                )
+                                .clickable { onToggleShowHidden() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (showHiddenUsers) CupertinoIcons.Default.Eye else CupertinoIcons.Default.EyeSlash,
+                                contentDescription = null,
+                                tint = if (showHiddenUsers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // 关注的UP主列表 - 带瀑布入场动画
+                itemsIndexed(users, key = { _, u -> "sidebar_${u.uid}" }) { index, user ->
+                    CascadeSidebarItem(
+                        index = index,
+                        content = {
+                            SidebarUserItem(
+                                user = user,
+                                isSelected = selectedUserId == user.uid,
+                                showLabel = isExpanded,
+                                onClick = { onUserClick(user.uid) },
+                                onTogglePin = { onTogglePin(user.uid) },
+                                onToggleHidden = { onToggleHidden(user.uid) }
+                            )
+                        }
+                    )
+                }
+            }
             
-            // 返回按钮区域
+            // 顶部返回按钮区域 - 应用模糊效果
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .clickable { onBackClick() },
-                contentAlignment = Alignment.Center
+                    .height(topPadding + 52.dp)
+                    .unifiedBlur(sidebarHazeState) // 应用模糊
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha))
+                    .align(Alignment.TopCenter)
             ) {
-                 Icon(
-                    imageVector = CupertinoIcons.Default.ChevronBackward,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onSurface, // 自适应颜色
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            LazyColumn(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp), // 减少顶部及间距，因为有了返回按钮
-                modifier = Modifier.weight(1f)
-            ) {
-            //  隐藏用户切换按钮 (胶囊样式)
-            if (hiddenCount > 0 || showHiddenUsers) {
-                item(key = "hidden_toggle") {
-                    Box(
-                        modifier = Modifier
-                            .padding(bottom = 12.dp)
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (showHiddenUsers) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) 
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f) // 自适应背景
-                            )
-                            .clickable { onToggleShowHidden() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (showHiddenUsers) CupertinoIcons.Default.Eye else CupertinoIcons.Default.EyeSlash,
-                            contentDescription = null,
-                            tint = if (showHiddenUsers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, // 自适应图标
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .align(Alignment.BottomCenter)
+                        .clickable { onBackClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.ChevronBackward,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
-
-            // 关注的UP主列表 - 带瀑布入场动画
-            itemsIndexed(users, key = { _, u -> "sidebar_${u.uid}" }) { index, user ->
-                CascadeSidebarItem(
-                    index = index,
-                    content = {
-                        SidebarUserItem(
-                            user = user,
-                            isSelected = selectedUserId == user.uid,
-                            showLabel = isExpanded,
-                            onClick = { onUserClick(user.uid) },
-                            onTogglePin = { onTogglePin(user.uid) },
-                            onToggleHidden = { onToggleHidden(user.uid) }
-                        )
-                    }
-                )
-            }
         }
-    } // End ColumnWrapper
         
         // 右侧边框线 - 极细
         Box(

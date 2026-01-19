@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -23,6 +24,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.util.responsiveContentWidth
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.unifiedBlur
 
 /**
  *  分区数据类
@@ -74,7 +78,11 @@ fun PartitionScreen(
     onBack: () -> Unit,
     onPartitionClick: (Int, String) -> Unit = { _, _ -> }  // 分区ID + 分区名
 ) {
+    val hazeState = remember { HazeState() }
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
                 title = { Text("分区") },
@@ -84,7 +92,11 @@ fun PartitionScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent
+                ),
+                modifier = Modifier.unifiedBlur(
+                    hazeState = hazeState
                 )
             )
         }
@@ -92,58 +104,67 @@ fun PartitionScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
                 .responsiveContentWidth(maxWidth = 1000.dp) // 📐 [Tablet Adaptation] Limit content width
         ) {
-            //  快捷访问
-            Text(
-                text = "快捷访问",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .clickable { /* TODO: 编辑快捷访问 */ },
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "+ 编辑",
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            //  全部分区
-            Text(
-                text = "全部分区",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            
             //  分区网格
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 80.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(
+                    // 顶部加上 TopBar 高度，底部保留原来的 padding
+                    top = paddingValues.calculateTopPadding() + 8.dp,
+                    bottom = paddingValues.calculateBottomPadding() + 16.dp, 
+                    start = 16.dp, 
+                    end = 16.dp
+                ),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .hazeSource(state = hazeState)
             ) {
+                //  快捷访问 (作为 Grid 的一个 Item 或者 Header)
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column {
+                        Text(
+                            text = "快捷访问",
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { /* TODO: 编辑快捷访问 */ },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "+ 编辑",
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Text(
+                            text = "全部分区",
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+                
                 items(allPartitions) { partition ->
                     PartitionItem(
                         partition = partition,

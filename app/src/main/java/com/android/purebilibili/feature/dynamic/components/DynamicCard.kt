@@ -31,8 +31,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.compose.AsyncImage
-//  已改用 MaterialTheme.colorScheme.primary
-import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicStatModule
@@ -65,7 +63,7 @@ fun DynamicCardV2(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
-        backgroundColor = MaterialTheme.colorScheme.surfaceContainer, // 自适应主题色
+        backgroundColor = MaterialTheme.colorScheme.surface, // 纯白背景，减少割裂感
         shape = RoundedCornerShape(20.dp) // 更大的圆角
     ) {
     Column(
@@ -309,14 +307,14 @@ fun RichTextContent(
                         }
                     }
                     "AT" -> {
-                        // @提及：蓝色高亮
-                        withStyle(SpanStyle(color = iOSBlue, fontWeight = FontWeight.Medium)) {
+                        // @提及：主题色高亮
+                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)) {
                             append(node.text)
                         }
                     }
                     "TOPIC" -> {
-                        // 话题标签：蓝色高亮
-                        withStyle(SpanStyle(color = iOSBlue, fontWeight = FontWeight.Medium)) {
+                        // 话题标签：主题色高亮
+                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)) {
                             append(node.text)
                         }
                     }
@@ -335,7 +333,7 @@ fun RichTextContent(
                 if (match.range.first > lastEnd) {
                     append(rawText.substring(lastEnd, match.range.first))
                 }
-                withStyle(SpanStyle(color = iOSBlue, fontWeight = FontWeight.Medium)) {
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)) {
                     append(match.value)
                 }
                 lastEnd = match.range.last + 1

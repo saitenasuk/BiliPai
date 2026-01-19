@@ -42,7 +42,8 @@ import com.android.purebilibili.core.util.rememberResponsiveValue
 fun CommonListScreen(
     viewModel: BaseListViewModel,
     onBack: () -> Unit,
-    onVideoClick: (String, Long) -> Unit
+    onVideoClick: (String, Long) -> Unit,
+    globalHazeState: HazeState? = null // [新增] 接收全局 HazeState
 ) {
     val state by viewModel.uiState.collectAsState()
     val gridState = rememberLazyGridState()
@@ -92,6 +93,12 @@ fun CommonListScreen(
         }
     }
 
+    // 📁 [新增] 收藏夹切换 Tab
+    val foldersState by favoriteViewModel?.folders?.collectAsState() 
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
+    val selectedFolderIndex by favoriteViewModel?.selectedFolderIndex?.collectAsState() 
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val hazeState = androidx.compose.runtime.remember { HazeState() }
 
@@ -104,19 +111,59 @@ fun CommonListScreen(
                     .fillMaxWidth()
                     .unifiedBlur(hazeState)
             ) {
-                TopAppBar(
-                    title = { Text(state.title) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back")
+                Column {
+                    TopAppBar(
+                        title = { Text(state.title) },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back")
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent
+                        ),
+                        scrollBehavior = scrollBehavior
+                    )
+                    
+                    // 📁 [新增] 收藏夹 Tab 栏（仅显示多个收藏夹时）
+                    if (foldersState.size > 1) {
+                        ScrollableTabRow(
+                            selectedTabIndex = selectedFolderIndex,
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            edgePadding = 16.dp,
+                            indicator = { tabPositions ->
+                                if (selectedFolderIndex < tabPositions.size) {
+                                    TabRowDefaults.SecondaryIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .wrapContentSize(Alignment.BottomStart)
+                                            .offset(x = tabPositions[selectedFolderIndex].left)
+                                            .width(tabPositions[selectedFolderIndex].width),
+                                        color = BiliPink
+                                    )
+                                }
+                            },
+                            divider = {}
+                        ) {
+                            foldersState.forEachIndexed { index, folder ->
+                                Tab(
+                                    selected = selectedFolderIndex == index,
+                                    onClick = { favoriteViewModel?.switchFolder(index) },
+                                    text = {
+                                        Text(
+                                            text = folder.title,
+                                            maxLines = 1,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (selectedFolderIndex == index) BiliPink else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                )
+                            }
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent
-                    ),
-                    scrollBehavior = scrollBehavior
-                )
+                    }
+                }
             }
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -124,7 +171,8 @@ fun CommonListScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = hazeState) // 内容作为模糊源
+                .hazeSource(state = hazeState) // 顶部 TopBar 的模糊源
+                .then(if (globalHazeState != null) Modifier.hazeSource(globalHazeState) else Modifier) // [新增] 全局底栏的模糊源
         ) {
             if (state.isLoading) {
                 LazyVerticalGrid(
@@ -164,7 +212,7 @@ fun CommonListScreen(
                         start = spacing.medium,
                         end = spacing.medium,
                         top = padding.calculateTopPadding() + spacing.medium,
-                        bottom = padding.calculateBottomPadding() + spacing.medium
+                        bottom = padding.calculateBottomPadding() + spacing.medium + 80.dp // [调整] 增加底部 padding 防止底栏遮挡
                     ),
                     horizontalArrangement = Arrangement.spacedBy(spacing.medium),
                     verticalArrangement = Arrangement.spacedBy(spacing.medium),

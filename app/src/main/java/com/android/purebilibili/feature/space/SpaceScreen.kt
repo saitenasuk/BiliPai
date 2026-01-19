@@ -42,6 +42,11 @@ import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import com.android.purebilibili.core.util.iOSTapEffect
 import com.android.purebilibili.core.util.responsiveContentWidth
 
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.unifiedBlur
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SpaceScreen(
@@ -53,6 +58,10 @@ fun SpaceScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
+    // [Blur] Haze State
+    val hazeState = remember { HazeState() }
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     LaunchedEffect(mid) {
         viewModel.loadSpaceInfo(mid)
         //  [埋点] 页面浏览追踪
@@ -60,27 +69,38 @@ fun SpaceScreen(
     }
     
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { 
-                    Text("空间", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
+            // [Blur] TopAppBar Container with Blur
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .unifiedBlur(hazeState)
+            ) {
+                TopAppBar(
+                    title = { 
+                        Text("空间", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent
+                    ),
+                    scrollBehavior = scrollBehavior
                 )
-            )
+            }
         },
         containerColor = MaterialTheme.colorScheme.surface
     ) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = padding.calculateTopPadding())  //  只应用顶部 padding，底部沉浸
+                .padding(top = 0.dp) // [Blur] Remove top padding to allow content behind TopBar
+                .hazeSource(hazeState) // [Blur] Content Source
         ) {
             when (val state = uiState) {
                 is SpaceUiState.Loading -> {
@@ -114,7 +134,9 @@ fun SpaceScreen(
                         onLoadDynamic = { viewModel.loadSpaceDynamic(refresh = true) },
                         onLoadMoreDynamic = { viewModel.loadSpaceDynamic(refresh = false) },
                         onSubTabSelected = { viewModel.selectSubTab(it) },
-                        onViewAllClick = onViewAllClick
+                        onViewAllClick = onViewAllClick,
+                        // [Blur] Pass content padding to handle list top spacing
+                        contentPadding = padding
                     )
                 }
             }
@@ -133,7 +155,8 @@ private fun SpaceContent(
     onLoadDynamic: () -> Unit,  //  加载动态数据
     onLoadMoreDynamic: () -> Unit,  //  加载更多动态
     onSubTabSelected: (SpaceSubTab) -> Unit,  // Uploads Sub-tab selection
-    onViewAllClick: (String, Long, Long, String) -> Unit
+    onViewAllClick: (String, Long, Long, String) -> Unit,
+    contentPadding: PaddingValues // [Blur] Receive padding from Scaffold
 ) {
     val context = LocalContext.current
     //  当前选中的 Tab（目前只实现投稿页）
@@ -160,7 +183,10 @@ private fun SpaceContent(
         columns = GridCells.Adaptive(minSize = 160.dp),
         state = listState,
         modifier = Modifier.fillMaxSize().responsiveContentWidth(),
-        contentPadding = PaddingValues(bottom = 16.dp),
+        contentPadding = PaddingValues(
+            top = contentPadding.calculateTopPadding(), // [Blur] Use top padding for first item
+            bottom = contentPadding.calculateBottomPadding() + 16.dp // Add extra bottom padding
+        ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {

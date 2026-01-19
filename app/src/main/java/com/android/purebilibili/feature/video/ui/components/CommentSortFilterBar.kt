@@ -1,10 +1,13 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -12,173 +15,180 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import io.github.alexzhirkevich.cupertino.icons.filled.Person
+import io.github.alexzhirkevich.cupertino.icons.outlined.Person
 
 /**
- *  评论排序筛选栏
- * 包含：评论数量 | 热度/时间 排序切换 | 只看UP主 切换
- *  排序和"只看UP主"互斥：激活一个时取消另一个的选中状态
+ *  评论排序筛选栏 (iOS Style)
+ *  Header: "评论 (123)"
+ *  Controls: Segmented Control [按热度 | 按时间]
  */
 @Composable
 fun CommentSortFilterBar(
     count: Int,
     sortMode: CommentSortMode,
-    upOnlyFilter: Boolean,
     onSortModeChange: (CommentSortMode) -> Unit,
-    onUpOnlyToggle: () -> Unit,
+    upOnly: Boolean = false,
+    onUpOnlyToggle: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        //  评论标题 + 数量
-        Text(
-            text = "评论",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = FormatUtils.formatStat(count.toLong()),
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.weight(1f))
-        
-        //  排序选项（热度/时间）- 当 upOnlyFilter 激活时不显示选中状态
-        SortChipGroup(
-            currentMode = sortMode,
-            isActive = !upOnlyFilter,  //  互斥：UP筛选激活时，排序按钮不高亮
-            onModeChange = onSortModeChange
-        )
-        
-        Spacer(modifier = Modifier.width(12.dp))
-        
-        //  只看UP主筛选
-        UpOnlyChip(
-            isActive = upOnlyFilter,
-            onClick = onUpOnlyToggle
-        )
+        //  Left: Title
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "评论",
+                fontSize = 20.sp, // iOS Large Title style scale
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface 
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = FormatUtils.formatStat(count.toLong()),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Right: Sort Control + Only UP Toggle
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Only UP Toggle
+            iOSToggleButton(
+                isChecked = upOnly,
+                onToggle = onUpOnlyToggle,
+                icon = CupertinoIcons.Default.Person
+            )
+
+            // Segmented Control
+            iOSSegmentedControl(
+                items = CommentSortMode.entries.map { it.label },
+                selectedIndex = when (sortMode) {
+                    CommentSortMode.HOT -> 0
+                    CommentSortMode.NEWEST -> 1
+                    CommentSortMode.REPLY -> 2
+                },
+                onScaleChange = { index ->
+                    val newMode = when (index) {
+                        0 -> CommentSortMode.HOT
+                        1 -> CommentSortMode.NEWEST
+                        else -> CommentSortMode.REPLY
+                    }
+                    onSortModeChange(newMode)
+                }
+            )
+        }
     }
 }
 
 /**
- * 排序 Chip 组（热度/时间）-  使用边框样式，与"只看UP主"一致
- * @param isActive 当为 false 时，所有按钮显示为未选中状态（互斥效果）
+ * iOS Style Segmented Control
  */
 @Composable
-private fun SortChipGroup(
-    currentMode: CommentSortMode,
-    isActive: Boolean = true,
-    onModeChange: (CommentSortMode) -> Unit
+fun iOSSegmentedControl(
+    items: List<String>,
+    selectedIndex: Int,
+    onScaleChange: (Int) -> Unit
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    val indicatorColor = MaterialTheme.colorScheme.surface
+    val selectedTextColor = MaterialTheme.colorScheme.onSurface
+    val unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val cornerRadius = 8.dp
+
+    Box(
+        modifier = Modifier
+            .height(32.dp)
+            .background(backgroundColor, RoundedCornerShape(cornerRadius))
+            .padding(2.dp)
     ) {
-        CommentSortMode.entries.forEach { mode ->
-            //  只有 isActive 为 true 且当前模式匹配时才显示选中状态
-            val isSelected = isActive && mode == currentMode
-            val bgColor by animateColorAsState(
-                targetValue = if (isSelected) 
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) 
-                else 
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                animationSpec = tween(200),
-                label = "chip_bg"
-            )
-            val textColor by animateColorAsState(
-                targetValue = if (isSelected) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = tween(200),
-                label = "chip_text"
-            )
-            
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(bgColor)
-                    .clickable { onModeChange(mode) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = mode.label,
-                    fontSize = 12.sp,
-                    fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-                    color = textColor
-                )
+        Row(
+            modifier = Modifier.fillMaxHeight(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEachIndexed { index, text ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f, fill = false) 
+                        .width(60.dp) // Fixed width for segments
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(cornerRadius - 2.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null // No ripple for iOS feel
+                        ) { onScaleChange(index) }
+                        .then(
+                            if (selectedIndex == index) {
+                                Modifier
+                                    .background(indicatorColor, RoundedCornerShape(cornerRadius - 2.dp))
+                                    .padding(vertical = 1.dp) // Subtle shadow inset simulation
+                            } else {
+                                Modifier
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Shadow simulation for selected item
+                    if (selectedIndex == index) {
+                         // In a real iOS implementation this would have a shadow
+                    }
+                    
+                    Text(
+                        text = text,
+                        fontSize = 13.sp,
+                        fontWeight = if (selectedIndex == index) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (selectedIndex == index) selectedTextColor else unselectedTextColor
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * 只看UP主 Chip
+ * iOS Style Toggle Button (Optional usage)
  */
 @Composable
-private fun UpOnlyChip(
-    isActive: Boolean,
-    onClick: () -> Unit
+fun iOSToggleButton(
+    isChecked: Boolean,
+    onToggle: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
-    val bgColor by animateColorAsState(
-        targetValue = if (isActive) 
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) 
-        else 
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        animationSpec = tween(200),
-        label = "up_chip_bg"
-    )
-    val textColor by animateColorAsState(
-        targetValue = if (isActive) 
-            MaterialTheme.colorScheme.primary 
-        else 
-            MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(200),
-        label = "up_chip_text"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (isActive) 
-            MaterialTheme.colorScheme.primary 
-        else 
-            Color.Transparent,
-        animationSpec = tween(200),
-        label = "up_chip_border"
-    )
+    val backgroundColor = if (isChecked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    val contentColor = if (isChecked) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     
-    Row(
+    Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(bgColor)
-            .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .clickable { onToggle() },
+        contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = if (isActive) CupertinoIcons.Default.CheckmarkCircle else CupertinoIcons.Default.Person,
+            imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(14.dp),
-            tint = textColor
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = "只看UP主",
-            fontSize = 12.sp,
-            fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal,
-            color = textColor
+            tint = contentColor,
+            modifier = Modifier.size(18.dp)
         )
     }
 }
+

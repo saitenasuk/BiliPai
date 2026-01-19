@@ -50,16 +50,36 @@ enum class LiveSubCategory(val label: String) {
 }
 
 /**
+ * 单个分类的内容状态 (新增)
+ */
+@Stable
+data class CategoryContent(
+    val videos: List<VideoItem> = emptyList(),
+    val liveRooms: List<LiveRoom> = emptyList(),
+    val followedLiveRooms: List<LiveRoom> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val pageIndex: Int = 1, //  保存分页索引
+    val hasMore: Boolean = true //  保存是否还有更多数据
+)
+
+/**
  * 首页 UI 状态
  *  性能优化：@Stable 告诉 Compose 此类字段变化可被追踪，优化重组
  */
 @Stable
 data class HomeUiState(
+    // 兼容旧字段便于迁移（将被 categoryStates 替代）
     val videos: List<VideoItem> = emptyList(),
     val liveRooms: List<LiveRoom> = emptyList(),  // 热门直播
     val followedLiveRooms: List<LiveRoom> = emptyList(),  // 🔴 [新增] 关注的主播直播
     val isLoading: Boolean = false,
     val error: String? = null,
+    
+    // 📺 [核心变更] 各分类独立状态缓存
+    // 使用 Map 保存每个分类的数据，切换时直接读取
+    val categoryStates: Map<HomeCategory, CategoryContent> = emptyMap(),
+    
     val user: UserState = UserState(),
     val currentCategory: HomeCategory = HomeCategory.RECOMMEND,
     val liveSubCategory: LiveSubCategory = LiveSubCategory.FOLLOWED,

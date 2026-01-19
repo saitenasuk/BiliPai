@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -44,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.database.entity.SearchHistory
-//  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard  //  使用首页卡片
 import com.android.purebilibili.core.store.SettingsManager  //  读取动画设置
@@ -59,6 +59,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.android.purebilibili.core.util.responsiveContentWidth
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.unifiedBlur
 
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -80,6 +83,9 @@ fun SearchScreen(
     // 1. 滚动状态监听 (用于列表)
     val historyListState = rememberLazyListState()
     val resultGridState = rememberLazyGridState()
+
+    // ✨ Haze State
+    val hazeState = remember { HazeState() }
 
     // 2. 顶部避让高度计算
     val density = LocalDensity.current
@@ -125,17 +131,6 @@ fun SearchScreen(
                     )
                 } else {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        //  筛选条件栏 (含类型切换)
-                        Spacer(modifier = Modifier.height(contentTopPadding + 4.dp))
-                        SearchFilterBar(
-                            currentType = state.searchType,
-                            currentOrder = state.searchOrder,
-                            currentDuration = state.searchDuration,
-                            onTypeChange = { viewModel.setSearchType(it) },
-                            onOrderChange = { viewModel.setSearchOrder(it) },
-                            onDurationChange = { viewModel.setSearchDuration(it) }
-                        )
-                        
                         //  搜索彩蛋消息横幅
                         val easterEggMsg = state.easterEggMessage
                         if (easterEggMsg != null) {
@@ -169,11 +164,23 @@ fun SearchScreen(
                                 LazyVerticalGrid(
                                     columns = GridCells.Adaptive(minSize = 160.dp),
                                     state = resultGridState,
-                                    contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp, start = 8.dp, end = 8.dp),
+                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 8.dp, end = 8.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
                                 ) {
+                                    // ✨ Filter Bar inside Grid
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                         SearchFilterBar(
+                                            currentType = state.searchType,
+                                            currentOrder = state.searchOrder,
+                                            currentDuration = state.searchDuration,
+                                            onTypeChange = { viewModel.setSearchType(it) },
+                                            onOrderChange = { viewModel.setSearchOrder(it) },
+                                            onDurationChange = { viewModel.setSearchDuration(it) }
+                                        )
+                                    }
+
                                     itemsIndexed(state.searchResults) { index, video ->
                                         ElegantVideoCard(
                                             video = video,
@@ -230,10 +237,21 @@ fun SearchScreen(
                             com.android.purebilibili.data.model.response.SearchType.UP -> {
                                 //  UP主搜索结果
                                 LazyColumn(
-                                    contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
                                 ) {
+                                    item {
+                                        SearchFilterBar(
+                                            currentType = state.searchType,
+                                            currentOrder = state.searchOrder,
+                                            currentDuration = state.searchDuration,
+                                            onTypeChange = { viewModel.setSearchType(it) },
+                                            onOrderChange = { viewModel.setSearchOrder(it) },
+                                            onDurationChange = { viewModel.setSearchDuration(it) }
+                                        )
+                                    }
+
                                     items(state.upResults) { upItem ->
                                         UpSearchResultCard(
                                             upItem = upItem,
@@ -245,10 +263,21 @@ fun SearchScreen(
                             com.android.purebilibili.data.model.response.SearchType.BANGUMI -> {
                                 //  番剧搜索结果
                                 LazyColumn(
-                                    contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
                                 ) {
+                                    item {
+                                        SearchFilterBar(
+                                            currentType = state.searchType,
+                                            currentOrder = state.searchOrder,
+                                            currentDuration = state.searchDuration,
+                                            onTypeChange = { viewModel.setSearchType(it) },
+                                            onOrderChange = { viewModel.setSearchOrder(it) },
+                                            onDurationChange = { viewModel.setSearchDuration(it) }
+                                        )
+                                    }
+
                                     items(state.bangumiResults) { bangumiItem ->
                                         BangumiSearchResultCard(
                                             item = bangumiItem,
@@ -260,10 +289,21 @@ fun SearchScreen(
                             com.android.purebilibili.data.model.response.SearchType.LIVE -> {
                                 //  直播搜索结果
                                 LazyColumn(
-                                    contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
                                 ) {
+                                    item {
+                                        SearchFilterBar(
+                                            currentType = state.searchType,
+                                            currentOrder = state.searchOrder,
+                                            currentDuration = state.searchDuration,
+                                            onTypeChange = { viewModel.setSearchType(it) },
+                                            onOrderChange = { viewModel.setSearchOrder(it) },
+                                            onDurationChange = { viewModel.setSearchDuration(it) }
+                                        )
+                                    }
+
                                     items(state.liveResults) { liveItem ->
                                         LiveSearchResultCard(
                                             item = liveItem,
@@ -277,7 +317,10 @@ fun SearchScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().responsiveContentWidth(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .responsiveContentWidth()
+                        .hazeSource(state = hazeState),
                     state = historyListState,
                     //  contentPadding 顶部避让搜索栏
                     contentPadding = PaddingValues(top = contentTopPadding + 16.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
@@ -475,7 +518,12 @@ fun SearchScreen(
                 },
                 onClearQuery = { viewModel.onQueryChange("") },
                 focusRequester = searchFocusRequester,  //  传递 focusRequester
-                modifier = Modifier.align(Alignment.TopCenter).responsiveContentWidth()
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .responsiveContentWidth()
+                    .unifiedBlur(
+                        hazeState = hazeState
+                    )
             )
             
             // ---  搜索建议下拉列表 ---
@@ -562,8 +610,8 @@ fun SearchTopBar(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 3.dp
+        color = Color.Transparent,
+        shadowElevation = 0.dp
     ) {
         Column {
             Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))

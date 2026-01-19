@@ -72,7 +72,8 @@ fun DynamicScreen(
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> },
     onBack: () -> Unit,
     onLoginClick: () -> Unit = {},
-    onHomeClick: () -> Unit = {}
+    onHomeClick: () -> Unit = {},
+    globalHazeState: dev.chrisbanes.haze.HazeState? = null  // [新增] 全局底栏模糊状态
 ) {
     val state by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -244,7 +245,9 @@ fun DynamicScreen(
                                         }
                                     },
                                     likedDynamics = likedDynamics,
-                                    modifier = Modifier.hazeSource(hazeState) // 应用 hazeSource
+                                    modifier = Modifier
+                                        .hazeSource(hazeState) // 本地 hazeSource - 顶栏使用
+                                        .then(if (globalHazeState != null) Modifier.hazeSource(globalHazeState) else Modifier) // 全局 hazeSource - 底栏使用
                                 )
                                 
                                 // 顶栏
@@ -294,7 +297,9 @@ fun DynamicScreen(
                                      }
                                  },
                                  likedDynamics = likedDynamics,
-                                 modifier = Modifier.hazeSource(hazeState) // 应用 hazeSource
+                                 modifier = Modifier
+                                     .hazeSource(hazeState) // 本地 hazeSource - 顶栏使用
+                                     .then(if (globalHazeState != null) Modifier.hazeSource(globalHazeState) else Modifier) // 全局 hazeSource - 底栏使用
                              )
                              
                              // 顶部区域：顶栏 + 横向用户列表
@@ -393,7 +398,7 @@ private fun DynamicList(
         state = listState,
         contentPadding = PaddingValues(
             top = statusBarHeight + topPaddingExtra,
-            bottom = 80.dp
+            bottom = 120.dp // [Modified] Increased to avoid occlusion by persistent BottomBar
         ),
         modifier = modifier.fillMaxSize().responsiveContentWidth()
     ) {

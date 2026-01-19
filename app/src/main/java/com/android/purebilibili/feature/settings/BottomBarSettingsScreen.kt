@@ -50,7 +50,8 @@ val allBottomBarTabs = listOf(
     BottomBarTabConfig("PROFILE", "我的", CupertinoIcons.Default.PersonCircle, isDefault = true),
     BottomBarTabConfig("FAVORITE", "收藏", CupertinoIcons.Default.Heart, isDefault = false),
     BottomBarTabConfig("LIVE", "直播", CupertinoIcons.Default.Tv, isDefault = false),
-    BottomBarTabConfig("WATCHLATER", "稍后看", CupertinoIcons.Default.Clock, isDefault = false)
+    BottomBarTabConfig("WATCHLATER", "稍后看", CupertinoIcons.Default.Clock, isDefault = false),
+    BottomBarTabConfig("SETTINGS", "设置", CupertinoIcons.Default.Gearshape, isDefault = false)
 )
 
 /**

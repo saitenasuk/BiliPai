@@ -75,22 +75,20 @@ fun ReplyHeader(count: Int) {
 @Composable
 fun ReplyItemView(
     item: ReplyItem,
-    upMid: Long = 0,  //  UP主的 mid，用于显示 UP 标签
-    isPinned: Boolean = false,  //  是否置顶评论
+    upMid: Long = 0,
+    isPinned: Boolean = false,
     emoteMap: Map<String, String> = emptyMap(),
     onClick: () -> Unit,
     onSubClick: (ReplyItem) -> Unit,
     onTimestampClick: ((Long) -> Unit)? = null,
-    onImagePreview: ((List<String>, Int, Rect?) -> Unit)? = null,  //  图片预览回调
-    // [新增] 评论交互回调
-    isLiked: Boolean = item.action == 1,  // 是否已点赞
-    onLikeClick: (() -> Unit)? = null,    // 点赞回调
-    onReplyClick: (() -> Unit)? = null,   // 回复回调
-    onLongClick: (() -> Unit)? = null,    // 长按回调
-    location: String? = item.replyControl?.location,  // IP属地
-    hideSubPreview: Boolean = false  // [新增] 隐藏楼中楼预览（在二级评论弹窗中使用）
+    onImagePreview: ((List<String>, Int, Rect?) -> Unit)? = null,
+    isLiked: Boolean = item.action == 1,
+    onLikeClick: (() -> Unit)? = null,
+    onReplyClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    location: String? = item.replyControl?.location,
+    hideSubPreview: Boolean = false
 ) {
-    // 判断是否是 UP 主的评论
     val isUpComment = upMid > 0 && item.mid == upMid
     val localEmoteMap = remember(item.content.emote, emoteMap) {
         val mergedMap = emoteMap.toMutableMap()
@@ -101,12 +99,15 @@ fun ReplyItemView(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surface) // White background for iOS list feel
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            // 头像
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, bottom = 12.dp, start = 16.dp, end = 16.dp)
+        ) {
+            // Avatar
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(FormatUtils.fixImageUrl(item.member.avatar))
@@ -118,38 +119,42 @@ fun ReplyItemView(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             )
+            
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                //  用户名 + 等级 + UP标签 + 置顶标签
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 置顶标签
-                    if (isPinned) {
-                        PinnedTag()
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
+                // User Info Header
+                Row(
+                    verticalAlignment = Alignment.CenterVertically, 
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
                         text = item.member.uname,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        //  VIP 用户使用粉色，普通用户使用次要色适配深色模式
-                        color = if (item.member.vip?.vipStatus == 1) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.copyOnLongPress(item.member.uname, "用户名")
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (item.member.vip?.vipStatus == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .copyOnLongPress(item.member.uname, "用户名")
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    //  优化后的等级标签
-                    LevelTag(level = item.member.levelInfo.currentLevel)
-                    // UP标签
+                    
                     if (isUpComment) {
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         UpTag()
                     }
+                    
+                    if (isPinned) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        PinnedTag()
+                    }
+                    
+                    Spacer(modifier = Modifier.width(6.dp))
+                    LevelTag(level = item.member.levelInfo.currentLevel)
                 }
-                
-                Spacer(modifier = Modifier.height(6.dp))
 
-                //  正文 - 使用增强版 RichCommentText 支持时间戳点击
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Content
                 RichCommentText(
                     text = item.content.message,
                     fontSize = 15.sp,
@@ -158,7 +163,7 @@ fun ReplyItemView(
                     onTimestampClick = onTimestampClick
                 )
 
-                //  评论图片
+                // Images
                 if (!item.content.pictures.isNullOrEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     CommentPictures(
@@ -169,46 +174,41 @@ fun ReplyItemView(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                //  时间 + IP属地 + 点赞 + 回复
+                // Footer Actions
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Time & Location
                     Text(
-                        text = formatTime(item.ctime),
+                        text = buildString {
+                            append(formatTime(item.ctime))
+                            if (!location.isNullOrEmpty()) {
+                                append(" · $location")
+                            }
+                        },
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
-                    
-                    // [新增] IP 属地显示
-                    if (!location.isNullOrEmpty()) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = location,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.width(20.dp))
 
-                    // [修改] 可点击的点赞按钮
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Like
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
                             .clickable(enabled = onLikeClick != null) { onLikeClick?.invoke() }
                             .padding(4.dp)
                     ) {
                         Icon(
                             imageVector = if (isLiked) CupertinoIcons.Filled.Heart else CupertinoIcons.Default.Heart,
-                            contentDescription = "点赞",
+                            contentDescription = "Like",
                             tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(16.dp)
                         )
-                        if (item.like > 0 || isLiked) {
+                        if (item.like > 0) {
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = FormatUtils.formatStat((item.like + if (isLiked && item.action != 1) 1 else 0).toLong()),
+                                text = FormatUtils.formatStat(item.like.toLong()),
                                 fontSize = 12.sp,
                                 color = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -217,86 +217,104 @@ fun ReplyItemView(
 
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    // [修改] 回复按钮
+                    // Dislike (Placeholder)
                     Icon(
-                        imageVector = CupertinoIcons.Default.Message,
-                        contentDescription = "回复",
+                        imageVector = CupertinoIcons.Default.MinusCircle, // Fallback Dislike
+                        contentDescription = "Dislike",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
-                            .size(14.dp)
-                            .clickable { 
-                                onReplyClick?.invoke() ?: onSubClick(item) 
-                            }
+                            .size(16.dp)
+                            .clickable { /* TODO: Dislike */ }
+                    )
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    // Reply Icon
+                    Icon(
+                        imageVector = CupertinoIcons.Default.BubbleLeft, // iOS Bubble icon
+                        contentDescription = "Reply",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable { onReplyClick?.invoke() ?: onSubClick(item) }
                     )
                 }
 
-                //  楼中楼预览 - 使用更浅的背景色（hideSubPreview 为 true 时隐藏）
+                // Sub-comments (Threaded view)
                 if (!hideSubPreview && (!item.replies.isNullOrEmpty() || item.rcount > 0)) {
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    // No background container, just cleaner list
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), //  适配深色
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .clip(RoundedCornerShape(8.dp))
                             .clickable { onSubClick(item) }
-                            .padding(12.dp)
                     ) {
                         item.replies?.take(3)?.forEach { subReply ->
-                            //  [修复] 子评论也使用自己的表情映射
                             val subEmoteMap = remember(subReply.content.emote, emoteMap) {
                                 val map = emoteMap.toMutableMap()
                                 subReply.content.emote?.forEach { (key, value) -> map[key] = value.url }
                                 map
                             }
                             
-                            Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                                //  子评论用户名 - 使用统一的次要色
+                            Row(
+                                modifier = Modifier.padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
                                 Text(
-                                    text = subReply.member.uname,
+                                    buildAnnotatedString {
+                                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))) {
+                                            append(subReply.member.uname)
+                                        }
+                                        if (subReply.member.mid == upMid.toString()) {
+                                            append(" ") // Space for badge if we had inline badge, but text distinction is enough for sub-replies usually
+                                        }
+                                    },
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = ": ",
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                //  [修复] 子评论内容也使用 RichCommentText 显示表情
-                                RichCommentText(
-                                    text = subReply.content.message,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                    emoteMap = subEmoteMap,
-                                    maxLines = 2,
-                                    onTimestampClick = onTimestampClick
-                                )
+                                // We might need a streamlined version of RichCommentText for sub-replies to avoid overhead or layout issues, 
+                                // but reusing RichCommentText is fine if it works inline. 
+                                // To make it inline accurately with the name is hard in Compose without a single Text block.
+                                // For now, let's keep name and content separate but close.
                             }
+                            RichCommentText(
+                                text = subReply.content.message,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                emoteMap = subEmoteMap,
+                                maxLines = 2,
+                                onTimestampClick = onTimestampClick
+                            )
                         }
+                        
                         if (item.rcount > 0) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "共${item.rcount}条回复 >",
+                                text = "查看全部 ${item.rcount} 条回复 >",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .clickable { onSubClick(item) }
+                                    .padding(vertical = 4.dp) // Increase touch target
                             )
                         }
                     }
                 }
             }
         }
+        
+        // Inset Divider (starts after avatar + spacing = 16 + 40 + 12 = 68dp)
+        HorizontalDivider(
+            modifier = Modifier.padding(start = 68.dp),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+        )
     }
-    
-    //  分割线 - 更细更浅
-    HorizontalDivider(
-        thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        modifier = Modifier.padding(start = 68.dp)  // 对齐头像右边
-    )
 }
 
 /**
@@ -470,70 +488,73 @@ fun EmojiText(
     )
 }
 
-//  [重构] 精简等级标签 - 纯文字显示，无背景边框
+//  [重构] 等级标签 - iOS 风格 (简约文字)
 @Composable
 fun LevelTag(level: Int) {
-    //  B站官方配色方案 - 纯颜色文字
     val textColor = when {
-        level >= 6 -> Color(0xFFFF6699)  // 粉色 (硬核用户)
-        level >= 5 -> Color(0xFFFF9500)  // 橙色
-        level >= 4 -> Color(0xFF22C3AA)  // 青绿色 (B站LV5标准色)
-        level >= 3 -> Color(0xFF7BC549)  // 绿色
-        level >= 2 -> Color(0xFF5EAADE)  // 蓝色
-        else -> Color(0xFF969696)  // 灰色 (新用户)
+        level >= 6 -> Color(0xFFFF6699)
+        level >= 5 -> Color(0xFFFF9500)
+        level >= 4 -> Color(0xFF22C3AA)
+        level >= 3 -> Color(0xFF7BC549)
+        level >= 2 -> Color(0xFF5EAADE)
+        else -> Color(0xFF969696)
     }
     
     Text(
-        text = "LV$level",
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
+        text = "Lv.$level",
+        fontSize = 11.sp, // Slightly larger for readability
+        fontWeight = FontWeight.SemiBold, // Less heavy than Bold
         color = textColor
     )
 }
 
 fun formatTime(timestamp: Long): String {
     val date = Date(timestamp * 1000)
-    val sdf = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+    val sdf = SimpleDateFormat("MM-dd", Locale.getDefault()) // Shortened date format for iOS style
     return sdf.format(date)
 }
 
-//  UP 标签组件
+//  UP 标签 - iOS Pill Style
 @Composable
 fun UpTag() {
-    Box(
-        modifier = Modifier
-            .background(
-                color = Color(0xFFFF6699),
-                shape = RoundedCornerShape(4.dp)
-            )
-            .padding(horizontal = 4.dp, vertical = 1.dp)
+    Surface(
+        color = Color(0xFFFF6699),
+        shape = CircleShape, // Capsule/Pill shape
+        modifier = Modifier.height(16.dp),
     ) {
-        Text(
-            text = "UP",
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 6.dp)
+        ) {
+            Text(
+                text = "UP",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
     }
 }
 
-//  置顶标签组件
+//  置顶标签 - iOS Pill Style
 @Composable
 fun PinnedTag() {
-    Box(
-        modifier = Modifier
-            .background(
-                color = Color(0xFFFFA500),
-                shape = RoundedCornerShape(4.dp)
-            )
-            .padding(horizontal = 4.dp, vertical = 1.dp)
+    Surface(
+        color = Color(0xFFFFA500),
+        shape = CircleShape,
+        modifier = Modifier.height(16.dp),
     ) {
-        Text(
-            text = "置顶",
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 6.dp)
+        ) {
+            Text(
+                text = "置顶",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
     }
 }
 

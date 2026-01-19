@@ -165,12 +165,10 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
                     ) {
-                        //  [修复] 将 .haze() 移到 Surface 内部
-                        // 这样 haze 源是 AppNavigation 内容，不会被 Surface 的不透明背景遮挡
+                        //  [修复] 移除 .haze() 以避免与 hazeSource/hazeEffect 冲突
+                        // 每个 Screen 自己管理 hazeSource（内容）和 hazeEffect（头部/底栏）
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .haze(state = mainHazeState)
+                            modifier = Modifier.fillMaxSize()
                         ) {
                             //  SharedTransitionProvider 包裹导航，启用共享元素过渡
                             SharedTransitionProvider {
@@ -190,9 +188,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             
-                            //  [关键修复] OnboardingBottomSheet 必须在 haze 源 Box 内部
-                            // 这样 hazeChild 可以模糊同一个 Box 内的兄弟内容 (AppNavigation)
-                            // 与 HomeScreen 中 FrostedBottomBar 的工作原理一致
+                            //  OnboardingBottomSheet 等其他 overlay 组件
 
                         }
                     }

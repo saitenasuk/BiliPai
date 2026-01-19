@@ -17,7 +17,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+ import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 /**
  * 弹幕管理器（单例模式）
@@ -76,6 +78,7 @@ class DanmakuManager private constructor(
     private var player: ExoPlayer? = null
     private var playerListener: Player.Listener? = null
     private var loadJob: Job? = null
+    private var syncJob: Job? = null  // ⚙️ [漂移修复] 定期检测漂移
     
     // 弹幕状态
     private var isPlaying = false
@@ -326,6 +329,38 @@ class DanmakuManager private constructor(
     }
     
     /**
+     * ⚙️ [漂移修复] 启动定期漂移检测
+     * 每 5 秒检测一次，仅当播放时同步
+     * 注意：不再使用 setData，避免干扰 Seek 处理
+     */
+    private fun startDriftSync() {
+        syncJob?.cancel()
+        syncJob = scope.launch {
+            while (isActive) {
+                delay(5000L)  // 每 5 秒检测一次
+                player?.let { p ->
+                    if (p.isPlaying && config.isEnabled && isPlaying) {
+                        val playerPos = p.currentPosition
+                        // 仅调用 start() 重新同步位置，不重新设置数据
+                        controller?.start(playerPos)
+                        Log.d(TAG, "⚙️ Drift sync at ${playerPos}ms")
+                    }
+                }
+            }
+        }
+        Log.d(TAG, "⚙️ Drift sync started")
+    }
+    
+    /**
+     * ⚙️ [漂移修复] 停止定期漂移检测
+     */
+    private fun stopDriftSync() {
+        syncJob?.cancel()
+        syncJob = null
+        Log.d(TAG, "⚙️ Drift sync stopped")
+    }
+    
+    /**
      * 绑定 ExoPlayer
      */
     fun attachPlayer(exoPlayer: ExoPlayer) {
@@ -335,6 +370,8 @@ class DanmakuManager private constructor(
         playerListener?.let { player?.removeListener(it) }
         
         player = exoPlayer
+        
+        // 🎬 [根本修复] 不在这里启动帧同步，而是在 onIsPlayingChanged 中启动
         
         playerListener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlayerPlaying: Boolean) {
@@ -346,7 +383,9 @@ class DanmakuManager private constructor(
                         val position = exoPlayer.currentPosition
                         controller?.start(position)
                         isPlaying = true
-                        Log.w(TAG, " Danmaku STARTED at ${position}ms")
+                        // 🎬 [根本修复] 启动帧级同步
+                        startDriftSync()
+                        Log.w(TAG, " Danmaku STARTED at ${position}ms with frame sync")
                     } else {
                         Log.w(TAG, " Player playing but danmaku data not loaded yet, will start after load")
                         // 数据加载完成后会自动 start
@@ -355,6 +394,8 @@ class DanmakuManager private constructor(
                     // 暂停 - DanmakuRenderEngine 的 pause() 会让弹幕停在原地
                     controller?.pause()
                     isPlaying = false
+                    // 🎬 [根本修复] 停止帧级同步
+                    stopDriftSync()
                     Log.w(TAG, " Danmaku PAUSED (danmakus stay in place)")
                 }
             }
@@ -685,6 +726,9 @@ class DanmakuManager private constructor(
         // 取消加载任务
         loadJob?.cancel()
         loadJob = null
+        
+        // 🎬 [根本修复] 停止帧级同步
+        stopDriftSync()
         
         isPlaying = false
         isLoading = false

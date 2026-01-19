@@ -30,6 +30,7 @@ object BlurStyles {
     @OptIn(ExperimentalHazeMaterialsApi::class)
     @Composable
     fun getBlurStyle(intensity: BlurIntensity): HazeStyle {
+        // [修复] 恢复使用 Haze 库内置样式，这些样式经过验证可正常工作
         return when (intensity) {
             BlurIntensity.THIN -> HazeMaterials.thin()             // 标准 - 轻度模糊
             BlurIntensity.APPLE_DOCK -> HazeMaterials.ultraThin()  //  玻璃拟态 - 最强模糊 + 背景透色
@@ -44,36 +45,12 @@ object BlurStyles {
      * - 标准: 中等透明度
      */
     fun getBackgroundAlpha(intensity: BlurIntensity): Float {
+        // [修复] 恢复原始透明度配置
         return when (intensity) {
             BlurIntensity.THIN -> 0.4f         // 标准 - 中等
             BlurIntensity.APPLE_DOCK -> 0.15f  //  玻璃拟态 - 极低，背景透出
             BlurIntensity.THICK -> 0.6f        //  浓郁 - 高透明度，遮盖背景
         }
     }
-    
-    /**
-     *  玻璃拟态风格模糊
-     * 
-     * 特点：
-     * - 高模糊半径（看不清背后内容）
-     * - 饱和度增强
-     * - 半透明底色提升可读性
-     */
-    @Composable
-    private fun createAppleDockStyle(): HazeStyle {
-        val surfaceColor = MaterialTheme.colorScheme.surface
-        val isDark = surfaceColor.red < 0.5f
-        
-        return HazeStyle(
-            blurRadius = 40.dp,  //  大幅提高模糊半径（从 24dp → 40dp）
-            backgroundColor = if (isDark) {
-                Color.Black.copy(alpha = 0.6f)   //  提高不透明度
-            } else {
-                Color.White.copy(alpha = 0.7f)   //  提高不透明度
-            },
-            tint = HazeTint(
-                color = surfaceColor.copy(alpha = if (isDark) 0.7f else 0.8f)  //  增强 tint
-            )
-        )
-    }
 }
+

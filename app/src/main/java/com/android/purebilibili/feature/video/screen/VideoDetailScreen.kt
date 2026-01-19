@@ -78,9 +78,8 @@ import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
 import com.android.purebilibili.feature.video.ui.components.ReplyHeader
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
-import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar  //  新增
+
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode  //  新增
-import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.LikeBurstAnimation
 import com.android.purebilibili.feature.video.ui.components.TripleSuccessAnimation
 import com.android.purebilibili.feature.video.ui.components.VideoDetailSkeleton
@@ -102,7 +101,10 @@ import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.overlay.PortraitFullscreenOverlay
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
-import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager  //  弹幕管理器
+import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
+import com.android.purebilibili.feature.video.ui.components.BottomInputBar // [New] Bottom Input Bar
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -129,6 +131,9 @@ fun VideoDetailScreen(
     //  监听评论状态
     val commentState by commentViewModel.commentState.collectAsState()
     val subReplyState by commentViewModel.subReplyState.collectAsState()
+    
+    // [Blur] Haze State
+    val hazeState = remember { HazeState() }
     
     //  空降助手 - 已由插件系统自动处理
     // val sponsorSegment by viewModel.currentSponsorSegment.collectAsState()
@@ -638,16 +643,11 @@ fun VideoDetailScreen(
                     val swipeHidePlayerEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getSwipeHidePlayerEnabled(context).collectAsState(initial = false)
                     
-                    //  播放器隐藏状态（用于动画）
-                    var isPlayerHidden by remember { mutableStateOf(false) }
-                    val animatedPlayerHeight by androidx.compose.animation.core.animateDpAsState(
-                        targetValue = if (isPlayerHidden && swipeHidePlayerEnabled) 0.dp else videoHeight + statusBarHeight,
-                        animationSpec = spring(
-                            dampingRatio = 0.8f,
-                            stiffness = 300f
-                        ),
-                        label = "playerHeight"
-                    )
+                    //  播放器隐藏状态（用于动画） - [已禁用] 始终显示
+                    val animatedPlayerHeight = videoHeight + statusBarHeight
+                    
+                    //  注意：移除了状态栏黑色 Spacer
+                    // 播放器将延伸到状态栏下方，共享元素过渡更流畅
                     
                     //  注意：移除了状态栏黑色 Spacer
                     // 播放器将延伸到状态栏下方，共享元素过渡更流畅
@@ -766,66 +766,11 @@ fun VideoDetailScreen(
                         }
                     }
                     
-                    //  播放器隐藏/恢复切换栏 - 仅在播放器被隐藏时显示（避免播放器显示时多出一块区域）
-                    if (swipeHidePlayerEnabled && isPlayerHidden) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { isPlayerHidden = !isPlayerHidden },
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    if (isPlayerHidden) CupertinoIcons.Default.ChevronDown else CupertinoIcons.Default.ChevronUp,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    if (isPlayerHidden) "展开播放器" else "收起播放器",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-
-                    //  第3层：内容区域
-                    //  创建嵌套滚动连接用于监听内容滑动
-                    val nestedScrollConnection = remember {
-                        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
-                            override fun onPreScroll(
-                                available: androidx.compose.ui.geometry.Offset,
-                                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
-                            ): androidx.compose.ui.geometry.Offset {
-                                // 只有开启设置时才处理
-                                if (swipeHidePlayerEnabled) {
-                                    // 向上滑动（正值）且超过阈值时隐藏播放器
-                                    if (available.y < -20f && !isPlayerHidden) {
-                                        isPlayerHidden = true
-                                    }
-                                    // 向下滑动（负值）且超过阈值时显示播放器
-                                    if (available.y > 40f && isPlayerHidden) {
-                                        isPlayerHidden = false
-                                    }
-                                }
-                                return androidx.compose.ui.geometry.Offset.Zero
-                            }
-                        }
-                    }
-                    
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
-                            .nestedScroll(nestedScrollConnection)
+                            // .nestedScroll(nestedScrollConnection) // [Remove] 移除嵌套滚动，确保 Tabs 正常滑动
                     ) {
                         when (uiState) {
                             is PlayerUiState.Loading -> {
@@ -873,46 +818,70 @@ fun VideoDetailScreen(
                                     label = "video_content_transition"
                                 ) { currentBvid ->
                                     // 使用 currentBvid 确保动画正确触发（实际仍使用 success.info）
-                                    VideoContentSection(
-                                        info = success.info,
-                                        relatedVideos = success.related,
-                                        replies = commentState.replies,
-                                        replyCount = commentState.replyCount,
-                                        emoteMap = success.emoteMap,
-                                        isRepliesLoading = commentState.isRepliesLoading,
-                                        isRepliesEnd = commentState.isRepliesEnd,
-                                        isFollowing = success.isFollowing,
-                                        isFavorited = success.isFavorited,
-                                        isLiked = success.isLiked,
-                                        coinCount = success.coinCount,
-                                        currentPageIndex = currentPageIndex,
-                                        downloadProgress = downloadProgress,
-                                        isInWatchLater = success.isInWatchLater,
-                                        followingMids = success.followingMids,
-                                        videoTags = success.videoTags,
-                                        //  [新增] 评论排序/筛选参数
-                                        sortMode = commentState.sortMode,
-                                        upOnlyFilter = commentState.upOnlyFilter,
-                                        onSortModeChange = { commentViewModel.setSortMode(it) },
-                                        onUpOnlyToggle = { commentViewModel.toggleUpOnly() },
-                                        onFollowClick = { viewModel.toggleFollow() },
-                                        onFavoriteClick = { viewModel.toggleFavorite() },
-                                        onLikeClick = { viewModel.toggleLike() },
-                                        onCoinClick = { viewModel.openCoinDialog() },
-                                        onTripleClick = { viewModel.doTripleAction() },
-                                        onPageSelect = { viewModel.switchPage(it) },
-                                        onUpClick = onUpClick,
-                                        onRelatedVideoClick = { vid -> viewModel.loadVideo(vid) },
-                                        onSubReplyClick = { commentViewModel.openSubReply(it) },
-                                        onLoadMoreReplies = { commentViewModel.loadComments() },
-                                        onDownloadClick = { viewModel.openDownloadDialog() },
-                                        onWatchLaterClick = { viewModel.toggleWatchLater() },
-                                        //  [新增] 时间戳点击跳转
-                                        onTimestampClick = { positionMs ->
-                                            playerState.player.seekTo(positionMs)
-                                            playerState.player.play()
+                                    // 使用 currentBvid 确保动画正确触发（实际仍使用 success.info）
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        // [Blur] Source: 只将内容区域标记为模糊源
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .hazeSource(hazeState)
+                                        ) {
+                                            VideoContentSection(
+                                                info = success.info,
+                                                relatedVideos = success.related,
+                                                replies = commentState.replies,
+                                                replyCount = commentState.replyCount,
+                                                emoteMap = success.emoteMap,
+                                                isRepliesLoading = commentState.isRepliesLoading,
+                                                isRepliesEnd = commentState.isRepliesEnd,
+                                                isFollowing = success.isFollowing,
+                                                isFavorited = success.isFavorited,
+                                                isLiked = success.isLiked,
+                                                coinCount = success.coinCount,
+                                                currentPageIndex = currentPageIndex,
+                                                downloadProgress = downloadProgress,
+                                                isInWatchLater = success.isInWatchLater,
+                                                followingMids = success.followingMids,
+                                                videoTags = success.videoTags,
+                                                //  [新增] 评论排序/筛选参数
+                                                sortMode = commentState.sortMode,
+                                                upOnlyFilter = commentState.upOnlyFilter,
+                                                onSortModeChange = { commentViewModel.setSortMode(it) },
+                                                onUpOnlyToggle = { commentViewModel.toggleUpOnly() },
+                                                onFollowClick = { viewModel.toggleFollow() },
+                                                onFavoriteClick = { viewModel.toggleFavorite() },
+                                                onLikeClick = { viewModel.toggleLike() },
+                                                onCoinClick = { viewModel.openCoinDialog() },
+                                                onTripleClick = { viewModel.doTripleAction() },
+                                                onPageSelect = { viewModel.switchPage(it) },
+                                                onUpClick = onUpClick,
+                                                onRelatedVideoClick = { vid -> viewModel.loadVideo(vid) },
+                                                onSubReplyClick = { commentViewModel.openSubReply(it) },
+                                                onLoadMoreReplies = { commentViewModel.loadComments() },
+                                                onDownloadClick = { viewModel.openDownloadDialog() },
+                                                onWatchLaterClick = { viewModel.toggleWatchLater() },
+                                                //  [新增] 时间戳点击跳转
+                                                onTimestampClick = { positionMs ->
+                                                    playerState.player.seekTo(positionMs)
+                                                    playerState.player.play()
+                                                }
+                                            )
                                         }
-                                    )
+
+                                        // 底部输入栏 (覆盖在内容之上)
+                                        BottomInputBar(
+                                            modifier = Modifier.align(Alignment.BottomCenter),
+                                            isLiked = success.isLiked,
+                                            isFavorited = success.isFavorited,
+                                            isCoined = success.coinCount > 0,
+                                            onLikeClick = { viewModel.toggleLike() },
+                                            onFavoriteClick = { viewModel.toggleFavorite() },
+                                            onCoinClick = { viewModel.openCoinDialog() },
+                                            onShareClick = { /* TODO: Share */ },
+                                            onCommentClick = { /* TODO: Open Input Dialog */ },
+                                            hazeState = hazeState
+                                        )
+                                    }
                                 }
                             }
 

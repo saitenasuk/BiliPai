@@ -15,7 +15,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.ImageLoader
-import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.DynamicItem
 
@@ -36,7 +35,7 @@ fun ForwardedContent(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(androidx.compose.ui.graphics.Color(0xFFF2F2F7)) // iOS Guided Gray
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) // 主题自适应背景
             .padding(12.dp)
     ) {
         // 原作者
@@ -46,7 +45,7 @@ fun ForwardedContent(
                     "@${author.name}",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = iOSBlue,
+                    color = MaterialTheme.colorScheme.primary, // 主题自适应颜色
                     modifier = Modifier.clickable { onUserClick(author.mid) }
                 )
                 Spacer(modifier = Modifier.width(8.dp))

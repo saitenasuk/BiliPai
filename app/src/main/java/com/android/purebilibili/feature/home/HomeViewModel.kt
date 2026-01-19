@@ -16,7 +16,13 @@ import kotlinx.coroutines.launch
 // 状态类已移至 HomeUiState.kt
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
-    private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
+    private val _uiState = MutableStateFlow(
+        HomeUiState(
+            isLoading = true,
+            // 初始化所有分类的状态
+            categoryStates = HomeCategory.entries.associateWith { CategoryContent() }
+        )
+    )
     val uiState = _uiState.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
@@ -35,8 +41,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     //  [新增] 切换分类
+    //  [新增] 切换分类
     fun switchCategory(category: HomeCategory) {
-        if (_uiState.value.currentCategory == category) return
+        val currentState = _uiState.value
+        if (currentState.currentCategory == category) return
         
         //  [修复] 标记正在切换分类，避免入场动画产生收缩效果
         com.android.purebilibili.core.util.CardPositionManager.isSwitchingCategory = true
@@ -45,27 +53,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             //  [修复] 如果切换到直播分类，未登录用户默认显示热门
             val liveSubCategory = if (category == HomeCategory.LIVE) {
                 val isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
-                if (isLoggedIn) _uiState.value.liveSubCategory else LiveSubCategory.POPULAR
+                if (isLoggedIn) currentState.liveSubCategory else LiveSubCategory.POPULAR
             } else {
-                _uiState.value.liveSubCategory
+                currentState.liveSubCategory
             }
             
-            _uiState.value = _uiState.value.copy(
+            val targetCategoryState = currentState.categoryStates[category] ?: CategoryContent()
+            val needFetch = targetCategoryState.videos.isEmpty() && targetCategoryState.liveRooms.isEmpty() && !targetCategoryState.isLoading && targetCategoryState.error == null
+
+            _uiState.value = currentState.copy(
                 currentCategory = category,
                 liveSubCategory = liveSubCategory,
-                videos = emptyList(),
-                liveRooms = emptyList(),  //  清空直播列表
-                isLoading = true,
-                error = null,
-                displayedTabIndex = category.ordinal  //  [新增] 同步更新标签页索引
+                displayedTabIndex = category.ordinal
             )
-            refreshIdx = 0
-            popularPage = 1
-            livePage = 1
-            livePage = 1
-            hasMoreLiveData = true  //  重置分页标志
-            sessionSeenBvids.clear() //  [新增] 切换分类时清空去重集合
-            fetchData(isLoadMore = false)
+            
+            // 如果目标分类没有数据，则加载
+            if (needFetch) {
+                 fetchData(isLoadMore = false)
+            }
         }
     }
     
@@ -82,11 +87,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     //  [新增] 完成消散动画（从列表移除并记录到已过滤集合）
+    //  [新增] 完成消散动画（从列表移除并记录到已过滤集合）
     fun completeVideoDissolve(bvid: String) {
-        _uiState.value = _uiState.value.copy(
-            dissolvingVideos = _uiState.value.dissolvingVideos - bvid,
-            videos = _uiState.value.videos.filterNot { it.bvid == bvid }
-        )
+        val currentCategory = _uiState.value.currentCategory
+        
+        // Update global dissolving list
+        val newDissolving = _uiState.value.dissolvingVideos - bvid
+        
+        // Update category state
+        updateCategoryState(currentCategory) { oldState ->
+            oldState.copy(
+                videos = oldState.videos.filterNot { it.bvid == bvid }
+            )
+        }
+        
+        // Also update the global dissolving set in UI state
+        _uiState.value = _uiState.value.copy(dissolvingVideos = newDissolving)
     }
     
     
@@ -129,11 +145,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (_isRefreshing.value) return
         viewModelScope.launch {
             _isRefreshing.value = true
-            refreshIdx = 0
-            popularPage = 1
-            livePage = 1  //  修复：刷新时也要重置直播分页
-            hasMoreLiveData = true  //  修复：刷新时重置分页标志
             fetchData(isLoadMore = false)
+            
             //  数据加载完成后再更新 refreshKey，避免闪烁
             //  刷新成功后显示趣味提示
             val refreshMessage = com.android.purebilibili.core.util.EasterEggs.getRefreshMessage()
@@ -146,20 +159,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadMore() {
-        if (_uiState.value.isLoading || _isRefreshing.value) return
+        val currentCategory = _uiState.value.currentCategory
+        val categoryState = _uiState.value.categoryStates[currentCategory] ?: return
+        
+        if (categoryState.isLoading || _isRefreshing.value || !categoryState.hasMore) return
         
         //  修复：如果是直播分类且没有更多数据，不再加载
-        if (_uiState.value.currentCategory == HomeCategory.LIVE && !hasMoreLiveData) {
+        if (currentCategory == HomeCategory.LIVE && !hasMoreLiveData) {
             com.android.purebilibili.core.util.Logger.d("HomeVM", "🔴 No more live data, skipping loadMore")
             return
         }
         
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            //  修复：先增加页码再获取数据（确保请求下一页）
-            refreshIdx++
-            popularPage++
-            livePage++
             fetchData(isLoadMore = true)
         }
     }
@@ -167,29 +178,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun fetchData(isLoadMore: Boolean) {
         val currentCategory = _uiState.value.currentCategory
         
-        //  直播分类单独处理
+        // 更新当前分类为加载状态
+        updateCategoryState(currentCategory) { it.copy(isLoading = true, error = null) }
+        
+        //  直播分类单独处理 (TODO: Adapt fetchLiveRooms to use categoryStates)
         if (currentCategory == HomeCategory.LIVE) {
             fetchLiveRooms(isLoadMore)
             return
         }
         
-        //  关注动态分类单独处理
+        //  关注动态分类单独处理 (TODO: Adapt fetchFollowFeed to use categoryStates)
         if (currentCategory == HomeCategory.FOLLOW) {
             fetchFollowFeed(isLoadMore)
             return
         }
         
-        //  [问题15修复] 保存旧视频列表，刷新失败时恢复
-        val oldVideos = _uiState.value.videos
-        
+        val currentCategoryState = _uiState.value.categoryStates[currentCategory] ?: CategoryContent()
+        // 获取当前页码 (如果是刷新则为0/1，加载更多则+1)
+        val pageToFetch = if (isLoadMore) currentCategoryState.pageIndex + 1 else 1 // Assuming 1-based pagination for simplicity in general, adjust per API
+
         //  视频类分类处理
         val videoResult = when (currentCategory) {
-            HomeCategory.RECOMMEND -> VideoRepository.getHomeVideos(refreshIdx)
-            HomeCategory.POPULAR -> VideoRepository.getPopularVideos(popularPage)
+            HomeCategory.RECOMMEND -> VideoRepository.getHomeVideos(if (isLoadMore) refreshIdx + 1 else 0) // Recommend uses idx, slightly different
+            HomeCategory.POPULAR -> VideoRepository.getPopularVideos(pageToFetch)
             else -> {
                 //  Generic categories (Game, Tech, etc.)
                 if (currentCategory.tid > 0) {
-                     VideoRepository.getRegionVideos(tid = currentCategory.tid, page = refreshIdx + 1) // Using refreshIdx for pagination similar to Recommend
+                     VideoRepository.getRegionVideos(tid = currentCategory.tid, page = pageToFetch)
                 } else {
                      Result.failure(Exception("Unknown category"))
                 }
@@ -224,59 +239,83 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             //  [新增] 应用 JSON 规则插件过滤器
             val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(nativeFiltered)
             
-            if (filteredVideos.isNotEmpty()) {
-                //  [修复] 全局会话级去重逻辑：过滤掉本会话已看过的视频
-                //  如果是刷新 (isLoadMore=false)，我们仍然希望能看到新内容，所以保留去重
-                //  如果是加载更多，更不能有重复
-                val uniqueNewVideos = filteredVideos.filter { it.bvid !in sessionSeenBvids }
-                
-                if (uniqueNewVideos.size < filteredVideos.size) {
-                    com.android.purebilibili.core.util.Logger.d("HomeVM", "Filtered ${filteredVideos.size - uniqueNewVideos.size} duplicate videos (session-level)")
-                }
-                
-                //  将新视频加入去重集合
-                sessionSeenBvids.addAll(uniqueNewVideos.map { it.bvid })
-                
-                // 如果去重后为空，且原本不为空，说明全是重复内容
-                if (uniqueNewVideos.isEmpty() && filteredVideos.isNotEmpty()) {
-                     com.android.purebilibili.core.util.Logger.d("HomeVM", "⚠️ All videos were filtered as duplicates! Fetching next page...")
-                     // 可以在这里触发一次自动加载更多 (递归调用需谨慎) -> 简单处理：显示"没有更多新内容"或者直接不做任何操作(保留旧列表)
-                     // 为防止空页面，如果是在刷新操作中全被过滤了，也许应该保留 oldVideos?
-                }
-
-                if (uniqueNewVideos.isNotEmpty()) {
-                    _uiState.value = _uiState.value.copy(
-                        videos = if (isLoadMore) _uiState.value.videos + uniqueNewVideos else uniqueNewVideos,
-                        liveRooms = emptyList(),  // 清空直播列表
-                        isLoading = false,
-                        error = null
-                    )
-                } else {
-                     //  全被过滤掉了
-                    _uiState.value = _uiState.value.copy(
-                        videos = if (!isLoadMore && oldVideos.isNotEmpty()) oldVideos else _uiState.value.videos,
-                        isLoading = false,
-                        error = if (!isLoadMore && oldVideos.isEmpty()) "推荐内容重复，请稍后再试" else null
-                    )
-                }
+            // Global deduplication for RECOMMEND only? Or per category? 
+            // Usually Recommend needs global deduplication. Other categories might just need simple append.
+            // For now, let's keep sessionSeenBvids for RECOMMEND, or apply globally to avoid seeing same video across tabs?
+            // Let's apply globally for now as per existing logic, but maybe we should scope it?
+            // Existing logic had a single sessionSeenBvids.
+            
+            val uniqueNewVideos = if (currentCategory == HomeCategory.RECOMMEND) {
+                 filteredVideos.filter { it.bvid !in sessionSeenBvids }
             } else {
-                //  [问题15修复] 刷新时如果没有获取到新数据，保留旧列表
-                _uiState.value = _uiState.value.copy(
-                    videos = if (!isLoadMore && oldVideos.isNotEmpty()) oldVideos else _uiState.value.videos,
-                    isLoading = false,
-                    error = if (!isLoadMore && oldVideos.isEmpty()) "没有更多内容了" else null
-                )
+                 filteredVideos // Other categories usually have fixed lists, but let's deduplicate against themselves if needed. 
+                 // Actually, region videos might have duplicates if pages overlap?
+                 // Let's just stick to sessionSeenBvids if we want to avoid seeing same video anywhere.
+                 filteredVideos.filter { it.bvid !in sessionSeenBvids }
+            }
+                
+            sessionSeenBvids.addAll(uniqueNewVideos.map { it.bvid })
+            
+            if (uniqueNewVideos.isNotEmpty()) {
+                updateCategoryState(currentCategory) { oldState ->
+                    oldState.copy(
+                        videos = if (isLoadMore) oldState.videos + uniqueNewVideos else uniqueNewVideos,
+                        liveRooms = emptyList(),
+                        isLoading = false,
+                        error = null,
+                        pageIndex = if (isLoadMore) oldState.pageIndex + 1 else 1,
+                        hasMore = true // Assuming if we got data, there might be more
+                    )
+                }
+                // Update global helper vars if needed for Recommend
+                if (currentCategory == HomeCategory.RECOMMEND && isLoadMore) refreshIdx++
+            } else {
+                 //  全被过滤掉了 OR 空列表
+                 updateCategoryState(currentCategory) { oldState ->
+                     oldState.copy(
+                        isLoading = false,
+                        error = if (!isLoadMore && oldState.videos.isEmpty()) "没有更多内容了" else null,
+                        hasMore = false
+                     )
+                 }
             }
         }.onFailure { error ->
-            //  [问题15修复] 刷新失败时保留旧视频列表，不清空
-            _uiState.value = _uiState.value.copy(
-                videos = if (!isLoadMore && oldVideos.isNotEmpty()) oldVideos else _uiState.value.videos,
-                isLoading = false,
-                error = if (!isLoadMore && oldVideos.isEmpty()) error.message ?: "网络错误" else null
-            )
+            updateCategoryState(currentCategory) { oldState ->
+                oldState.copy(
+                    isLoading = false,
+                    error = if (!isLoadMore && oldState.videos.isEmpty()) error.message ?: "网络错误" else null
+                )
+            }
         }
     }
     
+    // Helper to update state for a specific category
+    private fun updateCategoryState(category: HomeCategory, update: (CategoryContent) -> CategoryContent) {
+        val currentStates = _uiState.value.categoryStates
+        val currentCategoryState = currentStates[category] ?: CategoryContent()
+        val newCategoryState = update(currentCategoryState)
+        val newStates = currentStates.toMutableMap()
+        newStates[category] = newCategoryState
+        
+        // Also update legacy fields if it is current category, to keep UI working until full migration
+        // Or if we fully migrated UI, we don't need to update legacy fields 'videos', 'liveRooms' etc in HomeUiState root.
+        // But HomeScreen.kt still uses `state.videos`. So we MUST sync variables.
+        
+        var newState = _uiState.value.copy(categoryStates = newStates)
+        
+        if (category == newState.currentCategory) {
+            newState = newState.copy(
+                videos = newCategoryState.videos,
+                liveRooms = newCategoryState.liveRooms,
+                followedLiveRooms = newCategoryState.followedLiveRooms,
+                isLoading = newCategoryState.isLoading,
+                error = newCategoryState.error
+            )
+        }
+        _uiState.value = newState
+    }
+    
+    //  [新增] 获取关注动态列表
     //  [新增] 获取关注动态列表
     private suspend fun fetchFollowFeed(isLoadMore: Boolean) {
         if (!isLoadMore) {
@@ -311,23 +350,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             
             if (videos.isNotEmpty()) {
-                _uiState.value = _uiState.value.copy(
-                    videos = if (isLoadMore) _uiState.value.videos + videos else videos,
-                    liveRooms = emptyList(),
-                    isLoading = false,
-                    error = null
-                )
+                updateCategoryState(HomeCategory.FOLLOW) { oldState ->
+                    oldState.copy(
+                        videos = if (isLoadMore) oldState.videos + videos else videos,
+                        liveRooms = emptyList(),
+                        isLoading = false,
+                        error = null,
+                        hasMore = true // Assume more unless empty
+                    )
+                }
             } else {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = if (!isLoadMore && _uiState.value.videos.isEmpty()) "暂无关注动态，请先关注一些UP主" else null
-                )
+                 updateCategoryState(HomeCategory.FOLLOW) { oldState ->
+                    oldState.copy(
+                        isLoading = false,
+                        error = if (!isLoadMore && oldState.videos.isEmpty()) "暂无关注动态，请先关注一些UP主" else null,
+                        hasMore = false
+                    )
+                }
             }
         }.onFailure { error ->
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                error = if (!isLoadMore && _uiState.value.videos.isEmpty()) error.message ?: "请先登录" else null
-            )
+             updateCategoryState(HomeCategory.FOLLOW) { oldState ->
+                oldState.copy(
+                    isLoading = false,
+                    error = if (!isLoadMore && oldState.videos.isEmpty()) error.message ?: "请先登录" else null
+                )
+            }
         }
     }
     
@@ -378,25 +425,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             // 处理热门直播结果
             popularResult.onSuccess { rooms ->
                 if (rooms.isNotEmpty() || followedRooms.isNotEmpty()) {
-                    _uiState.value = _uiState.value.copy(
-                        followedLiveRooms = followedRooms,
-                        liveRooms = rooms,
-                        videos = emptyList(),
-                        isLoading = false,
-                        error = null
-                    )
+                    updateCategoryState(HomeCategory.LIVE) { oldState ->
+                        oldState.copy(
+                            followedLiveRooms = followedRooms,
+                            liveRooms = rooms,
+                            videos = emptyList(),
+                            isLoading = false,
+                            error = null,
+                            hasMore = true
+                        )
+                    }
                 } else {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = "暂无直播"
-                    )
+                     updateCategoryState(HomeCategory.LIVE) { oldState ->
+                        oldState.copy(
+                            isLoading = false,
+                            error = "暂无直播",
+                            hasMore = false
+                        )
+                    }
                 }
             }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(
-                    followedLiveRooms = followedRooms,
-                    isLoading = false,
-                    error = if (followedRooms.isEmpty()) e.message ?: "网络错误" else null
-                )
+                 updateCategoryState(HomeCategory.LIVE) { oldState ->
+                    oldState.copy(
+                        followedLiveRooms = followedRooms,
+                        isLoading = false,
+                        error = if (followedRooms.isEmpty()) e.message ?: "网络错误" else null
+                    )
+                }
             }
         } else {
             // 加载更多时只加载热门直播（关注的主播数量有限，不需要分页）
@@ -405,29 +460,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             
             result.onSuccess { rooms ->
                 if (rooms.isNotEmpty()) {
-                    val existingRoomIds = _uiState.value.liveRooms.map { it.roomid }.toSet()
+                    val currentLiveRooms = _uiState.value.categoryStates[HomeCategory.LIVE]?.liveRooms ?: emptyList()
+                    val existingRoomIds = currentLiveRooms.map { it.roomid }.toSet()
                     val newRooms = rooms.filter { it.roomid !in existingRoomIds }
                     
                     if (newRooms.isEmpty()) {
                         hasMoreLiveData = false
-                        _uiState.value = _uiState.value.copy(isLoading = false)
+                        updateCategoryState(HomeCategory.LIVE) { it.copy(isLoading = false, hasMore = false) }
                         return@onSuccess
                     }
                     
-                    _uiState.value = _uiState.value.copy(
-                        liveRooms = _uiState.value.liveRooms + newRooms,
-                        isLoading = false,
-                        error = null
-                    )
+                    updateCategoryState(HomeCategory.LIVE) { oldState ->
+                        oldState.copy(
+                            liveRooms = oldState.liveRooms + newRooms,
+                            isLoading = false,
+                            error = null,
+                            hasMore = true
+                        )
+                    }
                 } else {
                     hasMoreLiveData = false
-                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    updateCategoryState(HomeCategory.LIVE) { it.copy(isLoading = false, hasMore = false) }
                 }
             }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = null  // 加载更多失败不显示错误
-                )
+                updateCategoryState(HomeCategory.LIVE) { it.copy(isLoading = false) }
             }
         }
     }

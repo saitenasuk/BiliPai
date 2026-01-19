@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -99,10 +100,22 @@ fun ElegantVideoCard(
     
     //  记录卡片位置
     var cardBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    
+    //  [交互优化] 按压缩放动画状态
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = 0.6f,
+            stiffness = 400f
+        ),
+        label = "cardScale"
+    )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(scale)  //  应用全局缩放
             //  [修复] 进场动画 - 使用 Unit 作为 key，只在首次挂载时播放
             // 原问题：使用 video.bvid 作为 key，分类切换时所有卡片重新触发动画（缩放收缩效果）
             .animateEnter(index = index, key = Unit, animationEnabled = animationEnabled)
@@ -153,12 +166,21 @@ fun ElegantVideoCard(
                 )
                 .clip(RoundedCornerShape(cardCornerRadius))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                //  [交互优化] 封面区域：点击跳转
-                .clickable {
-                    cardBounds?.let { bounds ->
-                        CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
-                    }
-                    onClick(video.bvid, 0)
+                //  [交互优化] 封面区域：点击跳转 (带按压反馈)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            isPressed = true
+                            tryAwaitRelease()
+                            isPressed = false
+                        },
+                        onTap = {
+                            cardBounds?.let { bounds ->
+                                CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
+                            }
+                            onClick(video.bvid, 0)
+                        }
+                    )
                 }
         ) {
             // 🚀 [性能优化] 使用从父级传入的 isDataSaverActive，避免每个卡片重复计算
@@ -286,32 +308,28 @@ fun ElegantVideoCard(
                 modifier = Modifier
                     .weight(1f)
                     .semantics { contentDescription = "视频标题: ${video.title}" }
-                    //  [交互优化] 标题区域：长按弹出菜单，点击跳转
+                    //  [交互优化] 标题区域：长按弹出菜单，点击跳转 (带按压反馈)
                     .pointerInput(onDismiss, onWatchLater) {
                         val hasLongPressMenu = onDismiss != null || onWatchLater != null
-                        if (hasLongPressMenu) {
-                            detectTapGestures(
-                                onLongPress = {
+                        detectTapGestures(
+                            onPress = {
+                                isPressed = true
+                                tryAwaitRelease()
+                                isPressed = false
+                            },
+                            onLongPress = {
+                                if (hasLongPressMenu) {
                                     haptic(HapticType.HEAVY)
                                     showDismissMenu = true
-                                },
-                                onTap = {
-                                    cardBounds?.let { bounds ->
-                                        CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
-                                    }
-                                    onClick(video.bvid, 0)
                                 }
-                            )
-                        } else {
-                            detectTapGestures(
-                                onTap = {
-                                    cardBounds?.let { bounds ->
-                                        CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
-                                    }
-                                    onClick(video.bvid, 0)
+                            },
+                            onTap = {
+                                cardBounds?.let { bounds ->
+                                    CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
                                 }
-                            )
-                        }
+                                onClick(video.bvid, 0)
+                            }
+                        )
                     }
             )
 

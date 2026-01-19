@@ -340,23 +340,28 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
             
             // 同步所有 alias 状态：只有目标启用，其他禁用
             allAliases.forEach { (_, aliasFullName) ->
-                val currentState = pm.getComponentEnabledSetting(
-                    android.content.ComponentName(packageName, aliasFullName)
-                )
-                val shouldBeEnabled = aliasFullName == targetAlias
-                val targetState = if (shouldBeEnabled) {
-                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                } else {
-                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-                }
-                
-                // 只在状态不一致时修改，减少不必要的操作
-                if (currentState != targetState) {
-                    pm.setComponentEnabledSetting(
-                        android.content.ComponentName(packageName, aliasFullName),
-                        targetState,
-                        android.content.pm.PackageManager.DONT_KILL_APP
+                try {
+                    val currentState = pm.getComponentEnabledSetting(
+                        android.content.ComponentName(packageName, aliasFullName)
                     )
+                    val shouldBeEnabled = aliasFullName == targetAlias
+                    val targetState = if (shouldBeEnabled) {
+                        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    } else {
+                        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                    }
+                    
+                    // 只在状态不一致时修改，减少不必要的操作
+                    if (currentState != targetState) {
+                        pm.setComponentEnabledSetting(
+                            android.content.ComponentName(packageName, aliasFullName),
+                            targetState,
+                            android.content.pm.PackageManager.DONT_KILL_APP
+                        )
+                    }
+                } catch (e: Exception) {
+                    //  [容错] 忽略不存在的组件，防止崩溃
+                    Logger.d(TAG, "⚠️ Component $aliasFullName not found, skipping")
                 }
             }
             

@@ -42,6 +42,9 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.feature.bangumi.ui.detail.RatingRow
 import com.android.purebilibili.feature.bangumi.ui.detail.FollowButton
 import com.android.purebilibili.feature.bangumi.ui.detail.SeasonSelector
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.unifiedBlur
 
 /**
  * 番剧详情页面
@@ -58,6 +61,10 @@ fun BangumiDetailScreen(
 ) {
     val detailState by viewModel.detailState.collectAsState()
     
+    // ✨ Haze State
+    val hazeState = remember { HazeState() }
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    
     // 加载详情
     LaunchedEffect(seasonId, epId) {
         viewModel.loadSeasonDetail(seasonId, epId)
@@ -73,7 +80,11 @@ fun BangumiDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent
+                ),
+                modifier = Modifier.unifiedBlur(
+                    hazeState = hazeState
                 )
             )
         }
@@ -113,6 +124,7 @@ fun BangumiDetailScreen(
                     TabletBangumiDetailContent(
                         detail = state.detail,
                         paddingValues = paddingValues,
+                        hazeState = hazeState,
                         onEpisodeClick = onEpisodeClick,
                         onSeasonClick = onSeasonClick,
                         onToggleFollow = { isFollowing ->
@@ -123,6 +135,7 @@ fun BangumiDetailScreen(
                     MobileBangumiDetailContent(
                         detail = state.detail,
                         paddingValues = paddingValues,
+                        hazeState = hazeState,
                         onEpisodeClick = onEpisodeClick,
                         onSeasonClick = onSeasonClick,
                         onToggleFollow = { isFollowing ->
@@ -139,6 +152,7 @@ fun BangumiDetailScreen(
 private fun TabletBangumiDetailContent(
     detail: BangumiDetail,
     paddingValues: PaddingValues,
+    hazeState: HazeState,
     onEpisodeClick: (BangumiEpisode) -> Unit,
     onSeasonClick: (Long) -> Unit,
     onToggleFollow: (Boolean) -> Unit
@@ -170,7 +184,8 @@ private fun TabletBangumiDetailContent(
         ) {
             LazyColumn(
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.hazeSource(state = hazeState)
             ) {
                 // Header (Cover + Title)
                 item {
@@ -302,7 +317,7 @@ private fun TabletBangumiDetailContent(
                 contentPadding = PaddingValues(24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
             ) {
                  // Header: Episodes Title
                  if (!detail.episodes.isNullOrEmpty()) {
@@ -424,6 +439,7 @@ private fun TabletBangumiDetailContent(
 private fun MobileBangumiDetailContent(
     detail: BangumiDetail,
     paddingValues: PaddingValues,
+    hazeState: HazeState,
     onEpisodeClick: (BangumiEpisode) -> Unit,
     onSeasonClick: (Long) -> Unit,
     onToggleFollow: (Boolean) -> Unit
@@ -445,7 +461,7 @@ private fun MobileBangumiDetailContent(
     
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().hazeSource(state = hazeState),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
             // 头部封面和信息

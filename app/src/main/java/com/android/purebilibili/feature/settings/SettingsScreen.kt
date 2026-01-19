@@ -30,7 +30,7 @@ import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LogCollector
 import com.android.purebilibili.core.plugin.PluginManager
 
-import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeSource
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -76,7 +76,7 @@ fun SettingsScreen(
     var showPathDialog by remember { mutableStateOf(false) }
     
     // Haze State for this screen
-    val settingsHazeState = remember { dev.chrisbanes.haze.HazeState() }
+    val activeHazeState = mainHazeState ?: remember { dev.chrisbanes.haze.HazeState() }
 
     // Directory Picker Logic
     val defaultPath = remember { SettingsManager.getDefaultDownloadPath(context) }
@@ -222,7 +222,7 @@ fun SettingsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .haze(state = settingsHazeState)
+            .hazeSource(state = activeHazeState)
     ) {
         if (windowSizeClass.shouldUseSplitLayout) {
             TabletSettingsLayout(
@@ -350,7 +350,10 @@ private fun MobileSettingsLayout(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
-            contentPadding = WindowInsets.navigationBars.asPaddingValues()
+            // [修复] 增加底部内边距以适配自定义底栏 (80dp + systemBars)
+            contentPadding = PaddingValues(
+                bottom = 100.dp 
+            )
         ) {
             item { IOSSectionTitle("关注作者") }
             item { 

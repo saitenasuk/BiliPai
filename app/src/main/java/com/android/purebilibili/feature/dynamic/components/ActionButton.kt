@@ -27,9 +27,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-//  已改用 MaterialTheme.colorScheme.primary
-import com.android.purebilibili.core.theme.iOSBlue
-
 /**
  *  iOS 风格操作按钮 - 现代化胶囊设计
  * 
@@ -64,11 +61,11 @@ fun ActionButton(
         label = "actionButtonScale"
     )
     
-    //  iOS 风格颜色 - 根据激活状态调整
+    //  统一主题颜色 - 根据激活状态调整
     val buttonColor = when {
         isLike && isActive -> Color(0xFFFF6B81)  // 已点赞：粉红色
         isLike -> MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f)
-        isForward -> iOSBlue
+        isForward -> MaterialTheme.colorScheme.primary  // 使用主题色替代硬编码
         isComment -> MaterialTheme.colorScheme.primary
         else -> activeColor
     }

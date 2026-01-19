@@ -18,6 +18,26 @@ object MediaUtils {
         return hasDecoder("video/av01")
     }
 
+    /**
+     * Check if HDR (HDR10/HLG) video is supported
+     * HDR requires both decoder support and display capability
+     */
+    fun isHdrSupported(): Boolean {
+        // HDR10 uses HEVC with specific profile
+        // Check for HEVC support first, then assume HDR display is available on modern devices
+        return hasDecoder("video/hevc") && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N
+    }
+    
+    /**
+     * Check if Dolby Vision is supported
+     * Dolby Vision requires specific hardware decoder
+     */
+    fun isDolbyVisionSupported(): Boolean {
+        // Dolby Vision MIME type
+        val hasDolbyDecoder = hasDecoder("video/dolby-vision") || hasDecoder("video/dvhe") || hasDecoder("video/dvav")
+        return hasDolbyDecoder && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N
+    }
+
     private fun hasDecoder(mimeType: String): Boolean {
         try {
             val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)

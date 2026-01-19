@@ -16,6 +16,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -56,6 +59,10 @@ import com.android.purebilibili.core.ui.components.IOSSwitchItem
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import com.android.purebilibili.core.ui.blur.unifiedBlur
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
@@ -69,11 +76,15 @@ fun ProfileScreen(
     onFollowingClick: (Long) -> Unit = {},  //  关注列表点击
     onDownloadClick: () -> Unit = {},  //  离线缓存点击
     onWatchLaterClick: () -> Unit = {} // 稍后再看点击
+    // [注意] 移除了 globalHazeState - 双 hazeSource 模式与 Haze 库冲突
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val view = LocalView.current
     val windowSizeClass = LocalWindowSizeClass.current
+    
+    // [Blur] Haze State
+    val hazeState = remember { HazeState() }
 
     //  设置沉浸式状态栏和导航栏（进入时修改，离开时恢复）
     DisposableEffect(state) {
@@ -207,28 +218,35 @@ fun ProfileScreen(
                 containerColor = MaterialTheme.colorScheme.background,
                 topBar = {
                     if (!windowSizeClass.shouldUseSplitLayout) {
-                        LargeTopAppBar(
-                            title = { Text("我的", fontWeight = FontWeight.Bold) },
-                            navigationIcon = {
-                                IconButton(onClick = onBack) {
-                                    Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
-                                }
-                            },
-                            actions = {
-                                IconButton(onClick = onSettingsClick) {
-                                    Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
-                                }
-                            },
-                            scrollBehavior = scrollBehavior,
-                            colors = TopAppBarDefaults.largeTopAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.background,
-                                scrolledContainerColor = MaterialTheme.colorScheme.surface
+                        // [Blur] TopAppBar Container with Blur
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .unifiedBlur(hazeState)
+                        ) {
+                            LargeTopAppBar(
+                                title = { Text("我的", fontWeight = FontWeight.Bold) },
+                                navigationIcon = {
+                                    IconButton(onClick = onBack) {
+                                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                },
+                                actions = {
+                                    IconButton(onClick = onSettingsClick) {
+                                        Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                },
+                                scrollBehavior = scrollBehavior,
+                                colors = TopAppBarDefaults.largeTopAppBarColors(
+                                    containerColor = Color.Transparent,
+                                    scrolledContainerColor = Color.Transparent
+                                )
                             )
-                        )
+                        }
                     }
                 }
             ) { padding ->
-                Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     if (windowSizeClass.shouldUseSplitLayout) {
                         TabletProfileContent(
                             user = currentUiState.user,
@@ -242,7 +260,8 @@ fun ProfileScreen(
                             onDownloadClick = onDownloadClick,
                             onSettingsClick = onSettingsClick,
                             onBack = onBack,
-                            onWatchLaterClick = onWatchLaterClick
+                            onWatchLaterClick = onWatchLaterClick,
+                            paddingValues = padding
                         )
                     } else {
                         MobileProfileContent(
@@ -255,7 +274,9 @@ fun ProfileScreen(
                             onFavoriteClick = onFavoriteClick,
                             onFollowingClick = { onFollowingClick(currentUiState.user.mid) },
                             onDownloadClick = onDownloadClick,
-                            onWatchLaterClick = onWatchLaterClick
+                            onWatchLaterClick = onWatchLaterClick,
+                            hazeState = hazeState, // [Blur] Pass HazeState
+                            paddingValues = padding // [Blur] Pass padding
                         )
                     }
                 }
@@ -274,10 +295,11 @@ fun TabletProfileContent(
     onDownloadClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onBack: () -> Unit,
-    onWatchLaterClick: () -> Unit
+    onWatchLaterClick: () -> Unit,
+    paddingValues: PaddingValues
 ) {
     AdaptiveSplitLayout(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().padding(paddingValues),
         primaryRatio = 0.4f,
         primaryContent = {
             // Left Pane: User Info & Stats & VIP
@@ -352,11 +374,19 @@ fun MobileProfileContent(
     onFavoriteClick: () -> Unit,
     onFollowingClick: () -> Unit,
     onDownloadClick: () -> Unit,
-    onWatchLaterClick: () -> Unit
+    onWatchLaterClick: () -> Unit,
+    hazeState: HazeState? = null,
+    // [注意] 移除了 globalHazeState - 双 hazeSource 导致 Haze 库崩溃
+    paddingValues: PaddingValues = PaddingValues(0.dp)
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (hazeState != null) Modifier.hazeSource(hazeState) else Modifier), // [Blur] Apply hazeSource
+        contentPadding = PaddingValues(
+            top = paddingValues.calculateTopPadding(),
+            bottom = paddingValues.calculateBottomPadding() + 120.dp // [Modified] Increased padding
+        )
     ) {
         item { UserInfoSection(user) }
         item { UserStatsSection(user, onFollowingClick) }

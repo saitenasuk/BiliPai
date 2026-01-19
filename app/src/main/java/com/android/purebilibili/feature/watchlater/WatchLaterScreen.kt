@@ -211,7 +211,8 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
 fun WatchLaterScreen(
     onBack: () -> Unit,
     onVideoClick: (String, Long) -> Unit,
-    viewModel: WatchLaterViewModel = viewModel()
+    viewModel: WatchLaterViewModel = viewModel(),
+    globalHazeState: HazeState? = null // [新增]
 ) {
     val state by viewModel.uiState.collectAsState()
     val hazeState = remember { HazeState() }
@@ -251,6 +252,7 @@ fun WatchLaterScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .hazeSource(state = hazeState) // 内容作为模糊源
+                .then(if (globalHazeState != null) Modifier.hazeSource(globalHazeState) else Modifier) // [新增]
         ) {
             when {
                 state.isLoading -> {
@@ -303,7 +305,7 @@ fun WatchLaterScreen(
                             start = 8.dp, 
                             end = 8.dp, 
                             top = padding.calculateTopPadding() + 8.dp, 
-                            bottom = padding.calculateBottomPadding() + 8.dp
+                            bottom = padding.calculateBottomPadding() + 8.dp + 80.dp // [新增] 底部Padding
                         ),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
