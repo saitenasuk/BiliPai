@@ -54,7 +54,10 @@ class DampedDragAnimationState(
      */
     fun onDrag(dragAmountPx: Float, itemWidthPx: Float) {
         isDragging = true
-        val deltaIndex = dragAmountPx / itemWidthPx
+        // [增强] 增加阻尼感：拖拽距离打折，模拟由于流体阻力产生的迟滞
+        // 0.6f 的系数意味着手指移动 100px，指示器只移动 60px，产生"重"的感觉
+        val dragResistance = 0.6f
+        val deltaIndex = (dragAmountPx / itemWidthPx) * dragResistance
         // 修复：往右滑(dragAmountPx > 0)应该增加索引，所以改为 +
         val newValue = (animatable.value + deltaIndex).fastCoerceIn(0f, (itemCount - 1).toFloat())
         
@@ -77,8 +80,8 @@ class DampedDragAnimationState(
             animatable.animateTo(
                 targetValue = targetIndex.toFloat(),
                 animationSpec = spring(
-                    dampingRatio = 0.7f,  // 柔和阻尼
-                    stiffness = 400f       // 较快响应
+                    dampingRatio = 0.6f,   // [增强] 更低阻尼 = 更强回弹 (0.7 -> 0.6)
+                    stiffness = 350f       // [增强] 略微降低刚度，让回弹幅度感觉更大 (400 -> 350)
                 )
             )
             onIndexChanged(targetIndex)
@@ -95,8 +98,8 @@ class DampedDragAnimationState(
             animatable.animateTo(
                 targetValue = index.toFloat(),
                 animationSpec = spring(
-                    dampingRatio = 0.7f,
-                    stiffness = 400f
+                    dampingRatio = 0.6f,   // [增强] 保持一致的回弹感
+                    stiffness = 350f
                 )
             )
         }

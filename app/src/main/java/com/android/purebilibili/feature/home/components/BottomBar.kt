@@ -9,6 +9,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable  // [新增] 组合点击支持
+import androidx.compose.foundation.ExperimentalFoundationApi // [新增]
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -156,8 +158,8 @@ fun FrostedBottomBar(
     val debounceClick: (BottomNavItem, () -> Unit) -> Unit = remember {
         { item, action ->
             val currentTime = System.currentTimeMillis()
-            // 300ms 防抖 + 已经是当前项时跳过
-            if (currentTime - lastClickTime > 300 && item != currentItem) {
+            // 200ms 防抖
+            if (currentTime - lastClickTime > 200) {
                 lastClickTime = currentTime
                 action()
             }
@@ -197,7 +199,7 @@ fun FrostedBottomBar(
     //  根据样式计算垂直偏移以确保视觉居中
     //  正值向下偏移，负值向上偏移
     val contentVerticalOffset = when {
-        isFloating && labelMode == 0 -> 3.dp   // 悬浮+图标文字：向下偏移
+        isFloating && labelMode == 0 -> 0.dp   // 悬浮+图标文字：完全居中 (3->0)
         isFloating && labelMode == 1 -> 2.dp   // 悬浮+仅图标：向下偏移
         isFloating && labelMode == 2 -> 2.dp   // 悬浮+仅文字：向下偏移
         !isFloating && labelMode == 0 -> 2.dp  // 贴边+图标文字：微调偏移 (4->2)
@@ -515,6 +517,7 @@ private fun BottomBarContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BottomBarItem(
     item: BottomNavItem,
@@ -558,7 +561,7 @@ private fun BottomBarItem(
     )
     
     // [修改] 缩放插值
-    val targetScale = androidx.compose.ui.util.lerp(1.0f, 1.15f, selectionFraction)
+    val targetScale = androidx.compose.ui.util.lerp(1.0f, 0.9f, selectionFraction)
     val scale by animateFloatAsState(
         targetValue = targetScale,
         animationSpec = spring(dampingRatio = 0.4f, stiffness = 400f),
@@ -566,7 +569,7 @@ private fun BottomBarItem(
     )
     
     // [修改] Y轴位移插值
-    val targetBounceY = androidx.compose.ui.util.lerp(0f, -4f, selectionFraction)
+    val targetBounceY = androidx.compose.ui.util.lerp(0f, 0f, selectionFraction)
     val bounceY by animateFloatAsState(
         targetValue = targetBounceY,
         animationSpec = spring(dampingRatio = 0.4f, stiffness = 400f),
@@ -595,27 +598,27 @@ private fun BottomBarItem(
             .then(
                 // 保持原样
                 if (item == BottomNavItem.HOME) {
-                    Modifier.pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = {
-                                debounceClick(item) {
-                                    isPending = true
-                                    haptic(HapticType.LIGHT)
-                                    kotlinx.coroutines.MainScope().launch {
-                                        kotlinx.coroutines.delay(100)
-                                        wobbleAngle = 15f
-                                        kotlinx.coroutines.delay(150)
-                                        onClick()
-                                        isPending = false
-                                    }
+                    Modifier.combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            debounceClick(item) {
+                                isPending = true
+                                haptic(HapticType.LIGHT)
+                                kotlinx.coroutines.MainScope().launch {
+                                    kotlinx.coroutines.delay(100)
+                                    wobbleAngle = 15f
+                                    kotlinx.coroutines.delay(150)
+                                    onClick()
+                                    isPending = false
                                 }
-                            },
-                            onDoubleTap = {
-                                haptic(HapticType.MEDIUM)
-                                onHomeDoubleTap()
                             }
-                        )
-                    }
+                        },
+                        onDoubleClick = {
+                            haptic(HapticType.MEDIUM)
+                            onHomeDoubleTap()
+                        }
+                    )
                 } else {
                     Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },

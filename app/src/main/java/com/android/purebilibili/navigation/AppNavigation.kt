@@ -11,9 +11,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState //  新增
 import androidx.compose.runtime.getValue //  新增
+import androidx.compose.runtime.LaunchedEffect // 新增
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -46,6 +47,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import dev.chrisbanes.haze.hazeSource
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.runtime.CompositionLocalProvider
+import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
+import com.android.purebilibili.core.ui.LocalBottomBarVisible
 import androidx.compose.ui.platform.LocalConfiguration // [新增]
 // import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass (Removed)
 // import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass (Removed)
@@ -184,7 +191,42 @@ fun AppNavigation(
             ScreenRoutes.OpenSourceLicenses.route
         )
         val showBottomBar = (isTopLevelDestination || currentRoute in settingsRoutes) && !useSideNavigation && currentRoute != ScreenRoutes.Story.route
+        
+        // 核心可见性逻辑：
+        // 1. 永久隐藏模式 -> 始终隐藏
+        // 2. 始终显示模式 -> 始终显示
+        // 3. 上滑隐藏模式 -> 由子页面通过 LocalSetBottomBarVisible 控制，初始为 true
+        var isBottomBarVisible by remember { mutableStateOf(true) }
+        
+        // 根据模式强制重置状态（防止模式切换后状态卡死）
+        LaunchedEffect(bottomBarVisibilityMode) {
+            isBottomBarVisible = true
+        }
 
+        // [New Fix] 切换到顶级页面时，强制恢复底栏可见性
+        // 解决问题：从首页(已上滑隐藏)切换到其他Tab，或者从视频页返回时，确保底栏是可见的
+        LaunchedEffect(currentRoute) {
+            if (isTopLevelDestination) {
+                isBottomBarVisible = true
+            }
+        }
+        
+        // 最终决定是否显示：
+        // - 必须是顶层/白名单页面
+        // - 不是侧边栏模式
+        // - 不是故事模式
+        // - 且 (模式为始终显示 OR (模式为上滑隐藏 AND 当前状态为可见))
+        // - 且 模式不是永久隐藏
+        val finalBottomBarVisible = showBottomBar && 
+            bottomBarVisibilityMode != SettingsManager.BottomBarVisibilityMode.ALWAYS_HIDDEN &&
+            (bottomBarVisibilityMode == SettingsManager.BottomBarVisibilityMode.ALWAYS_VISIBLE || isBottomBarVisible)
+
+        val setBottomBarVisible: (Boolean) -> Unit = remember { { visible -> isBottomBarVisible = visible } }
+
+        CompositionLocalProvider(
+            LocalSetBottomBarVisible provides setBottomBarVisible,
+            LocalBottomBarVisible provides finalBottomBarVisible
+        ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // ===== 内容层 (hazeSource) =====
             // 这个 Box 包裹所有 NavHost 内容，作为底栏模糊的源
@@ -956,45 +998,54 @@ fun AppNavigation(
             } // End of Content Box
 
             // ===== 全局底栏 (Global Bottom Bar) =====
-            if (showBottomBar) {
+            // ===== 全局底栏 (Global Bottom Bar) =====
+            // 依然保留 showBottomBar 作为外层判断，避免不必要的 AnimatedVisibility 挂载
+            if (showBottomBar && bottomBarVisibilityMode != SettingsManager.BottomBarVisibilityMode.ALWAYS_HIDDEN) {
                 // 用于处理底栏悬浮时的点击穿透问题，底栏自身处理点击
                 Box(
                     modifier = Modifier.align(Alignment.BottomCenter).zIndex(1f)
                 ) {
-                   if (isBottomBarFloating) {
-                        // 悬浮式底栏
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 20.dp), // 悬浮距离
-                            contentAlignment = Alignment.Center
-                        ) {
+                    AnimatedVisibility(
+                        visible = finalBottomBarVisible,
+                        enter = slideInVertically { it },
+                        exit = slideOutVertically { it }
+                    ) {
+                       if (isBottomBarFloating) {
+                            // 悬浮式底栏
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 20.dp), // 悬浮距离
+                                contentAlignment = Alignment.Center
+                            ) {
+                                FrostedBottomBar(
+                                    currentItem = currentBottomNavItem,
+                                    onItemClick = { item -> navigateTo(item.route) },
+                                    onHomeDoubleTap = { /* TODO: Scroll Home to Top */ },
+                                    hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
+                                    isFloating = true,
+                                    labelMode = bottomBarLabelMode,
+                                    visibleItems = visibleBottomBarItems,
+                                    itemColorIndices = bottomBarItemColors
+                                )
+                            }
+                        } else {
+                            // 贴底式底栏
                             FrostedBottomBar(
                                 currentItem = currentBottomNavItem,
                                 onItemClick = { item -> navigateTo(item.route) },
                                 onHomeDoubleTap = { /* TODO: Scroll Home to Top */ },
                                 hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
-                                isFloating = true,
+                                isFloating = false,
                                 labelMode = bottomBarLabelMode,
                                 visibleItems = visibleBottomBarItems,
                                 itemColorIndices = bottomBarItemColors
                             )
                         }
-                    } else {
-                        // 贴底式底栏
-                        FrostedBottomBar(
-                            currentItem = currentBottomNavItem,
-                            onItemClick = { item -> navigateTo(item.route) },
-                            onHomeDoubleTap = { /* TODO: Scroll Home to Top */ },
-                            hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
-                            isFloating = false,
-                            labelMode = bottomBarLabelMode,
-                            visibleItems = visibleBottomBarItems,
-                            itemColorIndices = bottomBarItemColors
-                        )
                     }
                 }
             }
         } // End of Main Box
+        } // End of CompositionLocalProvider
     }
 }

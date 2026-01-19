@@ -64,6 +64,8 @@ import coil.imageLoader
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged  //  性能优化：防止重复触发
 import androidx.compose.animation.ExperimentalSharedTransitionApi  //  共享过渡实验API
+import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
+import com.android.purebilibili.core.ui.LocalBottomBarVisible
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
@@ -303,7 +305,7 @@ fun HomeScreen(
 
     //  [修复] 动态计算内容顶部边距，防止被头部遮挡
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val listTopPadding = statusBarHeight + 110.dp  // [调整] 优化顶部间距 (150 -> 110) 紧贴Header
+    val listTopPadding = statusBarHeight + 120.dp  // [调整] 优化顶部间距 (110 -> 120) 增加呼吸感
 
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     
@@ -335,8 +337,12 @@ fun HomeScreen(
         initial = SettingsManager.BottomBarVisibilityMode.ALWAYS_VISIBLE
     )
     
-    //  [新增] 底栏可见性状态（根据模式初始化）
-    var bottomBarVisible by remember { mutableStateOf(true) }
+    //  [Refactor] 使用全局 CompositionLocal 控制底栏可见性
+    val setBottomBarVisible = LocalSetBottomBarVisible.current
+    val isGlobalBottomBarVisible = LocalBottomBarVisible.current
+    // 兼容代码：为了最小化改动，将 bottomBarVisible 指向全局状态
+    // 注意：这里的 bottomBarVisible 现在是只读的，修改必须通过 setBottomBarVisible
+    val bottomBarVisible = isGlobalBottomBarVisible
     
     //  [修复] 跟踪是否正在导航到/从视频页 - 必须在 LaunchedEffect 之前声明
     var isVideoNavigating by remember { mutableStateOf(false) }
@@ -348,12 +354,12 @@ fun HomeScreen(
     //  [新增] 滚动方向检测逻辑
     LaunchedEffect(state.currentCategory, bottomBarVisibilityMode, useSideNavigation) {
         if (useSideNavigation) {
-            bottomBarVisible = false
+            setBottomBarVisible(false)
             return@LaunchedEffect
         }
         if (bottomBarVisibilityMode != SettingsManager.BottomBarVisibilityMode.SCROLL_HIDE) {
             // 非滚动隐藏模式时，根据设置决定底栏可见性
-            bottomBarVisible = bottomBarVisibilityMode == SettingsManager.BottomBarVisibilityMode.ALWAYS_VISIBLE
+            setBottomBarVisible(bottomBarVisibilityMode == SettingsManager.BottomBarVisibilityMode.ALWAYS_VISIBLE)
             return@LaunchedEffect
         }
         
@@ -369,7 +375,7 @@ fun HomeScreen(
             
             // 滚动到顶部时始终显示
             if (firstVisibleItem == 0 && scrollOffset < 100) {
-                bottomBarVisible = true
+                setBottomBarVisible(true)
             } else {
                 // 计算滚动方向
                 val isScrollingDown = when {
@@ -383,8 +389,8 @@ fun HomeScreen(
                     else -> scrollOffset < lastScrollOffset - 30
                 }
                 
-                if (isScrollingDown) bottomBarVisible = false
-                else if (isScrollingUp) bottomBarVisible = true
+                if (isScrollingDown) setBottomBarVisible(false)
+                else if (isScrollingUp) setBottomBarVisible(true)
             }
             
             lastFirstVisibleItem = firstVisibleItem
@@ -402,7 +408,7 @@ fun HomeScreen(
             bottomBarRestoreJob?.cancel()
             bottomBarRestoreJob = null
             
-            bottomBarVisible = false  //  触发底栏下滑动画
+            setBottomBarVisible(false)  //  触发底栏下滑动画
             isVideoNavigating = true  //  标记正在导航到视频
             onVideoClick(bvid, cid, cover)
         }
@@ -424,21 +430,22 @@ fun HomeScreen(
                         //  [同步动画] 延迟后再显示底栏，让进入动画与卡片返回动画同步
                         bottomBarRestoreJob = kotlinx.coroutines.MainScope().launch {
                             kotlinx.coroutines.delay(100)  // 等待返回动画开始
-                            bottomBarVisible = true
+                            setBottomBarVisible(true)
                             // 延迟重置导航状态，确保进入动画完成
                             kotlinx.coroutines.delay(400)
                             isVideoNavigating = false
                         }
                     } else if (!bottomBarVisible && !isVideoNavigating) {
                         //  [新增] 从设置等非视频页面返回时，立即显示底栏（无延迟）
-                        bottomBarVisible = true
+                        setBottomBarVisible(true)
                     }
                 }
                 androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
-                    //  [新增] 导航离开首页时隐藏底栏，避免影响其他页面的导航栏区域
+                    //  [修复] 移除此处隐藏底栏的逻辑
+                    //  防止切换到其他Tab（如动态/历史）时底栏消失
                     bottomBarRestoreJob?.cancel()
                     bottomBarRestoreJob = null
-                    bottomBarVisible = false
+                    // setBottomBarVisible(false) // REMOVED
                 }
                 else -> { /* 其他事件不处理 */ }
             }

@@ -3,14 +3,20 @@ package com.android.purebilibili.feature.home.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
@@ -18,11 +24,13 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
@@ -171,213 +179,68 @@ fun FluidHomeTopBar(
  * - 圆角胶囊选中指示器
  * - 最小触摸目标 44pt
  */
+/**
+ *  [HIG] iOS 风格可滑动分类标签栏 (Liquid Glass Style)
+ * - 移除"更多"菜单，所有分类水平平铺
+ * - 支持水平惯性滚动
+ * - 液态玻璃选中指示器 (变长胶囊)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryTabRow(
-    //  [修复] 分类列表必须与 HomeCategory 枚举顺序完全匹配！
-    // HomeCategory: RECOMMEND, FOLLOW, POPULAR, LIVE, ANIME, MOVIE, GAME, KNOWLEDGE, TECH
     categories: List<String> = listOf("推荐", "关注", "热门", "直播", "追番", "影视", "游戏", "知识", "科技"),
     selectedIndex: Int = 0,
     onCategorySelected: (Int) -> Unit = {},
-    onPartitionClick: () -> Unit = {}  //  新增：分区按钮回调
+    onPartitionClick: () -> Unit = {}
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
-    val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+    val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
     
-    //  [HIG] 限制主要可见标签数量 - 前4个为主要分类
-    val primaryCount = 4
-    val primaryCategories = categories.take(primaryCount)
-    val moreCategories = categories.drop(primaryCount)
-    
-    //  "更多"菜单展开状态
-    var showMoreMenu by remember { mutableStateOf(false) }
-    
-    //  判断当前选中项是否在"更多"菜单中
-    val isMoreSelected = selectedIndex >= primaryCount
-    val moreLabel = if (isMoreSelected && selectedIndex < categories.size) {
-        categories[selectedIndex]
-    } else {
-        "更多"
-    }
-    
+    // [Refactor] Removed Dock container to merge with unified header
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .height(48.dp) // Maintain height
+            .padding(horizontal = 4.dp), // Minimal horizontal padding
         verticalAlignment = Alignment.CenterVertically
     ) {
-        //  主要分类标签 - 固定显示
-        Row(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // [Refactor] 使用 ScrollableTabRow 支持多Tab
+        ScrollableTabRow(
+            selectedTabIndex = selectedIndex,
+            edgePadding = 12.dp, // Add some edge padding for the first item
+            containerColor = Color.Transparent,
+            contentColor = primaryColor,
+            divider = {}, 
+            indicator = { tabPositions ->
+                // Custom indicator if needed
+            },
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
         ) {
-            primaryCategories.forEachIndexed { index, category ->
-                val isSelected = index == selectedIndex
-                
-                //  [HIG] iOS 风格胶囊选中背景
-                val backgroundColor by animateColorAsState(
-                    targetValue = if (isSelected) primaryColor.copy(alpha = 0.12f) else Color.Transparent,
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
-                    label = "bgColor"
-                )
-                
-                val textColor by animateColorAsState(
-                    targetValue = if (isSelected) primaryColor else unselectedColor,
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
-                    label = "textColor"
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .height(36.dp)  // HIG 触摸目标
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(backgroundColor)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onCategorySelected(index) }
-                        .padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = category,
-                        color = textColor,
-                        fontSize = if (isSelected) 15.sp else 14.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                }
-            }
-            
-            //  "更多" 下拉菜单按钮 (只有当有额外分类时显示)
-            if (moreCategories.isNotEmpty()) {
-                Box {
-                    val isMoreActive = isMoreSelected || showMoreMenu
-                    
-                    val moreBgColor by animateColorAsState(
-                        targetValue = if (isMoreActive) primaryColor.copy(alpha = 0.12f) else Color.Transparent,
-                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
-                        label = "moreBgColor"
-                    )
-                    
-                    val moreTextColor by animateColorAsState(
-                        targetValue = if (isMoreActive) primaryColor else unselectedColor,
-                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
-                        label = "moreTextColor"
-                    )
-                    
-                    Row(
-                        modifier = Modifier
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(moreBgColor)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { showMoreMenu = true }
-                            .padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = moreLabel,
-                            color = moreTextColor,
-                            fontSize = if (isMoreSelected) 15.sp else 14.sp,
-                            fontWeight = if (isMoreSelected) FontWeight.SemiBold else FontWeight.Normal
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(
-                            CupertinoIcons.Default.ChevronDown,
-                            contentDescription = "展开更多分类",
-                            tint = moreTextColor,
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
-                    
-                    //  iOS 风格下拉菜单 - 毛玻璃风格
-                    DropdownMenu(
-                        expanded = showMoreMenu,
-                        onDismissRequest = { showMoreMenu = false },
-                        modifier = Modifier
-                            .width(150.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                    ) {
-                        // 分类图标映射
-                        val categoryIcons = mapOf(
-                            "追番" to CupertinoIcons.Default.Film,
-                            "影视" to CupertinoIcons.Default.Tv,
-                            "游戏" to CupertinoIcons.Default.Gamecontroller,
-                            "知识" to CupertinoIcons.Default.Book,
-                            "科技" to CupertinoIcons.Default.Cpu
-                        )
-                        
-                        moreCategories.forEachIndexed { index, category ->
-                            val actualIndex = primaryCount + index
-                            val isThisSelected = actualIndex == selectedIndex
-                            val icon = categoryIcons[category] ?: CupertinoIcons.Default.Folder
-                            
-                            // 菜单项
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        if (isThisSelected) primaryColor.copy(alpha = 0.15f)
-                                        else Color.Transparent
-                                    )
-                                    .clickable {
-                                        onCategorySelected(actualIndex)
-                                        showMoreMenu = false
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // 图标
-                                Icon(
-                                    icon,
-                                    contentDescription = null,
-                                    tint = if (isThisSelected) primaryColor 
-                                           else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                
-                                Spacer(modifier = Modifier.width(10.dp))
-                                
-                                // 文字
-                                Text(
-                                    text = category,
-                                    color = if (isThisSelected) primaryColor 
-                                            else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = if (isThisSelected) FontWeight.SemiBold 
-                                                 else FontWeight.Normal,
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                
-                                // 选中勾选
-                                if (isThisSelected) {
-                                    Icon(
-                                        CupertinoIcons.Default.Checkmark,
-                                        contentDescription = null,
-                                        tint = primaryColor,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+            categories.forEachIndexed { index, category ->
+                 Box(
+                     modifier = Modifier.wrapContentWidth(),
+                     contentAlignment = Alignment.Center
+                 ) {
+                     CategoryTabItem(
+                         category = category,
+                         isSelected = index == selectedIndex,
+                         primaryColor = primaryColor,
+                         unselectedColor = unselectedColor,
+                         onClick = { onCategorySelected(index) }
+                     )
+                 }
             }
         }
+
+        Spacer(modifier = Modifier.width(4.dp))
         
-        Spacer(modifier = Modifier.width(8.dp))
-        
-        //  分区按钮 - HIG 44dp 触摸目标
+        //  分区按钮
         Box(
             modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .size(44.dp)
+                .clip(RoundedCornerShape(22.dp))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
@@ -391,5 +254,53 @@ fun CategoryTabRow(
                 modifier = Modifier.size(20.dp)
             )
         }
+        
+        Spacer(modifier = Modifier.width(8.dp))
     }
+}
+
+
+@Composable
+fun CategoryTabItem(
+    category: String,
+    isSelected: Boolean,
+    primaryColor: Color,
+    unselectedColor: Color,
+    onClick: () -> Unit
+) {
+     // 文字颜色动画
+     val textColor by animateColorAsState(
+         targetValue = if (isSelected) primaryColor else unselectedColor,
+         animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+         label = "textColor"
+     )
+     
+     // [新增] 背景动画 (替代 Indicator)
+     // 选中时显示半透明背景，未选中透明
+     val backgroundColor by animateColorAsState(
+         targetValue = if (isSelected) primaryColor.copy(alpha = 0.12f) else Color.Transparent,
+         animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+         label = "bgColor"
+     )
+
+     val fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+
+     Box(
+         modifier = Modifier
+             .clip(RoundedCornerShape(16.dp)) // 圆角适配 Dock
+             .background(backgroundColor) // 应用背景
+             .clickable(
+                 interactionSource = remember { MutableInteractionSource() },
+                 indication = null
+             ) { onClick() }
+             .padding(horizontal = 16.dp, vertical = 6.dp), // 调整内边距
+         contentAlignment = Alignment.Center
+     ) {
+         Text(
+             text = category,
+             color = textColor,
+             fontSize = if (isSelected) 16.sp else 15.sp,
+             fontWeight = fontWeight
+         )
+     }
 }

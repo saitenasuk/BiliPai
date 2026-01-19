@@ -93,17 +93,131 @@ fun iOSHomeHeader(
     //  [优化] 使用 blurIntensity 对应的背景透明度实现毛玻璃质感
     val headerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (hazeState != null) backgroundAlpha else 1f)
     
-    Box(
-        modifier = Modifier.fillMaxWidth()
+    // Unified Header Container (Status Bar + Search Bar + Tabs)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .zIndex(10f) // Ensure high z-index for the whole header
+            .then(if (hazeState != null) Modifier.unifiedBlur(hazeState) else Modifier)
+            .background(headerColor)
+            .padding(bottom = 8.dp) // Add some bottom padding for breathing room
     ) {
-        // ===== 分类标签栏 =====
+        // 1. Status Bar Placeholder
         Box(
             modifier = Modifier
-                .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .padding(top = totalHeaderTopPadding)
-                .then(if (hazeState != null) Modifier.unifiedBlur(hazeState) else Modifier)
-                .background(headerColor)
+                .height(statusBarHeight)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = {
+                            haptic(HapticType.LIGHT)
+                            onStatusBarDoubleTap()
+                        }
+                    )
+                }
+        )
+
+        // 2. Search Bar + Avatar + Settings
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Avatar
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .iOSTapEffect { onAvatarClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                ) {
+                    if (user.isLogin && user.face.isNotEmpty()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(FormatUtils.fixImageUrl(user.face))
+                                .crossfade(true).build(),
+                            contentDescription = "用户头像",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(
+                            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("未", fontSize = 11.sp, fontWeight = FontWeight.Bold, 
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            // Search Box
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    .clickable { 
+                        haptic(HapticType.LIGHT)
+                        onSearchClick() 
+                    }
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        CupertinoIcons.Default.MagnifyingGlass,
+                        contentDescription = "搜索",
+                        tint = iOSSystemGray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "搜索视频、UP主...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = iOSSystemGray,
+                        maxLines = 1
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            // Settings Button
+            IconButton(
+                onClick = { 
+                    haptic(HapticType.LIGHT)
+                    onSettingsClick() 
+                },
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    CupertinoIcons.Default.Gear,
+                    contentDescription = "设置",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+        
+        // 3. Category Tabs (Merged directly below Search Bar)
+        // Adjust padding to make them close
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                // Removed top padding as it is now in flow
         ) {
             CategoryTabRow(
                 selectedIndex = categoryIndex,
@@ -111,125 +225,6 @@ fun iOSHomeHeader(
                 onPartitionClick = onPartitionClick
             )
         }
-
-        // ===== 搜索栏区域 =====
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .zIndex(1f)
-                .then(if (hazeState != null) Modifier.unifiedBlur(hazeState) else Modifier)
-                .background(headerColor)
-        ) {
-            // 状态栏占位
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(statusBarHeight)  // [修复] 明确设置高度以接收点击事件
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = {
-                                haptic(HapticType.LIGHT) // 单击震动反馈
-                                onStatusBarDoubleTap()
-                            }
-                        )
-                    }
-            )
-            
-            // 搜索栏 + 头像 + 设置
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 头像 - HIG: 最小触摸目标 44pt
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)  // HIG 最小触摸目标
-                        .iOSTapEffect { onAvatarClick() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)  // 实际头像尺寸
-                            .clip(CircleShape)
-                            .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                    ) {
-                        if (user.isLogin && user.face.isNotEmpty()) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(FormatUtils.fixImageUrl(user.face))
-                                    .crossfade(true).build(),
-                                contentDescription = "用户头像",
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Box(
-                                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("未", fontSize = 11.sp, fontWeight = FontWeight.Bold, 
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.width(8.dp))  // 调整间距适配更大触摸区域
-                
-                //  搜索框 - iOS 风格 (HIG: 圆角 10pt) - 优化柔和半透明效果
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(10.dp))  // HIG 标准圆角
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))  // 更柔和的半透明
-                        .clickable { 
-                            haptic(HapticType.LIGHT)
-                            onSearchClick() 
-                        }
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            CupertinoIcons.Default.MagnifyingGlass,
-                            contentDescription = "搜索",
-                            tint = iOSSystemGray,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "搜索视频、UP主...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = iOSSystemGray,
-                            maxLines = 1
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.width(8.dp))
-                
-                // 设置按钮 - HIG: 最小触摸目标 44pt
-                IconButton(
-                    onClick = { 
-                        haptic(HapticType.LIGHT)
-                        onSettingsClick() 
-                    },
-                    modifier = Modifier.size(44.dp)  // HIG 最小触摸目标
-                ) {
-                    Icon(
-                        CupertinoIcons.Default.Gear,
-                        contentDescription = "设置",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.size(22.dp)  // 稍大图标
-                    )
-                }
-            }
-            }
-        }
     }
 
+}
