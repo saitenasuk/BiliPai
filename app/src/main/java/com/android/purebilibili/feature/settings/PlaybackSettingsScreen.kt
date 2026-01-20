@@ -442,6 +442,24 @@ fun PlaybackSettingsContent(
                         },
                         iconTint = com.android.purebilibili.core.theme.iOSBlue
                     )
+                    
+                    // 🔄 [新增] 自动横竖屏切换
+                    Divider()
+                    val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
+                        .getAutoRotateEnabled(context).collectAsState(initial = false)
+                    IOSSwitchItem(
+                        icon = CupertinoIcons.Default.ArrowTriangle2CirclepathCamera,  // 旋转图标
+                        title = "自动横竖屏切换",
+                        subtitle = "跟随手机方向自动进入/退出全屏",
+                        checked = autoRotateEnabled,
+                        onCheckedChange = { 
+                            scope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setAutoRotateEnabled(context, it)
+                            }
+                        },
+                        iconTint = iOSTeal
+                    )
                 }
             }
             

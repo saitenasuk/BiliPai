@@ -230,6 +230,24 @@ fun VideoDetailScreen(
         }
     }
     
+    // 🔄 [新增] 自动横竖屏切换 - 跟随手机传感器方向
+    val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getAutoRotateEnabled(context).collectAsState(initial = false)
+    
+    LaunchedEffect(autoRotateEnabled) {
+        if (!useTabletLayout) {  // 只对手机生效
+            activity?.requestedOrientation = if (autoRotateEnabled) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR  // 传感器控制，跟随手机方向
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT  // 锁定竖屏
+            }
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoDetailScreen", 
+                "🔄 Auto-rotate: enabled=$autoRotateEnabled, orientation=${if (autoRotateEnabled) "SENSOR" else "PORTRAIT"}"
+            )
+        }
+    }
+    
     // 退出重置亮度 +  屏幕常亮管理 + 状态栏恢复（作为安全网）
     DisposableEffect(Unit) {
         //  [沉浸式] 启用边到边显示，让内容延伸到状态栏下方

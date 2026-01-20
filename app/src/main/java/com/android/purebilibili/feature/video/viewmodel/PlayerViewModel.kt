@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.purebilibili.feature.video.player.PlaylistManager
@@ -74,11 +75,12 @@ sealed class PlayerUiState {
         val allVideoUrls: List<String> = emptyList(),  // 所有可用视频 URL (主+备用)
         val allAudioUrls: List<String> = emptyList(),   // 所有可用音频 URL (主+备用)
         // 🖼️ [新增] 视频预览图数据（用于进度条拖动预览）
-        // 🖼️ [新增] 视频预览图数据（用于进度条拖动预览）
         val videoshotData: VideoshotData? = null,
         // 🎞️ [New] Codec & Audio Info
         val videoCodecId: Int = 0,
-        val audioCodecId: Int = 0
+        val audioCodecId: Int = 0,
+        // 👀 [新增] 在线观看人数
+        val onlineCount: String = ""
     ) : PlayerUiState() {
         val cdnCount: Int get() = allVideoUrls.size.coerceAtLeast(1)
         val currentCdnLabel: String get() = "线路${currentCdnIndex + 1}"
@@ -559,6 +561,9 @@ class PlayerViewModel : ViewModel() {
                     
                     // 📖 异步加载视频章节信息（用于进度条章节标记）
                     loadChapterInfo(bvid, result.info.cid)
+                    
+                    // 👀 [新增] 开始轮询在线观看人数
+                    startOnlineCountPolling(bvid, result.info.cid)
                     
                     //  [新增] 更新播放列表
                     updatePlaylist(result.info, result.related)
@@ -1171,8 +1176,11 @@ class PlayerViewModel : ViewModel() {
             try {
                 val response = com.android.purebilibili.core.network.NetworkModule.api.getVideoTags(bvid)
                 if (response.code == 0 && response.data != null) {
-                    val current = _uiState.value as? PlayerUiState.Success ?: return@launch
-                    _uiState.value = current.copy(videoTags = response.data)
+                    _uiState.update { current ->
+                        if (current is PlayerUiState.Success) {
+                            current.copy(videoTags = response.data)
+                        } else current
+                    }
                     Logger.d("PlayerVM", "🏷️ Loaded ${response.data.size} video tags")
                 }
             } catch (e: Exception) {
@@ -1187,12 +1195,45 @@ class PlayerViewModel : ViewModel() {
             try {
                 val videoshotData = VideoRepository.getVideoshot(bvid, cid)
                 if (videoshotData != null && videoshotData.isValid) {
-                    val current = _uiState.value as? PlayerUiState.Success ?: return@launch
-                    _uiState.value = current.copy(videoshotData = videoshotData)
+                    _uiState.update { current ->
+                        if (current is PlayerUiState.Success) {
+                            current.copy(videoshotData = videoshotData)
+                        } else current
+                    }
                     Logger.d("PlayerVM", "🖼️ Loaded videoshot: ${videoshotData.image.size} images, ${videoshotData.index.size} frames")
                 }
             } catch (e: Exception) {
                 Logger.d("PlayerVM", "🖼️ Failed to load videoshot: ${e.message}")
+            }
+        }
+    }
+    
+    // 👀 [新增] 在线观看人数定时刷新 Job
+    private var onlineCountJob: Job? = null
+    
+    // 👀 [新增] 获取并更新在线观看人数
+    private fun startOnlineCountPolling(bvid: String, cid: Long) {
+        // 取消之前的轮询
+        onlineCountJob?.cancel()
+        
+        onlineCountJob = viewModelScope.launch {
+            while (true) {
+                try {
+                    val response = com.android.purebilibili.core.network.NetworkModule.api.getOnlineCount(bvid, cid)
+                    if (response.code == 0 && response.data != null) {
+                        val onlineText = "${response.data.total}人正在看"
+                        _uiState.update { current ->
+                            if (current is PlayerUiState.Success) {
+                                current.copy(onlineCount = onlineText)
+                            } else current
+                        }
+                        Logger.d("PlayerVM", "👀 Online count: ${response.data.total}")
+                    }
+                } catch (e: Exception) {
+                    Logger.d("PlayerVM", "👀 Failed to fetch online count: ${e.message}")
+                }
+                // 每 30 秒更新一次
+                delay(30_000)
             }
         }
     }
@@ -1569,6 +1610,7 @@ class PlayerViewModel : ViewModel() {
         super.onCleared()
         heartbeatJob?.cancel()
         pluginCheckJob?.cancel()
+        onlineCountJob?.cancel()  // 👀 取消在线人数轮询
         
         //  通知插件系统：视频结束
         PluginManager.getEnabledPlayerPlugins().forEach { plugin ->
