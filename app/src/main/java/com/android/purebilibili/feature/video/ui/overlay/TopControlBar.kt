@@ -42,6 +42,8 @@ fun TopControlBar(
     danmakuEnabled: Boolean = true,
     onDanmakuToggle: () -> Unit = {},
     onDanmakuSettingsClick: () -> Unit = {},
+    // 👀 [新增] 在线观看人数
+    onlineCount: String = "",
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -56,14 +58,24 @@ fun TopControlBar(
             Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = Color.White)
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = title,
-            color = Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
+            // 👀 在线人数
+            if (onlineCount.isNotEmpty()) {
+                Text(
+                    text = onlineCount,
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+        }
         // Danmaku toggle button with settings indicator
         Spacer(modifier = Modifier.width(8.dp))
         Surface(

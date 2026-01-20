@@ -581,6 +581,26 @@ object SettingsManager {
         return prefs.getBoolean("enabled", true)
     }
     
+    // ========== 🔄 自动旋转设置 ==========
+    
+    private val KEY_AUTO_ROTATE_ENABLED = booleanPreferencesKey("auto_rotate_enabled")
+    
+    // --- 自动横竖屏切换 (跟随手机传感器方向，默认关闭) ---
+    fun getAutoRotateEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_AUTO_ROTATE_ENABLED] ?: false }
+    
+    suspend fun setAutoRotateEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_AUTO_ROTATE_ENABLED] = value }
+        // 同步到 SharedPreferences，供同步读取
+        context.getSharedPreferences("auto_rotate_cache", Context.MODE_PRIVATE)
+            .edit().putBoolean("enabled", value).apply()
+    }
+    
+    fun isAutoRotateEnabledSync(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("auto_rotate_cache", Context.MODE_PRIVATE)
+        return prefs.getBoolean("enabled", false)
+    }
+    
     // ========== 🌐 网络感知画质设置 ==========
     
     private val KEY_WIFI_QUALITY = intPreferencesKey("wifi_default_quality")

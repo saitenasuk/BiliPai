@@ -117,7 +117,9 @@ fun VideoPlayerOverlay(
     currentCodec: String = "hev1",
     onCodecChange: (String) -> Unit = {},
     currentAudioQuality: Int = -1,
-    onAudioQualityChange: (Int) -> Unit = {}
+    onAudioQualityChange: (Int) -> Unit = {},
+    // 👀 [新增] 在线观看人数
+    onlineCount: String = ""
 ) {
     var showQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
@@ -234,6 +236,7 @@ fun VideoPlayerOverlay(
                 if (isFullscreen) {
                     TopControlBar(
                         title = title,
+                        onlineCount = onlineCount,
                         isFullscreen = isFullscreen,
                         currentQualityLabel = currentQualityLabel,
                         onBack = onBack,
@@ -249,6 +252,7 @@ fun VideoPlayerOverlay(
                     //  [新增] 竖屏模式顶部栏（返回 + 画质 + 设置 + 分享按钮）
                     val context = LocalContext.current
                     PortraitTopBar(
+                        onlineCount = onlineCount,
                         onBack = onBack,
                         onSettings = { showVideoSettings = true },
                         onShare = onShare ?: {
@@ -541,6 +545,7 @@ fun VideoPlayerOverlay(
  */
 @Composable
 private fun PortraitTopBar(
+    onlineCount: String = "",
     onBack: () -> Unit,
     onSettings: () -> Unit,
     onShare: () -> Unit,
@@ -591,6 +596,16 @@ private fun PortraitTopBar(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
+            }
+            
+            // 👀 在线人数
+            if (onlineCount.isNotEmpty()) {
+                Text(
+                    text = onlineCount,
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
         

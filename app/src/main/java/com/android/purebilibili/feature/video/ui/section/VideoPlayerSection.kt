@@ -878,7 +878,9 @@ fun VideoPlayerSection(
                 currentCodec = currentCodec,
                 onCodecChange = onCodecChange,
                 currentAudioQuality = currentAudioQuality,
-                onAudioQualityChange = onAudioQualityChange
+                onAudioQualityChange = onAudioQualityChange,
+                // 👀 [新增] 在线观看人数
+                onlineCount = uiState.onlineCount
             )
         }
         
