@@ -58,6 +58,10 @@ object SettingsManager {
     //  [新增] 底栏显示模式 (0=图标+文字, 1=仅图标, 2=仅文字)
     private val KEY_BOTTOM_BAR_LABEL_MODE = intPreferencesKey("bottom_bar_label_mode")
     
+    //  [新增] 开屏壁纸
+    private val KEY_SPLASH_WALLPAPER_URI = stringPreferencesKey("splash_wallpaper_uri")
+    private val KEY_SPLASH_ENABLED = booleanPreferencesKey("splash_enabled")
+    
     object BottomBarLabelMode {
         const val SELECTED = 0 // 兼容 AppNavigation 的调用
         const val ICON_AND_TEXT = 0
@@ -305,6 +309,41 @@ object SettingsManager {
             .edit().putString("current_icon", iconKey).commit()
             
         com.android.purebilibili.core.util.Logger.d("SettingsManager", "App icon saved: $iconKey, persisted to prefs: $success")
+    }
+    
+    //  [新增] --- 开屏壁纸 ---
+    fun getSplashWallpaperUri(context: Context): Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SPLASH_WALLPAPER_URI] ?: "" }
+
+    suspend fun setSplashWallpaperUri(context: Context, uri: String) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_SPLASH_WALLPAPER_URI] = uri 
+        }
+        // 同步到 SharedPreferences
+        context.getSharedPreferences("splash_prefs", Context.MODE_PRIVATE)
+            .edit().putString("wallpaper_uri", uri).apply()
+    }
+    
+    fun getSplashWallpaperUriSync(context: Context): String {
+        return context.getSharedPreferences("splash_prefs", Context.MODE_PRIVATE)
+            .getString("wallpaper_uri", "") ?: ""
+    }
+    
+    fun isSplashEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SPLASH_ENABLED] ?: false } // 默认关闭
+
+    suspend fun setSplashEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_SPLASH_ENABLED] = value 
+        }
+        // 同步到 SharedPreferences
+        context.getSharedPreferences("splash_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean("enabled", value).apply()
+    }
+    
+    fun isSplashEnabledSync(context: Context): Boolean {
+        return context.getSharedPreferences("splash_prefs", Context.MODE_PRIVATE)
+            .getBoolean("enabled", false)
     }
     
     //  同步读取当前图标设置（用于 Application 启动时同步）
@@ -1144,6 +1183,29 @@ object SettingsManager {
     suspend fun setDynamicLayoutDirection(context: Context, direction: DynamicLayoutDirection) {
         context.settingsDataStore.edit { preferences -> 
             preferences[KEY_DYNAMIC_PAGE_LAYOUT_DIRECTION] = direction.value 
+        }
+    }
+
+    // ========== [New] 个人中心自定义背景 ==========
+
+    private val KEY_PROFILE_BG_URI = stringPreferencesKey("profile_bg_uri")
+
+    /**
+     * 获取自定义个人中心背景图 URI
+     */
+    fun getProfileBgUri(context: Context): Flow<String?> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PROFILE_BG_URI] }
+
+    /**
+     * 设置自定义个人中心背景图 URI
+     */
+    suspend fun setProfileBgUri(context: Context, uri: String?) {
+        context.settingsDataStore.edit { preferences ->
+            if (uri != null) {
+                preferences[KEY_PROFILE_BG_URI] = uri
+            } else {
+                preferences.remove(KEY_PROFILE_BG_URI)
+            }
         }
     }
 }

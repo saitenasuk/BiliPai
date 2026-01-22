@@ -433,6 +433,16 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             }
+            
+            // [新增] 检查登录状态
+            if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "未登录，请先登录",
+                    items = emptyList()
+                )
+                return
+            }
 
             val result = DynamicRepository.getDynamicFeed(refresh)
 

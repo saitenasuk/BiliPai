@@ -38,15 +38,21 @@ fun IOSSectionTitle(title: String) {
 }
 
 @Composable
-fun IOSGroup(content: @Composable ColumnScope.() -> Unit) {
+fun IOSGroup(
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+    shape: androidx.compose.ui.graphics.Shape? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val groupCornerRadius = iOSCornerRadius.Medium * cornerRadiusScale
+    val appliedShape = shape ?: RoundedCornerShape(groupCornerRadius)
     
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(groupCornerRadius)),
-        color = MaterialTheme.colorScheme.surface,
+            .clip(appliedShape),
+        color = containerColor,
         shadowElevation = 0.dp,
         tonalElevation = 1.dp
     ) {

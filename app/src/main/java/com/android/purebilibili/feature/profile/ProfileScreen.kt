@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.profile
 
 import android.app.Activity
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,7 +27,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -62,6 +67,16 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.ui.draw.blur
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.lazy.grid.items
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,11 +149,39 @@ fun ProfileScreen(
             }
         }
         is ProfileUiState.LoggedOut -> {
-            //  沉浸式全屏布局
-            GuestProfileContent(
-                onGoToLogin = onGoToLogin,
+            // [Modified] 游客模式：复用统一 UI，但使用虚拟游客数据
+            val guestUser = UserState(
+                isLogin = false,
+                name = "点击登录/注册",
+                face = "", // 空头像，UserInfoSection 会处理为默认或占位符
+                mid = 0,
+                level = 0,
+                coin = 0.0,
+                bcoin = 0.0,
+                isVip = false,
+                vipLabel = "",
+                following = 0,
+                follower = 0,
+
+                dynamic = 0,
+                topPhoto = currentUiState.topPhoto // [Modified] Use photo from state
+            )
+            
+            MobileProfileContent(
+                user = guestUser,
+                onLogout = onGoToLogin, // "退出登录" 变为 "登录"
+                onHistoryClick = onGoToLogin, // 游客点击功能需登录
+                onFavoriteClick = onGoToLogin,
+                onFollowingClick = { onGoToLogin() },
+                onDownloadClick = onGoToLogin,
+                onWatchLaterClick = onGoToLogin,
+                scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(),
                 onBack = onBack,
-                onSettingsClick = onSettingsClick
+                onSettingsClick = onSettingsClick,
+                hazeState = hazeState,
+                // [New] 传递点击头部去登录的回调 (需修改 MobileProfileContent 支持)
+                onHeaderClick = onGoToLogin,
+                paddingValues = PaddingValues(0.dp) // 全屏
             )
         }
         is ProfileUiState.Error -> {
@@ -216,10 +259,10 @@ fun ProfileScreen(
             Scaffold(
                 modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
                 containerColor = MaterialTheme.colorScheme.background,
+                // [Immersive] Mobile hides default TopBar, Tablet keeps it
                 topBar = {
-                    if (!windowSizeClass.shouldUseSplitLayout) {
-                        // [Blur] TopAppBar Container with Blur
-                        Box(
+                    if (windowSizeClass.shouldUseSplitLayout) {
+                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .unifiedBlur(hazeState)
@@ -244,7 +287,8 @@ fun ProfileScreen(
                             )
                         }
                     }
-                }
+                },
+                contentWindowInsets = if (!windowSizeClass.shouldUseSplitLayout) WindowInsets(0.dp) else ScaffoldDefaults.contentWindowInsets
             ) { padding ->
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (windowSizeClass.shouldUseSplitLayout) {
@@ -265,6 +309,7 @@ fun ProfileScreen(
                         )
                     } else {
                         MobileProfileContent(
+                            viewModel = viewModel,
                             user = currentUiState.user,
                             onLogout = {
                                 viewModel.logout()
@@ -275,8 +320,12 @@ fun ProfileScreen(
                             onFollowingClick = { onFollowingClick(currentUiState.user.mid) },
                             onDownloadClick = onDownloadClick,
                             onWatchLaterClick = onWatchLaterClick,
-                            hazeState = hazeState, // [Blur] Pass HazeState
-                            paddingValues = padding // [Blur] Pass padding
+                            // [Immersive] Pass ScrollBehavior and Navigation Actions
+                            scrollBehavior = scrollBehavior,
+                            onBack = onBack,
+                            onSettingsClick = onSettingsClick,
+                            hazeState = hazeState,
+                            paddingValues = padding
                         )
                     }
                 }
@@ -366,8 +415,12 @@ fun TabletProfileContent(
     )
 }
 
+// Imports moved to top
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MobileProfileContent(
+    viewModel: ProfileViewModel = viewModel(),
     user: UserState,
     onLogout: () -> Unit,
     onHistoryClick: () -> Unit,
@@ -375,33 +428,250 @@ fun MobileProfileContent(
     onFollowingClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
+    // [New] Params
+    scrollBehavior: TopAppBarScrollBehavior,
+    onBack: () -> Unit,
+    onSettingsClick: () -> Unit,
     hazeState: HazeState? = null,
-    // [注意] 移除了 globalHazeState - 双 hazeSource 导致 Haze 库崩溃
+    onHeaderClick: () -> Unit = {}, // [New] Support header click for guest login
     paddingValues: PaddingValues = PaddingValues(0.dp)
 ) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (hazeState != null) Modifier.hazeSource(hazeState) else Modifier), // [Blur] Apply hazeSource
-        contentPadding = PaddingValues(
-            top = paddingValues.calculateTopPadding(),
-            bottom = paddingValues.calculateBottomPadding() + 120.dp // [Modified] Increased padding
-        )
-    ) {
-        item { UserInfoSection(user) }
-        item { UserStatsSection(user, onFollowingClick) }
-        item { VipBannerSection(user) }
-        item { ServicesSection(onHistoryClick, onFavoriteClick, onDownloadClick, onWatchLaterClick) }
-        item {
-            IOSGroup {
-                IOSClickableItem(
-                    title = "退出登录",
-                    onClick = onLogout,
-                    textColor = MaterialTheme.colorScheme.error,
-                    centered = true
+    // 📸 图片选择器
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.updateCustomBackground(uri)
+        }
+    }
+    
+    // [New] State for Official Wallpaper Sheet
+    var showWallpaperSheet by remember { mutableStateOf(false) }
+    
+    // [New] Sheet
+    if (showWallpaperSheet) {
+        OfficialWallpaperSheet(viewModel = viewModel, onDismiss = { showWallpaperSheet = false })
+    }
+    
+    val isImmersive = user.topPhoto.isNotEmpty()
+    val contentColor = if (isImmersive) Color.White else MaterialTheme.colorScheme.onSurface
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 🖼️ 背景图层
+        if (isImmersive) {
+            // 1. 底层：高斯模糊填充 (填补图片不够长的区域)
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(user.topPhoto)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(60.dp) // Android 12+ 原生模糊
+            )
+            
+            // 2. 顶层：清晰头部图 (Header Banner)
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(user.topPhoto)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(320.dp) // [Modified] 增加高度以适应沉浸式 (260 -> 320)
+                    .align(Alignment.TopCenter)
+            )
+            
+            // 3. 遮罩：渐变黑遮罩 (增加缓动层级)
+            // [Adaptive] 浅色模式下减弱遮罩，深色模式保持深沉
+            // [Fix] Detect theme via MaterialTheme to support in-app theme switching
+            val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            val gradientColors = if (isDarkTheme) {
+                 listOf(
+                    Color.Black.copy(alpha = 0.6f),
+                    Color.Black.copy(alpha = 0.3f),
+                    Color.Transparent,
+                    Color.Black.copy(alpha = 0.2f),
+                    Color.Black.copy(alpha = 0.8f)
+                )
+            } else {
+                 listOf(
+                    Color.Black.copy(alpha = 0.3f), // Lighter top
+                    Color.Black.copy(alpha = 0.1f),
+                    Color.Transparent,
+                    Color.Black.copy(alpha = 0.05f),
+                    Color.Black.copy(alpha = 0.4f)  // Lighter bottom
                 )
             }
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = gradientColors,
+                            startY = 0f,
+                            endY = 1200f
+                        )
+                    )
+            )
+        } else {
+             // 无背景图时使用默认渐变
+             Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface)
+             )
         }
+
+        // 📜 滚动内容
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (hazeState != null) Modifier.hazeSource(hazeState) else Modifier),
+            contentPadding = PaddingValues(
+                // [Modified] 顶部留白，适配 CenterAlignedTopAppBar (64dp + Status Bar ~ 30-40dp)
+                top = 120.dp, 
+                bottom = paddingValues.calculateBottomPadding() + 120.dp
+            )
+        ) {
+            item { 
+                Column {
+                    // [UI优化] 移除背景色，透明显示下方 Header 图
+                    UserInfoSection(user, transparent = isImmersive) 
+                    
+                    // [Fixed] 壁纸选项行 - 独立于用户信息，避免重叠
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp), // Increased margin
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Glassy Button Style Helper
+                        val glassyModifier = Modifier
+                            .clip(RoundedCornerShape(50)) // Capsule shape
+                            .background(Color.Black.copy(alpha = 0.3f)) // Semi-transparent dark base
+                            .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(50)) // Subtle frost border
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+
+                        // 官方壁纸
+                        Row(
+                            modifier = glassyModifier.clickable { showWallpaperSheet = true },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Default.Photo,
+                                contentDescription = "官方壁纸",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "官方壁纸",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        // 本地相册
+                        Row(
+                            modifier = glassyModifier.clickable {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Default.Folder,
+                                contentDescription = "本地相册",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "本地相册",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+            if (user.isLogin) {
+                item { UserStatsSection(user, onFollowingClick, transparent = isImmersive) }
+            } else {
+                 // [Fix] Guest mode spacer to compensate for missing stats section
+                 // 16dp was too small, stats section is roughly 56dp (icon + text + padding)
+                 item { Spacer(modifier = Modifier.height(56.dp)) }
+            }
+            // [Modified] 移除 VIP Banner
+            // item { VipBannerSection(user) }
+            
+            item { 
+
+                // [Adaptive Frost] 自适应磨砂玻璃逻辑
+                // [Fix] Detect theme via MaterialTheme properties
+                val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+                
+                // 玻璃颜色：深色模式用黑透，浅色模式用白透
+                val glassContainerColor = if (isDarkTheme) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.5f)
+                
+                // 文字颜色：深色背景用白字，浅色背景用黑字
+                val glassContentColor = if (isDarkTheme) Color.White else Color.Black
+                
+                // 边框颜色：深色用微白边框，浅色用稍明显白边框(增强质感)
+                val glassBorderColor = if (isDarkTheme) Color.White.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.4f)
+
+                ServicesSection(
+                    onHistoryClick = onHistoryClick, 
+                    onFavoriteClick = onFavoriteClick, 
+                    onDownloadClick = onDownloadClick, 
+                    onWatchLaterClick = onWatchLaterClick,
+                    onLogout = onLogout,
+                    containerColor = if (isImmersive) glassContainerColor else MaterialTheme.colorScheme.surface,
+                    contentColor = if (isImmersive) glassContentColor else MaterialTheme.colorScheme.onSurface,
+                    borderColor = if (isImmersive) glassBorderColor else null,
+                    isLogin = user.isLogin // [New] Pass login status
+                )
+            }
+            // item { Spacer(...) } // Removed
+            // item { IOSGroup { ... } } // Removed
+        }
+        
+        // 🏗️ 沉浸式 TopBar (Standard)
+        CenterAlignedTopAppBar(
+            title = { Text("我的", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = contentColor)
+                }
+            },
+            actions = {
+                IconButton(onClick = onSettingsClick) {
+                    Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = contentColor)
+                }
+            },
+            scrollBehavior = scrollBehavior,
+            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                containerColor = Color.Transparent,
+                // [Style] 滚动后变为半透明黑底 (配合白色文字)，或保持透明?
+                // 建议使用深色背景以保证文字清晰
+                scrolledContainerColor = if (isImmersive) Color.Black.copy(alpha = 0.7f) else MaterialTheme.colorScheme.surface,
+                titleContentColor = contentColor,
+                actionIconContentColor = contentColor,
+                navigationIconContentColor = contentColor
+            )
+        )
     }
 }
 
@@ -519,12 +789,18 @@ fun GuestProfileContent(
 }
 
 @Composable
-fun UserInfoSection(user: UserState, centered: Boolean = false) {
+fun UserInfoSection(
+    user: UserState, 
+    centered: Boolean = false, 
+    transparent: Boolean = false,
+    onClick: () -> Unit = {} // [New]
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            //  修复：背景色
-            .background(MaterialTheme.colorScheme.surface)
+            //  修复：背景色 (支持透明)
+            .background(if (transparent) Color.Transparent else MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick) // [New] Make it clickable
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start
@@ -541,7 +817,7 @@ fun UserInfoSection(user: UserState, centered: Boolean = false) {
         if (!centered) {
             Spacer(modifier = Modifier.width(16.dp))
             Column {
-                UserInfoText(user)
+                UserInfoText(user, forceWhite = transparent)
             }
         }
     }
@@ -553,15 +829,20 @@ fun UserInfoSection(user: UserState, centered: Boolean = false) {
 }
 
 @Composable
-fun UserInfoText(user: UserState, centered: Boolean = false) {
-    //  修复：用户名颜色
+fun UserInfoText(user: UserState, centered: Boolean = false, forceWhite: Boolean = false) {
+    //  修复：用户名颜色 + 阴影
+    val contentColor = if (forceWhite) Color.White else MaterialTheme.colorScheme.onSurface
+    val shadow = if (forceWhite) Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f) else null
+    
     Text(
         text = user.name,
-        style = MaterialTheme.typography.titleLarge,
+        style = MaterialTheme.typography.titleLarge.copy(
+            shadow = shadow
+        ),
         fontWeight = FontWeight.Bold,
-        color = if (user.isVip) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        color = contentColor
     )
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(8.dp)) // Increased spacing
     Row(verticalAlignment = Alignment.CenterVertically) {
         LevelTag(level = user.level)
         Spacer(modifier = Modifier.width(8.dp))
@@ -585,32 +866,59 @@ fun LevelTag(level: Int) {
 }
 
 @Composable
-fun UserStatsSection(user: UserState, onFollowingClick: () -> Unit = {}) {
+fun UserStatsSection(user: UserState, onFollowingClick: () -> Unit = {}, transparent: Boolean = false) {
+    // 如果背景透明，文字强制为白色
+    val textColor = if (transparent) Color.White else MaterialTheme.colorScheme.onSurface
+    val labelColor = if (transparent) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            //  修复：背景色
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(bottom = 16.dp),
+            //  修复：背景色 (支持透明)
+            .background(if (transparent) Color.Transparent else MaterialTheme.colorScheme.surface)
+            .padding(bottom = 8.dp), // [Modified] 减少底部间距，使下方服务紧贴 (16.dp -> 8.dp)
         horizontalArrangement = Arrangement.SpaceAround
     ) {
-        StatItem(count = FormatUtils.formatStat(user.dynamic.toLong()), label = "动态")
-        StatItem(count = FormatUtils.formatStat(user.following.toLong()), label = "关注", onClick = onFollowingClick)
-        StatItem(count = FormatUtils.formatStat(user.follower.toLong()), label = "粉丝")
+        StatItem(count = FormatUtils.formatStat(user.dynamic.toLong()), label = "动态", textColor = textColor, labelColor = labelColor)
+        StatItem(count = FormatUtils.formatStat(user.following.toLong()), label = "关注", onClick = onFollowingClick, textColor = textColor, labelColor = labelColor)
+        StatItem(count = FormatUtils.formatStat(user.follower.toLong()), label = "粉丝", textColor = textColor, labelColor = labelColor)
     }
 }
 
+
 @Composable
-fun StatItem(count: String, label: String, onClick: (() -> Unit)? = null) {
+fun StatItem(
+    count: String, 
+    label: String, 
+    onClick: (() -> Unit)? = null, 
+    textColor: Color = MaterialTheme.colorScheme.onSurface,
+    labelColor: Color = MaterialTheme.colorScheme.onSurfaceVariant
+) {
+    // Detect if we need shadow (heuristic: if text is white)
+    val useShadow = textColor == Color.White
+    // Stronger shadow for better legibility against bright backgrounds
+    val shadow = if (useShadow) Shadow(color = Color.Black.copy(alpha = 0.8f), blurRadius = 4f) else null
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = if (onClick != null) {
             Modifier.clickable { onClick() }
         } else Modifier
     ) {
-        //  修复：数字和标签颜色
-        Text(text = count, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-        Text(text = label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        //  修复：数字和标签颜色 + 阴影
+        Text(
+            text = count, 
+            fontWeight = FontWeight.Bold, 
+            fontSize = 18.sp, 
+            color = textColor,
+            style = LocalTextStyle.current.copy(shadow = shadow)
+        )
+        Text(
+            text = label, 
+            fontSize = 12.sp, 
+            color = if (useShadow) Color.White.copy(alpha = 0.9f) else labelColor, // Whiter label
+            style = LocalTextStyle.current.copy(shadow = shadow) // Apply same shadow to label
+        )
     }
 }
 
@@ -640,36 +948,72 @@ fun ServicesSection(
     onHistoryClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onDownloadClick: () -> Unit = {},
-    onWatchLaterClick: () -> Unit = {}
+    onWatchLaterClick: () -> Unit = {},
+    onLogout: () -> Unit = {},
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    borderColor: Color? = null,
+    isLogin: Boolean = true // [New]
 ) {
-    IOSSectionTitle("我的服务")
-    IOSGroup {
-        IOSClickableItem(
-            icon = CupertinoIcons.Default.ArrowDownCircle,
-            title = "离线缓存",
-            onClick = onDownloadClick,
-            iconTint = MaterialTheme.colorScheme.primary
-        )
-        IOSDivider(startIndent = 66.dp)
-        IOSClickableItem(
-            icon = CupertinoIcons.Default.Clock,
-            title = "历史记录",
-            onClick = onHistoryClick,
-            iconTint = iOSBlue
-        )
-        IOSDivider(startIndent = 66.dp)
-        IOSClickableItem(
-            icon = CupertinoIcons.Default.Bookmark,
-            title = "我的收藏",
-            onClick = onFavoriteClick,
-            iconTint = iOSYellow
-        )
-        IOSDivider(startIndent = 66.dp)
-        IOSClickableItem(
-            icon = CupertinoIcons.Default.Bookmark,
-            title = "稍后再看",
-            onClick = onWatchLaterClick,
-            iconTint = iOSGreen
-        )
+    // [Modified] 移除标题，纯净悬浮岛风格 (Option 3)
+    // IOSSectionTitle("我的服务")
+    
+    // [Modified] Custom Surface implementation to avoid tonalElevation overlay causing "outer background" issue
+    Surface(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .then(
+                if (borderColor != null) {
+                    Modifier.border(
+                        width = 0.5.dp, 
+                        color = borderColor, 
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                } else Modifier
+            )
+            .clip(RoundedCornerShape(24.dp)),
+        color = containerColor,
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp // Ensure no extra overlay
+    ) {
+        Column {
+            IOSClickableItem(
+                icon = CupertinoIcons.Default.ArrowDownCircle,
+                title = "离线缓存",
+                onClick = onDownloadClick,
+                iconTint = MaterialTheme.colorScheme.primary,
+                textColor = contentColor
+            )
+            IOSClickableItem(
+                icon = CupertinoIcons.Default.Clock,
+                title = "历史记录",
+                onClick = onHistoryClick,
+                iconTint = iOSBlue,
+                textColor = contentColor
+            )
+            IOSClickableItem(
+                icon = CupertinoIcons.Default.Bookmark,
+                title = "我的收藏",
+                onClick = onFavoriteClick,
+                iconTint = iOSYellow,
+                textColor = contentColor
+            )
+            IOSClickableItem(
+                icon = CupertinoIcons.Default.Bookmark,
+                title = "稍后再看",
+                onClick = onWatchLaterClick,
+                iconTint = iOSGreen,
+                textColor = contentColor
+            )
+            
+            // [Merged] 退出登录 / 立即登录
+            IOSClickableItem(
+                title = if (isLogin) "退出登录" else "立即登录", // [New] Dynamic text
+                onClick = onLogout,
+                textColor = if (isLogin) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, // Red for logout, Blue for login
+                centered = true,
+                showChevron = false
+            )
+        }
     }
 }

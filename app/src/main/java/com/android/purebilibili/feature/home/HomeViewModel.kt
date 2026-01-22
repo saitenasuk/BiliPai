@@ -318,6 +318,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     //  [新增] 获取关注动态列表
     //  [新增] 获取关注动态列表
     private suspend fun fetchFollowFeed(isLoadMore: Boolean) {
+        if (com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()) {
+             updateCategoryState(HomeCategory.FOLLOW) { oldState ->
+                oldState.copy(
+                    isLoading = false,
+                    error = "未登录，请先登录以查看关注内容",
+                    videos = emptyList() // Ensure empty to trigger error state
+                )
+            }
+            return
+        }
+
         if (!isLoadMore) {
             fetchUserInfo()
             com.android.purebilibili.data.repository.DynamicRepository.resetPagination()

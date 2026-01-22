@@ -27,7 +27,9 @@ data class NavData(
     val wallet: Wallet = Wallet(),
     val vip: VipInfo = VipInfo(),
     //  核心修复：补回 wbi_img 字段 
-    val wbi_img: WbiImg? = null
+    val wbi_img: WbiImg? = null,
+    //  [New] 顶部背景图 (API 返回)
+    val top_photo: String = ""
 )
 
 @Serializable

@@ -9,6 +9,7 @@ import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.InputStream
@@ -76,8 +77,59 @@ object VideoRepository {
         buvidApi.activateBuvid(payload)
     }
 
-    // 1. 首页推荐
+    // [新增] 预加载缓存
+    private var preloadedHomeVideos: Result<List<VideoItem>>? = null
+    private var isPreloading = false
+    
+    // [新增] 检查首页数据是否就绪
+    fun isHomeDataReady(): Boolean {
+        return preloadedHomeVideos != null
+    }
+
+    // [新增] 预加载首页数据 (在 MainActivity onCreate 调用)
+    fun preloadHomeData() {
+        if (isPreloading || preloadedHomeVideos != null) return
+        isPreloading = true
+        
+        com.android.purebilibili.core.util.Logger.d("VideoRepo", "🚀 Starting home data preload...")
+        
+        // 使用 GlobalScope 或自定义 Scope 确保预加载不被取消
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            try {
+                // 确保依赖项就绪 (TokenManager 已同步初始化)
+                ensureBuvid3FromSpi()
+                
+                // 执行加载
+                val result = getHomeVideosInternal(idx = 0)
+                preloadedHomeVideos = result
+                
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", "🚀 Home data preload finished. Success=${result.isSuccess}")
+            } catch (e: Exception) {
+                com.android.purebilibili.core.util.Logger.e("VideoRepo", "🚀 Home data preload failed", e)
+                preloadedHomeVideos = Result.failure(e)
+            } finally {
+                isPreloading = false
+            }
+        }
+    }
+
+    // 1. 首页推荐 (修改为优先使用预加载数据)
     suspend fun getHomeVideos(idx: Int = 0): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
+        // 如果是首次加载 (idx=0) 且有预加载数据，直接使用
+        if (idx == 0) {
+            val cached = preloadedHomeVideos
+            if (cached != null) {
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Using preloaded home data!")
+                preloadedHomeVideos = null // 消费后清除，避免后续刷新无法获取新数据
+                return@withContext cached
+            }
+        }
+        
+        getHomeVideosInternal(idx)
+    }
+
+    // [重构] 内部加载逻辑
+    private suspend fun getHomeVideosInternal(idx: Int): Result<List<VideoItem>> {
         try {
             //  读取推荐流类型设置
             val context = com.android.purebilibili.core.network.NetworkModule.appContext
@@ -94,18 +146,18 @@ object VideoRepository {
                     // 尝试使用移动端 API
                     val mobileResult = fetchMobileFeed(idx)
                     if (mobileResult.isSuccess && mobileResult.getOrNull()?.isNotEmpty() == true) {
-                        mobileResult
+                        return mobileResult
                     } else {
                         // 移动端 API 失败，回退到 Web API
                         com.android.purebilibili.core.util.Logger.d("VideoRepo", " Mobile API failed, fallback to Web API")
-                        fetchWebFeed(idx)
+                        return fetchWebFeed(idx)
                     }
                 }
-                else -> fetchWebFeed(idx)
+                else -> return fetchWebFeed(idx)
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            Result.failure(e)
+            return Result.failure(e)
         }
     }
     

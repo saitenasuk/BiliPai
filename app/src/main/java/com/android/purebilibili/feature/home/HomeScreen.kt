@@ -819,10 +819,34 @@ fun HomeScreen(
                                 .height(500.dp), // 给定高度确保居中
                             contentAlignment = Alignment.Center
                         ) {
-                            ModernErrorState(
-                                message = state.error ?: "未知错误",
-                                onRetry = { viewModel.refresh() }
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    text = state.error ?: "未知错误",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                                
+                                if (state.error?.contains("登录") == true || state.error?.contains("Login") == true) {
+                                    com.android.purebilibili.core.ui.BiliGradientButton(
+                                        text = "去登录",
+                                        onClick = { onProfileClick() }
+                                    )
+                                } else {
+                                    Button(
+                                        onClick = { viewModel.refresh() },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    ) {
+                                        Text("重试")
+                                    }
+                                }
+                            }
                         }
                     }
                 }

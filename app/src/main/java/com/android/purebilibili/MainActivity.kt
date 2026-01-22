@@ -35,7 +35,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.animation.doOnEnd
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.animation.doOnEnd
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.layout.ContentScale
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
@@ -73,7 +79,11 @@ class MainActivity : ComponentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         //  安装 SplashScreen
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        
+        //  🚀 [启动优化] 立即开始预加载首页数据
+        // 这个必须尽早调用，利用开屏动画的时间并行加载数据
+        com.android.purebilibili.data.repository.VideoRepository.preloadHomeData()
         
         super.onCreate(savedInstanceState)
         //  初始调用，后续会根据主题动态更新
@@ -81,6 +91,30 @@ class MainActivity : ComponentActivity() {
         
         // 初始化小窗管理器
         miniPlayerManager = MiniPlayerManager.getInstance(this)
+        
+        //  🚀 [启动优化] 保持 Splash 直到数据加载完成或超时
+        var isDataReady = false
+        val startTime = System.currentTimeMillis()
+        
+        splashScreen.setKeepOnScreenCondition {
+            // 检查数据是否就绪
+            if (com.android.purebilibili.data.repository.VideoRepository.isHomeDataReady()) {
+                isDataReady = true
+            }
+            
+            // 计算耗时
+            val elapsed = System.currentTimeMillis() - startTime
+            
+            // 条件：数据未就绪 且 未超时(2500ms)
+            // 如果超时，强制进入（会显示骨架屏），避免用户以为死机
+            val shouldKeep = !isDataReady && elapsed < 2500L
+            
+            if (!shouldKeep) {
+                 Logger.d(TAG, "🚀 Splash dismissed. DataReady=$isDataReady, Elapsed=${elapsed}ms")
+            }
+            
+            shouldKeep
+        }
         
         //  [新增] 处理 deep link 或分享意图
         handleIntent(intent)
@@ -113,8 +147,6 @@ class MainActivity : ComponentActivity() {
             //  3. [新增] 获取主题色索引
             val themeColorIndex by SettingsManager.getThemeColorIndex(context).collectAsState(initial = 0)
             
-
-
             // 4. 获取系统当前的深色状态
             val systemInDark = isSystemInDarkTheme()
 
@@ -239,6 +271,44 @@ class MainActivity : ComponentActivity() {
                     // PiP 模式专用播放器 (只在 PiP 模式下显示，覆盖所有内容)
                     if (isInPipMode) {
                         PiPVideoPlayer(miniPlayerManager = miniPlayerManager)
+                    }
+                    
+                    // [New] Custom Splash Wallpaper Overlay
+                    var showSplash by remember { mutableStateOf(SettingsManager.isSplashEnabledSync(context)) }
+                    // [Optimization] If we delayed enough in splash screen, we might want to skip custom splash or show it briefly?
+                    // Logic: If user uses custom splash, system splash shows icon, then custom splash shows wallpaper.
+                    // If we use setKeepOnScreenCondition, system splash (icon) stays longer.
+                    // This is acceptable behavior: Icon -> Wallpaper (if enabled) -> App.
+                    // Or if custom wallpaper is enabled, maybe we shouldn't delay system splash?
+                    // User request: "当用户看见遮罩的时候，异步加载首页视频". Mask usually means System Splash (Icon) OR Custom Wallpaper.
+                    // Implementing delay on System Splash ensures data is likely ready when ANY content shows.
+                    
+                    val splashUri = remember { SettingsManager.getSplashWallpaperUriSync(context) }
+                    
+                    LaunchedEffect(Unit) {
+                        if (showSplash && splashUri.isNotEmpty()) {
+                            kotlinx.coroutines.delay(2000) // Display seconds
+                            showSplash = false 
+                        } else {
+                            showSplash = false
+                        }
+                    }
+                    
+                    AnimatedVisibility(
+                        visible = showSplash && splashUri.isNotEmpty(),
+                        exit = fadeOut(animationSpec = tween(1000)),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                            AsyncImage(
+                                model = splashUri,
+                                contentDescription = "Splash Wallpaper",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            // Optional: Skip button or Branding?
+                            // For now, simple clear image.
+                        }
                     }
                 }
                 }  // 📐 CompositionLocalProvider 结束

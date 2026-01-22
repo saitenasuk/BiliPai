@@ -363,6 +363,24 @@ fun AppearanceSettingsContent(
                     }
                 }
             }
+
+        }
+        
+        //  启动画面
+        item { IOSSectionTitle("启动画面") }
+        item {
+            IOSGroup {
+                val isSplashEnabled by com.android.purebilibili.core.store.SettingsManager.isSplashEnabled(context).collectAsState(initial = false)
+                
+                IOSSwitchItem(
+                    icon = CupertinoIcons.Default.Photo,
+                    title = "使用开屏壁纸",
+                    subtitle = "应用启动时显示所选官方壁纸，替代默认图标遮罩",
+                    checked = isSplashEnabled,
+                    onCheckedChange = { viewModel.toggleSplashEnabled(it) },
+                    iconTint = com.android.purebilibili.core.theme.iOSBlue
+                )
+            }
         }
         
         //  个性化

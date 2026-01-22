@@ -23,7 +23,9 @@ data class UserState(
     val follower: Int = 0,
     val dynamic: Int = 0,
     val isVip: Boolean = false,
-    val vipLabel: String = ""
+    val vipLabel: String = "",
+    //  [New] 顶部背景图
+    val topPhoto: String = ""
 )
 
 /**

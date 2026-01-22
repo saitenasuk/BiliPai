@@ -507,6 +507,20 @@ interface BuvidApi {
     ): SimpleApiResponse
 }
 
+//  [新增] 开屏/壁纸 API
+interface SplashApi {
+    @GET("https://app.bilibili.com/x/v2/splash/list")
+    suspend fun getSplashList(
+        @QueryMap params: Map<String, String> // 包含 appkey, ts, sign 等
+    ): com.android.purebilibili.data.model.response.SplashResponse
+    
+    // [新增] 品牌开屏壁纸列表 (无广告，高质量)
+    @GET("https://app.bilibili.com/x/v2/splash/brand/list")
+    suspend fun getSplashBrandList(
+        @QueryMap params: Map<String, String>
+    ): com.android.purebilibili.data.model.response.SplashBrandResponse
+}
+
 interface SearchApi {
     @GET("x/web-interface/search/square")
     suspend fun getHotSearch(@Query("limit") limit: Int = 10): HotSearchResponse
@@ -1139,5 +1153,12 @@ object NetworkModule {
         Retrofit.Builder().baseUrl("https://app.bilibili.com/").client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
             .create(StoryApi::class.java)
+    }
+    
+    //  [新增] 开屏/壁纸 API
+    val splashApi: SplashApi by lazy {
+        Retrofit.Builder().baseUrl("https://app.bilibili.com/").client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
+            .create(SplashApi::class.java)
     }
 }
