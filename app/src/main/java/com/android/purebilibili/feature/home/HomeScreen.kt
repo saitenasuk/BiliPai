@@ -105,7 +105,7 @@ fun HomeScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val pullRefreshState = rememberPullToRefreshState()
+// val pullRefreshState = rememberPullToRefreshState() // [Removed] Moved inside HorizontalPager
     val context = LocalContext.current
     //  [Refactor] Use a map of grid states for each category to support HorizontalPager
     val gridStates = remember { mutableMapOf<HomeCategory, LazyGridState>() }
@@ -594,32 +594,7 @@ fun HomeScreen(
         viewModel.switchCategory(HomeCategory.RECOMMEND)
     }
     
-    //  [新增] 下拉回弹物理动画状态
-    val targetPullOffset = if (pullRefreshState.distanceFraction > 0) {
-        val fraction = pullRefreshState.distanceFraction.coerceAtMost(2f)
-        // 使用阻尼公式模拟物理拉动感
-        fraction * 0.5f 
-    } else 0f
-    
-    //  使用 animateFloatAsState 包装偏移量，以实现松手时的过冲回弹效果
-    //  PullToRefreshState 自身的回弹比较"死板"，我们需要自定义 Spring 指标
-    val animatedDragOffsetFraction by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = targetPullOffset,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = 0.5f,  // 0.5 = 明显的弹性 (Bouncy)
-            stiffness = 350f      // 350 = 中等刚度
-        ),
-        label = "pull_bounce"
-    )
-
-    //  为了性能优化，不在此处直接计算 dragOffset (会导致全屏重组)，
-    //  而是定义计算逻辑，在 graphicsLayer 中调用
-    val calculateDragOffset: androidx.compose.ui.unit.Density.() -> Float = remember(animatedDragOffsetFraction) {
-        {
-            val maxPx = 140.dp.toPx()
-            maxPx * animatedDragOffsetFraction
-        }
-    }
+// [Removed] Animation logic moved inside HorizontalPager where the active state exists
     
     // 指示器位置逻辑也移入 graphicsLayer
     
@@ -707,7 +682,7 @@ fun HomeScreen(
                             isScrollingUp = true,
                             hazeState = null, // [Fix] Temporarily disable to stop crash
                             isRefreshing = isRefreshing,
-                            pullProgress = pullRefreshState.distanceFraction
+                            pullProgress = 0f // [Fix] Outer header doesn't track inner pull state
                         )
                     }
 
@@ -752,7 +727,7 @@ fun HomeScreen(
                             isScrollingUp = true,
                             hazeState = null, // [Fix] Temporarily disable to stop crash
                             isRefreshing = isRefreshing,
-                            pullProgress = pullRefreshState.distanceFraction
+                            pullProgress = 0f // [Fix] Outer header doesn't track inner pull state
                         )
                     }
 
@@ -836,8 +811,32 @@ fun HomeScreen(
                         val category = HomeCategory.entries[page]
                         val categoryState = state.categoryStates[category] ?: com.android.purebilibili.feature.home.CategoryContent()
                         
-                        //  [Fix] 独立的 PullToRefreshState，避免所有页面共享一个状态导致冲突
+                        //  独立的 PullToRefreshState，避免所有页面共享一个状态导致冲突
                         val pullRefreshState = rememberPullToRefreshState()
+
+                        //  [新增] 下拉回弹物理动画状态 (Moved from outer scope)
+                        val targetPullOffset = if (pullRefreshState.distanceFraction > 0) {
+                            val fraction = pullRefreshState.distanceFraction.coerceAtMost(2f)
+                            fraction * 0.5f 
+                        } else 0f
+                        
+                        //  使用 animateFloatAsState 包装偏移量
+                        val animatedDragOffsetFraction by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = targetPullOffset,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = 0.5f,  // 0.5 = 明显的弹性 (Bouncy)
+                                stiffness = 350f      // 350 = 中等刚度
+                            ),
+                            label = "pull_bounce"
+                        )
+
+                        //  Defers calculation to graphicsLayer
+                        val calculateDragOffset: androidx.compose.ui.unit.Density.() -> Float = remember(animatedDragOffsetFraction) {
+                            {
+                                val maxPx = 140.dp.toPx()
+                                maxPx * animatedDragOffsetFraction
+                            }
+                        }
                         
                         //  每个页面独立的 GridState
                         //  使用 saveable 记住滚动位置
@@ -862,9 +861,11 @@ fun HomeScreen(
                                          .padding(top = listTopPadding) 
                                          .graphicsLayer {
                                             val currentDragOffset = calculateDragOffset()
-                                            // 位于 Gap 中央 (Gap = currentDragOffset)
-                                            // 减去 40dp 微调
-                                            translationY = (currentDragOffset / 2f) - 40.dp.toPx()
+                                            // [物理优化] 始终保持在 Header (listTopPadding) 和 内容顶部 (listTopPadding + currentDragOffset) 之间
+                                            // 公式： (currentDragOffset / 2) - (indicatorHeight / 2)
+                                            // 假设指示器高度约 40dp (icon + text spacing)
+                                            val indicatorHeight = 40.dp.toPx()
+                                            translationY = (currentDragOffset / 2f) - (indicatorHeight / 2f)
                                          }
                                          .fillMaxWidth()
                                  )
@@ -971,7 +972,7 @@ fun HomeScreen(
                     }
                 },
                 isRefreshing = isRefreshing,
-                pullProgress = pullRefreshState.distanceFraction,
+                pullProgress = 0f, // [Fix] Outer header doesn't track inner pull state
                 pagerState = pagerState
             )
         }

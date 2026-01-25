@@ -82,6 +82,7 @@ fun HomeCategoryPageContent(
         contentPadding = contentPadding,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
+
         modifier = modifier
     ) {
         if (category == HomeCategory.LIVE) {
