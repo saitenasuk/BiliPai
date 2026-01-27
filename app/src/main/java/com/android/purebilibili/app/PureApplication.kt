@@ -78,6 +78,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         //  关键初始化（同步，必须在启动时完成）
         NetworkModule.init(this)
         TokenManager.init(this)
+        com.android.purebilibili.data.repository.VideoRepository.init(this) //  [新增] 初始化 VideoRepo
         BackgroundManager.init(this)  // 📱 后台状态管理
         
         createNotificationChannel()

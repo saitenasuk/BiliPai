@@ -117,7 +117,7 @@ fun HomeCategoryPageContent(
             if (categoryState.liveRooms.isNotEmpty()) {
                 item(span = { GridItemSpan(gridColumns) }) {
                     Text(
-                        text = "热门",
+                        text = "推荐直播",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

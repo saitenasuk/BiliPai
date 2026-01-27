@@ -40,7 +40,9 @@ data class SettingsUiState(
 
     //  空降助手
     val sponsorBlockEnabled: Boolean = false,
-    val sponsorBlockAutoSkip: Boolean = true
+    val sponsorBlockAutoSkip: Boolean = true,
+    // [新增] 触感反馈
+    val hapticFeedbackEnabled: Boolean = true
 )
 
 // 内部数据类，用于分批合并流
@@ -63,8 +65,9 @@ data class ExtraSettings(
     val displayMode: Int,
     val cardAnimationEnabled: Boolean,
     val cardTransitionEnabled: Boolean,
-
+    val hapticFeedbackEnabled: Boolean // [新增]
 )
+
 
 //  实验性功能设置
 data class ExperimentalSettings(
@@ -93,8 +96,9 @@ private data class BaseSettings(
     val displayMode: Int, //  新增
     val cardAnimationEnabled: Boolean, //  卡片进场动画
     val cardTransitionEnabled: Boolean, //  卡片过渡动画
-
+    val hapticFeedbackEnabled: Boolean // [新增]
 )
+
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
@@ -127,10 +131,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsManager.getBottomBarFloating(context),
         SettingsManager.getBottomBarLabelMode(context),
         SettingsManager.getDisplayMode(context),
-        SettingsManager.getCardAnimationEnabled(context),
-        SettingsManager.getCardTransitionEnabled(context)
-    ) { isBottomBarFloating, labelMode, displayMode, cardAnimation, cardTransition ->
-        listOf(isBottomBarFloating, labelMode, displayMode, cardAnimation, cardTransition)
+        SettingsManager.getCardAnimationEnabled(context), // [Restored]
+        SettingsManager.getCardTransitionEnabled(context),
+        SettingsManager.getHapticFeedbackEnabled(context) // [新增]
+    ) { values ->
+        val isBottomBarFloating = values[0] as Boolean
+        val labelMode = values[1] as Int
+        val displayMode = values[2] as Int
+        val cardAnimation = values[3] as Boolean
+        val cardTransition = values[4] as Boolean
+        val hapticFeedback = values[5] as Boolean
+        listOf(isBottomBarFloating, labelMode, displayMode, cardAnimation, cardTransition, hapticFeedback)
     }
 
     // 合并所有 UI 设置
@@ -146,6 +157,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             displayMode = ui2[2] as Int,
             cardAnimationEnabled = ui2[3] as Boolean,
             cardTransitionEnabled = ui2[4] as Boolean,
+            hapticFeedbackEnabled = ui2[5] as Boolean, // [新增]
             headerBlurEnabled = false, // 暂存，将在下一步合并
             bottomBarBlurEnabled = false, // 暂存
             blurIntensity = BlurIntensity.THIN // 暂存
@@ -207,8 +219,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             displayMode = extra.displayMode,
             cardAnimationEnabled = extra.cardAnimationEnabled,
             cardTransitionEnabled = extra.cardTransitionEnabled,
-
+            hapticFeedbackEnabled = extra.hapticFeedbackEnabled // [新增]
         )
+
     }
 
     // 第 6 步：与缓存大小和实验性功能合并
@@ -237,6 +250,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             displayMode = settings.displayMode,
             cardAnimationEnabled = settings.cardAnimationEnabled,
             cardTransitionEnabled = settings.cardTransitionEnabled,
+            hapticFeedbackEnabled = settings.hapticFeedbackEnabled, // [新增]
 
             cacheSize = cache.first,
             cacheBreakdown = cache.second,  //  详细缓存统计
@@ -431,6 +445,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     
     // [New] Splash Screen
     fun toggleSplashEnabled(value: Boolean) { viewModelScope.launch { SettingsManager.setSplashEnabled(context, value) } }
+
+    // [New] 触感反馈
+    fun toggleHapticFeedback(value: Boolean) { viewModelScope.launch { SettingsManager.setHapticFeedbackEnabled(context, value) } }
     
 
 }

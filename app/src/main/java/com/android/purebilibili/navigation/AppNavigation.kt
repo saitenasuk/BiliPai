@@ -192,7 +192,7 @@ fun AppNavigation(
         // 仅在非侧边栏模式且是一级页面(或设置页及其子页面)时显示底栏 (短视频页面专门隐藏)
         val settingsRoutes = listOf(
             ScreenRoutes.Settings.route,
-            ScreenRoutes.AppearanceSettings.route,
+            // ScreenRoutes.AppearanceSettings.route, // [Modified] Hide bottom bar on Appearance Settings
             ScreenRoutes.PlaybackSettings.route,
             ScreenRoutes.IconSettings.route,
             ScreenRoutes.AnimationSettings.route,
@@ -885,18 +885,28 @@ fun AppNavigation(
                 navArgument("title") { type = NavType.StringType; defaultValue = "" },
                 navArgument("uname") { type = NavType.StringType; defaultValue = "" }
             ),
-            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Up, tween(animDuration)) },
-            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down, tween(animDuration)) }
+            enterTransition = { 
+                if (cardTransitionEnabled) fadeIn(animationSpec = tween(300))
+                else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Up, tween(animDuration))
+            },
+            popExitTransition = { 
+                if (cardTransitionEnabled) fadeOut(animationSpec = tween(300))
+                else slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down, tween(animDuration))
+            }
         ) { backStackEntry ->
             val roomId = backStackEntry.arguments?.getLong("roomId") ?: 0L
             val title = backStackEntry.arguments?.getString("title") ?: ""
             val uname = backStackEntry.arguments?.getString("uname") ?: ""
-            com.android.purebilibili.feature.live.LivePlayerScreen(
-                roomId = roomId,
-                title = Uri.decode(title),
-                uname = Uri.decode(uname),
-                onBack = { navController.popBackStack() }
-            )
+            
+            ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
+                com.android.purebilibili.feature.live.LivePlayerScreen(
+                    roomId = roomId,
+                    title = Uri.decode(title),
+                    uname = Uri.decode(uname),
+                    onBack = { navController.popBackStack() },
+                    onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) }
+                )
+            }
         }
         
         // --- 11.  [新增] 番剧/影视主页面 ---

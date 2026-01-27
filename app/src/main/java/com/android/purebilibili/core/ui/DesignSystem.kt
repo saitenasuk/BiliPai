@@ -14,6 +14,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.core.theme.DarkBackground
 import com.android.purebilibili.core.theme.DarkSurface
 import com.android.purebilibili.core.theme.DarkSurfaceElevated
@@ -125,30 +127,33 @@ object BiliDesign {
  * 用法: Modifier.shimmer()
  */
 fun Modifier.shimmer(
-    durationMillis: Int = 1000,  //  更快的动画周期
+    durationMillis: Int = 1500,  //  [优化] 稍微放慢动画速度，更显优雅 (1000 -> 1500)
     delayMillis: Int = 0
 ): Modifier = composed {
     //  使用 MaterialTheme 颜色支持深色模式
     val baseColor = MaterialTheme.colorScheme.surfaceVariant
     val highlightColor = MaterialTheme.colorScheme.surface
     
+    // [优化] 更柔和的渐变色阶
     val shimmerColors = listOf(
         baseColor,
-        highlightColor,
-        highlightColor.copy(alpha = 0.9f),
-        highlightColor,
+        baseColor,
+        highlightColor.copy(alpha = 0.2f),
+        highlightColor.copy(alpha = 0.6f),
+        highlightColor.copy(alpha = 0.2f),
+        baseColor,
         baseColor
     )
     
     val transition = rememberInfiniteTransition(label = "shimmer")
     val translateAnim by transition.animateFloat(
-        initialValue = -500f,
-        targetValue = 1500f,  //  更大的动画范围
+        initialValue = -1000f,  // [优化] 扩大起始范围
+        targetValue = 2000f,    // [优化] 扩大结束范围
         animationSpec = infiniteRepeatable(
             animation = tween(
                 durationMillis = durationMillis,
                 delayMillis = delayMillis,
-                easing = FastOutSlowInEasing  //  更自然的缓动
+                easing = LinearOutSlowInEasing  //  [优化] 使用更自然的缓动
             ),
             repeatMode = RepeatMode.Restart
         ),
@@ -158,8 +163,8 @@ fun Modifier.shimmer(
     background(
         brush = Brush.linearGradient(
             colors = shimmerColors,
-            start = Offset(translateAnim, translateAnim * 0.5f),
-            end = Offset(translateAnim + 400f, translateAnim * 0.5f + 200f)  //  对角线渐变
+            start = Offset(translateAnim, translateAnim * 0.3f),      // [优化] 调整倾斜角度
+            end = Offset(translateAnim + 600f, translateAnim * 0.3f + 300f)
         )
     )
 }
@@ -200,13 +205,13 @@ fun VideoCardSkeleton(
             .fillMaxWidth()
             .clip(RoundedCornerShape(BiliDesign.Radius.md))
             .background(cardBackground)  //  使用主题色
-            .padding(bottom = BiliDesign.Spacing.sm)
+            .padding(bottom = BiliDesign.Spacing.md)
     ) {
-        // 封面 - 使用正确的宽高比
+        // 封面 - 使用正确的宽高比 (16:10)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f)
+                .aspectRatio(16f / 10f)
                 .clip(RoundedCornerShape(BiliDesign.Radius.md))
                 .shimmer(delayMillis = delay)
         )
@@ -217,7 +222,7 @@ fun VideoCardSkeleton(
         Column(modifier = Modifier.padding(horizontal = 8.dp)) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.85f)
+                    .fillMaxWidth(0.9f)
                     .height(14.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .shimmer(delayMillis = delay + 50)
@@ -225,7 +230,7 @@ fun VideoCardSkeleton(
             Spacer(modifier = Modifier.height(6.dp))
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.55f)
+                    .fillMaxWidth(0.6f)
                     .height(14.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .shimmer(delayMillis = delay + 100)
@@ -233,21 +238,25 @@ fun VideoCardSkeleton(
             
             Spacer(modifier = Modifier.height(10.dp))
             
-            // UP主和播放量
+            // UP主信息 (头像 + 昵称)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // 头像
                 Box(
                     modifier = Modifier
-                        .width(70.dp)
-                        .height(12.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .size(16.dp)
+                        .clip(CircleShape)
                         .shimmer(delayMillis = delay + 150)
                 )
+                
+                Spacer(modifier = Modifier.width(6.dp))
+                
+                // 昵称
                 Box(
                     modifier = Modifier
-                        .width(50.dp)
+                        .width(60.dp)
                         .height(12.dp)
                         .clip(RoundedCornerShape(4.dp))
                         .shimmer(delayMillis = delay + 150)

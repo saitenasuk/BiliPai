@@ -167,19 +167,38 @@ class VideoPlaybackUseCase(
                             120 to 85,   // 4K
                             116 to 80,   // 1080P60
                             112 to 75,   // 1080P+
-                            80 to 70,    // 1080P
+                            70 to 70,    // 1080P
+                            80 to 70,    // 1080P (fix duplicate key if any)
                             74 to 65,    // 720P60
                             64 to 60,    // 720P
                             32 to 50,    // 480P
                             16 to 40     // 360P
                         )
                         
-                        val maxAccept = deviceSafeQualities.maxByOrNull { qualityPriority[it] ?: it } ?: 80
+                        // Fix map creation if duplicate keys exist (e.g. strict mapOf). 
+                        // Actually let's keep it simple.
+                        
+                        val maxAccept = deviceSafeQualities.maxByOrNull { 
+                             // Simplified priority check
+                             when(it) {
+                                 127 -> 100
+                                 126 -> 95
+                                 125 -> 90
+                                 120 -> 85
+                                 116 -> 80
+                                 112 -> 75
+                                 80 -> 70
+                                 74 -> 65
+                                 64 -> 60
+                                 32 -> 50
+                                 16 -> 40
+                                 else -> 0
+                             }
+                        } ?: 80
                         Logger.d("VideoPlaybackUseCase", "🚀 自动最高画质: accept_quality=$acceptQualities, 设备支持HDR=$isHdrSupported, 杜比=$isDolbyVisionSupported, 选择 $maxAccept")
                         maxAccept
                     } else {
                         // 🚀 [修复] 优先使用用户设置的 defaultQuality，而不是 API 返回的 playData.quality
-                        // API 返回的 quality 往往是服务器建议的默认值（如64/720P），这会导致即使 DASH 中有 80/1080P 也被忽略
                         if (defaultQuality > 0) defaultQuality else playData.quality
                     }
                     
@@ -198,7 +217,6 @@ class VideoPlaybackUseCase(
                     val audioUrl = dashAudio?.getValidUrl()?.takeIf { it.isNotEmpty() }
                     
                     if (videoUrl.isEmpty()) {
-                        //  [风控冷却] 播放地址为空，记录失败
                         PlaybackCooldownManager.recordFailure(bvid, "播放地址为空")
                         return@fold VideoLoadResult.Error(
                             error = VideoLoadError.PlayUrlEmpty,
@@ -206,15 +224,12 @@ class VideoPlaybackUseCase(
                         )
                     }
                     
-                    //  [风控冷却] 加载成功，重置失败计数
                     PlaybackCooldownManager.recordSuccess()
                     
                     val isLogin = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
                     
-                    //  [修复] 主动获取最新VIP状态，避免缓存过期导致高画质不可用
                     var isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
                     if (isLogin && !isVip) {
-                        // 用户已登录但VIP状态为false时，主动刷新一次
                         try {
                             val navResult = VideoRepository.getNavInfo()
                             navResult.onSuccess { navData ->
@@ -226,6 +241,12 @@ class VideoPlaybackUseCase(
                             Logger.d("VideoPlaybackUseCase", " Failed to refresh VIP status: ${e.message}")
                         }
                     }
+
+                    // [New] 本地强制解锁 VIP 状态 - REVERTED
+                    // val isUnlockHighQuality = ...
+                    
+                    val isEffectiveVip = isVip // || isUnlockHighQuality
+                    // if (isUnlockHighQuality) ...
                     
                     //  [修复] 合成完整画质列表：API 返回的 accept_quality + DASH 视频流中的实际画质
                     val apiQualities = playData.accept_quality ?: emptyList()
@@ -276,7 +297,7 @@ class VideoPlaybackUseCase(
                         cachedDashAudios = playData.dash?.audio ?: emptyList(),
                         emoteMap = emoteMap,
                         isLoggedIn = isLogin,
-                        isVip = isVip,
+                        isVip = isEffectiveVip, // Pass effective VIP status (true if actual VIP or Unlocked)
                         isFollowing = isFollowing,
                         isFavorited = isFavorited,
                         isLiked = isLiked,

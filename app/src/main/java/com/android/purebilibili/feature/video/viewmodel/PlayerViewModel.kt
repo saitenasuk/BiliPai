@@ -479,7 +479,13 @@ class PlayerViewModel : ViewModel() {
                 com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "📉 省流量模式(${dataSaverMode.label}): 限制画质为480P")
             }
             
-            when (val result = playbackUseCase.loadVideo(bvid, aid, finalQuality, audioQualityPreference, videoCodecPreference)) {
+            when (val result = playbackUseCase.loadVideo(
+                bvid, 
+                aid, 
+                finalQuality, 
+                audioQualityPreference, 
+                videoCodecPreference
+            )) {
                 is VideoLoadResult.Success -> {
                     currentCid = result.info.cid
                     

@@ -646,166 +646,40 @@ fun HomeScreen(
                     // .hazeSource(state = hazeState) 
                     .then(if (globalHazeState != null) Modifier.hazeSource(state = globalHazeState) else Modifier)  // 全局 hazeSource - 底栏使用
             ) {
-            if (state.isLoading && state.videos.isEmpty() && state.liveRooms.isEmpty()) {
-                //  首次加载改为骨架屏
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(
-                        top = 0.dp,  //  [修改] Header 作为 item，顶部由 Header 自身处理
-                        //  [修复] 动态底部 padding
-                        bottom = when {
-                            useSideNavigation -> navBarHeight + 8.dp
-                            isBottomBarFloating -> 100.dp
-                            bottomBarVisible -> 64.dp + navBarHeight + 20.dp
-                            else -> navBarHeight + 8.dp
-                        },
-                        start = 8.dp,
-                        end = 8.dp
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            // [优化] 在所有宽屏模式下都应用内容宽度限制，增加呼吸感
-                            if (windowSizeClass.isExpandedScreen) {
-                                Modifier.responsiveContentWidth(maxWidth = 1280.dp)
-                            } else {
-                                Modifier
-                            }
-                        )
-                ) {
-                    // [新增] 骨架屏状态下的 Header
-                    item(span = { GridItemSpan(gridColumns) }) {
-                        iOSHomeHeader(
-                            scrollOffset = 0f,
-                            user = state.user,
-                            onAvatarClick = { if (state.user.isLogin) onProfileClick() else onAvatarClick() },
-                            onSettingsClick = onSettingsClick,
-                            onSearchClick = onSearchClick,
-                            categoryIndex = displayedTabIndex,
-                            onCategorySelected = { index ->
-                                viewModel.updateDisplayedTabIndex(index)
-                                val category = HomeCategory.entries[index]
-                                when (category) {
-                                    HomeCategory.ANIME -> onBangumiClick(1)
-                                    HomeCategory.MOVIE -> onBangumiClick(2)
-                                    else -> viewModel.switchCategory(category)
-                                }
-                            },
-                            onPartitionClick = onPartitionClick,
-                            isScrollingUp = true,
-                            hazeState = null, // [Fix] Temporarily disable to stop crash
-                            isRefreshing = isRefreshing,
-                            pullProgress = 0f // [Fix] Outer header doesn't track inner pull state
-                        )
-                    }
-
-                    // 📱 [平板适配] 根据列数动态生成骨架屏数量
-                    items(gridColumns * 4) { index ->
-                        VideoCardSkeleton(index = index)
-                    }
-                }
-            } else if (state.error != null && 
-                ((state.currentCategory == HomeCategory.LIVE && state.liveRooms.isEmpty()) ||
-                 (state.currentCategory != HomeCategory.LIVE && state.videos.isEmpty()))) {
+            //  [Restored] Always render Pager. Loading/Error states are handled per-page internally.
+            //  This prevents the Pager from being destroyed during category switches or loading states.
                 
-                // [修改] 错误状态改为 Grid 布局，包含 Header
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(gridColumns),
-                    contentPadding = PaddingValues(top = 0.dp), // Header 自带 Padding
-                    modifier = Modifier.fillMaxSize()
-                        // [Fix] Apply hazeSource here if needed, but for error state maybe skip or apply to grid
-                        // If header is item, it can't blur grid content behind it (it moves with it).
-                        // So we disable haze effect for header in error state.
-                        .hazeSource(state = hazeState)
-                ) {
-                    // 1. Header Item
-                    item(span = { GridItemSpan(gridColumns) }) {
-                        iOSHomeHeader(
-                            scrollOffset = 0f,
-                            user = state.user,
-                            onAvatarClick = { if (state.user.isLogin) onProfileClick() else onAvatarClick() },
-                            onSettingsClick = onSettingsClick,
-                            onSearchClick = onSearchClick,
-                            categoryIndex = displayedTabIndex,
-                            onCategorySelected = { index ->
-                                viewModel.updateDisplayedTabIndex(index)
-                                val category = HomeCategory.entries[index]
-                                when (category) {
-                                    HomeCategory.ANIME -> onBangumiClick(1)
-                                    HomeCategory.MOVIE -> onBangumiClick(2)
-                                    else -> viewModel.switchCategory(category)
-                                }
-                            },
-                            onPartitionClick = onPartitionClick,
-                            isScrollingUp = true,
-                            hazeState = null, // [Fix] Temporarily disable to stop crash
-                            isRefreshing = isRefreshing,
-                            pullProgress = 0f // [Fix] Outer header doesn't track inner pull state
-                        )
-                    }
+            //  [Best Practice] 使用 InteractionSource 区分用户操作和代码滚动
+            //  只有在用户发生过拖拽/按压行为后的 settling 才是用户切换，否则可能是代码触发的滚动
+            var isUserAction by remember { mutableStateOf(false) }
 
-                    // 2. Error Message Item
-                    item(span = { GridItemSpan(gridColumns) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(500.dp), // 给定高度确保居中
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(16.dp)
-                            ) {
-                                Text(
-                                    text = state.error ?: "未知错误",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(24.dp))
-                                
-                                if (state.error?.contains("登录") == true || state.error?.contains("Login") == true) {
-                                    com.android.purebilibili.core.ui.BiliGradientButton(
-                                        text = "去登录",
-                                        onClick = { onProfileClick() }
-                                    )
-                                } else {
-                                    Button(
-                                        onClick = { viewModel.refresh() },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary
-                                        )
-                                    ) {
-                                        Text("重试")
-                                    }
-                                }
-                            }
+                //  监听用户交互
+                LaunchedEffect(pagerState) {
+                    pagerState.interactionSource.interactions.collect { interaction ->
+                        if (interaction is androidx.compose.foundation.interaction.DragInteraction.Start) {
+                            isUserAction = true
                         }
                     }
                 }
-            } else {
-                //  [性能优化] 移除 AnimatedContent 包裹，减少分类切换时的重组开销
-                // 原：AnimatedContent 对整个 Grid 做动画，成本很高
-                // 新：直接渲染，分类切换瞬间完成
-                
-                // [重构] 使用 HorizontalPager 实现真正的 Tab 切换
-                // val initialPage ... (Hoisted)
-                // val pagerState ... (Hoisted)
-                
-                //  联动 Pager 和 ViewModel category: 仅在页面滑动停止（settled）后触发重逻辑切换
+
+                //  联动 Pager -> ViewModel
+                //  仅当 isUserAction 为 true 时才允许 Pager 驱动 ViewModel 变更
                 LaunchedEffect(pagerState) {
                     snapshotFlow { pagerState.settledPage }
                         .collect { page ->
-                            val category = HomeCategory.entries[page]
-                            if (state.currentCategory != category) {
-                                viewModel.switchCategory(category)
+                            if (isUserAction) {
+                                val category = HomeCategory.entries[page]
+                                if (state.currentCategory != category) {
+                                    viewModel.switchCategory(category)
+                                }
+                                // 重置标记，等待下一次手势
+                                isUserAction = false
                             }
                         }
                 }
                 
-                //  当 ViewModel 外部改变 category 时 (例如点击 Tab), 滚动 Pager
+                //  联动 ViewModel -> Pager
+                //  当点击 Tab 时触发，此时 isUserAction 为 false，不会反向触发
                 LaunchedEffect(state.currentCategory) {
                     val targetIndex = HomeCategory.entries.indexOf(state.currentCategory)
                     if (targetIndex >= 0 && targetIndex != pagerState.currentPage) {
@@ -821,7 +695,8 @@ fun HomeScreen(
                             state = pagerState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .hazeSource(state = hazeState) // [Restored] Always apply hazeSource for consistent blur
+                                .hazeSource(state = hazeState), // [Restored] Always apply hazeSource for consistent blur
+                            key = { index -> HomeCategory.entries[index].ordinal }
                         ) { page ->
                         val category = HomeCategory.entries[page]
                         val categoryState = state.categoryStates[category] ?: com.android.purebilibili.feature.home.CategoryContent()
@@ -907,9 +782,11 @@ fun HomeScreen(
                                          },
                                          start = 8.dp, end = 8.dp, top = listTopPadding // [Fix] Apply top padding to skeleton grid too
                                      ),
+                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                     verticalArrangement = Arrangement.spacedBy(10.dp),
                                      modifier = Modifier.fillMaxSize()
                                  ) {
-                                     items(10) { VideoCardSkeleton() }
+                                     items(10) { index -> VideoCardSkeleton(index = index) }
                                  }
                              } else if (categoryState.error != null && categoryState.videos.isEmpty()) {
                                  // Error State per page
@@ -951,7 +828,6 @@ fun HomeScreen(
                     } // Ends CompositionLocalProvider
                 }
             } // 关闭 PullToRefreshBox
-            }  // [Fix] Add missing brace for else block
         }  // 关闭 hazeSource Box
         
         //  ===== Header Overlay (毛玻璃效果) =====
@@ -961,36 +837,36 @@ fun HomeScreen(
             ((state.currentCategory == HomeCategory.LIVE && state.liveRooms.isEmpty()) ||
              (state.currentCategory != HomeCategory.LIVE && state.videos.isEmpty()))
 
-        if (!isSkeletonState && !isErrorState) {
-            iOSHomeHeader(
-                scrollOffset = scrollOffset,
-                user = state.user,
-                onAvatarClick = { if (state.user.isLogin) onProfileClick() else onAvatarClick() },
-                onSettingsClick = onSettingsClick,
-                onSearchClick = onSearchClick,
-                categoryIndex = displayedTabIndex,
-                onCategorySelected = { index ->
-                    viewModel.updateDisplayedTabIndex(index)
-                    val category = HomeCategory.entries[index]
-                    when (category) {
-                        HomeCategory.ANIME -> onBangumiClick(1)
-                        HomeCategory.MOVIE -> onBangumiClick(2)
-                        else -> viewModel.switchCategory(category)
-                    }
-                },
-                onPartitionClick = onPartitionClick,
-                isScrollingUp = isScrollingUp,
-                hazeState = if (isHeaderBlurEnabled) hazeState else null,
-                onStatusBarDoubleTap = {
-                    coroutineScope.launch {
-                        gridStates[state.currentCategory]?.animateScrollToItem(0)
-                    }
-                },
-                isRefreshing = isRefreshing,
-                pullProgress = 0f, // [Fix] Outer header doesn't track inner pull state
-                pagerState = pagerState
-            )
-        }
+        //  [Restored] Header 始终显示，不再随 Loading/Error 状态隐藏
+        //  这保证了 Tab 指示器状态的连续性，防止消失或重置
+        iOSHomeHeader(
+            scrollOffset = scrollOffset,
+            user = state.user,
+            onAvatarClick = { if (state.user.isLogin) onProfileClick() else onAvatarClick() },
+            onSettingsClick = onSettingsClick,
+            onSearchClick = onSearchClick,
+            categoryIndex = displayedTabIndex,
+            onCategorySelected = { index ->
+                viewModel.updateDisplayedTabIndex(index)
+                val category = HomeCategory.entries[index]
+                when (category) {
+                    HomeCategory.ANIME -> onBangumiClick(1)
+                    HomeCategory.MOVIE -> onBangumiClick(2)
+                    else -> viewModel.switchCategory(category)
+                }
+            },
+            onPartitionClick = onPartitionClick,
+            isScrollingUp = isScrollingUp,
+            hazeState = if (isHeaderBlurEnabled) hazeState else null,
+            onStatusBarDoubleTap = {
+                coroutineScope.launch {
+                    gridStates[state.currentCategory]?.animateScrollToItem(0)
+                }
+            },
+            isRefreshing = isRefreshing,
+            pullProgress = 0f, // [Fix] Outer header doesn't track inner pull state
+            pagerState = pagerState
+        )
     }  // 关闭外层 Box
     }  //  关闭 scaffoldContent lambda
     // 📱 [平板适配] 导航模式切换动画

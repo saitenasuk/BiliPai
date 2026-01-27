@@ -48,7 +48,8 @@ class DampedDragAnimationState(
     val scale: Float get() = if (isDragging) 1.1f else 1f
     
     /** 目标索引（释放后吸附的目标） */
-    private var targetIndex = initialIndex
+    var targetIndex = initialIndex
+        private set
     
     /** 动画是否正在运行 */
     val isRunning: Boolean get() = animatable.isRunning
@@ -155,7 +156,10 @@ class DampedDragAnimationState(
         // [修复] 拖拽过程中忽略外部更新，防止动画中断
         if (isDragging) return
         
-        if (index == targetIndex) return
+        // [Fix] Check actual value distance. 
+        // If targetIndex matches but we are stuck at an offset (e.g. 2.8 vs 3.0 via snapTo), 
+        // we MUST force restart the animation.
+        if (index == targetIndex && (isRunning || abs(value - index.toFloat()) < 0.005f)) return
         targetIndex = index
         scope.launch {
             animatable.animateTo(

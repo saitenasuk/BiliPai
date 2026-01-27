@@ -252,42 +252,63 @@ fun CategoryTabRow(
                 }
             )
             
+
+            // [Fix] Always update internal state when external selection changes
+            // This ensures instant visual feedback on Click, even if Pager is lagging
+            LaunchedEffect(selectedIndex) {
+                 dampedDragState.updateIndex(selectedIndex)
+            }
+
             // [Restored] Sync Pager -> DragState
             // 当 Pager 被外部（滑动内容区）滚动时，同步更新 DragState
             val isPagerDragging by pagerState?.interactionSource?.collectIsDraggedAsState() ?: remember { mutableStateOf(false) }
             
-            // 监听 Pager 变化，更新 DampedState
-            // 关键：只有当 DampedState NOT Dragging 时才同步，避免冲突
-            LaunchedEffect(pagerState?.currentPage, pagerState?.currentPageOffsetFraction, isPagerDragging) {
+            // [Fix Issue 2] 区分 "用户滑动内容" (Fling) 和 "代码滚动内容" (Animate)
+            // 只有用户交互引起的 Pager 滚动才应该驱动 Indicator
+            var isPagerInteracting by remember { mutableStateOf(false) }
+            
+            LaunchedEffect(isPagerDragging) {
+                if (isPagerDragging) isPagerInteracting = true
+            }
+            LaunchedEffect(pagerState?.isScrollInProgress) {
+                if (pagerState?.isScrollInProgress == false) {
+                     isPagerInteracting = false
+                }
+            }
+            
+            // 监听 Pager 变化，仅在 "用户滑动内容" 期间同步状态
+            // [Fix Issue 1] 恢复持续同步，但仅限 isPagerInteracting 为真时
+            LaunchedEffect(pagerState?.currentPage, pagerState?.currentPageOffsetFraction, isPagerInteracting) {
                 if (pagerState == null) return@LaunchedEffect
-                if (dampedDragState.isDragging) return@LaunchedEffect // 如果正在拖拽 Tab，忽略 Pager 同步
                 
-                // 限制索引在可见范围内
-                val page = pagerState.currentPage.coerceIn(0, visibleTabCount - 1)
-                // 计算 offset
-                val offset = if (pagerState.currentPage < visibleTabCount - 1) 
-                    pagerState.currentPageOffsetFraction.coerceIn(-1f, 1f) 
-                else 
-                    pagerState.currentPageOffsetFraction.coerceAtMost(0f)
-                
-                // 目标位置
-                val targetPosition = (page + offset).coerceIn(0f, (visibleTabCount - 1).toFloat())
-                
-                if (isPagerDragging) {
-                    // Pager 拖拽中 -> 实时 Snap
+                // 如果是用户在滑动内容，我们将 DampedState 持续 Snap 到 Pager 位置
+                // 这样当滑动停止时(isPagerInteracting -> false)，DampedState 已经在正确位置，无缝切换
+                if (isPagerInteracting && !dampedDragState.isDragging && !dampedDragState.isRunning) {
+                    val page = pagerState.currentPage
+                    val offset = pagerState.currentPageOffsetFraction
+                    val targetPosition = page + offset
                     dampedDragState.snapTo(targetPosition)
-                } else if (pagerState.isScrollInProgress) {
-                    // Pager 惯性滚动中 -> 实时 Snap (保持紧密同步)
-                     dampedDragState.snapTo(targetPosition)
-                } else {
-                    // Pager 静止 -> 确保对齐
-                    dampedDragState.updateIndex(page)
                 }
             }
 
-            // Source of truth: DampedDragState
-            val currentPositionState = remember(dampedDragState) {
-                derivedStateOf { dampedDragState.value }
+            // Source of truth Priority:
+            // 1. Tab Interaction (Drag/Spring) -> Trusted
+            // 2. Content Interaction (Swipe/Fling) -> Trusted
+            // 3. Static/Catch-up -> DampedState (Stable)
+            
+            val currentPositionState = remember(dampedDragState, pagerState, isPagerInteracting) {
+                derivedStateOf {
+                    val isTabActive = dampedDragState.isDragging || dampedDragState.isRunning
+                    
+                    if (isTabActive) {
+                        dampedDragState.value
+                    } else if (isPagerInteracting && pagerState != null) {
+                         // Zero Latency Direct Read
+                        pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    } else {
+                        dampedDragState.value
+                    }
+                }
             }
 
             // Tabs Container

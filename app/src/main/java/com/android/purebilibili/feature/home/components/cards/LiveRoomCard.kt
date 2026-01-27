@@ -1,5 +1,11 @@
-// 文件路径: feature/home/components/cards/LiveRoomCard.kt
 package com.android.purebilibili.feature.home.components.cards
+/**
+ * Shared Element Transition Imports
+ */
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,6 +40,7 @@ import com.android.purebilibili.core.theme.iOSCornerRadius
 /**
  *  iOS 风格直播间卡片
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun LiveRoomCard(
     room: LiveRoom,
@@ -46,6 +53,11 @@ fun LiveRoomCard(
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val cardCornerRadius = iOSCornerRadius.Large * cornerRadiusScale  // 14.dp * scale
     val tagCornerRadius = iOSCornerRadius.Tiny * cornerRadiusScale   // 4.dp * scale
+    
+    // Shared Element Transition Scopes
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+
     
     val coverUrl = remember(room.roomid) {
         FormatUtils.fixImageUrl(room.cover.ifEmpty { room.keyframe.ifEmpty { room.userCover } })
@@ -76,6 +88,16 @@ fun LiveRoomCard(
                 )
                 .clip(RoundedCornerShape(cardCornerRadius))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .then(
+                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedElement(
+                                sharedContentState = rememberSharedContentState(key = "live_cover_${room.roomid}"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
+                    } else Modifier
+                )
         ) {
             // 封面图 -  优化
             AsyncImage(

@@ -99,3 +99,26 @@ data class TvCookie(
     val httpOnly: Int = 0,
     val expires: Long = 0
 )
+
+// TV 端 Token 刷新响应
+@Serializable
+data class TvTokenRefreshResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 1,
+    val data: TvTokenRefreshData? = null
+)
+
+//  [新增] Token 刷新数据
+@Serializable
+data class TvTokenRefreshData(
+    val mid: Long = 0,
+    @SerialName("access_token")
+    val accessToken: String = "",
+    @SerialName("refresh_token")
+    val refreshToken: String = "",
+    @SerialName("expires_in")
+    val expiresIn: Long = 0,
+    @SerialName("cookie_info")
+    val cookieInfo: TvCookieInfo? = null
+)

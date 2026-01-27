@@ -218,7 +218,10 @@ fun rememberHapticFeedback(): (HapticType) -> Unit {
                     }
                 }
             }
-            view.performHapticFeedback(feedbackConstant)
+            // [新增] 全局触感反馈开关检查
+            if (com.android.purebilibili.core.store.SettingsManager.isHapticFeedbackEnabledSync(view.context)) {
+                view.performHapticFeedback(feedbackConstant)
+            }
         }
     }
 }

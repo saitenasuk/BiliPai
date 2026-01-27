@@ -152,6 +152,7 @@ class QualityManager {
      * @param qualityId 目标画质 ID
      * @param isLoggedIn 是否已登录
      * @param isVip 是否为大会员
+     * @param context [New] 上下文，用于检查解锁设置
      * @return 权限检查结果
      */
     fun checkQualityPermission(
@@ -159,6 +160,9 @@ class QualityManager {
         isLoggedIn: Boolean,
         isVip: Boolean
     ): QualityPermissionResult {
+        // [New] 检查是否开启“解锁高画质” - REVERTED
+        // if (context != null) ...
+        
         val label = getQualityLabel(qualityId)
         
         return when {
@@ -186,6 +190,7 @@ class QualityManager {
      * @param availableQualities 视频支持的画质列表
      * @param isLoggedIn 是否已登录
      * @param isVip 是否为大会员
+     * @param context [New] 上下文
      * @return 最高可用画质 ID，如果无可用画质返回默认值 64 (720P)
      */
     fun getMaxAvailableQuality(

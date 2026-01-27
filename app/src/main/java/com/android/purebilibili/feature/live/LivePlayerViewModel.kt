@@ -9,7 +9,35 @@ import com.android.purebilibili.data.model.response.LiveQuality
 import com.android.purebilibili.data.repository.LiveRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+import com.android.purebilibili.core.network.socket.DanmakuProtocol
+import com.android.purebilibili.data.repository.DanmakuRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+
+/**
+ * 直播弹幕 UI 模型
+ */
+data class LiveDanmakuItem(
+    val text: String,
+    val color: Int = 16777215, // Default White
+    val mode: Int = 1,         // 1=Scroll, 4=Bottom, 5=Top
+    val uid: Long = 0,
+    val uname: String = "",
+    val isSelf: Boolean = false, // 是否自己发送
+    val emoticonUrl: String? = null, // [NEW] B站自定义表情 URL
+    // [新增] 视觉优化字段
+    val medalName: String = "",
+    val medalLevel: Int = 0,
+    val medalColor: Int = 0,
+    val userLevel: Int = 0,
+    val isAdmin: Boolean = false,
+    val guardLevel: Int = 0 // 0=none, 1=总督, 2=提督, 3=舰长
+)
 
 /**
  * 主播信息
@@ -52,7 +80,8 @@ sealed class LivePlayerState {
         val qualityList: List<LiveQuality>,
         val roomInfo: RoomInfo = RoomInfo(),
         val anchorInfo: AnchorInfo = AnchorInfo(),
-        val isFollowing: Boolean = false
+        val isFollowing: Boolean = false,
+        val isDanmakuEnabled: Boolean = true // [新增] 弹幕开关状态
     ) : LivePlayerState()
     
     data class Error(
@@ -68,9 +97,18 @@ class LivePlayerViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<LivePlayerState>(LivePlayerState.Loading)
     val uiState = _uiState.asStateFlow()
     
+    // 直播弹幕流 (UI 观察此流进行渲染)
+    private val _danmakuFlow = MutableSharedFlow<LiveDanmakuItem>(extraBufferCapacity = 100)
+    val danmakuFlow = _danmakuFlow.asSharedFlow()
+    
+    private var danmakuClient: com.android.purebilibili.core.network.socket.LiveDanmakuClient? = null
+    
     private var currentRoomId: Long = 0
     private var currentUid: Long = 0
     
+    /**
+     * 加载直播流和直播间详情
+     */
     /**
      * 加载直播流和直播间详情
      */
@@ -81,104 +119,158 @@ class LivePlayerViewModel : ViewModel() {
             _uiState.value = LivePlayerState.Loading
             
             // 并行加载直播流和直播间详情
-            val playUrlResult = LiveRepository.getLivePlayUrlWithQuality(roomId, qn)
+            val playUrlDeferred = async { LiveRepository.getLivePlayUrlWithQuality(roomId, qn) }
+            val roomDetailDeferred = async { 
+                try { 
+                    NetworkModule.api.getLiveRoomDetail(roomId) 
+                } catch (e: Exception) { 
+                    e.printStackTrace()
+                    null 
+                } 
+            }
+            
+            val playUrlResult = playUrlDeferred.await()
+            val roomDetailResponse = roomDetailDeferred.await()
+            
+            var roomInfo = RoomInfo()
+            var anchorInfo = AnchorInfo()
+            var isFollowing = false
+            
+            // 尝试解析 LiveRoomDetail
+            var roomData = roomDetailResponse?.data?.roomInfo
+            var anchorData = roomDetailResponse?.data?.anchorInfo
+            var watchedShow = roomDetailResponse?.data?.watchedShow
+            
+            // 如果主要 API 失败或缺少主播信息，尝试 Fallback 方案
+            if (roomDetailResponse?.code != 0 || anchorData == null) {
+                com.android.purebilibili.core.util.Logger.w("LivePlayerVM", "🔴 LiveRoomDetail failed or empty. Starting Fallback...")
+                try {
+                    // 1. 获取基础房间信息 (为了拿到 UID 和 在线人数)
+                    val roomInfoResp = NetworkModule.api.getRoomInfo(roomId)
+                    if (roomInfoResp.code == 0 && roomInfoResp.data != null) {
+                        val basicInfo = roomInfoResp.data
+                        currentUid = basicInfo.uid
+                        
+                        // 临时构建 RoomInfo
+                        roomInfo = RoomInfo(
+                            roomId = basicInfo.room_id,
+                            title = basicInfo.title,
+                            online = basicInfo.online,
+                            liveStatus = basicInfo.liveStatus,
+                            areaName = basicInfo.areaName
+                        )
+                        
+                        // 2. 根据 UID 获取用户卡片 (为了拿到头像和名字)
+                        if (currentUid > 0) {
+                            val cardResp = NetworkModule.api.getUserCard(currentUid)
+                            if (cardResp.code == 0 && cardResp.data?.card != null) {
+                                val card = cardResp.data.card
+                                anchorInfo = AnchorInfo(
+                                    uid = currentUid,
+                                    uname = card.name,
+                                    face = card.face,
+                                    followers = cardResp.data.follower.toLong(),
+                                    officialTitle = card.Official?.title ?: ""
+                                )
+                                com.android.purebilibili.core.util.Logger.d("LivePlayerVM", "🔴 Fallback success: fetched anchor ${card.name}")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            
+            // 如果主要 API 成功，或者 Fallback 失败但至少有部分数据
+            if (anchorData != null || anchorInfo.uid > 0 || roomData != null) {
+                 // 优先使用 LiveRoomDetail 的数据（如果不为空）
+                 if (roomDetailResponse?.code == 0 && roomDetailResponse.data != null) {
+                     val data = roomDetailResponse.data
+                     currentUid = data.roomInfo?.uid ?: 0
+                     
+                     roomInfo = RoomInfo(
+                        roomId = data.roomInfo?.roomId ?: roomInfo.roomId,
+                        title = data.roomInfo?.title ?: roomInfo.title,
+                        cover = data.roomInfo?.cover ?: roomInfo.cover,
+                        areaName = data.roomInfo?.areaName ?: roomInfo.areaName,
+                        parentAreaName = data.roomInfo?.parentAreaName ?: "",
+                        online = data.watchedShow?.num ?: data.roomInfo?.online ?: roomInfo.online,
+                        liveStatus = data.roomInfo?.liveStatus ?: roomInfo.liveStatus,
+                        liveStartTime = data.roomInfo?.liveStartTime ?: 0,
+                        description = data.roomInfo?.description ?: "",
+                        tags = data.roomInfo?.tags ?: ""
+                     )
+                     
+                     anchorInfo = AnchorInfo(
+                        uid = data.roomInfo?.uid ?: 0,
+                        uname = data.anchorInfo?.baseInfo?.uname ?: "主播",
+                        face = data.anchorInfo?.baseInfo?.face ?: "",
+                        followers = data.anchorInfo?.relationInfo?.attention ?: 0,
+                        officialTitle = data.anchorInfo?.baseInfo?.officialInfo?.title ?: ""
+                     )
+                 }
+
+                // 检查关注状态 (通用逻辑)
+                if (currentUid > 0) {
+                    try {
+                        val relationResp = NetworkModule.api.getRelation(currentUid)
+                        if (relationResp.code == 0 && relationResp.data != null) {
+                            isFollowing = relationResp.data.isFollowing
+                        }
+                    } catch (e: Exception) { e.printStackTrace() }
+                }
+                
+                com.android.purebilibili.core.util.Logger.d("LivePlayerVM", "🔴 Final State -> Room: ${roomInfo.title}, Anchor: ${anchorInfo.uname}")
+            } else {
+                com.android.purebilibili.core.util.Logger.e("LivePlayerVM", "🔴 All attempts to load room info failed.")
+            }
             
             playUrlResult.onSuccess { data ->
-                android.util.Log.d("LivePlayer", "🔴 === API Response Debug ===")
-                android.util.Log.d("LivePlayer", "🔴 durl count: ${data.durl?.size ?: 0}")
-                android.util.Log.d("LivePlayer", "🔴 quality_description: ${data.quality_description}")
-                android.util.Log.d("LivePlayer", "🔴 current_quality: ${data.current_quality}")
+                // ... (Keep existing Play URL logic) ...
                 
                 //  [修复] 收集所有可用的 CDN URL
                 val allUrls = data.durl?.mapNotNull { it.url } ?: emptyList()
-                android.util.Log.d("LivePlayer", "🔴 All available URLs: ${allUrls.size}")
-                allUrls.forEachIndexed { index, u ->
-                    android.util.Log.d("LivePlayer", "🔴 URL[$index]: ${u.take(60)}...")
-                }
                 
-                //  [关键修复] 优先使用第二个 CDN（索引1），因为第一个 CDN 经常返回 403
-                // 如果只有一个 URL，则使用第一个
+                //  [关键修复] 优先使用第二个 CDN（索引1）
                 val preferredIndex = if (allUrls.size > 1) 1 else 0
                 val url = allUrls.getOrNull(preferredIndex) ?: extractPlayUrl(data)
-                
-                android.util.Log.d("LivePlayer", "🔴 Selected URL (index=$preferredIndex): ${url?.take(100) ?: "NULL"}")
                 
                 if (url != null) {
                     val qualityList = data.quality_description?.takeIf { it.isNotEmpty() }
                         ?: data.playurl_info?.playurl?.gQnDesc
                         ?: emptyList()
                     
-                    android.util.Log.d("LivePlayer", "🔴 Final qualityList: $qualityList (count: ${qualityList.size})")
-                    
                     _uiState.value = LivePlayerState.Success(
                         playUrl = url,
-                        allPlayUrls = allUrls,  //  保存所有 URL
+                        allPlayUrls = allUrls,
                         currentUrlIndex = preferredIndex,
-                        currentQuality = qn,  //  [修复] 使用请求的 qn 值，而不是 API 返回的 current_quality
-                        qualityList = qualityList
+                        currentQuality = qn,
+                        qualityList = qualityList,
+                        roomInfo = roomInfo,     // 填入解析好的数据
+                        anchorInfo = anchorInfo, // 填入解析好的数据
+                        isFollowing = isFollowing
                     )
-                    
-                    // 异步加载直播间详情
-                    loadRoomDetail(roomId)
                 } else {
-                    android.util.Log.e("LivePlayer", " No playable URL found!")
                     _uiState.value = LivePlayerState.Error("无法获取直播流地址")
                 }
             }.onFailure { e ->
-                android.util.Log.e("LivePlayer", " API call failed: ${e.message}", e)
                 _uiState.value = LivePlayerState.Error(e.message ?: "加载失败")
             }
-        }
-    }
-    
-    /**
-     * 加载直播间详情
-     */
-    private suspend fun loadRoomDetail(roomId: Long) {
-        try {
-            val api = NetworkModule.api
-            val response = api.getLiveRoomDetail(roomId)
+
+            // 启动弹幕连接
+            startLiveDanmaku(roomId)
             
-            if (response.code == 0 && response.data != null) {
-                val roomData = response.data.roomInfo
-                val anchorData = response.data.anchorInfo
-                val watchedShow = response.data.watchedShow
-                
-                currentUid = roomData?.uid ?: 0
-                
-                val currentState = _uiState.value as? LivePlayerState.Success ?: return
-                
-                _uiState.value = currentState.copy(
-                    roomInfo = RoomInfo(
-                        roomId = roomData?.roomId ?: 0,
-                        title = roomData?.title ?: "",
-                        cover = roomData?.cover ?: "",
-                        areaName = roomData?.areaName ?: "",
-                        parentAreaName = roomData?.parentAreaName ?: "",
-                        online = watchedShow?.num ?: roomData?.online ?: 0,
-                        liveStatus = roomData?.liveStatus ?: 0,
-                        liveStartTime = roomData?.liveStartTime ?: 0,
-                        description = roomData?.description ?: "",
-                        tags = roomData?.tags ?: ""
-                    ),
-                    anchorInfo = AnchorInfo(
-                        uid = roomData?.uid ?: 0,
-                        uname = anchorData?.baseInfo?.uname ?: "",
-                        face = anchorData?.baseInfo?.face ?: "",
-                        followers = anchorData?.relationInfo?.attention ?: 0,
-                        officialTitle = anchorData?.baseInfo?.officialInfo?.title ?: ""
-                    )
-                )
-                
-                // 检查关注状态
-                if (currentUid > 0) {
-                    checkFollowStatus(currentUid)
+            // [新增] 加载弹幕表情
+            launch(Dispatchers.IO) {
+                val emojiResult = LiveRepository.getEmoticons(roomId)
+                emojiResult.onSuccess { map ->
+                    com.android.purebilibili.feature.live.components.DanmakuEmoticonMapper.update(map)
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
+
+
     
     /**
      * 检查关注状态
@@ -271,6 +363,17 @@ class LivePlayerViewModel : ViewModel() {
                 android.util.Log.e("LivePlayer", " changeQuality failed: ${e.message}")
             }
         }
+    
+    }
+    
+    /**
+     * [新增] 切换弹幕开关
+     */
+    fun toggleDanmaku() {
+        val currentState = _uiState.value as? LivePlayerState.Success ?: return
+        _uiState.value = currentState.copy(
+            isDanmakuEnabled = !currentState.isDanmakuEnabled
+        )
     }
     
     /**
@@ -347,5 +450,141 @@ class LivePlayerViewModel : ViewModel() {
      */
     fun retry() {
         loadLiveStream(currentRoomId)
+    }
+    
+    /**
+     * 启动直播弹幕
+     */
+    private fun startLiveDanmaku(roomId: Long) {
+        // 先断开旧连接
+        danmakuClient?.disconnect()
+        danmakuClient = null
+        
+        viewModelScope.launch {
+            val result = DanmakuRepository.startLiveDanmaku(this, roomId)
+            result.onSuccess { client ->
+                danmakuClient = client
+                
+                // 监听弹幕消息
+                launch(Dispatchers.Default) {
+                    client.messageFlow.collect { packet ->
+                        handleDanmakuPacket(packet)
+                    }
+                }
+            }.onFailure { e ->
+                android.util.Log.e("LivePlayer", "🔥 Danmaku connection failed: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * 发送弹幕
+     */
+    fun sendDanmaku(text: String) {
+        if (text.isBlank() || currentRoomId == 0L) return
+        
+        viewModelScope.launch {
+            val result = LiveRepository.sendDanmaku(currentRoomId, text)
+            result.onSuccess {
+                // 发送成功，模拟一条本地弹幕立即上屏
+                // 注意：B站API也会通过WebSocket推送自己发送的弹幕，这里可能造成重复
+                // 但为了体验（立即上屏），我们可以先显示，WebSocket收到的可以通过 ID 去重（如果支持）
+                // 目前简单处理：直接显示
+                val mid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
+                val item = LiveDanmakuItem(
+                    text = text,
+                    color = 16777215, // White
+                    mode = 1, // Scroll
+                    uid = mid,
+                    uname = "我", // 暂无缓存用户名，使用默认值
+                    isSelf = true
+                )
+                _danmakuFlow.tryEmit(item)
+            }.onFailure { e ->
+                // 发送失败处理，比如 Toast 提示 (这里简单打印日志，UI 层可观察错误流)
+                android.util.Log.e("LivePlayer", "Send danmaku failed: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * 点赞直播间（点亮）
+     */
+    fun clickLike() {
+        val currentState = _uiState.value as? LivePlayerState.Success ?: return
+        if (currentRoomId == 0L) return
+        
+        viewModelScope.launch {
+            // 参数: roomId, uid, anchorId
+            LiveRepository.clickLike(currentRoomId, currentUid, currentState.anchorInfo.uid)
+        }
+    }
+
+    /**
+     * 处理弹幕包
+     */
+    private fun handleDanmakuPacket(packet: DanmakuProtocol.Packet) {
+        if (packet.operation == DanmakuProtocol.OP_MESSAGE) {
+            try {
+                // Body 是 JSON (Brotli/Zlib 解压后)
+                val jsonStr = String(packet.body, Charsets.UTF_8)
+                val json = JSONObject(jsonStr)
+                val cmd = json.optString("cmd")
+                
+                if (cmd.startsWith("DANMU_MSG")) { // 可能有 "DANMU_MSG:4:0:2:2:2:0" 这种格式
+                    val info = json.getJSONArray("info")
+                    
+                    // 解析基本信息
+                    val meta = info.getJSONArray(0)
+                    val text = info.getString(1)
+                    val user = info.getJSONArray(2)
+                    
+                    val mode = meta.getInt(1)
+                    val color = meta.getInt(3)
+                    val uid = user.getLong(0)
+                    val uname = user.getString(1)
+                    
+                    // 解析表情包 (位于 info[0][13])
+                    val emoticonUrl = if (meta.length() > 13) {
+                        meta.optJSONObject(13)?.optString("url")
+                    } else null
+                    
+                    // 过滤非法弹幕
+                    if (text.isNotEmpty()) {
+                        val item = LiveDanmakuItem(
+                            text = text,
+                            color = color,
+                            mode = mode,
+                            uid = uid,
+                            uname = uname,
+                            isSelf = uid == currentUid, // 标记是否自己发送
+                            emoticonUrl = emoticonUrl,
+                            // [新增] 粉丝牌信息 info[3]
+                            // [level, name, anchor_name, room_id, color, ...]
+                            medalLevel = if (info.length() > 3 && !info.isNull(3) && info.getJSONArray(3).length() > 0) info.getJSONArray(3).getInt(0) else 0,
+                            medalName = if (info.length() > 3 && !info.isNull(3) && info.getJSONArray(3).length() > 1) info.getJSONArray(3).getString(1) else "",
+                            medalColor = if (info.length() > 3 && !info.isNull(3) && info.getJSONArray(3).length() > 4) info.getJSONArray(3).getInt(4) else 0,
+                            
+                            // [新增] 用户等级 info[4][0]
+                            userLevel = if (info.length() > 4 && !info.isNull(4) && info.getJSONArray(4).length() > 0) info.getJSONArray(4).getInt(0) else 0,
+                            
+                            // [新增] 身份标识
+                            isAdmin = if (user.length() > 2) user.getInt(2) == 1 else false,
+                            guardLevel = if (info.length() > 7) info.getInt(7) else 0 // 1=总督 2=提督 3=舰长
+                        )
+                        _danmakuFlow.tryEmit(item)
+                    }
+                }
+                // TODO: 处理 SendGift, SystemMsg 等其他消息
+                
+            } catch (e: Exception) {
+                // JSON 解析失败忽略
+            }
+        }
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        danmakuClient?.disconnect()
     }
 }

@@ -439,4 +439,75 @@ object DanmakuRepository {
             Result.failure(e)
         }
     }
+
+    /**
+     * 启动直播弹幕连接
+     * 
+     * @param scope 用于管理 WebSocket 生命周期的协程作用域 (通常是 ViewModelScope)
+     * @param roomId 直播间 ID
+     * @return 连接成功的 Client 实例
+     */
+    suspend fun startLiveDanmaku(
+        scope: kotlinx.coroutines.CoroutineScope,
+        roomId: Long
+    ): Result<com.android.purebilibili.core.network.socket.LiveDanmakuClient> = withContext(Dispatchers.IO) {
+        try {
+            com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "📡 Getting live danmaku info for room=$roomId...")
+            
+            // 1. 获取 Wbi 密钥并签名参数 (解决 -352 风控)
+            val wbiKeys = com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrNull()
+            val response = if (wbiKeys != null) {
+                com.android.purebilibili.core.util.Logger.d("DanmakuRepo", " Using Wbi signature for danmaku info")
+                val params = mapOf(
+                    "id" to roomId.toString(),
+                    "type" to "0"
+                )
+                val signedParams = com.android.purebilibili.core.network.WbiUtils.sign(params, wbiKeys.first, wbiKeys.second)
+                api.getDanmuInfoWbi(signedParams)
+            } else {
+                com.android.purebilibili.core.util.Logger.w("DanmakuRepo", " Wbi keys missing, falling back to unsigned request")
+                api.getDanmuInfo(roomId)
+            }
+
+            if (response.code != 0 || response.data == null) {
+                return@withContext Result.failure(Exception("获取弹幕服务信息失败: ${response.code} (msg=${response.message})"))
+            }
+            
+            val info = response.data
+            val token = info.token
+            val hosts = info.host_list
+            
+            if (hosts.isEmpty()) {
+                return@withContext Result.failure(Exception("无可用弹幕服务器"))
+            }
+            
+            // 2. 选择最佳服务器 (优先 wss, 默认 443 端口)
+            val bestHost = hosts.find { it.wss_port == 443 } 
+                ?: hosts.find { it.wss_port != 0 }
+                ?: hosts.first()
+                
+            val port = if (bestHost.wss_port != 0) bestHost.wss_port else bestHost.ws_port
+            val schema = if (bestHost.wss_port != 0) "wss" else "ws"
+            val webSocketUrl = "$schema://${bestHost.host}:$port/sub"
+            
+            com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "🔗 Connecting to Live Danmaku: $webSocketUrl")
+            
+            if (webSocketUrl.isNotEmpty()) {
+            val client = com.android.purebilibili.core.network.socket.LiveDanmakuClient(scope) // Removed onMessage and onPopularity as they are not defined in the original context
+            
+            // 获取当前用户 UID (如果已登录)
+            val uid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
+            com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "🔌 Connecting with UID: $uid")
+            
+            client.connect(webSocketUrl, token, roomId, uid)
+            // liveDanmakuClient = client // liveDanmakuClient is not defined in the original context
+            Result.success(client)
+        } else {
+            Result.failure(Exception("未找到有效的 WebSocket 地址"))
+        }
+    } catch (e: Exception) {
+            android.util.Log.e("DanmakuRepo", "❌ Start live danmaku failed: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
 }

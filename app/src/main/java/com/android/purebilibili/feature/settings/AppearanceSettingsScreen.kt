@@ -533,6 +533,15 @@ fun AppearanceSettingsContent(
                         onClick = onNavigateToAnimationSettings,
                         iconTint = iOSPink
                     )
+                    Divider()
+                    // 触感反馈
+                    IOSSwitchItem(
+                        icon = CupertinoIcons.Default.HandTap,
+                        title = "触感反馈",
+                        checked = state.hapticFeedbackEnabled,
+                        onCheckedChange = { viewModel.toggleHapticFeedback(it) },
+                        iconTint = iOSBlue
+                    )
                 }
             }
         }

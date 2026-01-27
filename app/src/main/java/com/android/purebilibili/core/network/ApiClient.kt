@@ -44,6 +44,13 @@ interface BilibiliApi {
     @GET("x/web-interface/nav/stat")
     suspend fun getNavStat(): NavStatResponse
 
+    //  [New] 获取用户卡片信息 (轻量级用户信息)
+    @GET("x/web-interface/card")
+    suspend fun getUserCard(
+        @Query("mid") mid: Long,
+        @Query("photo") photo: Boolean = true
+    ): UserCardResponse
+
     @GET("x/web-interface/history/cursor")
     suspend fun getHistoryList(
         @Query("ps") ps: Int = 30,
@@ -128,6 +135,19 @@ interface BilibiliApi {
         @Query("room_id") roomId: Long
     ): LiveRoomDetailResponse
     
+    //  [新增] 获取直播弹幕 WebSocket 信息
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo")
+    suspend fun getDanmuInfo(
+        @Query("id") roomId: Long,
+        @Query("type") type: Int = 0
+    ): LiveDanmuInfoResponse
+    
+    //  [新增] 获取直播弹幕 WebSocket 信息 (Wbi 签名版 - 解决 -352 风控)
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo")
+    suspend fun getDanmuInfoWbi(
+        @QueryMap params: Map<String, String>
+    ): LiveDanmuInfoResponse
+    
     //  [新增] 获取直播间详情（包含在线人数）
     @GET("https://api.live.bilibili.com/room/v1/Room/get_info")
     suspend fun getRoomInfo(
@@ -153,6 +173,41 @@ interface BilibiliApi {
         @Query("qn") qn: Int = 10000,         // 画质: 10000最高, 150高清, 80流畅
         @Query("platform") platform: String = "web"
     ): LivePlayUrlResponse
+
+    //  [新增] 发送直播弹幕
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("https://api.live.bilibili.com/msg/send")
+    suspend fun sendLiveDanmaku(
+        @retrofit2.http.Field("roomid") roomId: Long,
+        @retrofit2.http.Field("msg") msg: String,
+        @retrofit2.http.Field("color") color: Int = 16777215,
+        @retrofit2.http.Field("fontsize") fontsize: Int = 25,
+        @retrofit2.http.Field("mode") mode: Int = 1,
+        @retrofit2.http.Field("rnd") rnd: Long = System.currentTimeMillis() / 1000,
+        @retrofit2.http.Field("csrf") csrf: String,
+        @retrofit2.http.Field("csrf_token") csrfToken: String
+    ): SimpleApiResponse
+
+
+    //  [新增] 直播间点赞 (点亮/点赞上报)
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("https://api.live.bilibili.com/xlive/web-ucenter/v1/like/like_report_v3")
+    suspend fun clickLikeLiveRoom(
+        @retrofit2.http.Field("click_time") clickTime: Int = 1, // 点击次数
+        @retrofit2.http.Field("room_id") roomId: Long,
+        @retrofit2.http.Field("uid") uid: Long,        // 当前用户 UID
+        @retrofit2.http.Field("anchor_id") anchorId: Long, // 主播 UID
+        @retrofit2.http.Field("csrf") csrf: String,
+        @retrofit2.http.Field("csrf_token") csrfToken: String
+    ): SimpleApiResponse
+
+    //  [新增] 获取直播弹幕表情
+    @GET("https://api.live.bilibili.com/xlive/web-ucenter/v2/emoticon/GetEmoticons")
+    suspend fun getLiveEmoticons(
+        @Query("platform") platform: String = "pc",
+        @Query("room_id") roomId: Long
+    ): com.android.purebilibili.data.model.response.LiveEmoticonRootResponse
+
 
     // ==================== 视频播放模块 ====================
     @GET("x/web-interface/view")
@@ -867,6 +922,13 @@ interface PassportApi {
     suspend fun pollTvQrCode(
         @retrofit2.http.FieldMap params: Map<String, String>
     ): TvPollResponse
+
+    //  [新增] TV 端刷新 Token
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("https://passport.bilibili.com/x/passport-tv-login/h5/refresh")
+    suspend fun refreshToken(
+        @retrofit2.http.FieldMap params: Map<String, String>
+    ): com.android.purebilibili.data.model.response.TvTokenRefreshResponse
 }
 
 
@@ -1011,14 +1073,29 @@ object NetworkModule {
                     referer = "https://space.bilibili.com/$mid"
                 }
                 
+                //  [新增] 直播 API Referer 处理
+                if (url.host == "api.live.bilibili.com") {
+                    val roomId = url.queryParameter("room_id") ?: url.queryParameter("id")
+                    referer = if (!roomId.isNullOrEmpty()) {
+                        "https://live.bilibili.com/$roomId"
+                    } else {
+                        "https://live.bilibili.com"
+                    }
+                }
+                
                 //  [修复] 弹幕 API 需要使用视频页面作为 Referer (解决 412 问题)
                 if (url.encodedPath.contains("/dm/list.so") || url.encodedPath.contains("/x/v1/dm/")) {
                     referer = "https://www.bilibili.com/video/"
                 }
 
+                var origin = "https://www.bilibili.com"
+                if (url.host == "api.live.bilibili.com") {
+                    origin = "https://live.bilibili.com"
+                }
+
                 val builder = original.newBuilder()
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-                    .header("Origin", "https://www.bilibili.com") //  增加 Origin 头
+                    .header("Origin", origin) //  动态 Origin 头
                 
                 //  [关键修复] WBI 签名接口绝对不能设置 Referer 头，否则会失败
                 // 参考：https://github.com/SocialSisterYi/bilibili-API-collect/blob/master/docs/misc/sign/wbi.md

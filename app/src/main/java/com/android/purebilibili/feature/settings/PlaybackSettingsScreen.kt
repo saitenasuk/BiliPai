@@ -546,6 +546,7 @@ fun PlaybackSettingsContent(
                         )
                         
                         Divider()
+
                         // WiFi 画质选择
                         var wifiExpanded by remember { mutableStateOf(false) }
                         Column {

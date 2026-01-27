@@ -49,6 +49,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.responsiveContentWidth
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+
 
 // 辅助函数：格式化数字
 private fun formatNumber(num: Int): String {
@@ -572,11 +576,15 @@ private fun EmptyState(message: String) {
 /**
  *  直播间卡片 - iOS 风格
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun LiveRoomCard(
     item: LiveRoomItem,
     onClick: () -> Unit
 ) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -589,7 +597,19 @@ private fun LiveRoomCard(
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .then(
+                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedElement(
+                                sharedContentState = rememberSharedContentState(key = "live_cover_${item.roomId}"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
+                    } else Modifier
+                )
         ) {
+
             AsyncImage(
                 model = item.cover,
                 contentDescription = null,

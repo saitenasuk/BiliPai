@@ -41,6 +41,8 @@ object SettingsManager {
     private val KEY_THEME_MODE = intPreferencesKey("theme_mode_v2")
     private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     private val KEY_BG_PLAY = booleanPreferencesKey("bg_play")
+    //  [新增] 触感反馈 (默认开启)
+    private val KEY_HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
     //  [新增] 手势灵敏度和主题色
     private val KEY_GESTURE_SENSITIVITY = floatPreferencesKey("gesture_sensitivity")
     //  [新增] 双击跳转秒数 (可分开设置快进和后退)
@@ -61,6 +63,9 @@ object SettingsManager {
     //  [新增] 开屏壁纸
     private val KEY_SPLASH_WALLPAPER_URI = stringPreferencesKey("splash_wallpaper_uri")
     private val KEY_SPLASH_ENABLED = booleanPreferencesKey("splash_enabled")
+
+    //  [New] 解锁高画质 (Bypass client-side checks) - REVERTED
+    // private val KEY_UNLOCK_HIGH_QUALITY = booleanPreferencesKey("unlock_high_quality")
     
     object BottomBarLabelMode {
         const val SELECTED = 0 // 兼容 AppNavigation 的调用
@@ -208,6 +213,23 @@ object SettingsManager {
         context.settingsDataStore.edit { preferences -> preferences[KEY_BG_PLAY] = value }
     }
 
+    //  [新增] --- 触感反馈 ---
+    fun getHapticFeedbackEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_HAPTIC_FEEDBACK_ENABLED] ?: true } // 默认开启
+
+    suspend fun setHapticFeedbackEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_HAPTIC_FEEDBACK_ENABLED] = value }
+        // 同步到 SharedPreferences，供同步读取 (例如 modifier 中)
+        context.getSharedPreferences("haptic_cache", Context.MODE_PRIVATE)
+            .edit().putBoolean("enabled", value).apply()
+    }
+
+    fun isHapticFeedbackEnabledSync(context: Context): Boolean {
+        // 优先读取缓存
+        return context.getSharedPreferences("haptic_cache", Context.MODE_PRIVATE)
+            .getBoolean("enabled", true)
+    }
+
     //  [新增] --- 手势灵敏度 (0.5 ~ 2.0, 默认 1.0) ---
     fun getGestureSensitivity(context: Context): Flow<Float> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_GESTURE_SENSITIVITY] ?: 1.0f }
@@ -345,6 +367,8 @@ object SettingsManager {
         return context.getSharedPreferences("splash_prefs", Context.MODE_PRIVATE)
             .getBoolean("enabled", false)
     }
+
+
     
     //  同步读取当前图标设置（用于 Application 启动时同步）
     fun getAppIconSync(context: Context): String {

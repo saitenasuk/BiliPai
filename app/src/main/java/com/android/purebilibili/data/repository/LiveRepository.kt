@@ -162,4 +162,84 @@ object LiveRepository {
             Result.failure(e)
         }
     }
+    /**
+     * 发送直播弹幕
+     */
+    suspend fun sendDanmaku(roomId: Long, msg: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
+            if (csrf.isEmpty()) return@withContext Result.failure(Exception("请先登录"))
+            
+            val resp = api.sendLiveDanmaku(
+                roomId = roomId,
+                msg = msg,
+                csrf = csrf,
+                csrfToken = csrf
+            )
+            
+            if (resp.code == 0) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception(resp.message ?: "发送失败"))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 直播间点赞 (上报)
+     */
+    suspend fun clickLike(roomId: Long, uid: Long, anchorId: Long): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
+            
+            val resp = api.clickLikeLiveRoom(
+                roomId = roomId,
+                uid = uid,
+                anchorId = anchorId,
+                csrf = csrf,
+                csrfToken = csrf
+            )
+            
+            if (resp.code == 0) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception(resp.message))
+            }
+        } catch (e: Exception) {
+
+            // 点赞失败静默处理
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 获取直播弹幕表情
+     * 返回: Map<关键词, 图片URL>
+     */
+    suspend fun getEmoticons(roomId: Long): Result<Map<String, String>> = withContext(Dispatchers.IO) {
+        try {
+            val resp = api.getLiveEmoticons(roomId = roomId)
+            if (resp.code == 0 && resp.data?.data != null) {
+                val emojiMap = mutableMapOf<String, String>()
+                resp.data.data.forEach { pkg ->
+                    pkg.emoticons?.forEach { emotion ->
+                        if (emotion.emoji.isNotEmpty() && emotion.url.isNotEmpty()) {
+                            emojiMap[emotion.emoji] = emotion.url
+                        }
+                    }
+                }
+                com.android.purebilibili.core.util.Logger.d("LiveRepo", " Fetched ${emojiMap.size} emoticons for room $roomId")
+                Result.success(emojiMap)
+            } else {
+                Result.failure(Exception(resp.msg))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // 失败不影响主要流程
+            Result.failure(e)
+        }
+    }
 }

@@ -701,37 +701,55 @@ object VideoRepository {
         return null
     }
     
-    //  [新增] 使用 access_token 获取高画质视频流 (4K/HDR/1080P60)
-    private suspend fun fetchPlayUrlWithAccessToken(bvid: String, cid: Long, qn: Int): PlayUrlData? {
+    //  [New] Context storage for Token Refresh
+    private var applicationContext: android.content.Context? = null
+
+    fun init(context: android.content.Context) {
+        applicationContext = context.applicationContext
+    }
+
+    //  [New] Use access_token to get high quality stream (4K/HDR/1080P60)
+    private suspend fun fetchPlayUrlWithAccessToken(bvid: String, cid: Long, qn: Int, allowRetry: Boolean = true): PlayUrlData? {
         val accessToken = com.android.purebilibili.core.store.TokenManager.accessTokenCache
         if (accessToken.isNullOrEmpty()) {
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " No access_token available, fallback to Web API")
             return null
         }
         
-        com.android.purebilibili.core.util.Logger.d("VideoRepo", " fetchPlayUrlWithAccessToken: bvid=$bvid, qn=$qn, accessToken=${accessToken.take(10)}...")
+        com.android.purebilibili.core.util.Logger.d("VideoRepo", " fetchPlayUrlWithAccessToken: bvid=$bvid, qn=$qn, accessToken=${accessToken.take(10)}..., retry=$allowRetry")
         
-        //  [修复] 必须使用 TV appkey，因为 access_token 是通过 TV 登录获取的
-        // 根据 B站 API 文档：通过某一组 APPKEY/APPSEC 获取到的 access_token，之后的 API 调用也必须使用同一组
+        //  [Fix] Must use TV appkey because access_token was obtained via TV login
         val params = mapOf(
             "bvid" to bvid,
             "cid" to cid.toString(),
             "qn" to qn.toString(),
-            "fnval" to "4048",  // 全部 DASH 格式
+            "fnval" to "4048",  // All DASH formats
             "fnver" to "0",
             "fourk" to "1",
             "access_key" to accessToken,
-            "appkey" to AppSignUtils.TV_APP_KEY,  //  使用 TV appkey (与登录时一致)
+            "appkey" to AppSignUtils.TV_APP_KEY,
             "ts" to AppSignUtils.getTimestamp().toString(),
             "platform" to "android",
-            "mobi_app" to "android_tv_yst",  //  TV 端标识
+            "mobi_app" to "android_tv_yst",
             "device" to "android"
         )
         
-        val signedParams = AppSignUtils.signForTvLogin(params)  //  使用 TV 签名
+        val signedParams = AppSignUtils.signForTvLogin(params)
         
         try {
             val response = api.getPlayUrlApp(signedParams)
+            
+            // Check for -101 (Invalid Access Key)
+            if (response.code == -101 && allowRetry && applicationContext != null) {
+                com.android.purebilibili.core.util.Logger.w("VideoRepo", " Access token invalid (-101), trying to refresh...")
+                val success = com.android.purebilibili.core.network.TokenRefreshHelper.refresh(applicationContext!!)
+                if (success) {
+                    com.android.purebilibili.core.util.Logger.i("VideoRepo", " Token refreshed successfully, retrying request...")
+                    return fetchPlayUrlWithAccessToken(bvid, cid, qn, false)
+                } else {
+                    com.android.purebilibili.core.util.Logger.e("VideoRepo", " Token refresh failed, aborting retry.")
+                }
+            }
             
             val dashIds = response.data?.dash?.video?.map { it.id }?.distinct()?.sortedDescending()
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " APP PlayUrl response: code=${response.code}, qn=$qn, dashIds=$dashIds")
