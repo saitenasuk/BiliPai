@@ -224,7 +224,7 @@ class VideoPlaybackUseCase(
                         )
                     }
                     
-                    PlaybackCooldownManager.recordSuccess()
+                    PlaybackCooldownManager.recordSuccess(bvid)
                     
                     val isLogin = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
                     
@@ -316,6 +316,10 @@ class VideoPlaybackUseCase(
                     )
                 }
             )
+
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            Logger.d("VideoPlaybackUseCase", "🚫 加载已取消: $bvid")
+            throw e
         } catch (e: Exception) {
             //  [风控冷却] 异常失败，记录
             PlaybackCooldownManager.recordFailure(bvid, e.message ?: "exception")

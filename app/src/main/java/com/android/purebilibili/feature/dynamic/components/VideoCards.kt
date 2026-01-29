@@ -25,14 +25,26 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.android.purebilibili.data.model.response.ArchiveMajor
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+
 /**
  *  大尺寸视频卡片
  *  🎨 [优化] 更大圆角、渐变遮罩、更好的信息展示
  */
 @Composable
+@OptIn(ExperimentalSharedTransitionApi::class)
 fun VideoCardLarge(
     archive: ArchiveMajor,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    // [新增] 合集相关参数
+    isCollection: Boolean = false,
+    collectionTitle: String = "",
+    // [新增] 共享元素过渡动画支持
+    transitionName: String? = null
 ) {
     val context = LocalContext.current
     val coverUrl = remember(archive.cover) {
@@ -46,18 +58,32 @@ fun VideoCardLarge(
         }
     }
     
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))  //  [优化] 更大圆角 8dp → 12dp
-            .clickable(onClick = onClick)
-    ) {
+    // 获取共享元素动画的作用域
+    var modifier = Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(12.dp))
+        .clickable(onClick = onClick)
+        
+    // [新增] 应用共享元素过渡动画
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    
+    if (transitionName != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            modifier = modifier.sharedElement(
+                sharedContentState = rememberSharedContentState(key = transitionName),
+                animatedVisibilityScope = animatedVisibilityScope
+            )
+        }
+    }
+    
+    Column(modifier = modifier) {
         // 视频封面 - 16:9
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(12.dp))  //  [优化] 封面也使用 12dp 圆角
+                .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             if (coverUrl.isNotEmpty()) {
@@ -73,7 +99,7 @@ fun VideoCardLarge(
                 )
             }
             
-            //  [新增] 底部渐变遮罩 - 增加信息可读性
+            // 底部渐变遮罩
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -89,12 +115,25 @@ fun VideoCardLarge(
                     )
             )
             
+            //  [新增] 合集/剧集标识 - 左上角
+            if (isCollection) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text("合集", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                }
+            }
+            
             // 时长标签 - 右下角
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(8.dp)
-                    .background(Color.Black.copy(0.6f), RoundedCornerShape(6.dp))  //  [优化] 更大圆角
+                    .background(Color.Black.copy(0.6f), RoundedCornerShape(6.dp))
                     .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
                 Text(archive.duration_text, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
@@ -111,24 +150,47 @@ fun VideoCardLarge(
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(archive.stat.play, fontSize = 12.sp, color = Color.White)
                 Spacer(modifier = Modifier.width(12.dp))
-                Icon(CupertinoIcons.Default.Message, null, modifier = Modifier.size(13.dp), tint = Color.White)  //  弹幕图标
+                Icon(CupertinoIcons.Default.Message, null, modifier = Modifier.size(13.dp), tint = Color.White)
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(archive.stat.danmaku, fontSize = 12.sp, color = Color.White)
             }
         }
         
-        Spacer(modifier = Modifier.height(10.dp))  //  [优化] 增加间距
+        Spacer(modifier = Modifier.height(10.dp))
         
-        // 视频标题
-        Text(
-            archive.title,
-            fontSize = 15.sp,  //  [优化] 稍大字体
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            lineHeight = 20.sp,  //  [优化] 行高
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        //  [新增] 合集显示逻辑：优先显示 "合集标题"，副标题显示 "更新至：xxx"
+        //  如果是普通视频，则直接显示标题
+        
+        if (isCollection && collectionTitle.isNotEmpty()) {
+             // 合集样式：两行
+             Text(
+                collectionTitle, // 合集标题
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                "更新：${archive.title}", // 具体视频标题作为更新信息
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        } else {
+             // 普通视频样式
+             Text(
+                archive.title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 20.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 

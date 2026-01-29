@@ -111,13 +111,18 @@ fun VideoTitleSection(
  * Video Title with Description (Official layout: title + stats + description)
  *  Description and tags hidden by default, shown on expand
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun VideoTitleWithDesc(
     info: ViewInfo,
-    videoTags: List<VideoTag> = emptyList()  //  视频标签
+    videoTags: List<VideoTag> = emptyList(),  //  视频标签
+    transitionEnabled: Boolean = false  // 🔗 共享元素过渡开关
 ) {
     var expanded by remember { mutableStateOf(false) }
+    
+    //  尝试获取共享元素作用域
+    val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
     
     Column(
         modifier = Modifier
@@ -131,8 +136,22 @@ fun VideoTitleWithDesc(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
-            // [新增] 使用 SelectionContainer 支持滑动复制
-            SelectionContainer(modifier = Modifier.weight(1f)) {
+                //  共享元素过渡 - 标题
+                var titleModifier = Modifier.animateContentSize()
+                
+                //  注意：使用 ExperimentalSharedTransitionApi 注解需要上下文
+                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                         titleModifier = titleModifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "video_title_${info.bvid}"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ ->
+                                androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                            }
+                        )
+                    }
+                }
+
                 Text(
                     text = info.title,
                     style = MaterialTheme.typography.titleMedium.copy(
@@ -143,9 +162,8 @@ fun VideoTitleWithDesc(
                     maxLines = if (expanded) Int.MAX_VALUE else 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.animateContentSize()
+                    modifier = titleModifier
                 )
-            }
             Spacer(Modifier.width(4.dp))
             Icon(
                 imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
@@ -161,12 +179,60 @@ fun VideoTitleWithDesc(
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "${FormatUtils.formatStat(info.stat.view.toLong())}\u64ad\u653e  \u2022  ${FormatUtils.formatStat(info.stat.danmaku.toLong())}\u5f39\u5e55  \u2022  ${FormatUtils.formatPublishTime(info.pubdate)}",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                maxLines = 1
-            )
+            // Stats Row split for shared element transitions
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Views
+                var viewsModifier = Modifier.wrapContentSize()
+                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        viewsModifier = viewsModifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "video_views_${info.bvid}"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ ->
+                                androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                            }
+                        )
+                    }
+                }
+                Text(
+                    text = "${FormatUtils.formatStat(info.stat.view.toLong())}播放",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = viewsModifier
+                )
+
+                Text(
+                    text = "  •  ",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+
+                // Danmaku
+                var danmakuModifier = Modifier.wrapContentSize()
+                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        danmakuModifier = danmakuModifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "video_danmaku_${info.bvid}"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ ->
+                                androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                            }
+                        )
+                    }
+                }
+                Text(
+                    text = "${FormatUtils.formatStat(info.stat.danmaku.toLong())}弹幕",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = danmakuModifier
+                )
+
+                Text(
+                    text = "  •  ${FormatUtils.formatPublishTime(info.pubdate)}",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
             // [新增] 显示 BVID 并支持点击复制
             Spacer(Modifier.width(8.dp))
             Text(
@@ -236,13 +302,18 @@ fun VideoTitleWithDesc(
 /**
  * UP Owner Info Section (Bilibili official style: blue UP tag)
  */
+@OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun UpInfoSection(
     info: ViewInfo,
     isFollowing: Boolean = false,
     onFollowClick: () -> Unit = {},
-    onUpClick: (Long) -> Unit = {}
+    onUpClick: (Long) -> Unit = {},
+    transitionEnabled: Boolean = false  // 🔗 共享元素过渡开关
 ) {
+    //  尝试获取共享元素作用域
+    val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -252,16 +323,31 @@ fun UpInfoSection(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Avatar
+        var avatarModifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            
+        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                avatarModifier = avatarModifier.sharedBounds(
+                    sharedContentState = rememberSharedContentState(key = "video_avatar_${info.bvid}"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    boundsTransform = { _, _ ->
+                        androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                    },
+                    clipInOverlayDuringTransition = OverlayClip(CircleShape)
+                )
+            }
+        }
+
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(FormatUtils.fixImageUrl(info.owner.face))
                 .crossfade(true)
                 .build(),
             contentDescription = null,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+            modifier = avatarModifier
         )
         
         Spacer(Modifier.width(10.dp))
@@ -269,6 +355,25 @@ fun UpInfoSection(
         // UP owner name row
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                //  共享元素过渡 - UP主名称
+                //  [调整] 确保 sharedBounds 在交互修饰符之前应用
+                var upNameModifier: Modifier = Modifier
+                
+                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        upNameModifier = upNameModifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "video_up_${info.bvid}"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ ->
+                                androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                            }
+                        )
+                    }
+                }
+                
+                //  添加交互修饰符 (放在 sharedBounds 之后，使其包含在 sharedBounds 内部)
+                upNameModifier = upNameModifier.copyOnLongPress(info.owner.name, "UP主名称")
+
                 Text(
                     text = info.owner.name,
                     fontSize = 14.sp,
@@ -276,7 +381,7 @@ fun UpInfoSection(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.copyOnLongPress(info.owner.name, "UP主名称")
+                    modifier = upNameModifier
                 )
             }
             Spacer(Modifier.height(2.dp))

@@ -185,7 +185,8 @@ fun DynamicCardV2(
         content?.major?.archive?.let { archive ->
             VideoCardLarge(
                 archive = archive,
-                onClick = { onVideoClick(archive.bvid) }
+                onClick = { onVideoClick(archive.bvid) },
+                transitionName = "video-${archive.bvid}" // [新增] 共享元素过渡名称
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
@@ -278,6 +279,32 @@ fun DynamicCardV2(
                         onDismiss = { selectedImageIndex = -1 }
                     )
                 }
+            }
+        }
+        
+        //  [新增] 合集/剧集动态
+        content?.major?.ugc_season?.let { season ->
+            // 如果有 archive 字段，显示最近更新的视频
+            val archive = season.archive
+            if (archive != null) {
+                // 复用 VideoCardLarge，但增加合集标识
+                VideoCardLarge(
+                    archive = archive,
+                    onClick = { onVideoClick(archive.bvid) },
+                    isCollection = true,
+                    collectionTitle = season.title,
+                    transitionName = "video-${archive.bvid}" // [新增] 共享元素过渡名称
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            } else {
+                // 如果没有 archive，显示由于合集封面和标题
+                // 这里可以使用一个简化版的卡片
+                Text(
+                     "合集：${season.title}", 
+                     fontWeight = FontWeight.Bold,
+                     color = MaterialTheme.colorScheme.primary
+                )
+                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
         

@@ -44,7 +44,8 @@ fun ZoomableImage(
     imageLoader: ImageLoader,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
-    onZoomChange: (Float) -> Unit = {}
+    onZoomChange: (Float) -> Unit = {},
+    onClick: () -> Unit = {}
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -105,7 +106,8 @@ fun ZoomableImage(
             .onSizeChanged { containerSize = it }
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onDoubleTap = { onDoubleTap(it) }
+                    onDoubleTap = { onDoubleTap(it) },
+                    onTap = { onClick() }
                 )
             }
             .pointerInput(Unit) {

@@ -562,7 +562,8 @@ fun rememberVideoPlayerState(
                 
                 if (isNetworkError && retryCountRef.count < maxRetries) {
                     retryCountRef.count++
-                    val delayMs = retryCountRef.count * 2000L  // 递增延迟：2s, 4s, 6s
+                    // 🔧 [优化] 指数退避：1s, 2s, 4s（更快首次重试）
+                    val delayMs = (1000L * (1 shl (retryCountRef.count - 1))).coerceAtMost(8000L)
                     com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "🔄 Network error, retry ${retryCountRef.count}/$maxRetries in ${delayMs}ms")
                     
                     // 🚀 [修复] 使用受管理的 scope 避免内存泄漏

@@ -92,7 +92,7 @@ fun VideoContentSection(
     onTripleClick: () -> Unit,
     onPageSelect: (Int) -> Unit,
     onUpClick: (Long) -> Unit,
-    onRelatedVideoClick: (String) -> Unit,
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     onSubReplyClick: (ReplyItem) -> Unit,
     onLoadMoreReplies: () -> Unit,
     onDownloadClick: () -> Unit = {},
@@ -145,7 +145,7 @@ fun VideoContentSection(
                 onDismiss = { showCollectionSheet = false },
                 onEpisodeClick = { episode ->
                     showCollectionSheet = false
-                    onRelatedVideoClick(episode.bvid)
+                    onRelatedVideoClick(episode.bvid, null)
                 }
             )
         }
@@ -272,13 +272,14 @@ private fun VideoIntroTab(
     onTripleClick: () -> Unit,
     onPageSelect: (Int) -> Unit,
     onUpClick: (Long) -> Unit,
-    onRelatedVideoClick: (String) -> Unit,
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     onOpenCollectionSheet: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
     contentPadding: PaddingValues,
     transitionEnabled: Boolean = false  // 🔗 共享元素过渡开关
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
@@ -304,7 +305,9 @@ private fun VideoIntroTab(
                 onOpenCollectionSheet = onOpenCollectionSheet,
                 onDownloadClick = onDownloadClick,
                 onWatchLaterClick = onWatchLaterClick,
-                onGloballyPositioned = { }
+
+                onGloballyPositioned = { },
+                transitionEnabled = transitionEnabled  // 🔗 传递共享元素开关
             )
         }
         if (info.pages.size > 1) {
@@ -326,7 +329,13 @@ private fun VideoIntroTab(
                 video = video,
                 isFollowed = video.owner.mid in followingMids,
                 transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
-                onClick = { onRelatedVideoClick(video.bvid) }
+                onClick = { 
+                    val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+                    val options = activity?.let { 
+                        android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle() 
+                    }
+                    onRelatedVideoClick(video.bvid, options) 
+                }
             )
         }
     }
@@ -482,7 +491,8 @@ private fun VideoHeaderContent(
     onOpenCollectionSheet: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
-    onGloballyPositioned: (Float) -> Unit
+    onGloballyPositioned: (Float) -> Unit,
+    transitionEnabled: Boolean = false  // 🔗 共享元素过渡开关
 ) {
     Column(
         modifier = Modifier
@@ -496,12 +506,14 @@ private fun VideoHeaderContent(
             info = info,
             isFollowing = isFollowing,
             onFollowClick = onFollowClick,
-            onUpClick = onUpClick
+            onUpClick = onUpClick,
+            transitionEnabled = transitionEnabled  // 🔗 传递共享元素开关
         )
 
         VideoTitleWithDesc(
             info = info,
-            videoTags = videoTags
+            videoTags = videoTags,
+            transitionEnabled = transitionEnabled  // 🔗 传递共享元素开关
         )
 
         ActionButtonsRow(

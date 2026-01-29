@@ -122,7 +122,7 @@ fun VideoDetailScreen(
     transitionEnabled: Boolean = false,
     onBack: () -> Unit,
     onNavigateToAudioMode: () -> Unit = {},
-    onVideoClick: (String) -> Unit,
+    onVideoClick: (String, android.os.Bundle?) -> Unit,
     onUpClick: (Long) -> Unit = {},
     miniPlayerManager: MiniPlayerManager? = null,
     isInPipMode: Boolean = false,
@@ -361,8 +361,19 @@ fun VideoDetailScreen(
             com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP
     }
     
+    // 🔧 [性能优化] 记录上次设置的 PiP bounds，避免重复设置
+    var lastPipBounds by remember { mutableStateOf<android.graphics.Rect?>(null) }
+    var pipParamsInitialized by remember { mutableStateOf(false) }
+    
     LaunchedEffect(videoPlayerBounds, pipModeEnabled) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            // 🔧 [性能优化] 只有 bounds 真正变化或首次初始化时才更新 PiP 参数
+            val boundsChanged = videoPlayerBounds != lastPipBounds
+            if (!boundsChanged && pipParamsInitialized) return@LaunchedEffect
+            
+            lastPipBounds = videoPlayerBounds
+            pipParamsInitialized = true
+            
             activity?.let { act ->
                 val pipParamsBuilder = android.app.PictureInPictureParams.Builder()
                     .setAspectRatio(android.util.Rational(16, 9))
@@ -436,6 +447,9 @@ fun VideoDetailScreen(
         }
     }
 
+    // 🔧 [性能优化] 记录上次缓存的 bvid，避免重复缓存 MiniPlayer 信息
+    var lastCachedMiniPlayerBvid by remember { mutableStateOf<String?>(null) }
+    
     //  核心修改：初始化评论 & 媒体中心信息
     LaunchedEffect(uiState) {
         if (uiState is PlayerUiState.Success) {
@@ -458,7 +472,12 @@ fun VideoDetailScreen(
             
             //  同步视频信息到小窗管理器（为小窗模式做准备）
             //  🚀 [性能优化] 将繁重的序列化和缓存操作移至后台线程，防止主线程卡顿
-            if (miniPlayerManager != null) {
+            // 🔧 [性能优化] 只有首次加载或视频切换时才缓存 MiniPlayer 信息
+            val shouldCacheMiniPlayer = lastCachedMiniPlayerBvid != bvid
+            
+            if (miniPlayerManager != null && shouldCacheMiniPlayer) {
+                lastCachedMiniPlayerBvid = bvid
+                
                 launch(Dispatchers.Default) {
                     com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "🔄 [Background] Preparing MiniPlayer info...")
                     
@@ -483,7 +502,7 @@ fun VideoDetailScreen(
                     miniPlayerManager.cacheUiState(success)
                     com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "✅ [Background] MiniPlayer info cached")
                 }
-            } else {
+            } else if (miniPlayerManager == null) {
                 android.util.Log.w("VideoDetailScreen", " miniPlayerManager 是 null!")
             }
         } else if (uiState is PlayerUiState.Loading) {
@@ -1317,7 +1336,7 @@ fun VideoDetailScreen(
                                             targetValue = -screenHeightPx,
                                             animationSpec = androidx.compose.animation.core.tween(300)
                                         )
-                                        onVideoClick(nextVid)
+                                        onVideoClick(nextVid, null)
                                         // 重置偏移量 (为了返回时状态正常)
                                         verticalOffset.snapTo(0f)
                                     } else {
@@ -1337,7 +1356,7 @@ fun VideoDetailScreen(
                                             targetValue = screenHeightPx,
                                             animationSpec = androidx.compose.animation.core.tween(300)
                                         )
-                                        onVideoClick(prevVid)
+                                        onVideoClick(prevVid, null)
                                         // 重置偏移量
                                         verticalOffset.snapTo(0f)
                                     } else {

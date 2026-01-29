@@ -83,7 +83,7 @@ fun TabletVideoLayout(
     currentAudioQuality: Int = -1,
     onAudioQualityChange: (Int) -> Unit = {},
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
-    onRelatedVideoClick: (String) -> Unit
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit
 ) {
     val splitRatio = rememberSplitLayoutRatio()
     
@@ -241,7 +241,7 @@ private fun TabletSecondaryContent(
     viewModel: PlayerViewModel,
     playerState: VideoPlayerState,
     onUpClick: (Long) -> Unit,
-    onRelatedVideoClick: (String) -> Unit
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("评论 ${if (commentState.replyCount > 0) "(${commentState.replyCount})" else ""}", "相关推荐")
@@ -251,6 +251,8 @@ private fun TabletSecondaryContent(
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
     var sourceRect by remember { mutableStateOf<Rect?>(null) }
+    
+    val context = androidx.compose.ui.platform.LocalContext.current
     
     // 图片预览对话框
     if (showImagePreview && previewImages.isNotEmpty()) {
@@ -416,7 +418,13 @@ private fun TabletSecondaryContent(
                         RelatedVideoItem(
                             video = video,
                             isFollowed = video.owner.mid in success.followingMids,
-                            onClick = { onRelatedVideoClick(video.bvid) }
+                            onClick = { 
+                                val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+                                val options = activity?.let { 
+                                    android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle() 
+                                }
+                                onRelatedVideoClick(video.bvid, options) 
+                            }
                         )
                     }
                 }
@@ -450,12 +458,13 @@ private fun ScrollableVideoInfoSection(
     onUpClick: (Long) -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
-    onRelatedVideoClick: (String) -> Unit,
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     // 合集展开状态
     var showCollectionSheet by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // 合集底部弹窗
     info.ugc_season?.let { season ->
@@ -466,7 +475,11 @@ private fun ScrollableVideoInfoSection(
                 onDismiss = { showCollectionSheet = false },
                 onEpisodeClick = { episode ->
                     showCollectionSheet = false
-                    onRelatedVideoClick(episode.bvid)
+                    val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+                    val options = activity?.let { 
+                        android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle() 
+                    }
+                    onRelatedVideoClick(episode.bvid, options)
                 }
             )
         }
@@ -604,7 +617,13 @@ private fun ScrollableVideoInfoSection(
                         Column(
                             modifier = Modifier
                                 .width(160.dp)
-                                .clickable { onRelatedVideoClick(video.bvid) }
+                                .clickable {
+                                    val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+                                    val options = activity?.let {
+                                        android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle()
+                                    }
+                                    onRelatedVideoClick(video.bvid, options)
+                                }
                         ) {
                             Box(
                                 modifier = Modifier

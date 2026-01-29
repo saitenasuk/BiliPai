@@ -362,6 +362,29 @@ fun AppNavigation(
                         }
                     }
                 }
+            },
+            // [新增] 前进退出动画 (A -> B, A is exiting)
+            exitTransition = {
+                if (cardTransitionEnabled) {
+                     fadeOut(animationSpec = tween(300))
+                } else {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration))
+                }
+            },
+            // [新增] 返回进入动画 (B -> A, A is re-entering)
+            popEnterTransition = {
+                if (cardTransitionEnabled) {
+                     fadeIn(animationSpec = tween(300))
+                } else {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) // Reverse of slideOutLeft? Or usually Right?
+                    // Standard back nav usually slides from left to right (content entering from left) if we pushed from right.
+                    // But here we slid OUT to Left. So we slide IN from Left?
+                    // Actually standard Android is: Push: Enter Right, Exit Left. Pop: Enter Left, Exit Right.
+                    // So popEnter should be SlideDirection.Right (content moving towards Right? No, coming FROM Left).
+                    // SlideDirection.Right means "towards right".
+                    // slideIntoContainer(Right) -> moves from Left edge towards Right. Correct.
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration))
+                }
             }
         ) { backStackEntry ->
             val bvid = backStackEntry.arguments?.getString("bvid") ?: ""
@@ -428,7 +451,7 @@ fun AppNavigation(
                         navController.navigate(ScreenRoutes.AudioMode.route)
                     },
                     // [修复] 传递视频点击导航回调
-                    onVideoClick = { vid -> 
+                    onVideoClick = { vid, _ -> 
                         navigateToVideo(vid, 0L, "")
                     }
                 )
@@ -654,17 +677,19 @@ fun AppNavigation(
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
         ) {
-            DynamicScreen(
-                onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
-                onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
-                onLiveClick = { roomId, title, uname ->  //  直播点击
-                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
-                },
-                onBack = { navController.popBackStack() },
-                onLoginClick = { navController.navigate(ScreenRoutes.Login.route) },  //  跳转登录
-                onHomeClick = { navController.popBackStack() },  //  返回首页
-                globalHazeState = mainHazeState  // [新增] 全局底栏模糊状态
-            )
+            ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
+                DynamicScreen(
+                    onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
+                    onLiveClick = { roomId, title, uname ->  //  直播点击
+                        navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                    },
+                    onBack = { navController.popBackStack() },
+                    onLoginClick = { navController.navigate(ScreenRoutes.Login.route) },  //  跳转登录
+                    onHomeClick = { navController.popBackStack() },  //  返回首页
+                    globalHazeState = mainHazeState  // [新增] 全局底栏模糊状态
+                )
+            }
         }
         
         // --- 6.5  [新增] 竖屏短视频 (故事模式) ---

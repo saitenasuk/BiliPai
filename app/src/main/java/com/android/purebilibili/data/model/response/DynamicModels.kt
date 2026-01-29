@@ -121,7 +121,8 @@ data class DynamicMajor(
     val archive: ArchiveMajor? = null, // 视频
     val draw: DrawMajor? = null, // 图片
     val live_rcmd: LiveRcmdMajor? = null, //  直播
-    val opus: OpusMajor? = null //  [新增] 图文动态 (新版格式)
+    val opus: OpusMajor? = null, //  [新增] 图文动态 (新版格式)
+    val ugc_season: UgcSeasonMajor? = null // [新增] 合集
 )
 
 //  [新增] 图文动态 (MAJOR_TYPE_OPUS) - B站新版图文格式
@@ -151,6 +152,25 @@ data class OpusSummary(
 @Serializable
 data class LiveRcmdMajor(
     val content: String = "" // JSON string，需要解析
+)
+
+//  [新增] 合集/剧集 (MAJOR_TYPE_UGC_SEASON)
+@Serializable
+data class UgcSeasonMajor(
+    val title: String = "",
+    val cover: String = "",
+    val intro: String = "",
+    val id: Long = 0, // season_id
+    val sign_state: Int = 0,
+    val type: Int = 0, // 1=合集
+    val stat: UgcSeasonStat = UgcSeasonStat(),
+    val archive: ArchiveMajor? = null // 播放第一集或最新一集
+)
+
+@Serializable
+data class UgcSeasonStat(
+    val play: String = "0",
+    val danmaku: String = "0"
 )
 
 @Serializable
@@ -206,6 +226,7 @@ enum class DynamicType(val apiValue: String) {
     FORWARD("DYNAMIC_TYPE_FORWARD"),
     LIVE("DYNAMIC_TYPE_LIVE_RCMD"),
     OPUS("DYNAMIC_TYPE_DRAW"),  //  [新增] 图文动态 (使用 DRAW 类型，但 major 为 opus)
+    UGC_SEASON("DYNAMIC_TYPE_UGC_SEASON"), // [新增] 合集/剧集
     UNKNOWN("UNKNOWN");
     
     companion object {

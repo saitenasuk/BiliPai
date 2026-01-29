@@ -51,8 +51,8 @@ fun LiquidIndicator(
     val density = LocalDensity.current
     
     // 指示器尺寸
-    val indicatorWidth = itemWidth + 24.dp
-    val indicatorHeight = 55.dp
+    val indicatorWidth =85.dp
+    val indicatorHeight = 48.dp
     
     // 计算位置 (OFFSET 模式)
     val itemStartOffset = with(density) { (position * itemWidth.toPx()).toDp() }

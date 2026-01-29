@@ -686,6 +686,48 @@ class PlayerViewModel : ViewModel() {
             PlaylistManager.setPlaylist(playlist, 0)
             Logger.d("PlayerVM", " 播放列表已重置: 1 + ${relatedItems.size} 项")
         }
+        
+        // 🚀 [优化] 预加载前 2 个推荐视频的 PlayUrl
+        preloadRelatedPlayUrls(related.take(2))
+    }
+    
+    /**
+     * 🚀 [新增] 预加载推荐视频的 PlayUrl
+     * 异步获取视频详情（获取 cid）并缓存 PlayUrl，切换视频时更快
+     */
+    private fun preloadRelatedPlayUrls(videos: List<com.android.purebilibili.data.model.response.RelatedVideo>) {
+        if (videos.isEmpty()) return
+        
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            for (video in videos) {
+                try {
+                    // 获取视频详情（主要是为了获取 cid）
+                    // getVideoDetails 返回 Pair<ViewInfo, PlayUrlData>
+                    val detailResult = com.android.purebilibili.data.repository.VideoRepository.getVideoDetails(video.bvid)
+                    val (viewInfo, _) = detailResult.getOrNull() ?: continue
+                    
+                    // 检查 PlayUrl 是否已缓存
+                    if (com.android.purebilibili.core.cache.PlayUrlCache.get(video.bvid, viewInfo.cid) != null) {
+                        Logger.d("PlayerVM", "🚀 Preload skip (cached): ${video.bvid}")
+                        continue
+                    }
+                    
+                    // 获取默认画质
+                    val defaultQuality = appContext?.let { com.android.purebilibili.core.util.NetworkUtils.getDefaultQualityId(it) } ?: 64
+                    
+                    // 预加载 PlayUrl（会自动缓存到 PlayUrlCache）
+                    com.android.purebilibili.data.repository.VideoRepository.getPlayUrlData(
+                        video.bvid, 
+                        viewInfo.cid, 
+                        defaultQuality
+                    )
+                    Logger.d("PlayerVM", "🚀 Preloaded PlayUrl: ${video.bvid}")
+                } catch (e: Exception) {
+                    // 预加载失败不影响正常播放，静默忽略
+                    Logger.d("PlayerVM", "🚀 Preload failed (ignored): ${video.bvid}")
+                }
+            }
+        }
     }
     
     fun retry() {

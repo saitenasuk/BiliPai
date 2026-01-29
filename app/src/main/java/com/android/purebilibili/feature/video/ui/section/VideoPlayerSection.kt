@@ -225,11 +225,27 @@ fun VideoPlayerSection(
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
 
+    // [新增] 共享元素过渡支持
+    val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
+    val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
+    
+    var rootModifier = Modifier
+        .fillMaxSize()
+        .clipToBounds()
+        .background(Color.Black)
+
+    // 应用共享元素
+    if (bvid.isNotEmpty() && sharedTransitionScope != null && animatedVisibilityScope != null) {
+         with(sharedTransitionScope) {
+             rootModifier = rootModifier.sharedElement(
+                 sharedContentState = rememberSharedContentState(key = "video-$bvid"),
+                 animatedVisibilityScope = animatedVisibilityScope
+             )
+         }
+    }
+
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clipToBounds()  //  确保所有内容（包括弹幕）不会超出边界
-            .background(Color.Black)
+        modifier = rootModifier
             //  [新增] 处理双指缩放和平移
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->

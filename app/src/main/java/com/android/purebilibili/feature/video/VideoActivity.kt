@@ -108,12 +108,12 @@ class VideoActivity : ComponentActivity() {
                 com.android.purebilibili.feature.video.screen.VideoDetailScreen(
                     bvid = bvid,
                     coverUrl = "", // Will be updated when video info loads
-                    onBack = { finish() },
+                    onBack = { onBackPressedDispatcher.onBackPressed() },
                     onNavigateToAudioMode = {
                         viewModel.setAudioMode(true)
                     },
-                    onVideoClick = { vid ->
-                        VideoActivity.start(this, vid)
+                    onVideoClick = { vid, options ->
+                        VideoActivity.start(this, vid, options)
                     }
                     // We don't need to pass external player here as VideoDetailScreen manages it via VideoPlayerState
                     // But if we wanted to support smooth transition from notification (which might be playing), 
@@ -231,11 +231,11 @@ class VideoActivity : ComponentActivity() {
     }
 
     companion object {
-        fun start(context: Context, bvid: String) {
+        fun start(context: Context, bvid: String, options: android.os.Bundle? = null) {
             val intent = Intent(context, VideoActivity::class.java).apply {
                 putExtra("bvid", bvid)
             }
-            context.startActivity(intent)
+            context.startActivity(intent, options)
         }
     }
 }

@@ -22,6 +22,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.clickable
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
@@ -91,18 +95,43 @@ fun RelatedVideoItem(
     // Using simple Row structure but with IOS touch physics manually or via wrapper
     // Since we want the whole row to be clickable and scale:
     
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = 0.6f, // MediumBouncy
+            stiffness = 500f // Medium
+        ),
+        label = "cardScale"
+    )
+    
+    // Haptic feedback
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) // Using standard haptic for now
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp) // Spacing between items
-            .iosCard(
-                shape = RoundedCornerShape(12.dp),
-                backgroundColor = MaterialTheme.colorScheme.surface,
-                elevation = 0.dp, // Flat list style often doesn't need elevation for cells, or very subtle
-                pressEffect = true,
-                onClick = onClick
-            )
     ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .scale(scale)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = androidx.compose.foundation.LocalIndication.current,
+                    onClick = onClick
+                )
+        ) {
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -176,29 +205,94 @@ fun RelatedVideoItem(
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 // Title
-                Text(
-                    text = video.title,
-                    style = MaterialTheme.typography.bodyMedium.copy( // 15sp regular/medium
-                        fontWeight = FontWeight.Medium
-                    ),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                // 🔗 [共享元素] 标题 - Wrap in Box to isolate from Text intrinsic measurement issues
+                var titleBoxModifier = Modifier.fillMaxWidth()
+
+                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        titleBoxModifier = titleBoxModifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "video_title_${video.bvid}"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ ->
+                                spring(dampingRatio = 0.8f, stiffness = 200f)
+                            }
+                        )
+                    }
+                }
+
+                Box(modifier = titleBoxModifier) {
+                    Text(
+                        text = video.title,
+                        style = MaterialTheme.typography.bodyMedium.copy( // 15sp regular/medium
+                            fontWeight = FontWeight.Medium
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
                 Column {
                     // UP owner info row
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = video.owner.name,
-                            style = MaterialTheme.typography.labelMedium, // 12sp
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, // System Gray
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
+                        // UP Avatar
+                        if (video.owner.face.isNotEmpty()) {
+                            var avatarModifier = Modifier
+                                .size(16.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                
+                            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                with(sharedTransitionScope) {
+                                    avatarModifier = avatarModifier.sharedBounds(
+                                        sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        boundsTransform = { _, _ ->
+                                            spring(dampingRatio = 0.8f, stiffness = 200f)
+                                        },
+                                        clipInOverlayDuringTransition = OverlayClip(androidx.compose.foundation.shape.CircleShape)
+                                    )
+                                }
+                            }
+
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(FormatUtils.fixImageUrl(video.owner.face))
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = avatarModifier
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+
+                        // UP Name
+                        var upNameBoxModifier = Modifier.weight(1f, fill = false)
+
+                        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                upNameBoxModifier = upNameBoxModifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "video_up_${video.bvid}"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ ->
+                                        spring(dampingRatio = 0.8f, stiffness = 200f)
+                                    }
+                                )
+                            }
+                        }
+
+                        Box(modifier = upNameBoxModifier) {
+                            Text(
+                                text = video.owner.name,
+                                style = MaterialTheme.typography.labelMedium, // 12sp
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, // System Gray
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         
                         //  已关注标签
                         if (isFollowed) {
@@ -224,16 +318,45 @@ fun RelatedVideoItem(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Views
-                        StatItem(icon = CupertinoIcons.Filled.Play, text = FormatUtils.formatStat(video.stat.view.toLong()))
+                        var viewsModifier = Modifier.wrapContentSize()
+                        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                viewsModifier = viewsModifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "video_views_${video.bvid}"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ ->
+                                        spring(dampingRatio = 0.8f, stiffness = 200f)
+                                    }
+                                )
+                            }
+                        }
+                        Box(modifier = viewsModifier) {
+                            StatItem(icon = CupertinoIcons.Filled.Play, text = FormatUtils.formatStat(video.stat.view.toLong()))
+                        }
                         
                         Spacer(modifier = Modifier.width(12.dp))
                         
                         // Danmaku
-                        StatItem(icon = CupertinoIcons.Filled.BubbleLeft, text = FormatUtils.formatStat(video.stat.danmaku.toLong()))
+                        var danmakuModifier = Modifier.wrapContentSize()
+                        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                danmakuModifier = danmakuModifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "video_danmaku_${video.bvid}"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ ->
+                                        spring(dampingRatio = 0.8f, stiffness = 200f)
+                                    }
+                                )
+                            }
+                        }
+                        Box(modifier = danmakuModifier) {
+                            StatItem(icon = CupertinoIcons.Filled.BubbleLeft, text = FormatUtils.formatStat(video.stat.danmaku.toLong()))
+                        }
                     }
                 }
             }
         }
+    }
     }
 }
 

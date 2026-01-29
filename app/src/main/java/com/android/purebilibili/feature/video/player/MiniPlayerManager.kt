@@ -133,6 +133,14 @@ class MiniPlayerManager private constructor(private val context: Context) :
         isLowMemoryMode = true
         val currentPlayer = player ?: return
         
+        // 🔧 [优化] 如果未在播放，直接暂停/停止缓冲，避免浪费 CDN 请求
+        val wasPlaying = currentPlayer.isPlaying
+        if (!wasPlaying) {
+            currentPlayer.pause()
+            Logger.d(TAG, "🔋 后台模式：未播放，暂停缓冲节省流量")
+            return
+        }
+        
         // 判断是否需要后台音频
         if (shouldContinueBackgroundAudio()) {
             // 保存原始轨道参数

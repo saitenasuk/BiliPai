@@ -297,6 +297,10 @@ fun ImagePreviewDialog(
                                 // 由于这是在 Item 内部，我们不能直接控制 Pager 的 userScrollEnabled
                                 // 但 ZoomableImage 内部的手势监听会消费触摸事件，从而自然阻止 Pager 滑动
                                 // 只要 pointerInput 的处理得当
+                            },
+                            onClick = {
+                                // 点击图片关闭预览
+                                triggerDismiss()
                             }
                         )
                     }

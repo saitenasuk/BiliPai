@@ -298,6 +298,23 @@ fun ElegantVideoCard(
             verticalAlignment = Alignment.Top
         ) {
             //  [HIG] 标题 - 15sp Medium, 行高 20sp
+            //  共享元素过渡 - 标题
+            var titleModifier = Modifier
+                .weight(1f)
+                .semantics { contentDescription = "视频标题: ${video.title}" }
+            
+            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    titleModifier = titleModifier.sharedBounds(
+                        sharedContentState = rememberSharedContentState(key = "video_title_${video.bvid}"),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        boundsTransform = { _, _ ->
+                            spring(dampingRatio = 0.8f, stiffness = 200f)
+                        }
+                    )
+                }
+            }
+
             Text(
                 text = video.title,
                 maxLines = 2,
@@ -309,9 +326,7 @@ fun ElegantVideoCard(
                     lineHeight = 20.sp,  // HIG 行高
                     color = MaterialTheme.colorScheme.onSurface
                 ),
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { contentDescription = "视频标题: ${video.title}" }
+                modifier = titleModifier
                     //  [交互优化] 标题区域：长按弹出菜单，点击跳转 (带按压反馈)
                     .pointerInput(onDismiss, onWatchLater) {
                         val hasLongPressMenu = onDismiss != null || onWatchLater != null
@@ -379,6 +394,24 @@ fun ElegantVideoCard(
             
             //  UP主头像（小圆形，官方风格）
             if (video.owner.face.isNotEmpty()) {
+                var avatarModifier = Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                
+                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        avatarModifier = avatarModifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ ->
+                                spring(dampingRatio = 0.8f, stiffness = 200f)
+                            },
+                            clipInOverlayDuringTransition = OverlayClip(CircleShape)
+                        )
+                    }
+                }
+
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(FormatUtils.fixImageUrl(video.owner.face))
@@ -389,15 +422,27 @@ fun ElegantVideoCard(
                         .memoryCacheKey("avatar_${video.owner.face.hashCode()}")
                         .build(),
                     contentDescription = null,
-                    modifier = Modifier
-                        .size(14.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = avatarModifier,
                     contentScale = ContentScale.Crop
                 )
             }
             
             //  [HIG] UP主名称 - 13sp footnote 标准
+            //  共享元素过渡 - UP主名称
+            var upNameModifier = Modifier.weight(1f, fill = false)
+            
+            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    upNameModifier = upNameModifier.sharedBounds(
+                        sharedContentState = rememberSharedContentState(key = "video_up_${video.bvid}"),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        boundsTransform = { _, _ ->
+                            spring(dampingRatio = 0.8f, stiffness = 200f)
+                        }
+                    )
+                }
+            }
+
             Text(
                 text = video.owner.name,
                 fontSize = 13.sp,  // HIG footnote 标准
@@ -405,7 +450,7 @@ fun ElegantVideoCard(
                 color = iOSSystemGray,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
+                modifier = upNameModifier
             )
             
             //  发布时间（搜索结果显示）
