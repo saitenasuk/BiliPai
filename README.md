@@ -440,13 +440,6 @@ cd BiliPai
 - ❌ 不得用于商业目的
 - ❌ 不得移除原作者信息
 
-## ☕ 打赏作者
-
-如果你觉得 BiliPai 让你的 B 站体验变得更好，欢迎请作者喝杯咖啡 ☕
-
-<p align="center">
-  <img src="docs/donate.jpg" alt="Donation" width="300">
-</p>
 
 ## ⭐ Star History
 
