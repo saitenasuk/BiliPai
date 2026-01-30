@@ -20,6 +20,13 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.AnalyticsHelper
@@ -82,6 +89,8 @@ fun SettingsScreen(
     var showPermissionDialog by remember { mutableStateOf(false) }
     // [新增] 目录选择对话框状态
     var showDirectoryPicker by remember { mutableStateOf(false) }
+    // [新增] 打赏对话框
+    var showDonateDialog by remember { mutableStateOf(false) }
     
     // Haze State for this screen
     val activeHazeState = mainHazeState ?: remember { dev.chrisbanes.haze.HazeState() }
@@ -268,6 +277,10 @@ fun SettingsScreen(
         )
     }
 
+    if (showDonateDialog) {
+        DonateDialog(onDismiss = { showDonateDialog = false })
+    }
+
     // Layout Switching
     Box(
         modifier = Modifier
@@ -301,7 +314,8 @@ fun SettingsScreen(
                 analyticsEnabled = analyticsEnabled,
                 pluginCount = PluginManager.getEnabledCount(),
                 versionName = com.android.purebilibili.BuildConfig.VERSION_NAME,
-                easterEggEnabled = easterEggEnabled
+                easterEggEnabled = easterEggEnabled,
+                onDonateClick = { showDonateDialog = true }
             )
         } else {
             MobileSettingsLayout(
@@ -342,7 +356,8 @@ fun SettingsScreen(
                             android.widget.Toast.LENGTH_SHORT
                         ).show()
                     }
-                }
+                },
+                onDonateClick = { showDonateDialog = true }
             )
         }
         
@@ -370,6 +385,7 @@ private fun MobileSettingsLayout(
     onTwitterClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
     onClearCacheClick: () -> Unit,
+    onDonateClick: () -> Unit,
     
     // Logic Callbacks
     onPrivacyModeChange: (Boolean) -> Unit,
@@ -433,7 +449,7 @@ private fun MobileSettingsLayout(
             }
             item { 
                 Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
-                    FollowAuthorSection(onTelegramClick, onTwitterClick)  
+                    FollowAuthorSection(onTelegramClick, onTwitterClick, onDonateClick)  
                 }
             }
             
@@ -520,6 +536,63 @@ private fun MobileSettingsLayout(
             }
             
             item { Spacer(modifier = Modifier.height(32.dp)) }
+        }
+    }
+}
+
+@Composable
+fun DonateDialog(onDismiss: () -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false, // Full screen
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f)),
+            contentAlignment = Alignment.Center
+        ) {
+            // Close Button (Top Left)
+            // Using statusBarsPadding to avoid overlap with system bars
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(top = 16.dp, start = 16.dp)
+            ) {
+                Icon(
+                    imageVector = CupertinoIcons.Filled.XmarkCircle,
+                    contentDescription = "Close",
+                    tint = Color.White,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+
+            // QR Code Container
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Image(
+                    painter = painterResource(id = com.android.purebilibili.R.drawable.author_qr),
+                    contentDescription = "Donate QR Code",
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Fit
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    "感谢您的支持！",
+                    color = Color.White.copy(alpha = 0.9f),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            }
         }
     }
 }

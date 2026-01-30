@@ -49,7 +49,8 @@ import com.android.purebilibili.core.ui.components.IOSDivider as SettingsDivider
 @Composable
 fun FollowAuthorSection(
     onTelegramClick: () -> Unit,
-    onTwitterClick: () -> Unit
+    onTwitterClick: () -> Unit,
+    onDonateClick: () -> Unit
 ) {
     SettingsGroup {
         SettingClickableItem(
@@ -68,6 +69,15 @@ fun FollowAuthorSection(
             onClick = onTwitterClick,
             iconTint = Color(0xFF1DA1F2),
             enableCopy = true
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
+            icon = CupertinoIcons.Filled.Heart,
+            title = "打赏作者",
+            value = "支持开发",
+            onClick = onDonateClick,
+            iconTint = Color(0xFFFF3B30),
+            enableCopy = false
         )
     }
 }
