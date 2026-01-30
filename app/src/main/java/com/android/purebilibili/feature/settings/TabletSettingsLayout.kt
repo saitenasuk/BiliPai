@@ -61,6 +61,7 @@ fun TabletSettingsLayout(
     onTwitterClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
     onClearCacheClick: () -> Unit,
+    onDonateClick: () -> Unit,
     
     // Logic Callbacks
     onPrivacyModeChange: (Boolean) -> Unit,
@@ -138,7 +139,8 @@ fun TabletSettingsLayout(
                 // Author Section in Sidebar
                 FollowAuthorSection(
                     onTelegramClick = onTelegramClick,
-                    onTwitterClick = onTwitterClick
+                    onTwitterClick = onTwitterClick,
+                    onDonateClick = onDonateClick
                 )
                 
                 Spacer(modifier = Modifier.height(24.dp))

@@ -347,7 +347,8 @@ fun FrostedBottomBar(
         }
 
     // [Fix] 确保指示器互斥显示的最终逻辑
-    val showGlassEffect = homeSettings.isLiquidGlassEnabled
+    // 当底栏停靠时，强制禁用液态玻璃（Liquid Glass），仅使用标准磨砂（Frosted Glass）
+    val showGlassEffect = homeSettings.isLiquidGlassEnabled && isFloating
     
     // 🟢 最外层容器
     Box(
@@ -419,15 +420,15 @@ fun FrostedBottomBar(
                             val isDark = isSystemInDarkTheme()
                             
                                     // [Visual Tuning] Glass Effect Parameters
-                                    // 1. Refraction: Stronger lens effect for "thick glass" feel
-                                    val dynamicRefractionAmount = 35f + (scrollValue * 0.02f).coerceIn(0f, 30f)
+                                    // 1. Refraction: Much stronger lens effect for "thick liquid" feel
+                                    val dynamicRefractionAmount = 65f + (scrollValue * 0.05f).coerceIn(0f, 40f)
                                     
                                     this.drawBackdrop(
                                         backdrop = backdrop,
                                         shape = { barShape },
                                         effects = {
                                             lens(
-                                                refractionHeight = 120f, // Wider lens area
+                                                refractionHeight = 200f, // Thicker glass lens
                                                 refractionAmount = dynamicRefractionAmount,
                                                 depthEffect = isFloating, // [Fix] Only show 3D rim/depth when floating, flat when docked
                                                 chromaticAberration = true // Enable for both themes for "premium" feel
@@ -435,10 +436,9 @@ fun FrostedBottomBar(
                                         },
                                         onDrawSurface = {
                                             // [Visual Tuning] Translucency & Readability
-                                            // Light Mode: Needs "Milky Glass" (White tint) to support BLACK text over potential dark video
-                                            // Dark Mode: Needs "Smoked Glass" (Dark tint) to support WHITE text over potential light video
-                                            val baseAlpha = if (isDark) 0.15f else 0.35f 
-                                            val scrollImpact = (scrollValue * 0.0005f).coerceIn(0f, 0.2f)
+                                            // Increased opacity to ensure text readability while maintaining "glass" look
+                                            val baseAlpha = if (isDark) 0.40f else 0.60f 
+                                            val scrollImpact = (scrollValue * 0.0005f).coerceIn(0f, 0.1f)
                                             val overlayAlpha = baseAlpha + scrollImpact
                                             
                                             drawRect(barColor.copy(alpha = overlayAlpha))
