@@ -16,6 +16,32 @@ data class FavFolderResponse(
     val data: FavFolderList? = null
 )
 
+// --- 收藏夹内容响应 (支持分页) ---
+@Serializable
+data class FavoriteResourceResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: FavoriteResourceData? = null
+)
+
+@Serializable
+data class FavoriteResourceData(
+    val info: FavoriteInfo? = null,
+    val medias: List<FavoriteData>? = null,
+    val has_more: Boolean = false,
+    val ttl: Int = 0
+)
+
+@Serializable
+data class FavoriteInfo(
+    val id: Long = 0,
+    val fid: Long = 0,
+    val mid: Long = 0,
+    val title: String = "",
+    val cover: String = "",
+    val media_count: Int = 0
+)
+
 @Serializable
 data class FavFolderList(
     val list: List<FavFolder>? = null
@@ -44,6 +70,7 @@ data class FavoriteData(
     fun toVideoItem(): VideoItem {
         return VideoItem(
             id = id,
+            aid = id, // [Fix] FavoriteData.id is equivalent to aid, required for removing favorite
             bvid = bvid,
             title = title,
             pic = cover,

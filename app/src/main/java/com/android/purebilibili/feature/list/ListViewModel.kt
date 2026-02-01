@@ -215,13 +215,14 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                     mediaId = allFolderIds[index], 
                     pn = 1
                 )
-                val items = listResult.getOrNull()?.map { it.toVideoItem() } ?: emptyList()
+                val resultData = listResult.getOrNull()
+                val items = resultData?.medias?.map { it.toVideoItem() } ?: emptyList()
                 
-                hasMore = items.size >= 20
+                hasMore = resultData?.has_more == true
                 _hasMoreState.value = hasMore
                 
                 _uiState.value = _uiState.value.copy(isLoading = false, items = items)
-                com.android.purebilibili.core.util.Logger.d("FavoriteVM", "📁 Switched to folder $index, loaded ${items.size} items")
+                com.android.purebilibili.core.util.Logger.d("FavoriteVM", "📁 Switched to folder $index, loaded ${items.size} items, hasMore=$hasMore")
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
@@ -261,12 +262,13 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
             mediaId = allFolderIds[0], 
             pn = 1
         )
-        val items = listResult.getOrNull()?.map { it.toVideoItem() } ?: emptyList()
+        val resultData = listResult.getOrNull()
+        val items = resultData?.medias?.map { it.toVideoItem() } ?: emptyList()
         
         com.android.purebilibili.core.util.Logger.d("FavoriteVM", " First folder loaded ${items.size} items")
         
-        // 判断是否还有更多
-        hasMore = items.size >= 20
+        // 判断是否还有更多 (使用 API 返回的 has_more)
+        hasMore = resultData?.has_more == true
         _hasMoreState.value = hasMore
         
         return items
@@ -288,17 +290,13 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                     mediaId = allFolderIds[currentFolderIndex], 
                     pn = currentPage
                 )
-                var newItems = listResult.getOrNull()?.map { it.toVideoItem() } ?: emptyList()
+                val resultData = listResult.getOrNull()
+                var newItems = resultData?.medias?.map { it.toVideoItem() } ?: emptyList()
                 
                 com.android.purebilibili.core.util.Logger.d("FavoriteVM", " Loaded ${newItems.size} items from folder $currentFolderIndex page $currentPage")
                 
-                //  如果当前收藏夹没有更多内容，尝试加载下一个收藏夹
-                //  [修复] 如果当前收藏夹没有更多内容，停止加载，不自动跳转下一个
-                if (newItems.isEmpty() || newItems.size < 20) {
-                    hasMore = false
-                } else {
-                    hasMore = true
-                }
+                // 使用 API 返回的 has_more
+                hasMore = resultData?.has_more == true
                 
                 _hasMoreState.value = hasMore
                 
@@ -318,6 +316,33 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
             } finally {
                 isLoadingMore = false
                 _isLoadingMoreState.value = false
+            }
+        }
+    }
+    //  [新增] 移除收藏
+    fun removeVideo(video: VideoItem) {
+        // aid 作为 resourceId
+        val resourceId = video.aid 
+        if (resourceId == 0L || allFolderIds.isEmpty()) return
+        
+        val currentMediaId = allFolderIds[currentFolderIndex]
+        
+        viewModelScope.launch {
+            try {
+                // Optimistic update: Remove locally immediately for better UX
+                val originalItems = _uiState.value.items
+                _uiState.value = _uiState.value.copy(
+                    items = originalItems.filter { it.id != video.id }
+                )
+                
+                val result = com.android.purebilibili.data.repository.FavoriteRepository.removeResource(currentMediaId, resourceId)
+                if (result.isFailure) {
+                    // Revert if failed
+                    _uiState.value = _uiState.value.copy(items = originalItems)
+                    _uiState.value = _uiState.value.copy(error = "取消收藏失败: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                 e.printStackTrace()
             }
         }
     }

@@ -636,4 +636,52 @@ class SpaceViewModel : ViewModel() {
             null
         }
     }
+    // ==========  关注 / 取关逻辑 ==========
+    
+    fun toggleFollow() {
+        val current = _uiState.value as? SpaceUiState.Success ?: return
+        val isFollowing = current.userInfo.isFollowed
+        val mid = current.userInfo.mid
+        
+        viewModelScope.launch {
+            // 1. 乐观更新 UI
+            val newUserInfo = current.userInfo.copy(isFollowed = !isFollowing)
+            _uiState.value = current.copy(userInfo = newUserInfo)
+            
+            try {
+                // 2. 调用 API
+                val act = if (isFollowing) 2 else 1  // 1=关注, 2=取关
+                val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
+                
+                // 使用 NetworkModule.api (BilibiliApi) 而不是 spaceApi
+                val response = NetworkModule.api.modifyRelation(
+                    fid = mid,
+                    act = act,
+                    csrf = csrf
+                )
+                
+                if (response.code != 0) {
+                    // 3. 失败回滚
+                    com.android.purebilibili.core.util.Logger.e("SpaceVM", "modifyRelation failed: ${response.message}")
+                    _uiState.value = current.copy(userInfo = current.userInfo) // Revert
+                    // 可以考虑发送一个一次性事件通知 UI 显示 Toast，这里简化处理
+                } else {
+                    com.android.purebilibili.core.util.Logger.d("SpaceVM", "modifyRelation success: act=$act")
+                    // 成功后，刷新一下关系统计数据（粉丝数等）
+                    val relationStat = fetchRelationStat(mid)
+                    if (relationStat != null) {
+                        val currentState = _uiState.value as? SpaceUiState.Success
+                        if (currentState != null) {
+                            _uiState.value = currentState.copy(relationStat = relationStat)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // 失败回滚
+                com.android.purebilibili.core.util.Logger.e("SpaceVM", "modifyRelation error: ${e.message}", e)
+                _uiState.value = current.copy(userInfo = current.userInfo) // Revert
+            }
+        }
+    }
+
 }

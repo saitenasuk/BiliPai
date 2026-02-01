@@ -136,7 +136,8 @@ fun SpaceScreen(
                         onSubTabSelected = { viewModel.selectSubTab(it) },
                         onViewAllClick = onViewAllClick,
                         // [Blur] Pass content padding to handle list top spacing
-                        contentPadding = padding
+                        contentPadding = padding,
+                        onFollowClick = { viewModel.toggleFollow() }
                     )
                 }
             }
@@ -156,7 +157,8 @@ private fun SpaceContent(
     onLoadMoreDynamic: () -> Unit,  //  加载更多动态
     onSubTabSelected: (SpaceSubTab) -> Unit,  // Uploads Sub-tab selection
     onViewAllClick: (String, Long, Long, String) -> Unit,
-    contentPadding: PaddingValues // [Blur] Receive padding from Scaffold
+    contentPadding: PaddingValues, // [Blur] Receive padding from Scaffold
+    onFollowClick: () -> Unit
 ) {
     val context = LocalContext.current
     //  当前选中的 Tab（目前只实现投稿页）
@@ -195,7 +197,8 @@ private fun SpaceContent(
             SpaceHeader(
                 userInfo = state.userInfo,
                 relationStat = state.relationStat,
-                upStat = state.upStat
+                upStat = state.upStat,
+                onFollowClick = onFollowClick
             )
         }
         
@@ -584,7 +587,8 @@ private fun SpaceContent(
 private fun SpaceHeader(
     userInfo: SpaceUserInfo,
     relationStat: RelationStatData?,
-    upStat: UpStatData?
+    upStat: UpStatData?,
+    onFollowClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -739,6 +743,29 @@ private fun SpaceHeader(
                         }
                     }
                 }
+            }
+
+            
+            // [新增] 关注按钮
+            Spacer(Modifier.width(12.dp))
+            val isFollowed = userInfo.isFollowed
+            Button(
+                onClick = onFollowClick,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isFollowed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+                    contentColor = if (isFollowed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier
+                    .height(32.dp)
+                    .padding(bottom = 8.dp) // 对齐底部
+            ) {
+                Text(
+                    text = if (isFollowed) "已关注" else "关注",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
         

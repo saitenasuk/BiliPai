@@ -74,6 +74,7 @@ fun ElegantVideoCard(
     isDataSaverActive: Boolean = false, // 🚀 [性能优化] 从父级传入，避免每个卡片重复计算
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
     onWatchLater: (() -> Unit)? = null,  //  [新增] 稍后再看回调
+    onUnfavorite: (() -> Unit)? = null,  //  [新增] 取消收藏回调
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
@@ -86,6 +87,8 @@ fun ElegantVideoCard(
     
     //  [新增] 长按删除菜单状态
     var showDismissMenu by remember { mutableStateOf(false) }
+    //  [新增] 确认对话框状态
+    var showUnfavoriteDialog by remember { mutableStateOf(false) }
     
     val coverUrl = remember(video.bvid) {
         FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic)
@@ -291,8 +294,8 @@ fun ElegantVideoCard(
                 ),
                 modifier = titleModifier
                     //  [交互优化] 标题区域：长按弹出菜单，点击跳转 (带按压反馈)
-                    .pointerInput(onDismiss, onWatchLater) {
-                        val hasLongPressMenu = onDismiss != null || onWatchLater != null
+                    .pointerInput(onDismiss, onWatchLater, onUnfavorite) {
+                        val hasLongPressMenu = onDismiss != null || onWatchLater != null || onUnfavorite != null
                         detectTapGestures(
                             onPress = {
                                 isPressed = true
@@ -315,25 +318,51 @@ fun ElegantVideoCard(
                     }
             )
 
-            //  [新增] 更多按钮 - 标题右侧
-            val hasMenu = onDismiss != null || onWatchLater != null
-            if (hasMenu) {
-                Box(
-                    modifier = Modifier
-                        .padding(start = 4.dp, top = 2.dp) // 微调位置对齐第一行文字
-                        .size(20.dp)
-                        .clickable { 
-                            haptic(HapticType.LIGHT)
-                            showDismissMenu = true 
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "⋮",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            //  [新增] 更多按钮 / 取消收藏按钮
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 如果提供了取消收藏回调，直接显示取消按钮 (优先于更多菜单显示，或者并存)
+                if (onUnfavorite != null) {
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 4.dp, top = 2.dp)
+                            .size(24.dp)
+                            .clickable { 
+                                haptic(HapticType.MEDIUM)
+                                // onUnfavorite.invoke() -> 改为弹窗确认
+                                showUnfavoriteDialog = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = CupertinoIcons.Filled.HeartSlash,
+                            contentDescription = "取消收藏",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                val hasMenu = onDismiss != null || onWatchLater != null
+                if (hasMenu) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 4.dp, top = 2.dp) // 微调位置对齐第一行文字
+                            .size(20.dp)
+                            .clickable { 
+                                haptic(HapticType.LIGHT)
+                                showDismissMenu = true 
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "⋮",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -508,6 +537,30 @@ fun ElegantVideoCard(
         }
     }
     
+    
+    if (showUnfavoriteDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnfavoriteDialog = false },
+            title = { Text("取消收藏") },
+            text = { Text("确定要将此视频从收藏夹中移除吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showUnfavoriteDialog = false
+                        onUnfavorite?.invoke()
+                    }
+                ) {
+                    Text("移除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnfavoriteDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     //  [新增] 长按操作菜单
     DropdownMenu(
         expanded = showDismissMenu,
@@ -525,6 +578,24 @@ fun ElegantVideoCard(
                 onClick = {
                     showDismissMenu = false
                     onWatchLater.invoke()
+                }
+            )
+        }
+        
+        
+        // 取消收藏 (仅在收藏页显示)
+        if (onUnfavorite != null) {
+             DropdownMenuItem(
+                text = { 
+                    Text(
+                        "💔 取消收藏",
+                        color = MaterialTheme.colorScheme.error  // 使用错误色强调删除操作
+                    ) 
+                },
+                onClick = {
+                    showDismissMenu = false
+                    // onUnfavorite.invoke() -> 改为弹窗确认
+                    showUnfavoriteDialog = true
                 }
             )
         }

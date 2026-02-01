@@ -23,14 +23,32 @@ object FavoriteRepository {
         }
     }
 
-    suspend fun getFavoriteList(mediaId: Long, pn: Int): Result<List<FavoriteData>> {
+    suspend fun getFavoriteList(mediaId: Long, pn: Int): Result<FavoriteResourceData> {
         return withContext(Dispatchers.IO) {
             try {
                 // pn defaults to 1 if not passed, but here we pass it
                 val response = api.getFavoriteList(mediaId = mediaId, pn = pn)
+                if (response.code == 0 && response.data != null) {
+                    Result.success(response.data)
+                } else {
+                    Result.failure(Exception(response.message))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun removeResource(mediaId: Long, resourceId: Long): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
+                // type=2 代表视频
+                val resourceStr = "$resourceId:2"
+                val response = api.batchDelFavResource(mediaId, resourceStr, csrf)
+                
                 if (response.code == 0) {
-                    // 收藏夹内容通常在 medias 字段
-                    Result.success(response.data?.medias ?: emptyList())
+                    Result.success(true)
                 } else {
                     Result.failure(Exception(response.message))
                 }

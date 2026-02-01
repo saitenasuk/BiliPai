@@ -308,7 +308,10 @@ fun CommonListScreen(
                                 index = index,
                                 animationEnabled = true,
                                 transitionEnabled = true, // 启用共享元素过渡
-                                onClick = { bvid, cid -> onVideoClick(bvid, cid) }
+                                onClick = { bvid, cid -> onVideoClick(bvid, cid) },
+                                onUnfavorite = if (favoriteViewModel != null) { 
+                                    { favoriteViewModel.removeVideo(video) } 
+                                } else null
                             )
                         }
                         
