@@ -164,6 +164,7 @@ fun HomeCategoryPageContent(
                                     animationEnabled = cardAnimationEnabled,
                                     transitionEnabled = cardTransitionEnabled,
                                     onDismiss = { onDismissVideo(video.bvid) },
+                                    onLongClick = { longPressCallback(video) }, // [修复] 传递长按回调
                                     onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
                                 )
                             }

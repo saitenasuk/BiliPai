@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.Fullscreen
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.zIndex
 
 /**
  * iOS 3D Touch style Preview Dialog
@@ -126,6 +127,7 @@ fun VideoPreviewDialog(
                     .clickable(enabled = false) {}, // Prevent clicks from passing through to background
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.fillMaxWidth()

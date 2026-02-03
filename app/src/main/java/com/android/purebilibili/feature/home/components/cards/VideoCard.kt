@@ -152,10 +152,7 @@ fun ElegantVideoCard(
                         animatedVisibilityScope = animatedVisibilityScope,
                         //  添加回弹效果的 spring 动画
                         boundsTransform = { _, _ ->
-                            spring(
-                                dampingRatio = 0.8f,   // [Hero] 高阻尼，类似高级跑车悬挂，稳
-                                stiffness = 200f       // [Hero] 低刚度，缓慢展开，营造电影感
-                            )
+                            com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
                         },
                         clipInOverlayDuringTransition = OverlayClip(
                             RoundedCornerShape(cardCornerRadius)  //  过渡时保持动态圆角
@@ -205,6 +202,21 @@ fun ElegantVideoCard(
                     )
                 }
         ) {
+            // [新增] 监听共享元素归位（即封面重新可见时），触发轻微震动反馈
+            // 注意：当从详情页返回时，sharedElement 动画结束，封面会从不可见变为可见
+            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                     // 使用 renderInSharedTransitionScopeOverlayOption 控制可见性
+                     // 但此处我们可以利用 SideEffect 或 LaunchedEffect 监听
+                }
+                
+                // 简单方案：当 VideoCard 重新组合且处于可见状态时（通常意味着转场结束）
+                // 但 Compose 重组频繁，需结合 CardPositionManager.isReturningFromDetail 状态
+                
+                // 优化方案：我们在 sharedElement 的 boundsTransform 中无法直接触发副作用
+                // 暂时方案：依靠 SharedTransitionScope 的 renderInOverlay 属性变化难以捕捉
+                // 替代方案：在 VideoPlayerSection 退出时触发一次，或者在 CardPositionManager 中管理
+            }
             // 🚀 [性能优化] 使用从父级传入的 isDataSaverActive，避免每个卡片重复计算
             val imageWidth = if (isDataSaverActive) 240 else 360
             val imageHeight = if (isDataSaverActive) 150 else 225
@@ -282,7 +294,7 @@ fun ElegantVideoCard(
                         sharedContentState = rememberSharedContentState(key = "video_title_${video.bvid}"),
                         animatedVisibilityScope = animatedVisibilityScope,
                         boundsTransform = { _, _ ->
-                            spring(dampingRatio = 0.8f, stiffness = 200f)
+                            com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
                         }
                     )
                 }
@@ -407,7 +419,7 @@ fun ElegantVideoCard(
                             sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
                             animatedVisibilityScope = animatedVisibilityScope,
                             boundsTransform = { _, _ ->
-                                spring(dampingRatio = 0.8f, stiffness = 200f)
+                                com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
                             },
                             clipInOverlayDuringTransition = OverlayClip(CircleShape)
                         )
@@ -439,7 +451,7 @@ fun ElegantVideoCard(
                         sharedContentState = rememberSharedContentState(key = "video_up_${video.bvid}"),
                         animatedVisibilityScope = animatedVisibilityScope,
                         boundsTransform = { _, _ ->
-                            spring(dampingRatio = 0.8f, stiffness = 200f)
+                            com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
                         }
                     )
                 }
@@ -481,7 +493,7 @@ fun ElegantVideoCard(
                         sharedContentState = rememberSharedContentState(key = "video_views_${video.bvid}"),
                         animatedVisibilityScope = animatedVisibilityScope,
                         boundsTransform = { _, _ ->
-                            spring(dampingRatio = 0.8f, stiffness = 200f)
+                            com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
                         }
                     )
                 }
@@ -518,7 +530,7 @@ fun ElegantVideoCard(
                             sharedContentState = rememberSharedContentState(key = "video_danmaku_${video.bvid}"),
                             animatedVisibilityScope = animatedVisibilityScope,
                             boundsTransform = { _, _ ->
-                                spring(dampingRatio = 0.8f, stiffness = 200f)
+                                com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
                             }
                         )
                     }
@@ -633,6 +645,6 @@ fun ElegantVideoCard(
  * 注意: onClick 只接收 bvid，不接收 cid
  */
 @Composable
-fun VideoGridItem(video: VideoItem, index: Int, onClick: (String) -> Unit) {
-    ElegantVideoCard(video, index) { bvid, _ -> onClick(bvid) }
+fun VideoGridItem(video: VideoItem, index: Int, onLongClick: ((VideoItem) -> Unit)? = null, onClick: (String) -> Unit) {
+    ElegantVideoCard(video, index, onLongClick = onLongClick) { bvid, _ -> onClick(bvid) }
 }

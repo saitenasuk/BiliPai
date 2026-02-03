@@ -716,7 +716,10 @@ private fun SpaceHeader(
                         text = userInfo.name,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     
                     Spacer(Modifier.width(6.dp))
@@ -770,7 +773,8 @@ private fun SpaceHeader(
                                 fontSize = 9.sp,
                                 color = Color.White,
                                 fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                softWrap = false
                             )
                         }
                     }

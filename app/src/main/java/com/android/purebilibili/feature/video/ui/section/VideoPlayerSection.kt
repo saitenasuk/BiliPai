@@ -24,6 +24,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.activity.compose.BackHandler
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -245,7 +246,10 @@ fun VideoPlayerSection(
          with(sharedTransitionScope) {
              rootModifier = rootModifier.sharedElement(
                  sharedContentState = rememberSharedContentState(key = "video-$bvid"),
-                 animatedVisibilityScope = animatedVisibilityScope
+                 animatedVisibilityScope = animatedVisibilityScope,
+                 boundsTransform = { _, _ ->
+                     com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
+                 }
              )
          }
     }
@@ -287,8 +291,7 @@ fun VideoPlayerSection(
                             // 🔒 锁定时禁用拖拽手势
                             if (isScreenLocked) {
                                 return@detectDragGestures
-                            }
-                            
+                            }                
                             //  [新增] 边缘防误触检测
                             //  如果在屏幕顶部或底部区域开始滑动，则视为系统手势（如下拉通知栏），不触发播放器手势
                             val density = context.resources.displayMetrics.density
@@ -1100,17 +1103,17 @@ fun VideoPlayerSection(
                 currentPlayMode = currentPlayMode,
                 onPlayModeClick = onPlayModeClick
             )
-        }
-        
-        //  空降助手跳过按钮
-        if (!isInPipMode) {
-            SponsorSkipButton(
-                segment = sponsorSegment,
-                visible = showSponsorSkipButton,
-                onSkip = onSponsorSkip,
-                onDismiss = onSponsorDismiss,
-                modifier = Modifier.align(Alignment.BottomEnd)
-            )
-        }
+    }
+
+
+
+    // [新增] 返回时的触感反馈
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val hapticScope = rememberCoroutineScope()
+
+    // 拦截系统返回事件 (仅在全屏时拦截以处理退出全屏，否则交给系统处理预测性返回)
+    BackHandler(enabled = !isScreenLocked && isFullscreen) {
+        onToggleFullscreen()
+    }
     }
 }

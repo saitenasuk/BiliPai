@@ -62,6 +62,7 @@ fun StoryVideoCard(
     animationEnabled: Boolean = true,  //  卡片动画开关
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
+    onLongClick: ((VideoItem) -> Unit)? = null, // [修复] 长按预览回调
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
@@ -126,12 +127,18 @@ fun StoryVideoCard(
             .onGloballyPositioned { coordinates ->
                 cardBounds = coordinates.boundsInRoot()
             }
-            .pointerInput(onDismiss) {
-                 if (onDismiss != null) {
+            .pointerInput(onDismiss, onLongClick) {
+                 val hasLongPressAction = onDismiss != null || onLongClick != null
+                 if (hasLongPressAction) {
                      detectTapGestures(
                          onLongPress = {
-                             haptic(HapticType.HEAVY)
-                             showDismissMenu = true
+                             if (onLongClick != null) {
+                                 haptic(HapticType.HEAVY)
+                                 onLongClick(video)
+                             } else if (onDismiss != null) {
+                                 haptic(HapticType.HEAVY)
+                                 showDismissMenu = true
+                             }
                          },
                          onTap = {
                              cardBounds?.let { bounds ->
@@ -146,7 +153,7 @@ fun StoryVideoCard(
                  }
             }
             .then(
-                 if (onDismiss == null) {
+                 if (onDismiss == null && onLongClick == null) {
                      Modifier.iOSCardTapEffect(
                          pressScale = 0.97f,
                          pressTranslationY = 10f,
