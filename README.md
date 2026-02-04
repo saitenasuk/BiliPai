@@ -36,7 +36,6 @@
   <img src="docs/images/screenshot_preview_4.png" alt="预览图 4" height="500">
   <img src="docs/images/screenshot_preview_5.png" alt="预览图 5" height="500">
 </p>
----
 
 ## ✨ 功能亮点
 
