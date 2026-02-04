@@ -1056,6 +1056,13 @@ fun VideoDetailScreen(
                                                 enter = fadeIn(tween(300))
                                             ) {
                                                 Box(modifier = Modifier.fillMaxSize()) {
+                                                    // [新增] 计算播放器是否已折叠 (容差 10px)
+                                                    val isPlayerCollapsed = if (swipeHidePlayerEnabled) {
+                                                        playerHeightOffsetPx <= -videoHeightPx + 10f
+                                                    } else {
+                                                        false
+                                                    }
+
                                                     VideoContentSection(
                                                         info = success.info,
                                                         relatedVideos = success.related,
@@ -1125,7 +1132,10 @@ fun VideoDetailScreen(
                                                         onDismissFavoriteFolderDialog = { viewModel.dismissFavoriteFolderDialog() },
                                                         onCreateFavoriteFolder = { title, intro, isPrivate -> 
                                                             viewModel.createFavoriteFolder(title, intro, isPrivate) 
-                                                        }
+                                                        },
+                                                        // [新增] 恢复播放器 (音频模式 -> 视频模式)
+                                                        isPlayerCollapsed = isPlayerCollapsed,
+                                                        onRestorePlayer = { playerHeightOffsetPx = 0f }
                                                     )
 
                                                     // 底部输入栏 (覆盖在内容之上)

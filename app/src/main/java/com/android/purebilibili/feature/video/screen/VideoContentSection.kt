@@ -2,6 +2,7 @@
 package com.android.purebilibili.feature.video.screen
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -117,7 +118,11 @@ fun VideoContentSection(
     isFavoriteFoldersLoading: Boolean = false,
     onFavoriteFolderClick: (com.android.purebilibili.data.model.response.FavFolder) -> Unit = {},
     onDismissFavoriteFolderDialog: () -> Unit = {},
-    onCreateFavoriteFolder: (String, String, Boolean) -> Unit = { _, _, _ -> }
+
+    onCreateFavoriteFolder: (String, String, Boolean) -> Unit = { _, _, _ -> },
+    // [新增] 恢复播放器 (音频模式 -> 视频模式)
+    isPlayerCollapsed: Boolean = false,
+    onRestorePlayer: () -> Unit = {}
 ) {
     val tabs = listOf("简介", "评论 $replyCount")
     val pagerState = rememberPagerState(pageCount = { tabs.size })
@@ -187,7 +192,9 @@ fun VideoContentSection(
             selectedTabIndex = pagerState.currentPage,
             onTabSelected = onTabSelected,
             onDanmakuSendClick = onDanmakuSendClick,
-            modifier = Modifier
+            modifier = Modifier,
+            isPlayerCollapsed = isPlayerCollapsed,
+            onRestorePlayer = onRestorePlayer
         )
 
         // 内容区域
@@ -585,7 +592,9 @@ private fun VideoContentTabBar(
     selectedTabIndex: Int,
     onTabSelected: (Int) -> Unit,
     onDanmakuSendClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPlayerCollapsed: Boolean = false,
+    onRestorePlayer: () -> Unit = {}
 ) {
     Column(modifier = modifier) {
         Row(
@@ -601,23 +610,23 @@ private fun VideoContentTabBar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .clickable { onTabSelected(index) }
-                        .padding(vertical = 6.dp, horizontal = 6.dp)
+                        .padding(vertical = 10.dp, horizontal = 12.dp) // Increased padding
                 ) {
                     Text(
                         text = title,
-                        fontSize = 14.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = if (isSelected) 17.sp else 16.sp, // Increased font size
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, // Slightly bolder unselected
                         color = if (isSelected) MaterialTheme.colorScheme.primary 
-                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                               else MaterialTheme.colorScheme.onSurface, // More visible unselected color
                         maxLines = 1,
                         softWrap = false
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Box(
                         modifier = Modifier
-                            .width(24.dp)
-                            .height(2.dp)
-                            .clip(RoundedCornerShape(1.dp))
+                            .width( if (isSelected) 32.dp else 0.dp) // Wider indicator, hide when unselected
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(1.5.dp))
                             .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
                     )
                 }
@@ -627,6 +636,37 @@ private fun VideoContentTabBar(
             }
             
             Spacer(modifier = Modifier.weight(1f))
+
+            // [新增] 恢复画面按钮 (仅在播放器折叠时显示)
+            AnimatedVisibility(
+                visible = isPlayerCollapsed,
+                enter = fadeIn() + expandHorizontally(),
+                exit = fadeOut() + shrinkHorizontally()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { onRestorePlayer() }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.Play, // 或 Tv
+                        contentDescription = "恢复画面",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "恢复画面",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
             
             // 发弹幕入口
             Row(

@@ -170,7 +170,7 @@ object VideoRepository {
             val subKey = wbiImg.sub_url.substringAfterLast("/").substringBefore(".")
 
             val params = mapOf(
-                "ps" to "10", "fresh_type" to "3", "fresh_idx" to idx.toString(),
+                "ps" to "30", "fresh_type" to "3", "fresh_idx" to idx.toString(),
                 "feed_version" to System.currentTimeMillis().toString(), "y_num" to idx.toString()
             )
             val signedParams = WbiUtils.sign(params, imgKey, subKey)
@@ -210,6 +210,7 @@ object VideoRepository {
                 "column" to "4",  // 4列布局
                 "flush" to "5",   // 刷新间隔
                 "autoplay_card" to "11",
+                "ps" to "30",     //  [适配] 增加单次获取数量，适配平板大屏 (默认10太少)
                 "access_key" to accessToken,
                 "appkey" to AppSignUtils.TV_APP_KEY,
                 "ts" to AppSignUtils.getTimestamp().toString(),
@@ -246,7 +247,7 @@ object VideoRepository {
     //  [新增] 热门视频
     suspend fun getPopularVideos(page: Int = 1): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
         try {
-            val resp = api.getPopularVideos(pn = page, ps = 20)
+            val resp = api.getPopularVideos(pn = page, ps = 30)
             val list = resp.data?.list?.map { it.toVideoItem() }?.filter { it.bvid.isNotEmpty() } ?: emptyList()
             Result.success(list)
         } catch (e: Exception) {

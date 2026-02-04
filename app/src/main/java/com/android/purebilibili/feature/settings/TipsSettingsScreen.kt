@@ -78,18 +78,23 @@ private fun TipsSection() {
             .background(MaterialTheme.colorScheme.surface)
     ) {
         TipItem(
-            titile = "双击快速回顶",
-            content = "在首页，双击底部的 \"首页\" 图标，或双击左下角的 \"推荐\" Tab，均可快速回到列表顶部。"
+            titile = "1. 摸鱼神器：下滑隐身",
+            content = "在视频详情页，手指轻轻往下一滑，播放器瞬间消失！\n此时视频声音继续播放，老板来了也不怕~"
         )
         TipDivider()
         TipItem(
-            titile = "长按预览视频",
-            content = "长按视频卡片，可以快速预览封面大图，并进行 \"稍后再看\" 或 \"不感兴趣\" 操作。"
+            titile = "2. 咻的一下回顶部",
+            content = "首页刷太深回不去？双击底部的那个小房子图标，或者顶部的“推荐”二字，嗖的一下就回家啦！"
         )
         TipDivider()
         TipItem(
-            titile = "左右滑动切换",
-            content = "在首页支持左右滑动快速切换不同的频道分区。"
+            titile = "3. 长按有惊喜",
+            content = "看到感兴趣的封面不要犹豫，长按它！\n超大图预览马上奉上，还能顺手点个“稍后再看”，简直是囤片党福音。"
+        )
+        TipDivider()
+        TipItem(
+            titile = "4. 左右横跳",
+            content = "首页不仅能上下刷，还能左右滑哦~\n在不同的频道分区之间反复横跳，总有一个适合你！"
         )
     }
 }

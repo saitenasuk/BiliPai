@@ -343,17 +343,7 @@ fun SearchScreen(
                             contentPadding = PaddingValues(top = contentTopPadding + 16.dp, bottom = 16.dp, start = 24.dp, end = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(24.dp)
                         ) {
-                            item {
-                                SearchDiscoverySection(
-                                    title = state.discoverTitle,
-                                    list = state.discoverList,
-                                    onItemClick = {
-                                        viewModel.search(it)
-                                        keyboardController?.hide()
-                                    },
-                                    onRefresh = { /* TODO: Refresh logic */ }
-                                )
-                            }
+
                             
                             item {
                                 SearchHistorySection(
@@ -396,17 +386,7 @@ fun SearchScreen(
                         state = historyListState,
                         contentPadding = PaddingValues(top = contentTopPadding + 16.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
                     ) {
-                        item {
-                            SearchDiscoverySection(
-                                title = state.discoverTitle,
-                                list = state.discoverList,
-                                onItemClick = {
-                                    viewModel.search(it)
-                                    keyboardController?.hide()
-                                },
-                                onRefresh = { /* TODO: Refresh logic */ }
-                            )
-                        }
+
 
                         item {
                             SearchHotSection(
