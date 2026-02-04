@@ -63,11 +63,12 @@ fun FrostedSideBar(
             .fillMaxHeight()
             .then(
                 if (hazeState != null) {
-                    Modifier.unifiedBlur(hazeState)
+                    Modifier.unifiedBlur(hazeState, shape = androidx.compose.ui.graphics.RectangleShape)
                 } else {
                     Modifier.background(MaterialTheme.colorScheme.surface)
                 }
             ),
+        shape = androidx.compose.ui.graphics.RectangleShape,
         color = if (hazeState != null) {
             MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha)
         } else {

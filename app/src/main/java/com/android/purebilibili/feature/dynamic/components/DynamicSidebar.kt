@@ -84,14 +84,14 @@ fun DynamicSidebar(
         modifier = modifier
             .width(animatedWidth.dp)
             .fillMaxHeight()
-            .clip(RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp))
+            .clip(androidx.compose.ui.graphics.RectangleShape) // [修复] 直角
             .background(
                 MaterialTheme.colorScheme.surface // 纯白背景，减少割裂感
             )
             .border(
                 width = 0.5.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
+                shape = androidx.compose.ui.graphics.RectangleShape // [修复] 直角
             )
     ) {
         // 内容层 - 使用 Box 重新组织布局以支持模糊

@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.store.SettingsManager
+import androidx.compose.ui.draw.clip
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 
@@ -23,7 +24,8 @@ import dev.chrisbanes.haze.hazeEffect
 @Composable
 fun Modifier.unifiedBlur(
     hazeState: HazeState,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    shape: androidx.compose.ui.graphics.Shape? = null
 ): Modifier = composed {
     if (!enabled) return@composed this
     
@@ -36,8 +38,13 @@ fun Modifier.unifiedBlur(
     // 根据用户选择获取对应的模糊样式
     val blurStyle = BlurStyles.getBlurStyle(blurIntensity)
     
-    //  [修复] 使用正确的 Haze API: hazeEffect 替代 hazeChild
-    this.hazeEffect(
+    //  [修复] HazeEffect 不支持 shape 参数，需使用 clip 修饰符
+    //  仅当提供了 shape 时才应用 clip，避免破坏现有圆角组件 (如 BottomBar)
+    if (shape != null) {
+        this.clip(shape)
+    } else {
+        this
+    }.hazeEffect(
         state = hazeState,
         style = blurStyle
     )

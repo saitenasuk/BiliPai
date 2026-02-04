@@ -527,9 +527,11 @@ fun AppNavigation(
                 onFavoriteClick = { navController.navigate(ScreenRoutes.Favorite.route) },
                 onFollowingClick = { mid -> navController.navigate(ScreenRoutes.Following.createRoute(mid)) },
                 onDownloadClick = { navController.navigate(ScreenRoutes.DownloadList.route) },
-                onWatchLaterClick = { navController.navigate(ScreenRoutes.WatchLater.route) }
+                onWatchLaterClick = { navController.navigate(ScreenRoutes.WatchLater.route) },
+                onInboxClick = { navController.navigate(ScreenRoutes.Inbox.route) }  //  [新增] 私信入口
             )
         }
+
 
         // --- 4. 历史记录 ---
         composable(
@@ -1084,6 +1086,45 @@ fun AppNavigation(
                 name = name,
                 onBack = { navController.popBackStack() },
                 onVideoClick = { bvid, cid, cover -> navigateToVideo(bvid, cid, cover) }
+            )
+        }
+        
+        // --- [新增] 私信收件箱 ---
+        composable(
+            route = ScreenRoutes.Inbox.route,
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) {
+            com.android.purebilibili.feature.message.InboxScreen(
+                onBack = { navController.popBackStack() },
+                onSessionClick = { talkerId, sessionType, userName ->
+                    navController.navigate(ScreenRoutes.Chat.createRoute(talkerId, sessionType, userName))
+                }
+            )
+        }
+        
+        // --- [新增] 私信聊天详情 ---
+        composable(
+            route = ScreenRoutes.Chat.route,
+            arguments = listOf(
+                navArgument("talkerId") { type = NavType.LongType },
+                navArgument("sessionType") { type = NavType.IntType },
+                navArgument("name") { type = NavType.StringType; defaultValue = "" }
+            ),
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) { backStackEntry ->
+            val talkerId = backStackEntry.arguments?.getLong("talkerId") ?: 0L
+            val sessionType = backStackEntry.arguments?.getInt("sessionType") ?: 1
+            val userName = Uri.decode(backStackEntry.arguments?.getString("name") ?: "用户$talkerId")
+            com.android.purebilibili.feature.message.ChatScreen(
+                talkerId = talkerId,
+                sessionType = sessionType,
+                userName = userName,
+                onBack = { navController.popBackStack() },
+                onNavigateToVideo = { bvid ->
+                    navController.navigate(ScreenRoutes.VideoPlayer.createRoute(bvid))
+                }
             )
         }
         } // End of NavHost

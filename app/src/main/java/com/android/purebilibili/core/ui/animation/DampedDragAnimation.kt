@@ -183,13 +183,14 @@ fun rememberDampedDragAnimationState(
     onIndexChanged: (Int) -> Unit
 ): DampedDragAnimationState {
     val scope = rememberCoroutineScope()
+    val currentOnIndexChanged by rememberUpdatedState(onIndexChanged)
     
     return remember(itemCount) {
         DampedDragAnimationState(
             initialIndex = initialIndex,
             itemCount = itemCount,
             scope = scope,
-            onIndexChanged = onIndexChanged
+            onIndexChanged = { currentOnIndexChanged(it) }
         )
     }
 }

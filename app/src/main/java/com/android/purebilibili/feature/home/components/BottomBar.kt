@@ -246,13 +246,18 @@ fun FrostedBottomBar(
         }
         
         val rowPadding = 20.dp
-        val itemCount = visibleItems.size
+        
+        // [平板适配] 侧边栏按钮也算作一个 Item，确保指示器宽度的计算与实际渲染一致
+        // 否则会导致指示器计算出的宽度偏大，从而产生偏移
+        val sidebarCount = if (isTablet && onToggleSidebar != null) 1 else 0
+        val itemCount = visibleItems.size + sidebarCount
+        
         // itemWidth calculation
         val contentWidth = availableWidth - (rowPadding * 2)
+        
         // [平板适配] 优化底栏宽度：根据图标数量自适应，避免过度拉伸
         // 假设每个图标最佳宽度约 80-100dp，按 88dp 计算较为紧凑且适中
-        val sidebarCount = if (isTablet && onToggleSidebar != null) 1 else 0
-        val optimalWidth = ((visibleItems.size + sidebarCount) * 88).dp
+        val optimalWidth = (itemCount * 88).dp
         
         // 限制最大宽度 (平板适配)
         // 使用 min(640.dp, optimalWidth) 确保不超宽也不过窄
@@ -271,6 +276,9 @@ fun FrostedBottomBar(
             onIndexChanged = { index -> 
                 if (index in visibleItems.indices) {
                     onItemClick(visibleItems[index])
+                } else if (isTablet && onToggleSidebar != null && index == visibleItems.size) {
+                    // [Feature] Slide to trigger sidebar
+                    onToggleSidebar()
                 }
             }
         )
@@ -381,7 +389,7 @@ fun FrostedBottomBar(
                 .then(
                     if (isFloating) {
                          Modifier
-                            .widthIn(max = 640.dp)
+                            .widthIn(max = targetMaxWidth)
                             .shadow(8.dp, barShape, ambientColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                             .height(floatingHeight)
                     } else {

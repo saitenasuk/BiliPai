@@ -905,7 +905,11 @@ fun HomeScreen(
                                      verticalArrangement = Arrangement.spacedBy(10.dp),
                                      modifier = Modifier.fillMaxSize()
                                  ) {
-                                     items(10) { index -> VideoCardSkeleton(index = index) }
+                                     // [Fix] Dynamic skeleton count to fill tablet screens (at least 5 rows)
+                                     val skeletonItemCount = gridColumns * 5
+                                     // [Fix] Use modulo to prevent excessive delay for large item counts on tablet
+                                     // Cap the animation wave to ~10 items (approx 800ms max delay) to ensure visibility
+                                     items(skeletonItemCount) { index -> VideoCardSkeleton(index = index % 10) }
                                  }
                              } else if (categoryState.error != null && categoryState.videos.isEmpty()) {
                                  // Error State per page

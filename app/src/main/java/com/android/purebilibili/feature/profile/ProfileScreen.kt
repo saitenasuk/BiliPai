@@ -91,7 +91,8 @@ fun ProfileScreen(
     onFavoriteClick: () -> Unit,
     onFollowingClick: (Long) -> Unit = {},  //  关注列表点击
     onDownloadClick: () -> Unit = {},  //  离线缓存点击
-    onWatchLaterClick: () -> Unit = {} // 稍后再看点击
+    onWatchLaterClick: () -> Unit = {}, // 稍后再看点击
+    onInboxClick: () -> Unit = {}  //  [新增] 私信入口点击
     // [注意] 移除了 globalHazeState - 双 hazeSource 模式与 Haze 库冲突
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -180,6 +181,7 @@ fun ProfileScreen(
                     onFollowingClick = { onGoToLogin() },
                     onDownloadClick = onGoToLogin,
                     onWatchLaterClick = onGoToLogin,
+                    onInboxClick = onGoToLogin,  //  [新增] 游客点击需登录
                     scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(),
                     onBack = onBack,
                     onSettingsClick = onSettingsClick,
@@ -330,6 +332,7 @@ fun ProfileScreen(
                             onFollowingClick = { onFollowingClick(currentUiState.user.mid) },
                             onDownloadClick = onDownloadClick,
                             onWatchLaterClick = onWatchLaterClick,
+                            onInboxClick = onInboxClick,  //  [新增] 私信入口
                             // [Immersive] Pass ScrollBehavior and Navigation Actions
                             scrollBehavior = scrollBehavior,
                             onBack = onBack,
@@ -543,6 +546,7 @@ fun MobileProfileContent(
     onFollowingClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
+    onInboxClick: () -> Unit = {},  //  [新增] 私信入口
     // [New] Params
     scrollBehavior: TopAppBarScrollBehavior,
     onBack: () -> Unit,
@@ -781,6 +785,7 @@ fun MobileProfileContent(
                     onFavoriteClick = onFavoriteClick, 
                     onDownloadClick = onDownloadClick, 
                     onWatchLaterClick = onWatchLaterClick,
+                    onInboxClick = onInboxClick,  //  [新增]
                     onLogout = onLogout,
                     containerColor = if (isImmersive) glassContainerColor else MaterialTheme.colorScheme.surface,
                     contentColor = if (isImmersive) glassContentColor else MaterialTheme.colorScheme.onSurface,
@@ -1093,6 +1098,7 @@ fun ServicesSection(
     onFavoriteClick: () -> Unit,
     onDownloadClick: () -> Unit = {},
     onWatchLaterClick: () -> Unit = {},
+    onInboxClick: () -> Unit = {},  //  [新增] 私信入口
     onLogout: () -> Unit = {},
     containerColor: Color = MaterialTheme.colorScheme.surface,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
@@ -1106,7 +1112,8 @@ fun ServicesSection(
             Triple("离线缓存", CupertinoIcons.Default.ArrowDownCircle, onDownloadClick),
             Triple("历史记录", CupertinoIcons.Default.Clock, onHistoryClick),
             Triple("我的收藏", CupertinoIcons.Default.Bookmark, onFavoriteClick),
-            Triple("稍后再看", CupertinoIcons.Default.Bookmark, onWatchLaterClick)
+            Triple("稍后再看", CupertinoIcons.Default.Bookmark, onWatchLaterClick),
+            Triple("我的私信", CupertinoIcons.Default.Envelope, onInboxClick)  //  [新增]
         )
         
         // Simple Grid implementation since LazyVerticalGrid might be overkill inside a Column if not scrolling?
@@ -1190,6 +1197,13 @@ fun ServicesSection(
                 title = "稍后再看",
                 onClick = onWatchLaterClick,
                 iconTint = iOSGreen,
+                textColor = contentColor
+            )
+            IOSClickableItem(
+                icon = CupertinoIcons.Default.Envelope,
+                title = "我的私信",
+                onClick = onInboxClick,
+                iconTint = com.android.purebilibili.core.theme.iOSPink,  //  粉色图标
                 textColor = contentColor
             )
             
