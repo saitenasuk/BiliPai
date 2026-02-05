@@ -12,6 +12,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChatBubble
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -43,10 +45,21 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.util.ShareUtils
+
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import io.github.alexzhirkevich.cupertino.icons.filled.HandThumbsup
+import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
+import com.android.purebilibili.core.ui.AppIcons
 
 
 @Composable
@@ -145,10 +158,26 @@ fun VideoPlayerOverlay(
     // 🔁 [新增] 播放模式
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
+    
+    // [新增] 侧边栏抽屉数据与交互
+    relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo> = emptyList(),
+    ugcSeason: com.android.purebilibili.data.model.response.UgcSeason? = null,
+    isFollowed: Boolean = false,
+    isLiked: Boolean = false,
+    isCoined: Boolean = false,
+    isFavorited: Boolean = false,
+    onToggleFollow: () -> Unit = {},
+    onToggleLike: () -> Unit = {},
+    onCoin: () -> Unit = {},
+    onToggleFavorite: () -> Unit = {},
+    // 复用 onRelatedVideoClick 或 onVideoClick
+    onDrawerVideoClick: (String) -> Unit = {},
 ) {
     var showQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
     var showRatioMenu by remember { mutableStateOf(false) }
+    // [新增] 侧边栏显示状态
+    var showEndDrawer by remember { mutableStateOf(false) }
     var showDanmakuSettings by remember { mutableStateOf(false) }
     var showVideoSettings by remember { mutableStateOf(false) }  //  新增
     var showChapterList by remember { mutableStateOf(false) }  // 📖 章节列表
@@ -273,6 +302,8 @@ fun VideoPlayerOverlay(
                         danmakuEnabled = danmakuEnabled,
                         onDanmakuToggle = onDanmakuToggle,
                         onDanmakuSettingsClick = { showDanmakuSettings = true },
+                        //  [新增] 侧边栏回调
+                        onDrawerClick = { showEndDrawer = true },
                         //  [修复] 传入 modifier 确保在顶部
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
@@ -606,6 +637,30 @@ fun VideoPlayerOverlay(
                 onDismiss = { showChapterList = false }
             )
         }
+        
+        // --- 11. [新增] 侧边栏抽屉 ---
+        LandscapeEndDrawer(
+            visible = showEndDrawer,
+            onDismiss = { showEndDrawer = false },
+            relatedVideos = relatedVideos,
+            ugcSeason = ugcSeason,
+            currentBvid = bvid,
+            ownerName = videoOwnerName,
+            ownerFace = videoOwnerFace,
+            isFollowed = isFollowed,
+            isLiked = isLiked,
+            isCoined = isCoined,
+            isFavorited = isFavorited,
+            onToggleFollow = onToggleFollow,
+            onToggleLike = onToggleLike,
+            onCoin = onCoin,
+            onToggleFavorite = onToggleFavorite,
+            onVideoClick = { vid ->
+                onDrawerVideoClick(vid)
+                showEndDrawer = false
+            },
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
     }
 }
 
@@ -726,6 +781,452 @@ private fun PortraitTopBar(
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )
+            }
+        }
+    }
+}
+
+// --- 11. 侧边栏抽屉 (Landscape End Drawer) ---
+@Composable
+fun LandscapeEndDrawer(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    // Data
+    relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
+    ugcSeason: com.android.purebilibili.data.model.response.UgcSeason?,
+    currentBvid: String,
+    // UP Info
+    ownerName: String,
+    ownerFace: String,
+    // Interaction States
+    isFollowed: Boolean,
+    isLiked: Boolean,
+    isCoined: Boolean,
+    isFavorited: Boolean,
+    // Callbacks
+    onToggleFollow: () -> Unit,
+    onToggleLike: () -> Unit,
+    onCoin: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onVideoClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+        exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(),
+        modifier = modifier
+    ) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            // 点击空白处关闭
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss
+                    )
+            )
+            
+            // 抽屉内容
+            Surface(
+                modifier = Modifier
+                    .width(320.dp)
+                    .fillMaxHeight(),
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // 1. 顶部交互区 (UP主信息 + 一键三连)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        // Row 1: UP主头像、名字、关注按钮
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            // 头像
+                            coil.compose.AsyncImage(
+                                model = ownerFace,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Gray),
+                                contentScale = ContentScale.Crop
+                            )
+                            
+                            Spacer(modifier = Modifier.width(12.dp))
+                            
+                            // 名字
+                            Text(
+                                text = ownerName,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            
+                            Spacer(modifier = Modifier.width(12.dp))
+                            
+                            // 关注按钮 (放在右上角)
+                            Button(
+                                onClick = onToggleFollow,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isFollowed) MaterialTheme.colorScheme.onSurface.copy(0.2f) else MaterialTheme.colorScheme.primary
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                modifier = Modifier.height(32.dp),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Text(if (isFollowed) "已关注" else "+ 关注", fontSize = 12.sp)
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Row 2: 一键三连按钮 (SpaceAround)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 点赞
+                            InteractionButton(
+                                icon = if (isLiked) CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Outlined.HandThumbsup,
+                                label = "点赞",
+                                isActive = isLiked,
+                                onClick = onToggleLike
+                            )
+                            
+                            // 投币
+                            InteractionButton(
+                                icon = AppIcons.BiliCoin,
+                                label = "投币",
+                                isActive = isCoined,
+                                onClick = onCoin
+                            )
+                            
+                            // 收藏
+                            InteractionButton(
+                                icon = if (isFavorited) CupertinoIcons.Filled.Star else CupertinoIcons.Default.Star,
+                                label = "收藏",
+                                isActive = isFavorited,
+                                onClick = onToggleFavorite
+                            )
+                        }
+                    }
+                    
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    
+                    // 2. Tab Row
+                    var selectedTab by remember { mutableIntStateOf(0) } // 0: 推荐, 1: 合集
+                    val hasSeason = ugcSeason != null && ugcSeason.sections.isNotEmpty()
+                    
+                    if (hasSeason) {
+                        TabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            indicator = { tabPositions ->
+                                TabRowDefaults.Indicator(
+                                    Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        ) {
+                            Tab(
+                                selected = selectedTab == 0,
+                                onClick = { selectedTab = 0 },
+                                text = { Text("推荐视频") }
+                            )
+                            Tab(
+                                selected = selectedTab == 1,
+                                onClick = { selectedTab = 1 },
+                                text = { Text("合集列表") }
+                            )
+                        }
+                    } else {
+                        // 只有推荐，显示标题
+                        Text(
+                            text = "推荐视频",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                    
+                    // 3. 列表内容
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (selectedTab == 0) {
+                            // 推荐视频列表
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(relatedVideos) { video ->
+                                    LandscapeVideoItem(
+                                        video = video,
+                                        isCurrent = video.bvid == currentBvid,
+                                        onClick = { onVideoClick(video.bvid) }
+                                    )
+                                }
+                            }
+                        } else if (hasSeason && ugcSeason != null) {
+                            // 合集列表
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                ugcSeason.sections.forEach { section ->
+                                    item {
+                                        Text(
+                                            text = section.title,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        )
+                                    }
+                                    items(section.episodes) { episode ->
+                                        LandscapeEpisodeItem(
+                                            episode = episode,
+                                            isCurrent = episode.bvid == currentBvid,
+                                            onClick = { onVideoClick(episode.bvid) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InteractionButton(
+    icon: ImageVector,
+    label: String,
+    isActive: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick
+        )
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 10.sp
+        )
+    }
+}
+
+@Composable
+private fun LandscapeVideoItem(
+    video: com.android.purebilibili.data.model.response.RelatedVideo,
+    isCurrent: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(70.dp)
+            .clickable(onClick = onClick)
+            .background(if (isCurrent) MaterialTheme.colorScheme.onSurface.copy(0.1f) else Color.Transparent, RoundedCornerShape(4.dp))
+            .padding(4.dp)
+    ) {
+        // 封面
+        Box(
+            modifier = Modifier
+                .aspectRatio(16f / 9f)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(4.dp))
+        ) {
+             coil.compose.AsyncImage(
+                model = video.pic,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            // 时长
+            Text(
+                text = FormatUtils.formatDuration(video.duration),
+                color = Color.White,
+                fontSize = 10.sp,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .background(Color.Black.copy(0.6f), RoundedCornerShape(2.dp))
+                    .padding(horizontal = 2.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        // 标题和UP
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = video.title,
+                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                lineHeight = 16.sp
+            )
+            Text(
+                text = video.owner.name,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun LandscapeEpisodeItem(
+    episode: com.android.purebilibili.data.model.response.UgcEpisode,
+    isCurrent: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(80.dp) // 增加高度以容纳封面
+            .clickable(onClick = onClick)
+            .background(if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent, RoundedCornerShape(4.dp))
+            .padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 1. 封面 (如果有 arc 信息)
+        if (episode.arc != null && episode.arc.pic.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .aspectRatio(16f / 9f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            ) {
+                coil.compose.AsyncImage(
+                    model = episode.arc.pic,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // 时长
+                Text(
+                    text = FormatUtils.formatDuration(episode.arc.duration),
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .background(Color.Black.copy(0.6f), RoundedCornerShape(topStart = 4.dp))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        } else {
+            // 无封面时的占位 (或纯文本模式)
+             if (isCurrent) {
+                Icon(
+                    imageVector = CupertinoIcons.Default.Play,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            } else {
+                 Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(0.3f), CircleShape)
+                )
+                 Spacer(modifier = Modifier.width(18.dp))
+            }
+        }
+        
+        // 2. 信息列
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            verticalArrangement = Arrangement.SpaceAround // 分散对齐
+        ) {
+            // 标题
+            Text(
+                text = episode.title,
+                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                lineHeight = 16.sp
+            )
+            
+            // 底部元数据 (弹幕/观看等，如果有)
+            // 目前 UgcEpisodeArc -> Stat (view, danmaku)
+            // 我们暂且假设 stat 存在且包含 view
+            /* 
+               注意：data.model.response.Stat 通常包含 view, danmaku
+               这里我们需要安全访问
+            */
+            if (episode.arc?.stat != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 播放量
+                    Icon(
+                        imageVector = CupertinoIcons.Default.PlayCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = FormatUtils.formatStat(episode.arc.stat.view.toLong()), 
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    // 弹幕
+                    Icon(
+                        imageVector = Icons.Filled.ChatBubble, 
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = FormatUtils.formatStat(episode.arc.stat.danmaku.toLong()), 
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp
+                    )
+                }
+            } else if (episode.arc != null) {
+                // 如果没有 stat 但有 arc，显示 "P<Index>" 或其他信息?
+                // 暂时只显示时长 (上面已经显示在封面上了) 或保持空白
             }
         }
     }

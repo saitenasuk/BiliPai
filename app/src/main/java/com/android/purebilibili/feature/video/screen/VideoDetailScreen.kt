@@ -58,6 +58,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.core.view.WindowCompat
+import com.android.purebilibili.data.model.response.BgmInfo
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 //  已改用 MaterialTheme.colorScheme.primary
@@ -137,7 +138,8 @@ fun VideoDetailScreen(
     isInPipMode: Boolean = false,
     isVisible: Boolean = true,
     viewModel: PlayerViewModel = viewModel(),
-    commentViewModel: VideoCommentViewModel = viewModel()
+    commentViewModel: VideoCommentViewModel = viewModel(),
+    onBgmClick: (BgmInfo) -> Unit = {}
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -724,7 +726,20 @@ fun VideoDetailScreen(
 
                 // [New Actions]
                 onSaveCover = { viewModel.saveCover(context) },
-                onDownloadAudio = { viewModel.downloadAudio(context) }
+                onDownloadAudio = { viewModel.downloadAudio(context) },
+                
+                // [新增] 侧边栏抽屉数据与交互
+                relatedVideos = (uiState as? PlayerUiState.Success)?.related ?: emptyList(),
+                ugcSeason = (uiState as? PlayerUiState.Success)?.info?.ugc_season,
+                isFollowed = (uiState as? PlayerUiState.Success)?.isFollowing ?: false,
+                isLiked = (uiState as? PlayerUiState.Success)?.isLiked ?: false,
+                isCoined = (uiState as? PlayerUiState.Success)?.coinCount?.let { it > 0 } ?: false,
+                isFavorited = (uiState as? PlayerUiState.Success)?.isFavorited ?: false,
+                onToggleFollow = { viewModel.toggleFollow() },
+                onToggleLike = { viewModel.toggleLike() },
+                onCoin = { viewModel.showCoinDialog() },
+                onToggleFavorite = { viewModel.showFavoriteFolderDialog() },
+                onRelatedVideoClick = onVideoClick
             )
         } else {
                 //  沉浸式布局：视频延伸到状态栏 + 内容区域
@@ -1135,7 +1150,11 @@ fun VideoDetailScreen(
                                                         },
                                                         // [新增] 恢复播放器 (音频模式 -> 视频模式)
                                                         isPlayerCollapsed = isPlayerCollapsed,
-                                                        onRestorePlayer = { playerHeightOffsetPx = 0f }
+                                                        onRestorePlayer = { playerHeightOffsetPx = 0f },
+                                                        // [新增] AI Summary & BGM
+                                                        aiSummary = success.aiSummary,
+                                                        bgmInfo = success.bgmInfo,
+                                                        onBgmClick = onBgmClick
                                                     )
 
                                                     // 底部输入栏 (覆盖在内容之上)
@@ -1684,6 +1703,25 @@ fun VideoDetailScreen(
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
+                }
+            )
+        }
+
+        // 📁 收藏夹选择弹窗
+        val showFavoriteFolderDialog by viewModel.favoriteFolderDialogVisible.collectAsState()
+        val favoriteFolders by viewModel.favoriteFolders.collectAsState()
+        val isFavoriteFoldersLoading by viewModel.isFavoriteFoldersLoading.collectAsState()
+        
+        if (showFavoriteFolderDialog) {
+            com.android.purebilibili.feature.video.ui.components.FavoriteFolderSheet(
+                folders = favoriteFolders,
+                isLoading = isFavoriteFoldersLoading,
+                onFolderClick = { folder -> 
+                    viewModel.addToFavoriteFolder(folder)
+                },
+                onDismissRequest = { viewModel.dismissFavoriteFolderDialog() },
+                onCreateFolder = { title, intro, isPrivate ->
+                    viewModel.createFavoriteFolder(title, intro, isPrivate)
                 }
             )
         }

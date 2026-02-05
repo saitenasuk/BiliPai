@@ -2,6 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/Compose-Symphony" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/AndroidLiquidGlass" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/bilibili-API-collect" vcs="Git" />
   </component>
 </project>

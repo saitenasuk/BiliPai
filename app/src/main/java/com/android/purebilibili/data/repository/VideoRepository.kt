@@ -385,6 +385,32 @@ object VideoRepository {
         }
     }
 
+    // [新增] 获取 AI 视频总结
+    suspend fun getAiSummary(bvid: String, cid: Long, upMid: Long): Result<AiSummaryResponse> = withContext(Dispatchers.IO) {
+        try {
+            val (imgKey, subKey) = getWbiKeys()
+            val params = mapOf(
+                "bvid" to bvid,
+                "cid" to cid.toString(),
+                "up_mid" to upMid.toString()
+            )
+            val signedParams = WbiUtils.sign(params, imgKey, subKey)
+            
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", " Fetching AI Summary for bvid=$bvid")
+            val response = api.getAiConclusion(signedParams)
+            
+            if (response.code == 0) {
+                Result.success(response)
+            } else {
+                Result.failure(Exception("AI Summary API error: code=${response.code}, msg=${response.message}"))
+            }
+        } catch (e: Exception) {
+             // 静默失败，不打印堆栈，仅记录
+             com.android.purebilibili.core.util.Logger.w("VideoRepo", " AI Summary failed: ${e.message}")
+             Result.failure(e)
+        }
+    }
+
     //  [优化] WBI Key 缓存
     private var wbiKeysCache: Pair<String, String>? = null
     private var wbiKeysTimestamp: Long = 0
@@ -880,6 +906,20 @@ object VideoRepository {
         } catch (e: Exception) {
             android.util.Log.w("VideoRepo", "🖼️ Videoshot exception: ${e.message}")
             null
+        }
+    }
+
+    // [新增] 获取播放器信息 (BGM/ViewPoints/Etc)
+    suspend fun getPlayerInfo(bvid: String, cid: Long): Result<PlayerInfoData> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getPlayerInfo(bvid, cid)
+            if (response.code == 0 && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception("PlayerInfo error: ${response.code}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
     

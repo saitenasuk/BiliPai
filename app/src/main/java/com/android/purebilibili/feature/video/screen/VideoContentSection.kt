@@ -44,6 +44,7 @@ import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.VideoTag
 import com.android.purebilibili.data.model.response.ViewInfo
+import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
@@ -58,6 +59,8 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import com.android.purebilibili.data.model.response.AiSummaryData
+import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
 import kotlin.math.abs
 
 /**
@@ -122,7 +125,11 @@ fun VideoContentSection(
     onCreateFavoriteFolder: (String, String, Boolean) -> Unit = { _, _, _ -> },
     // [新增] 恢复播放器 (音频模式 -> 视频模式)
     isPlayerCollapsed: Boolean = false,
-    onRestorePlayer: () -> Unit = {}
+    onRestorePlayer: () -> Unit = {},
+    // [新增] AI Summary & BGM
+    aiSummary: AiSummaryData? = null,
+    bgmInfo: BgmInfo? = null,
+    onBgmClick: (BgmInfo) -> Unit = {}
 ) {
     val tabs = listOf("简介", "评论 $replyCount")
     val pagerState = rememberPagerState(pageCount = { tabs.size })
@@ -233,7 +240,11 @@ fun VideoContentSection(
                     onWatchLaterClick = onWatchLaterClick,
                     contentPadding = PaddingValues(bottom = 84.dp), // 适配底部输入栏
                     transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
-                    onFavoriteLongClick = onFavoriteLongClick
+                    onFavoriteLongClick = onFavoriteLongClick,
+                    aiSummary = aiSummary,
+                    bgmInfo = bgmInfo,
+                    onTimestampClick = onTimestampClick,
+                    onBgmClick = onBgmClick
                 )
                 1 -> VideoCommentTab(
                     listState = commentListState,
@@ -305,7 +316,11 @@ private fun VideoIntroTab(
     onWatchLaterClick: () -> Unit,
     contentPadding: PaddingValues,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
-    onFavoriteLongClick: () -> Unit = {}
+    onFavoriteLongClick: () -> Unit = {},
+    aiSummary: AiSummaryData? = null,
+    bgmInfo: BgmInfo? = null,
+    onTimestampClick: ((Long) -> Unit)? = null,
+    onBgmClick: (BgmInfo) -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     LazyColumn(
@@ -336,7 +351,11 @@ private fun VideoIntroTab(
 
                 onGloballyPositioned = { },
                 transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
-                onFavoriteLongClick = onFavoriteLongClick
+                onFavoriteLongClick = onFavoriteLongClick,
+                aiSummary = aiSummary,
+                bgmInfo = bgmInfo,
+                onTimestampClick = onTimestampClick,
+                onBgmClick = onBgmClick
             )
         }
         if (info.pages.size > 1) {
@@ -532,7 +551,11 @@ private fun VideoHeaderContent(
     onWatchLaterClick: () -> Unit,
     onGloballyPositioned: (Float) -> Unit,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
-    onFavoriteLongClick: () -> Unit = {}
+    onFavoriteLongClick: () -> Unit = {},
+    aiSummary: AiSummaryData? = null,
+    bgmInfo: BgmInfo? = null,
+    onTimestampClick: ((Long) -> Unit)? = null,
+    onBgmClick: (BgmInfo) -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -553,8 +576,19 @@ private fun VideoHeaderContent(
         VideoTitleWithDesc(
             info = info,
             videoTags = videoTags,
-            transitionEnabled = transitionEnabled  // 🔗 传递共享元素开关
+            transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
+            bgmInfo = bgmInfo,
+            onBgmClick = onBgmClick
         )
+
+        // [新增] AI Summary
+        if (aiSummary != null && aiSummary.modelResult != null) {
+            AiSummaryCard(
+                aiSummary = aiSummary,
+                onTimestampClick = onTimestampClick,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
 
         ActionButtonsRow(
             info = info,

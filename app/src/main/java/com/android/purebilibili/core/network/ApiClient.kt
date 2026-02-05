@@ -236,9 +236,13 @@ interface BilibiliApi {
     @GET("x/web-interface/view")
     suspend fun getVideoInfoByAid(@Query("aid") aid: Long): VideoDetailResponse
     
-    //  获取视频标签
     @GET("x/tag/archive/tags")
     suspend fun getVideoTags(@Query("bvid") bvid: String): VideoTagResponse
+
+    // [新增] 获取 AI 视频总结 (WBI 签名)
+    @GET("x/web-interface/view/conclusion/get")
+    suspend fun getAiConclusion(@QueryMap params: Map<String, String>): AiSummaryResponse
+
 
     @GET("x/player/wbi/playurl")
     suspend fun getPlayUrl(@QueryMap params: Map<String, String>): PlayUrlResponse
@@ -959,6 +963,29 @@ interface PassportApi {
     ): com.android.purebilibili.data.model.response.TvTokenRefreshResponse
 }
 
+// ==================== 音频 API ====================
+interface AudioApi {
+    // 🎵 获取音频基本信息
+    @GET("audio/music-service-c/web/song/info")
+    suspend fun getSongInfo(
+        @Query("sid") sid: Long
+    ): com.android.purebilibili.data.model.response.SongInfoResponse
+
+    // 🎵 获取音频流地址
+    @GET("audio/music-service-c/web/url")
+    suspend fun getSongStream(
+        @Query("sid") sid: Long,
+        @Query("privilege") privilege: Int = 2,
+        @Query("quality") quality: Int = 2
+    ): com.android.purebilibili.data.model.response.SongStreamResponse
+
+    // 🎵 获取歌词
+    @GET("audio/music-service-c/web/song/lyric")
+    suspend fun getSongLyric(
+        @Query("sid") sid: Long
+    ): com.android.purebilibili.data.model.response.SongLyricResponse
+}
+
 // ==================== 私信 API (api.vc.bilibili.com) ====================
 interface MessageApi {
     // 获取未读私信数
@@ -1383,5 +1410,12 @@ object NetworkModule {
         Retrofit.Builder().baseUrl("https://api.vc.bilibili.com/").client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
             .create(MessageApi::class.java)
+    }
+    
+    //  [新增] 音频 API - 使用 www.bilibili.com
+    val audioApi: AudioApi by lazy {
+        Retrofit.Builder().baseUrl("https://www.bilibili.com/").client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
+            .create(AudioApi::class.java)
     }
 }

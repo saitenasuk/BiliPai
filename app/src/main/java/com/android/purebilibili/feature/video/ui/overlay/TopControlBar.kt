@@ -44,6 +44,8 @@ fun TopControlBar(
     onDanmakuSettingsClick: () -> Unit = {},
     // 👀 [新增] 在线观看人数
     onlineCount: String = "",
+    // [新增] 侧边栏回调
+    onDrawerClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -120,18 +122,23 @@ fun TopControlBar(
             }
         }
         Spacer(modifier = Modifier.width(8.dp))
+        // 侧边栏按钮 (Sidebar Toggle)
         Surface(
-            onClick = onQualityClick,
+            onClick = onDrawerClick,
             color = Color.White.copy(alpha = 0.2f),
             shape = RoundedCornerShape(4.dp)
         ) {
-            Text(
-                text = currentQualityLabel,
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-            )
+            Box(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = CupertinoIcons.Default.SidebarRight,
+                    contentDescription = "侧边栏",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

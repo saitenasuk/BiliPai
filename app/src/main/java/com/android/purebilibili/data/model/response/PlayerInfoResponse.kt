@@ -30,7 +30,19 @@ data class PlayerInfoData(
     val viewPoints: List<ViewPoint> = emptyList(),
     @SerialName("online_count")
     val onlineCount: Int = 0,
-    val subtitle: SubtitleInfo? = null
+    val subtitle: SubtitleInfo? = null,
+    @SerialName("bgm_info")
+    val bgmInfo: BgmInfo? = null
+)
+
+@Serializable
+data class BgmInfo(
+    @SerialName("music_id")
+    val musicId: String = "",
+    @SerialName("music_title")
+    val musicTitle: String = "",
+    @SerialName("jump_url")
+    val jumpUrl: String = ""
 )
 
 /**

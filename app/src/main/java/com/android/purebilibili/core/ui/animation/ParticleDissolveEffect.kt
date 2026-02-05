@@ -184,6 +184,14 @@ fun DissolvableVideoCard(
         }
     }
 
+    DisposableEffect(cardId) {
+        onDispose {
+            if (cardId.isNotEmpty() && DissolveAnimationManager.dissolvingCardId.value == cardId) {
+                DissolveAnimationManager.stopDissolving()
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .onSizeChanged { cardSize = it }

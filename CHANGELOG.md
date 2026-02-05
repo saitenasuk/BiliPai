@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.0.5] - 2026-02-05
+
+### ✨ New Features (新增功能)
+
+- **Video Player Optimization**: Narrowed brightness/volume trigger zones in portrait mode to prevent accidental triggers when swiping for fullscreen.
+- **AI Summary**: Added support for AI-generated video summaries.
+- **Music Identification**: Added support for identifying and searching for BGM in videos.
+- **Version Bump**: Updated app version to 5.0.5.
+
+### 🛠 Improvements (优化)
+
+- **Engineering**: Removed mandatory dependency on `google-services.json` for cleaner builds.
+- **Tablet Support**: Improved drawer and bottom bar interaction on tablets.
+- **Messaging**: Enhanced private message loading and added video link previews.
+
 ## [5.0.1] - 2026-02-01
 
 ### ✨ New Features (新增功能)

@@ -80,7 +80,10 @@ sealed class PlayerUiState {
         val videoCodecId: Int = 0,
         val audioCodecId: Int = 0,
         // 👀 [新增] 在线观看人数
-        val onlineCount: String = ""
+        val onlineCount: String = "",
+        // [新增] AI Summary & BGM
+        val aiSummary: AiSummaryData? = null,
+        val bgmInfo: BgmInfo? = null
     ) : PlayerUiState() {
         val cdnCount: Int get() = allVideoUrls.size.coerceAtLeast(1)
         val currentCdnLabel: String get() = "线路${currentCdnIndex + 1}"
@@ -121,6 +124,14 @@ class PlayerViewModel : ViewModel() {
     // Coin dialog
     private val _coinDialogVisible = MutableStateFlow(false)
     val coinDialogVisible = _coinDialogVisible.asStateFlow()
+
+    fun showCoinDialog() {
+        _coinDialogVisible.value = true
+    }
+
+    fun dismissCoinDialog() {
+        _coinDialogVisible.value = false
+    }
     
     //  SponsorBlock (via Plugin)
     private val _showSkipButton = MutableStateFlow(false)
@@ -719,8 +730,11 @@ class PlayerViewModel : ViewModel() {
                         // 🖼️ 异步加载视频预览图（用于进度条拖动预览）
                         loadVideoshot(bvid, result.info.cid)
                         
-                        // 📖 异步加载视频章节信息（用于进度条章节标记）
-                        loadChapterInfo(bvid, result.info.cid)
+                        // 📖 异步加载视频章节信息 & BGM
+                        loadPlayerInfo(bvid, result.info.cid)
+
+                        // 🤖 [新增] 异步加载 AI 总结
+                        loadAiSummary(bvid, result.info.cid, result.info.owner.mid)
                         
                         // 👀 [新增] 开始轮询在线观看人数
                         startOnlineCountPolling(bvid, result.info.cid)
@@ -1580,24 +1594,66 @@ class PlayerViewModel : ViewModel() {
         }
     }
     
-    //  [新增] 异步加载视频章节/看点数据（用于进度条章节标记）
-    private fun loadChapterInfo(bvid: String, cid: Long) {
+    //  [新增] 异步加载播放器额外信息 (章节/看点 + BGM)
+    private fun loadPlayerInfo(bvid: String, cid: Long) {
         viewModelScope.launch {
             try {
-                val response = com.android.purebilibili.core.network.NetworkModule.api.getPlayerInfo(bvid, cid)
-                if (response.code == 0 && response.data != null) {
-                    val points = response.data.viewPoints
+                // 使用 Repository 的 wrapper 方法
+                val result = VideoRepository.getPlayerInfo(bvid, cid)
+                
+                result.onSuccess { data ->
+                    // 1. 处理章节信息
+                    val points = data.viewPoints
                     if (points.isNotEmpty()) {
                         _viewPoints.value = points
                         Logger.d("PlayerVM", "📖 Loaded ${points.size} chapter points")
                     } else {
                         _viewPoints.value = emptyList()
-                        Logger.d("PlayerVM", "📖 No chapter points for this video")
+                    }
+                    
+                    // 2. 处理 BGM 信息
+                    if (data.bgmInfo != null) {
+                        _uiState.update { current ->
+                            if (current is PlayerUiState.Success) {
+                                current.copy(bgmInfo = data.bgmInfo)
+                            } else current
+                        }
+                        Logger.d("PlayerVM", "🎵 Loaded BGM: ${data.bgmInfo?.musicTitle}")
+                    }
+                }.onFailure { e ->
+                    Logger.d("PlayerVM", "📖 Failed to load player info: ${e.message}")
+                    _viewPoints.value = emptyList()
+                }
+            } catch (e: Exception) {
+                Logger.d("PlayerVM", "📖 Exception loading player info: ${e.message}")
+                _viewPoints.value = emptyList()
+            }
+        }
+    }
+
+    // [新增] 加载 AI 视频总结
+    private fun loadAiSummary(bvid: String, cid: Long, upMid: Long) {
+        viewModelScope.launch {
+            try {
+                val result = VideoRepository.getAiSummary(bvid, cid, upMid)
+                result.onSuccess { response ->
+                    if (response.code == 0 && response.data != null) {
+                         // 过滤：如果有 model_result 才更新
+                         val hasResult = response.data.modelResult != null
+                         if (hasResult) {
+                             _uiState.update { current ->
+                                 if (current is PlayerUiState.Success && current.info.bvid == bvid) {
+                                     current.copy(aiSummary = response.data)
+                                 } else current
+                             }
+                             Logger.d("PlayerVM", "🤖 Loaded AI Summary")
+                         } else {
+                             Logger.d("PlayerVM", "🤖 AI Summary empty (code=0)")
+                         }
                     }
                 }
             } catch (e: Exception) {
-                Logger.d("PlayerVM", "📖 Failed to load chapter info: ${e.message}")
-                _viewPoints.value = emptyList()
+                Logger.d("PlayerVM", "🤖 Failed to load AI Summary: ${e.message}")
             }
         }
     }

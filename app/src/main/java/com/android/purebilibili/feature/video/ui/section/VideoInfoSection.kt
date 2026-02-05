@@ -26,11 +26,16 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.data.model.response.UgcSeason
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.model.response.VideoTag
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import androidx.compose.foundation.text.selection.SelectionContainer
 import com.android.purebilibili.core.ui.common.copyOnClick
+import com.android.purebilibili.data.model.response.BgmInfo
+import com.android.purebilibili.data.model.response.AiSummaryData
+import androidx.compose.ui.platform.LocalUriHandler
+
 
 /**
  * Video Info Section Components
@@ -107,16 +112,15 @@ fun VideoTitleSection(
  *  Description and tags hidden by default, shown on expand
  */
 
-/**
- * Video Title with Description (Official layout: title + stats + description)
- *  Description and tags hidden by default, shown on expand
- */
+
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun VideoTitleWithDesc(
     info: ViewInfo,
     videoTags: List<VideoTag> = emptyList(),  //  视频标签
-    transitionEnabled: Boolean = false  // 🔗 共享元素过渡开关
+    bgmInfo: BgmInfo? = null, // [新增] BGM 信息
+    transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
+    onBgmClick: (BgmInfo) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
     
@@ -240,6 +244,15 @@ fun VideoTitleWithDesc(
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                 modifier = Modifier.copyOnClick(info.bvid, "BV号")
+            )
+        }
+
+        // [新增] BGM Info Row
+        if (bgmInfo != null) {
+            Spacer(Modifier.height(8.dp))
+            BgmInfoRow(
+                bgmInfo = bgmInfo,
+                onBgmClick = onBgmClick
             )
         }
         
@@ -484,6 +497,58 @@ fun DescriptionSection(desc: String) {
                         modifier = Modifier.size(18.dp)
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * [新增] 背景音乐信息行
+ */
+@Composable
+fun BgmInfoRow(
+    bgmInfo: BgmInfo,
+    onBgmClick: (BgmInfo) -> Unit = {}
+) {
+    val uriHandler = LocalUriHandler.current
+    
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                if (bgmInfo.jumpUrl.isNotEmpty() || bgmInfo.musicId.isNotEmpty()) {
+                    onBgmClick(bgmInfo)
+                }
+            }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = CupertinoIcons.Default.MusicNote, 
+                contentDescription = "BGM",
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = bgmInfo.musicTitle.ifEmpty { "背景音乐" },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.secondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            if (bgmInfo.jumpUrl.isNotEmpty()) {
+                Icon(
+                    imageVector = CupertinoIcons.Default.ChevronForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
+                    modifier = Modifier.size(12.dp)
+                )
             }
         }
     }

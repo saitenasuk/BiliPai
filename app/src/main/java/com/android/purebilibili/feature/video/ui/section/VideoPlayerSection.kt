@@ -59,7 +59,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-enum class VideoGestureMode { None, Brightness, Volume, Seek }
+enum class VideoGestureMode { None, Brightness, Volume, Seek, SwipeToFullscreen }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -121,6 +121,19 @@ fun VideoPlayerSection(
     // 🔁 [新增] 播放模式
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
+
+    // [新增] 侧边栏抽屉数据与交互
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit = {_,_ -> },
+    relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo> = emptyList(),
+    ugcSeason: com.android.purebilibili.data.model.response.UgcSeason? = null,
+    isFollowed: Boolean = false,
+    isLiked: Boolean = false,
+    isCoined: Boolean = false,
+    isFavorited: Boolean = false,
+    onToggleFollow: () -> Unit = {},
+    onToggleLike: () -> Unit = {},
+    onCoin: () -> Unit = {},
+    onToggleFavorite: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
@@ -235,6 +248,7 @@ fun VideoPlayerSection(
     // [新增] 共享元素过渡支持
     val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     
     var rootModifier = Modifier
         .fillMaxSize()
@@ -336,6 +350,15 @@ fun VideoPlayerSection(
                             if (gestureMode == VideoGestureMode.Seek) {
                                 playerState.player.seekTo(seekTargetTime)
                                 playerState.player.play()
+                            } else if (gestureMode == VideoGestureMode.SwipeToFullscreen) {
+                                //  阈值判定：上滑超过一定距离触发全屏
+                                val swipeThreshold = 50.dp.toPx()
+                                if (totalDragDistanceY < -swipeThreshold && !isFullscreen) {
+                                    onToggleFullscreen()
+                                    // 震动反馈 (可选)
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "👆 Swipe up to fullscreen triggered")
+                                }
                             }
                             isGestureVisible = false
                             gestureMode = VideoGestureMode.None
@@ -355,17 +378,37 @@ fun VideoPlayerSection(
                                 if (abs(dragAmount.x) > abs(dragAmount.y)) {
                                     gestureMode = VideoGestureMode.Seek
                                 } else {
-                                    // 根据起始 X 坐标判断左右屏
-                                    val screenWidth = context.resources.displayMetrics.widthPixels
-                                    gestureMode = if (change.position.x < screenWidth / 2) {
-                                        VideoGestureMode.Brightness
+                                    // 根据起始 X 坐标判断区域 (左1/3=亮度, 右1/3=音量, 中间1/3=上滑全屏)
+                                    val width = size.width.toFloat()
+                                    val startX = change.position.x
+                                    
+                                    gestureMode = if (!isFullscreen) {
+                                        // 竖屏模式优化
+                                        // 左侧 15%: 亮度
+                                        // 右侧 15%: 音量
+                                        // 中间 70%: 上滑全屏 (避免误触)
+                                        when {
+                                            startX < width * 0.15f -> VideoGestureMode.Brightness
+                                            startX > width * 0.85f -> VideoGestureMode.Volume
+                                            else -> VideoGestureMode.SwipeToFullscreen
+                                        }
                                     } else {
-                                        VideoGestureMode.Volume
+                                        // 横屏模式
+                                        // 左侧 50%: 亮度
+                                        // 右侧 50%: 音量
+                                        when {
+                                             startX < width * 0.5f -> VideoGestureMode.Brightness
+                                             else -> VideoGestureMode.Volume
+                                        }
                                     }
                                 }
                             }
 
                             when (gestureMode) {
+                                VideoGestureMode.SwipeToFullscreen -> {
+                                    // 累积 Y 轴距离 (上滑为负)
+                                    totalDragDistanceY += dragAmount.y
+                                }
                                 VideoGestureMode.Seek -> {
                                     totalDragDistanceX += dragAmount.x
                                     val duration = playerState.player.duration.coerceAtLeast(0L)
@@ -1101,7 +1144,22 @@ fun VideoPlayerSection(
                 onDownloadAudio = onDownloadAudio,
                 // 🔁 [新增] 播放模式
                 currentPlayMode = currentPlayMode,
-                onPlayModeClick = onPlayModeClick
+                onPlayModeClick = onPlayModeClick,
+                
+                // [新增] 侧边栏抽屉数据与交互
+                relatedVideos = relatedVideos,
+                ugcSeason = ugcSeason,
+                isFollowed = isFollowed,
+                isLiked = isLiked,
+                isCoined = isCoined,
+                isFavorited = isFavorited,
+                onToggleFollow = onToggleFollow,
+                onToggleLike = onToggleLike,
+                onCoin = onCoin,
+                onToggleFavorite = onToggleFavorite,
+                onDrawerVideoClick = { vid ->
+                    onRelatedVideoClick(vid, null) 
+                }
             )
     }
 

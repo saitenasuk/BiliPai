@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-5.0.4-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-5.0.5-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -50,6 +50,7 @@
 | **倍速播放** | 0.5x / 0.75x / 1.0x / 1.25x / 1.5x / 2.0x |
 | **画中画** | 悬浮小窗播放，多任务无缝切换 |
 | **听视频模式** | 🆕 专属音频播放界面，支持沉浸式/黑胶唱片模式，歌词显示与播放列表管理 |
+| **AI 总结** | 🆕 智能生成视频内容摘要，快速获取核心信息 |
 | **原地播放** | 长按视频封面直接预览播放，点击即可全屏，无缝衔接 |
 | **后台播放** | 锁屏/切后台继续听，支持通知栏控制 |
 | **播放记忆** | 自动记录观看进度，下次打开继续播放 |
@@ -195,6 +196,7 @@ JSON 规则插件是一种**无需编程**的轻量级插件格式，只需编�
 | **热门榜单** | 展示当前热门搜索词 |
 | **历史记录** | 搜索历史自动保存，支持去重 |
 | **分类搜索** | 视频 / UP主 / 番剧 分类检索 |
+| **视频音乐查找** | 🆕 快速识别并查找视频中的背景音乐 (BGM) |
 
 ### 🎨 现代 UI 设计
 
@@ -360,15 +362,16 @@ app/src/main/java/com/android/purebilibili/
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v5.0.4)
+### 最近更新 (v5.0.5)
 
+- ✨ **新功能**: 新增视频 AI 总结功能与视频 BGM 音乐识别查找
 - 🛠 **工程优化**: 移除对 `google-services.json` 的强制依赖，支持纯净编译
 - 📱 **平板适配**: 优化 Pad 端侧边栏交互与底部导航栏布局
 - 💬 **私信升级**: 完善私信列表分页加载，新增视频链接预览卡片
 - ✨ **视觉特效**: 新增"不感兴趣"粒子消散动画，优化顶部栏折叠效果
 - 🐛 **修复**: 修复已知崩溃与网络连接问题
 
-### 历史更新 (v4.3.0)
+### 历史更新 (v5.0.4)
 
 - 🛠 **修复**: 修复视频加载时的黑屏问题，强制启用 HTTPS 加载资源
 - 🐛 **修复**: 修复竖屏模式下弹幕显示异常及自定义下载路径支持 (v4.2.4)

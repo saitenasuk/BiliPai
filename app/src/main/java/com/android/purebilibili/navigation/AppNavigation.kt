@@ -41,6 +41,7 @@ import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.ProvideAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.SharedTransitionProvider
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.data.model.response.BgmInfo
 
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
@@ -470,6 +471,32 @@ fun AppNavigation(
                     // [修复] 传递视频点击导航回调
                     onVideoClick = { vid, _ -> 
                         navigateToVideo(vid, 0L, "")
+                    },
+                    onBgmClick = { bgm ->
+                        // 获取当前视频的 cid（在闭包中捕获）
+                        val videoCid = backStackEntry.arguments?.getLong("cid") ?: 0L
+                        
+                        android.util.Log.d("BGM_DEBUG", "🎵 musicId=${bgm.musicId}, title=${bgm.musicTitle}")
+                        android.util.Log.d("BGM_DEBUG", "🎵 Using current video: bvid=$bvid, cid=$videoCid")
+                        
+                        // 尝试解析 au 格式 (如 au123456 或纯数字)
+                        val auSid = bgm.musicId.removePrefix("au").toLongOrNull()
+                        
+                        if (auSid != null) {
+                            // au 格式：使用原生音乐详情页
+                            navController.navigate(ScreenRoutes.MusicDetail.createRoute(auSid))
+                        } else if (bgm.musicId.startsWith("MA") && videoCid > 0) {
+                            // MA 格式：使用当前视频的 bvid 和 cid 获取音频流
+                            // jumpUrl 中的 aid/cid 是 B 站内部 ID，无法用于获取视频流
+                            // 所以直接使用当前正在播放的视频来提取音频
+                            val title = bgm.musicTitle.ifEmpty { "背景音乐" }
+                            
+                            android.util.Log.d("BGM_DEBUG", "🎵 Navigating with: bvid=$bvid, cid=$videoCid")
+                            navController.navigate(ScreenRoutes.NativeMusic.createRoute(title, bvid, videoCid))
+                        } else if (bgm.jumpUrl.isNotEmpty()) {
+                            // 回退：使用 WebView
+                            navController.navigate(ScreenRoutes.Web.createRoute(bgm.jumpUrl, "背景音乐"))
+                        }
                     }
                 )
             }
@@ -803,6 +830,53 @@ fun AppNavigation(
             )
         }
 
+        // --- 11. WebView ---
+        composable(
+            route = ScreenRoutes.Web.route,
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Up, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down, tween(animDuration)) }
+        ) { backStackEntry ->
+            val url = android.net.Uri.decode(backStackEntry.arguments?.getString("url") ?: "")
+            val title = android.net.Uri.decode(backStackEntry.arguments?.getString("title") ?: "")
+            
+            com.android.purebilibili.feature.web.WebViewScreen(
+                url = url,
+                title = title.ifEmpty { null },
+                onBack = { navController.popBackStack() },
+                // [新增] 链接拦截回调 - 跳转到应用内原生界面
+                onVideoClick = { bvid -> 
+                    navController.popBackStack()  // 先关闭 WebView
+                    navigateToVideo(bvid, 0L, "") 
+                },
+                onSpaceClick = { mid -> 
+                    navController.popBackStack()
+                    navController.navigate(ScreenRoutes.Space.createRoute(mid)) 
+                },
+                onLiveClick = { roomId -> 
+                    navController.popBackStack()
+                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, "", "")) 
+                },
+                onBangumiClick = { seasonId, epId ->
+                    navController.popBackStack()
+                    if (seasonId > 0) {
+                        navController.navigate(ScreenRoutes.BangumiDetail.createRoute(seasonId, epId))
+                    } else if (epId > 0) {
+                        navController.navigate(ScreenRoutes.BangumiDetail.createRoute(0, epId))
+                    }
+                },
+                onMusicClick = { musicId ->
+                    navController.popBackStack()
+                    // AU 格式：跳转到音乐详情页
+                    val auSid = musicId.removePrefix("au").removePrefix("AU").toLongOrNull()
+                    if (auSid != null) {
+                        navController.navigate(ScreenRoutes.MusicDetail.createRoute(auSid))
+                    }
+                    // MA 格式目前无法在 WebView 内处理，因为缺少当前视频上下文
+                    // 用户需要从视频页直接点击 BGM 按钮
+                }
+            )
+        }
+
         // --- 8. 开源许可证 ---
         composable(
             route = ScreenRoutes.OpenSourceLicenses.route,
@@ -1127,7 +1201,46 @@ fun AppNavigation(
                 }
             )
         }
-        } // End of NavHost
+        
+        // --- 16.  [新增] 音频详情页面 ---
+        composable(
+            route = ScreenRoutes.MusicDetail.route,
+            arguments = listOf(
+                navArgument("sid") { type = NavType.LongType }
+            ),
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Up, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down, tween(animDuration)) }
+        ) { backStackEntry ->
+            val sid = backStackEntry.arguments?.getLong("sid") ?: 0L
+            com.android.purebilibili.feature.audio.screen.MusicDetailScreen(
+                sid = sid,
+                onBack = { navController.popBackStack() }
+        )
+        }
+        
+        // --- 17. [新增] 原生音乐播放页 (MA 格式 - 从视频 DASH 提取音频) ---
+        composable(
+            route = ScreenRoutes.NativeMusic.route,
+            arguments = listOf(
+                navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                navArgument("bvid") { type = NavType.StringType },
+                navArgument("cid") { type = NavType.LongType }
+            ),
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Up, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down, tween(animDuration)) }
+        ) { backStackEntry ->
+            val title = android.net.Uri.decode(backStackEntry.arguments?.getString("title") ?: "")
+            val bvid = android.net.Uri.decode(backStackEntry.arguments?.getString("bvid") ?: "")
+            val cid = backStackEntry.arguments?.getLong("cid") ?: 0L
+            
+            com.android.purebilibili.feature.audio.screen.MusicDetailScreen(
+                musicTitle = title.ifEmpty { "背景音乐" },
+                bvid = bvid,
+                cid = cid,
+                onBack = { navController.popBackStack() }
+            )
+        }
+    } // End of NavHost
             } // End of Content Box
 
             // ===== 全局底栏 (Global Bottom Bar) =====

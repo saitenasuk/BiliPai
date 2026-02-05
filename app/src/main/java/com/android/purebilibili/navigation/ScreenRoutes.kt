@@ -126,4 +126,27 @@ sealed class ScreenRoutes(val route: String) {
             return "chat/$talkerId/$sessionType?name=${android.net.Uri.encode(userName)}"
         }
     }
+    
+    // [新增] In-app Browser
+    object Web : ScreenRoutes("web?url={url}&title={title}") {
+        fun createRoute(url: String, title: String? = null): String {
+            val encodedUrl = android.net.Uri.encode(url)
+            val encodedTitle = title?.let { android.net.Uri.encode(it) } ?: ""
+            return "web?url=$encodedUrl&title=$encodedTitle"
+        }
+    }
+    
+    // [新增] Audio Player
+    object MusicDetail : ScreenRoutes("music/{sid}") {
+        fun createRoute(sid: Long): String {
+            return "music/$sid"
+        }
+    }
+    
+    // [新增] Native Music - 用于 MA 格式的原生音乐播放 (从视频 DASH 流提取音频)
+    object NativeMusic : ScreenRoutes("native_music?title={title}&bvid={bvid}&cid={cid}") {
+        fun createRoute(title: String, bvid: String, cid: Long): String {
+            return "native_music?title=${android.net.Uri.encode(title)}&bvid=${android.net.Uri.encode(bvid)}&cid=$cid"
+        }
+    }
 }
