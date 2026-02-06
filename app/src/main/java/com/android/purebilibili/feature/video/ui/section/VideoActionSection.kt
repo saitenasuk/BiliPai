@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -75,10 +76,17 @@ fun ActionButtonsRow(
     onWatchLaterClick: () -> Unit = {},  //  稍后再看点击
     onFavoriteLongClick: () -> Unit = {} // [New] 长按收藏
 ) {
+    var tripleProgress by remember { mutableFloatStateOf(0f) }
+    
+    val isTripleComboActive by remember {
+        derivedStateOf { tripleProgress > 0f }
+    }
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
+            .animateContentSize() // 🚀 [优化] 使布局变化更平滑
             .padding(horizontal = 4.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
@@ -92,27 +100,40 @@ fun ActionButtonsRow(
             favoriteCount = FormatUtils.formatStat(info.stat.favorite.toLong()),
             hasCoin = coinCount > 0,
             onLikeClick = onLikeClick,
-            onTripleComplete = onTripleClick
+            onTripleComplete = onTripleClick,
+            onProgressChange = { tripleProgress = it }
         )
 
-        // Coin
-        BiliActionButton(
-            icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
-            text = FormatUtils.formatStat(info.stat.coin.toLong()),
-            isActive = coinCount > 0,
-            activeColor = Color(0xFFFFB300),
-            onClick = onCoinClick
-        )
+        // Coin - 使用更为柔和的缩放 + 淡入淡出，并由于 AnimatedVisibility 会动态移除占位，解决了间距问题
+        androidx.compose.animation.AnimatedVisibility(
+            visible = !isTripleComboActive,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.9f),
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.9f)
+        ) {
+            BiliActionButton(
+                icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
+                text = FormatUtils.formatStat(info.stat.coin.toLong()),
+                isActive = coinCount > 0,
+                activeColor = Color(0xFFFFB300),
+                onClick = onCoinClick
+            )
+        }
 
         // Favorite
-        BiliActionButton(
-            icon = if (isFavorited) CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark,
-            text = FormatUtils.formatStat(info.stat.favorite.toLong()),
-            isActive = isFavorited,
-            activeColor = Color(0xFFFFC107),
-            onClick = onFavoriteClick,
-            onLongClick = onFavoriteLongClick
-        )
+        androidx.compose.animation.AnimatedVisibility(
+            visible = !isTripleComboActive,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.9f),
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.9f)
+        ) {
+            BiliActionButton(
+                icon = if (isFavorited) CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark,
+                text = FormatUtils.formatStat(info.stat.favorite.toLong()),
+                isActive = isFavorited,
+                activeColor = Color(0xFFFFC107),
+                onClick = onFavoriteClick,
+                onLongClick = onFavoriteLongClick
+            )
+        }
         
         //  稍后再看
         BiliActionButton(
@@ -155,6 +176,7 @@ private fun TripleLikeActionButton(
     hasCoin: Boolean,
     onLikeClick: () -> Unit,
     onTripleComplete: () -> Unit,
+    onProgressChange: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val haptic = rememberHapticFeedback()
@@ -184,8 +206,9 @@ private fun TripleLikeActionButton(
     
     LaunchedEffect(animatedProgress) {
         longPressProgress = animatedProgress
+        onProgressChange(animatedProgress)
     }
-    
+
     LaunchedEffect(isLongPressing) {
         if (isLongPressing) {
             haptic(HapticType.LIGHT)
@@ -236,7 +259,7 @@ private fun TripleLikeActionButton(
         
         // 收藏图标 (只在长按时显示)
         androidx.compose.animation.AnimatedVisibility(
-            visible = longPressProgress > 0.05f,
+            visible = longPressProgress > 0.1f,
             enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
             exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut()
         ) {
