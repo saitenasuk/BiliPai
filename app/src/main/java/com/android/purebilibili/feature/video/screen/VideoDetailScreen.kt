@@ -254,8 +254,11 @@ fun VideoDetailScreen(
     }
     
     //  [修复] 包装的 onBack，在导航之前立即恢复状态栏并通知小窗管理器
+    var isActuallyLeaving by remember { mutableStateOf(false) }
+
     val handleBack = remember(onBack, miniPlayerManager) {
         {
+            isActuallyLeaving = true // 标记确实是用户通过点击或返回键离开
             isScreenActive = false  // 标记页面正在退出
             // 🎯 通知小窗管理器这是用户主动导航离开（用于控制后台音频）
             miniPlayerManager?.markLeavingByNavigation()
@@ -442,10 +445,14 @@ fun VideoDetailScreen(
     DisposableEffect(playerState) {
         onDispose {
             // 标记页面正在退出
-            // 如果是导航到音频模式，不要标记为离开（否则会触发自动暂停）
-            if (!isNavigatingToAudioMode) {
-                com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "🛑 Disposing screen, notifying MiniPlayerManager")
+            // [修复] 只有在真正离开页面（isActuallyLeaving）或者 Activity 正在销毁且不是因为系统回收（isFinishing）时才标记
+            // 如果是因为后台回收（isFinishing=false），则保留播放状态
+            val isFinishingExit = activity?.isFinishing == true
+            if ((isActuallyLeaving || isFinishingExit) && !isNavigatingToAudioMode) {
+                com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "🛑 Disposing screen (user exit), notifying MiniPlayerManager")
                 miniPlayerManager?.markLeavingByNavigation()
+            } else {
+                com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "💤 Screen disposed (possible background kill), keeping playback state")
             }
         }
     }

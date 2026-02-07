@@ -263,7 +263,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     // --- MediaSession ---
-    private var mediaSession: MediaSession? = null
+    var mediaSession: MediaSession? = null
     
     //  [新增] MediaSession 回调处理器，支持系统媒体控件
     private val mediaSessionCallback = object : MediaSession.Callback {
@@ -649,9 +649,46 @@ class MiniPlayerManager private constructor(private val context: Context) :
         isActive = true
         isMiniMode = false
         
+        // 🎯 [修复] 统一 MediaSession 管理：将外部播放器关联到全局 Session
+        // 这样在 Activity 销毁后，后台服务仍能通过此 Session 控制播放
+        updateMediaSession(externalPlayer)
+        
         // 同步播放状态
         isPlaying = externalPlayer.isPlaying
         duration = externalPlayer.duration.coerceAtLeast(0L)
+    }
+    
+    /**
+     * 🎯 [新增] 更新 MediaSession 关联的播放器
+     * 允许在内部播放器和外部播放器（Activity 提供）之间平滑切换
+     */
+    private fun updateMediaSession(newPlayer: Player) {
+        if (mediaSession?.player != newPlayer) {
+            Logger.d(TAG, "🎯 Updating MediaSession player: ${mediaSession?.player.hashCode()} -> ${newPlayer.hashCode()}")
+            
+            // 如果已经存在 session，先释放旧的
+            mediaSession?.release()
+            
+            // 构建新的 Session
+            val sessionActivityPendingIntent = PendingIntent.getActivity(
+                context, 0,
+                Intent(context, com.android.purebilibili.MainActivity::class.java).apply {
+                    action = Intent.ACTION_VIEW
+                    data = Uri.parse("https://www.bilibili.com/video/$currentBvid")
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                },
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            
+            val sessionId = "bilipai_shared_session" // 使用固定 ID 保持一致性
+            mediaSession = MediaSession.Builder(context, newPlayer)
+                .setId(sessionId)
+                .setSessionActivity(sessionActivityPendingIntent)
+                .setCallback(mediaSessionCallback)
+                .build()
+            
+            Logger.d(TAG, "✅ MediaSession updated and bound to new player")
+        }
     }
     
     /**
@@ -775,8 +812,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
     /**
      * 更新媒体元数据和通知
      */
-    private fun updateMediaMetadata(title: String, artist: String, coverUrl: String) {
-        val currentItem = _player?.currentMediaItem ?: return
+    fun updateMediaMetadata(title: String, artist: String, coverUrl: String) {
+        val currentPlayer = player ?: return
+        val currentItem = currentPlayer.currentMediaItem ?: return
 
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
@@ -790,7 +828,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             .setMediaMetadata(metadata)
             .build()
 
-        _player?.replaceMediaItem(_player?.currentMediaItemIndex ?: 0, newItem)
+        currentPlayer.replaceMediaItem(currentPlayer.currentMediaItemIndex, newItem)
 
         // 异步加载封面并推送通知
         scope.launch(Dispatchers.IO) {

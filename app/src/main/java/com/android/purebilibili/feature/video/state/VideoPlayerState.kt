@@ -60,10 +60,16 @@ private const val THEME_COLOR = 0xFFFB7299.toInt()
 class VideoPlayerState(
     val context: Context,
     val player: ExoPlayer,
-    val mediaSession: MediaSession,
     //  性能优化：传入受管理的 CoroutineScope，避免内存泄漏
     private val scope: CoroutineScope
 ) {
+    // 🎯 [修复] 使用 MiniPlayerManager 管理的全局 MediaSession
+    private val miniPlayerManager = MiniPlayerManager.getInstance(context)
+    val mediaSession: MediaSession get() = miniPlayerManager.mediaSession ?: run {
+        // 安全回退，通常 MiniPlayerManager 会在 attachPlayer 期间创建 session
+        miniPlayerManager.ensurePlayer() // 这会确保产生一个 session
+        miniPlayerManager.mediaSession!!
+    }
     // 📱 竖屏视频状态 - 双重验证机制
     // 来源1: API dimension 字段（预判断，快速可用）
     // 来源2: 播放器 onVideoSizeChanged（精确验证，需要等待加载）
@@ -128,7 +134,8 @@ class VideoPlayerState(
             // 当播放状态改变时，更新通知栏（主要是播放/暂停按钮）
             if (currentTitle.isNotEmpty()) {
                 scope.launch(Dispatchers.Main) {
-                    pushMediaNotification()
+                    // 使用统一的管理方法
+                    miniPlayerManager.updateMediaMetadata(currentTitle, currentArtist, "")
                 }
             }
         }
@@ -196,130 +203,12 @@ class VideoPlayerState(
         currentTitle = title
         currentArtist = artist
         
-        val currentItem = player.currentMediaItem ?: return
-
-        // 1. 更新 Player 内部元数据
-        val metadata = MediaMetadata.Builder()
-            .setTitle(title)
-            .setArtist(artist)
-            .setArtworkUri(Uri.parse(FormatUtils.fixImageUrl(coverUrl)))
-            .setDisplayTitle(title)
-            .setIsPlayable(true)
-            .build()
-
-        val newItem = currentItem.buildUpon()
-            .setMediaMetadata(metadata)
-            .build()
-        
-        // 避免在此处不必要地重置 mediaItem，这可能导致播放中断
-        if (currentItem.mediaMetadata.title != title) {
-            player.replaceMediaItem(player.currentMediaItemIndex, newItem)
-        }
-
-        // 2.  性能优化：使用传入的 scope 而非裸创建的 CoroutineScope
-        scope.launch(Dispatchers.IO) {
-            val bitmap = loadBitmap(context, coverUrl)
-            currentBitmap = bitmap // 更新缓存
-
-            // 切回主线程操作 Player 和发送通知
-            launch(Dispatchers.Main) {
-                pushMediaNotification()
-            }
-        }
+        // 🎯 [核心修复] 将元数据同步到全局 MiniPlayerManager，由其统一推送通知
+        // 这样即使当前 Activity 销毁，全局 Service 也能持有正确的元数据和 Session
+        miniPlayerManager.updateMediaMetadata(title, artist, coverUrl)
     }
 
-    private suspend fun loadBitmap(context: Context, url: String): Bitmap? {
-        return try {
-            //  性能优化：使用 Coil 单例，避免重复创建 ImageLoader
-            val loader = context.imageLoader
-            val request = ImageRequest.Builder(context)
-                .data(FormatUtils.fixImageUrl(url))
-                .allowHardware(false)
-                .scale(Scale.FILL)
-                .transformations(RoundedCornersTransformation(16f))
-                .size(512, 512)
-                .build()
-            val result = loader.execute(request)
-            (result as? SuccessResult)?.drawable?.let { (it as BitmapDrawable).bitmap }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    private fun pushMediaNotification() {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // 确保渠道存在
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
-                val channel = NotificationChannel(CHANNEL_ID, "媒体播放", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "显示播放控制"
-                    setShowBadge(false)
-                    setSound(null, null)
-                }
-                notificationManager.createNotificationChannel(channel)
-            }
-        }
-        
-        val isPlaying = player.isPlaying
-        
-        // 创建播放/暂停 Intent
-        // 注意：MediaSession 通常会自动处理这些，但为了通知栏按钮生效，我们显式添加 Action
-        // 更好的方式是直接利用 MediaStyle 的自动行为，但 Media3 下有时需要手动添加 Action 到 NotificationCompat
-        
-        // 我们使用 MediaSession 的 PendingIntent 或 BroadcastReceiver 来处理
-        // 简单起见，这里复用 `mediaSession.sessionActivity` 点击跳转，
-        // 按钮操作由 System UI 通过 sessionToken 直接控制 Session，
-        // 但我们需要在 Notification UI 上画出这些按钮。
-        
-        // 对于 Android MediaStyle，必须 addAction 才能显示按钮
-        val pauseAction = NotificationCompat.Action(
-            android.R.drawable.ic_media_pause, "Pause",
-            androidx.media.session.MediaButtonReceiver.buildMediaButtonPendingIntent(
-                context,
-                PlaybackStateCompat.ACTION_PAUSE
-            )
-        )
-        
-        val playAction = NotificationCompat.Action(
-            android.R.drawable.ic_media_play, "Play",
-            androidx.media.session.MediaButtonReceiver.buildMediaButtonPendingIntent(
-                context,
-                PlaybackStateCompat.ACTION_PLAY
-            )
-        )
-
-        val style = androidx.media.app.NotificationCompat.MediaStyle()
-            .setMediaSession(mediaSession.sessionCompatToken)
-            .setShowActionsInCompactView(0) // 显示第1个 Action (索引0)
-
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(currentTitle)
-            .setContentText(currentArtist)
-            .setLargeIcon(currentBitmap)
-            .setStyle(style)
-            .setColor(THEME_COLOR)
-            .setColorized(true)
-            .setOngoing(isPlaying) // 播放时常驻，暂停时可清除
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setOnlyAlertOnce(true)
-            .setContentIntent(mediaSession.sessionActivity)
-
-        // 添加 Play/Pause 按钮
-        if (isPlaying) {
-            builder.addAction(pauseAction)
-        } else {
-            builder.addAction(playAction)
-        }
-
-        try {
-            notificationManager.notify(NOTIFICATION_ID, builder.build())
-        } catch (e: SecurityException) {
-            e.printStackTrace()
-        }
-    }
+    private suspend fun loadBitmap(context: Context, url: String): Bitmap? = null
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -431,21 +320,10 @@ fun rememberVideoPlayerState(
         )
     }
 
-    // 🚀 [修复] MediaSession 与 player 生命周期同步
-    val mediaSession = remember(player) {
-        val sessionId = "bilipai_${java.util.UUID.randomUUID()}"
-        com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "📺 Creating MediaSession with ID: $sessionId")
-        MediaSession.Builder(context, player)
-            .setId(sessionId)
-            .setSessionActivity(sessionActivityPendingIntent)
-            .build()
-    }
-
-    //  性能优化：使用 rememberCoroutineScope 创建受管理的协程作用域
     val scope = rememberCoroutineScope()
 
-    val holder = remember(player, mediaSession, scope) {
-        VideoPlayerState(context, player, mediaSession, scope)
+    val holder = remember(player, scope) {
+        VideoPlayerState(context, player, scope)
     }
 
     val uiState by viewModel.uiState.collectAsState()
@@ -456,7 +334,7 @@ fun rememberVideoPlayerState(
         }
     }
 
-    DisposableEffect(player, mediaSession) {
+    DisposableEffect(player, holder.mediaSession) {
         onDispose {
             //  [新增] 保存播放进度到 ViewModel 缓存
             viewModel.saveCurrentPosition()
@@ -465,7 +343,7 @@ fun rememberVideoPlayerState(
             val miniPlayerManager = MiniPlayerManager.getInstance(context)
             //  [修复] 使用 isActive 和 hasExternalPlayer 来判断是否保留 player
             // isMiniMode 可能还没有被设置（AppNavigation.onDispose 可能在之后执行）
-            // 但如果 isActive 为 true 且当前 player 是被引用的外部 player，则不释放
+            // 但如果 isActive 为 true b且当前 player 是被引用的外部 player，则不释放
             val shouldKeepPlayer = miniPlayerManager.isActive && miniPlayerManager.hasExternalPlayer
             
             if (shouldKeepPlayer) {
@@ -480,7 +358,7 @@ fun rememberVideoPlayerState(
                 //  [修复2] 清除外部播放器引用，防止状态混乱
                 miniPlayerManager.resetExternalPlayer()
                 holder.release()  // 📱 释放视频尺寸监听器
-                mediaSession.release()
+                holder.mediaSession.release()
                 player.release()
             }
             
