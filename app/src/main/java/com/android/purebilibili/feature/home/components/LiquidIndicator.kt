@@ -168,20 +168,21 @@ fun LiquidIndicator(
  */
 @Composable
 fun SimpleLiquidIndicator(
-    positionState: State<Float>, // [Optimized] Pass State to defer reading
-    itemWidth: Dp,
+    position: Float, // [修复] 直接接受 Float 而非 State，简化 API
+    itemWidthPx: Float, // [修复] 使用像素值计算
     isDragging: Boolean,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
     
-    // [Updated] Shrink size slightly as requested
-    val indicatorWidth = itemWidth
-    val indicatorHeight = 36.dp
+    // [修复] 指示器尺寸配置 - 扁长样式
+    val indicatorWidthPx = itemWidthPx * 0.85f // 指示器宽度为 Tab 宽度的 85%
+    val indicatorWidth = with(density) { indicatorWidthPx.toDp() }
+    val indicatorHeight = 24.dp
+    val indicatorHeightPx = with(density) { indicatorHeight.toPx() }
     
-    // [Optimized] Use graphicsLayer for translation to avoid Layout phases
-    // We calculate the pixel offset directly in the drawing phase
-    val itemWidthPx = with(density) { itemWidth.toPx() }
+    // [修复] 居中偏移：将指示器居中放置在每个 Tab 单元格内
+    val centerOffsetPx = (itemWidthPx - indicatorWidthPx) / 2f
     
     val scale by animateFloatAsState(
         targetValue = if (isDragging) 1.05f else 1f,
@@ -192,18 +193,25 @@ fun SimpleLiquidIndicator(
     // [Updated] Match BottomBar style: Primary color with alpha
     val indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     
-    Box(
-        modifier = modifier
-            // [Optimized] Replaced offset with graphicsLayer translation
-            .graphicsLayer {
-                val currentPosition = positionState.value
-                translationX = currentPosition * itemWidthPx
-                
-                this.scaleX = scale
-                this.scaleY = scale
-            }
-            .size(indicatorWidth, indicatorHeight)
-            .clip(RoundedCornerShape(18.dp)) // Half of 36dp
-            .background(indicatorColor)
-    )
+    // [修复] 使用 BoxWithConstraints 获取父容器高度来计算垂直居中
+    BoxWithConstraints(
+        modifier = modifier.fillMaxHeight()
+    ) {
+        val parentHeightPx = with(density) { maxHeight.toPx() }
+        val verticalCenterOffsetPx = (parentHeightPx - indicatorHeightPx) / 2f
+        
+        Box(
+            modifier = Modifier
+                .graphicsLayer {
+                    translationX = position * itemWidthPx + centerOffsetPx
+                    translationY = verticalCenterOffsetPx
+                    
+                    this.scaleX = scale
+                    this.scaleY = scale
+                }
+                .size(indicatorWidth, indicatorHeight)
+                .clip(RoundedCornerShape(12.dp))
+                .background(indicatorColor)
+        )
+    }
 }

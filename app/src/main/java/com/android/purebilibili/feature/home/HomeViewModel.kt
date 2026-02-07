@@ -95,15 +95,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 currentState.liveSubCategory
             }
             
-            val targetCategoryState = currentState.categoryStates[category] ?: CategoryContent()
-            val needFetch = targetCategoryState.videos.isEmpty() && targetCategoryState.liveRooms.isEmpty() && !targetCategoryState.isLoading && targetCategoryState.error == null
-
             _uiState.value = currentState.copy(
                 currentCategory = category,
                 liveSubCategory = liveSubCategory,
                 displayedTabIndex = category.ordinal
             )
-            
+
+            //  [修复] 恢复“追番”分类的数据拉取逻辑，确保滑动到这些页面时有内容显示
+            /* 之前禁用了此处拉取，导致滑动展示空白页。现在移除提前返回。 */
+
+            val targetCategoryState = _uiState.value.categoryStates[category] ?: CategoryContent()
+            val needFetch = targetCategoryState.videos.isEmpty() && 
+                           targetCategoryState.liveRooms.isEmpty() && 
+                           !targetCategoryState.isLoading && 
+                           targetCategoryState.error == null
+
             // 如果目标分类没有数据，则加载
             if (needFetch) {
                  fetchData(isLoadMore = false)

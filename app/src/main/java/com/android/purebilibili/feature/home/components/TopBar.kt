@@ -1,7 +1,6 @@
 // 文件路径: feature/home/components/TopBar.kt
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.animation.*
@@ -50,6 +49,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.home.UserState
+import com.android.purebilibili.feature.home.HomeCategory
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -206,7 +206,7 @@ fun FluidHomeTopBar(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoryTabRow(
-    categories: List<String> = listOf("推荐", "关注", "热门", "直播", "追番", "影视", "游戏", "知识", "科技"),
+    categories: List<String> = HomeCategory.entries.map { it.label },
     selectedIndex: Int = 0,
     onCategorySelected: (Int) -> Unit = {},
     onPartitionClick: () -> Unit = {},
@@ -219,8 +219,8 @@ fun CategoryTabRow(
     //  [交互优化] 触觉反馈
     val haptic = com.android.purebilibili.core.util.rememberHapticFeedback()
     val scrollChannel = com.android.purebilibili.feature.home.LocalHomeScrollChannel.current
+    val coroutineScope = rememberCoroutineScope()
 
-    // [Restored] Re-enable custom Damped Drag for better touch feel
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -234,109 +234,76 @@ fun CategoryTabRow(
                 .weight(1f)
                 .fillMaxHeight()
         ) {
-            // 计算每个 Tab 的宽度
-            val visibleTabCount = 5
-            val tabWidth = maxWidth / visibleTabCount
+            val tabWidth = maxWidth / 5 // 每个 Tab 占用 1/5 宽度
+            val localDensity = LocalDensity.current
+            val tabListState = rememberLazyListState()
             
-            // [Restored] 阻尼拖拽状态
-            val coroutineScope = rememberCoroutineScope()
-            // 使用 DampedDragAnimationState 管理内部状态
-            val dampedDragState = rememberDampedDragAnimationState(
-                initialIndex = selectedIndex.coerceIn(0, visibleTabCount - 1),
-                itemCount = visibleTabCount,
-                onIndexChanged = { index ->
-                    // 当 Tab 内部拖拽结束时，同步到 Pager
-                    if (pagerState != null && pagerState.currentPage != index) {
-                        coroutineScope.launch { pagerState.animateScrollToPage(index) }
-                    }
-                    onCategorySelected(index)
-                }
-            )
-            
-
-            // [Fix] Always update internal state when external selection changes
-            // This ensures instant visual feedback on Click, even if Pager is lagging
-            LaunchedEffect(selectedIndex) {
-                 dampedDragState.updateIndex(selectedIndex)
-            }
-
-            // [Restored] Sync Pager -> DragState
-            // 当 Pager 被外部（滑动内容区）滚动时，同步更新 DragState
-            val isPagerDragging by pagerState?.interactionSource?.collectIsDraggedAsState() ?: remember { mutableStateOf(false) }
-            
-            // [Fix Issue 2] 区分 "用户滑动内容" (Fling) 和 "代码滚动内容" (Animate)
-            // 只有用户交互引起的 Pager 滚动才应该驱动 Indicator
-            var isPagerInteracting by remember { mutableStateOf(false) }
-            
-            LaunchedEffect(isPagerDragging) {
-                if (isPagerDragging) isPagerInteracting = true
-            }
-            LaunchedEffect(pagerState?.isScrollInProgress) {
-                if (pagerState?.isScrollInProgress == false) {
-                     isPagerInteracting = false
-                }
-            }
-            
-            // 监听 Pager 变化，仅在 "用户滑动内容" 期间同步状态
-            // [Fix Issue 1] 恢复持续同步，但仅限 isPagerInteracting 为真时
-            LaunchedEffect(pagerState?.currentPage, pagerState?.currentPageOffsetFraction, isPagerInteracting) {
-                if (pagerState == null) return@LaunchedEffect
-                
-                // 如果是用户在滑动内容，我们将 DampedState 持续 Snap 到 Pager 位置
-                // 这样当滑动停止时(isPagerInteracting -> false)，DampedState 已经在正确位置，无缝切换
-                if (isPagerInteracting && !dampedDragState.isDragging && !dampedDragState.isRunning) {
-                    val page = pagerState.currentPage
-                    val offset = pagerState.currentPageOffsetFraction
-                    val targetPosition = page + offset
-                    dampedDragState.snapTo(targetPosition)
-                }
-            }
-
-            // Source of truth Priority:
-            // 1. Tab Interaction (Drag/Spring) -> Trusted
-            // 2. Content Interaction (Swipe/Fling) -> Trusted
-            // 3. Static/Catch-up -> DampedState (Stable)
-            
-            val currentPositionState = remember(dampedDragState, pagerState, isPagerInteracting) {
+            // [简化] 直接从 PagerState 计算位置，不再使用 DampedDragAnimationState
+            // 这是唯一的状态源，消除多状态同步问题
+            val currentPosition by remember(pagerState) {
                 derivedStateOf {
-                    val isTabActive = dampedDragState.isDragging || dampedDragState.isRunning
-                    
-                    if (isTabActive) {
-                        dampedDragState.value
-                    } else if (isPagerInteracting && pagerState != null) {
-                         // Zero Latency Direct Read
+                    if (pagerState != null) {
                         pagerState.currentPage + pagerState.currentPageOffsetFraction
                     } else {
-                        dampedDragState.value
+                        selectedIndex.toFloat()
                     }
                 }
             }
+            
+            // [简化] 是否正在交互（用于指示器缩放效果）
+            val isInteracting = pagerState?.isScrollInProgress == true
+            
+            // 同步滚动位置：当选中索引变化时，自动滚动到可见区域
+            LaunchedEffect(selectedIndex) {
+                tabListState.animateScrollToItem(selectedIndex.coerceIn(0, categories.size - 1))
+            }
 
-            // Tabs Container
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    // [Restored] Apply gesture to the bar itself
-                    .horizontalDragGesture(
-                        dragState = dampedDragState, 
-                        itemWidthPx = with(LocalDensity.current) { tabWidth.toPx() }
+            // [修复] 从 layoutInfo 中获取第一个 Tab 的实际物理宽度
+            val actualTabWidthPx by remember {
+                derivedStateOf {
+                    tabListState.layoutInfo.visibleItemsInfo.firstOrNull()?.size?.toFloat() 
+                        ?: with(localDensity) { tabWidth.toPx() }
+                }
+            }
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                // 1. [Layer] Background Liquid Indicator
+                // [修复] 使用 layoutInfo 动态计算滚动偏移
+                val scrollOffset by remember {
+                    derivedStateOf {
+                        val visibleItems = tabListState.layoutInfo.visibleItemsInfo
+                        if (visibleItems.isEmpty()) 0f
+                        else {
+                            val firstItem = visibleItems.first()
+                            firstItem.index * actualTabWidthPx - firstItem.offset.toFloat()
+                        }
+                    }
+                }
+
+                Box(modifier = Modifier.graphicsLayer {
+                    translationX = -scrollOffset
+                }) {
+                    SimpleLiquidIndicator(
+                        position = currentPosition,
+                        itemWidthPx = actualTabWidthPx,
+                        isDragging = isInteracting,
+                        modifier = Modifier.align(Alignment.CenterStart)
                     )
-            ) {
-                 // 1. [Layer] Background Liquid Indicator
-                 com.android.purebilibili.feature.home.components.SimpleLiquidIndicator(
-                    positionState = currentPositionState,
-                    itemWidth = tabWidth,
-                    isDragging = dampedDragState.isDragging || (pagerState?.isScrollInProgress == true),
-                    modifier = Modifier.align(Alignment.CenterStart)
-                 )
+                }
 
-                 // 2. [Layer] Content Tabs
-                Row(
-                   modifier = Modifier.height(48.dp),
-                   verticalAlignment = Alignment.CenterVertically
+                // 2. [Layer] Content Tabs
+                LazyRow(
+                    state = tabListState,
+                    modifier = Modifier.fillMaxHeight(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start,
+                    contentPadding = PaddingValues(horizontal = 0.dp),
+                    // [修复] 禁用惯性滚动，让 Tab 列表只能通过点击切换
+                    flingBehavior = object : androidx.compose.foundation.gestures.FlingBehavior {
+                        override suspend fun androidx.compose.foundation.gestures.ScrollScope.performFling(initialVelocity: Float): Float = 0f
+                    }
                 ) {
-                    // 只渲染可见的 5 个标签
-                    categories.take(visibleTabCount).forEachIndexed { index, category ->
+                    itemsIndexed(categories) { index, category ->
                         Box(
                             modifier = Modifier.width(tabWidth),
                             contentAlignment = Alignment.Center
@@ -345,18 +312,23 @@ fun CategoryTabRow(
                                 category = category,
                                 index = index,
                                 selectedIndex = selectedIndex,
-                                currentPositionState = currentPositionState,
+                                currentPosition = currentPosition,
                                 primaryColor = primaryColor,
                                 unselectedColor = unselectedColor,
                                 onClick = { 
-                                    // [修复] 直播分区点击时跳转到独立页面
-                                    if (index == 3) { // 直播
+                                    // [修复] 直播索引特殊处理
+                                    if (index == 3) {
                                         onLiveClick()
                                     } else {
+                                        // [核心修复] 点击时让 Pager 滚动，指示器会自动跟随
+                                        if (pagerState != null) {
+                                            coroutineScope.launch {
+                                                pagerState.animateScrollToPage(index)
+                                            }
+                                        }
                                         onCategorySelected(index)
                                     }
                                     haptic(com.android.purebilibili.core.util.HapticType.LIGHT)
-                                    // Click usually triggers Pager scroll via onCategorySelected -> ViewModel -> HomeScreen LaunchedEffect
                                 },
                                 onDoubleTap = {
                                     if (selectedIndex == index) {
@@ -401,19 +373,16 @@ fun CategoryTabItem(
     category: String,
     index: Int,
     selectedIndex: Int,
-    currentPositionState: State<Float>,
+    currentPosition: Float,
     primaryColor: Color,
     unselectedColor: Color,
     onClick: () -> Unit,
     onDoubleTap: () -> Unit = {}
 ) {
-     // [Optimized] Calculate fraction from the passed state inside derivedStateOf
-     // Defer reading state until drawing phase where possible
-     val selectionFraction by remember {
-         derivedStateOf {
-             val distance = kotlin.math.abs(currentPositionState.value - index)
-             (1f - distance).coerceIn(0f, 1f)
-         }
+     // [Optimized] Calculate fraction from the position
+     val selectionFraction = remember(currentPosition, index) {
+         val distance = kotlin.math.abs(currentPosition - index)
+         (1f - distance).coerceIn(0f, 1f)
      }
 
      // [Optimized] Removed Color Interpolation to avoid Recomposition

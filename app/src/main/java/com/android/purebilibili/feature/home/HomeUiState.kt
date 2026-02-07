@@ -37,7 +37,6 @@ enum class HomeCategory(val label: String, val tid: Int = 0) {
     POPULAR("热门", 0),
     LIVE("直播", 0),
     ANIME("追番", 13),     // 番剧分区
-    MOVIE("影视", 181),    // 影视分区
     GAME("游戏", 4),       // 游戏分区
     KNOWLEDGE("知识", 36), // 知识分区
     TECH("科技", 188)      // 科技分区

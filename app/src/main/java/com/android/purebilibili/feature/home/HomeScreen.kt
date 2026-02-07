@@ -167,6 +167,21 @@ fun HomeScreen(
     val initialPage = HomeCategory.entries.indexOf(state.currentCategory).coerceAtLeast(0)
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { HomeCategory.entries.size }
     
+    // [修复] 监听 Pager 滑动，同步更新 ViewModel 分类
+    LaunchedEffect(pagerState.currentPage) {
+        val targetCategory = HomeCategory.entries[pagerState.currentPage]
+        viewModel.switchCategory(targetCategory)
+    }
+
+    // [修复] 监听 ViewModel 状态变化，同步更新 Pager 位置
+    // 当点击 Tab 导致 state.currentCategory 变化时，让 Pager 自动跟随滚动
+    LaunchedEffect(state.currentCategory) {
+        val targetPage = HomeCategory.entries.indexOf(state.currentCategory)
+        if (targetPage >= 0 && targetPage != pagerState.currentPage && !pagerState.isScrollInProgress) {
+            pagerState.animateScrollToPage(targetPage)
+        }
+    }
+
     // [修复] 刷新时自动滚回顶部，防止下拉用力过猛导致内容偏移
     LaunchedEffect(isRefreshing) {
         if (isRefreshing) {
@@ -790,7 +805,6 @@ fun HomeScreen(
                 val category = HomeCategory.entries[index]
                 when (category) {
                     HomeCategory.ANIME -> onBangumiClick(1)
-                    HomeCategory.MOVIE -> onBangumiClick(2)
                     else -> viewModel.switchCategory(category)
                 }
             },
