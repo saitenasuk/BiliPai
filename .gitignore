@@ -37,6 +37,7 @@ keystore.properties
 
 # 🔥 忽略 IDE 相关
 .idea/
+.vscode/
 *.ipr
 *.iws
 
