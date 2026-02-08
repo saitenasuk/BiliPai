@@ -53,6 +53,7 @@ import com.android.purebilibili.feature.video.ui.gesture.GestureMode
 import com.android.purebilibili.feature.video.ui.gesture.GestureIndicator
 import com.android.purebilibili.feature.video.ui.gesture.rememberPlayerGestureState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import androidx.compose.runtime.collectAsState
@@ -60,6 +61,9 @@ import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
 import com.android.purebilibili.core.ui.common.copyOnLongPress
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private const val AUTO_HIDE_DELAY = 4000L
 
@@ -102,6 +106,8 @@ fun FullscreenPlayerOverlay(
     //  画质选择菜单状态
     var showQualityMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    //  共享弹幕管理器（横竖屏切换保持状态，同时可用于手势 seek 同步）
+    val danmakuManager = rememberDanmakuManager()
     
     // 手势状态
     var gestureMode by remember { mutableStateOf(FullscreenGestureMode.None) }
@@ -124,6 +130,14 @@ fun FullscreenPlayerOverlay(
     var currentProgress by remember { mutableFloatStateOf(0f) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
+    val currentClockText by produceState(initialValue = formatCurrentClock()) {
+        while (true) {
+            value = formatCurrentClock()
+            val now = System.currentTimeMillis()
+            val nextMinuteDelay = (60_000L - (now % 60_000L)).coerceAtLeast(1_000L)
+            delay(nextMinuteDelay)
+        }
+    }
     
     //  [修复] 获取生命周期用于监听前后台切换
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
@@ -181,8 +195,8 @@ fun FullscreenPlayerOverlay(
     }
     
     // 监听播放器状态
-    LaunchedEffect(player) {
-        while (true) {
+    LaunchedEffect(player, showControls, gestureMode) {
+        while (isActive) {
             player?.let {
                 isPlaying = it.isPlaying
                 duration = it.duration.coerceAtLeast(1L)
@@ -191,7 +205,8 @@ fun FullscreenPlayerOverlay(
                     currentProgress = (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
                 }
             }
-            delay(200)
+            val pollInterval = if (showControls || gestureMode == FullscreenGestureMode.Seek) 100L else 250L
+            delay(pollInterval)
         }
     }
     
@@ -237,11 +252,13 @@ fun FullscreenPlayerOverlay(
                                     // 左侧双击：后退 10 秒
                                     val newPos = (p.currentPosition - 10000).coerceAtLeast(0)
                                     p.seekTo(newPos)
+                                    danmakuManager.seekTo(newPos)
                                 }
                                 relativeX > 0.7f -> {
                                     // 右侧双击：前进 10 秒
                                     val newPos = (p.currentPosition + 10000).coerceAtMost(p.duration)
                                     p.seekTo(newPos)
+                                    danmakuManager.seekTo(newPos)
                                 }
                                 else -> {
                                     // 中间双击：播放/暂停
@@ -288,7 +305,10 @@ fun FullscreenPlayerOverlay(
                     },
                     onDragEnd = {
                         if (gestureMode == FullscreenGestureMode.Seek && abs(dragDelta) > 20f) {
-                            player?.seekTo(seekPreviewPosition)
+                            player?.let {
+                                it.seekTo(seekPreviewPosition)
+                                danmakuManager.seekTo(seekPreviewPosition)
+                            }
                         }
                         gestureMode = FullscreenGestureMode.None
                     },
@@ -325,9 +345,6 @@ fun FullscreenPlayerOverlay(
                 )
             }
     ) {
-        //  [重构] 弹幕管理器 (使用共享单例，确保横竖屏切换时保持状态)
-        val danmakuManager = rememberDanmakuManager()
-        
         //  弹幕开关设置
         val danmakuEnabled by SettingsManager
             .getDanmakuEnabled(context)
@@ -372,7 +389,7 @@ fun FullscreenPlayerOverlay(
         }
         
         //  弹幕设置变化时实时应用
-        LaunchedEffect(danmakuOpacity, danmakuFontScale, danmakuSpeed, danmakuDisplayArea) {
+        LaunchedEffect(danmakuOpacity, danmakuFontScale, danmakuSpeed, danmakuDisplayArea, danmakuMergeDuplicates) {
             danmakuManager.updateSettings(
                 opacity = danmakuOpacity,
                 fontScale = danmakuFontScale,
@@ -445,8 +462,12 @@ fun FullscreenPlayerOverlay(
                     },
                     update = { view ->
                         if (view.width > 0 && view.height > 0) {
-                            danmakuManager.attachView(view)
-                            com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView update: size=${view.width}x${view.height}")
+                            val sizeTag = "${view.width}x${view.height}"
+                            if (view.tag != sizeTag) {
+                                view.tag = sizeTag
+                                danmakuManager.attachView(view)
+                                com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView update: size=${view.width}x${view.height}")
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxSize()
@@ -503,6 +524,14 @@ fun FullscreenPlayerOverlay(
                             modifier = Modifier
                                 .weight(1f)
                                 .copyOnLongPress(miniPlayerManager.currentTitle, "视频标题")
+                        )
+
+                        Text(
+                            text = currentClockText,
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(end = 8.dp)
                         )
                         
                         //  [新增] 弹幕开关按钮
@@ -583,7 +612,10 @@ fun FullscreenPlayerOverlay(
                                 onValueChangeFinished = {
                                     isDragging = false
                                     val newPosition = (dragProgress * duration).toLong()
-                                    player?.seekTo(newPosition)
+                                    player?.let {
+                                        it.seekTo(newPosition)
+                                        danmakuManager.seekTo(newPosition)
+                                    }
                                     currentProgress = dragProgress
                                 },
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
@@ -792,4 +824,9 @@ private fun FullscreenControlButton(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
         )
     }
+}
+
+private fun formatCurrentClock(): String {
+    val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+    return formatter.format(Date())
 }

@@ -61,7 +61,8 @@ object CommentRepository {
 
     /**
      * 获取评论列表
-     * @param mode 排序模式: 3=热度(默认), 2=时间, 1=回复最多
+     * @param mode 排序模式:
+     * 3=最热(WBI mode=3), 2=最新(legacy sort=0), 4=点赞(legacy sort=1), 1=回复(legacy sort=2)
      */
     suspend fun getComments(aid: Long, page: Int, ps: Int = 20, mode: Int = 3): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
@@ -81,7 +82,7 @@ object CommentRepository {
                     )
                 }
                 1 -> {
-                    // [新增] 回复数排序使用旧版 API
+                    // 回复数排序使用旧版 API
                     com.android.purebilibili.core.util.Logger.d("CommentRepo", " getComments (Legacy): aid=$aid, page=$page, sort=2 (回复数)")
                     api.getReplyListLegacy(
                         oid = aid,
@@ -89,6 +90,17 @@ object CommentRepository {
                         pn = page,
                         ps = ps,
                         sort = 2  // 旧版 API: 2=按回复数
+                    )
+                }
+                4 -> {
+                    // 点赞数排序使用旧版 API
+                    com.android.purebilibili.core.util.Logger.d("CommentRepo", " getComments (Legacy): aid=$aid, page=$page, sort=1 (点赞数)")
+                    api.getReplyListLegacy(
+                        oid = aid,
+                        type = 1,
+                        pn = page,
+                        ps = ps,
+                        sort = 1  // 旧版 API: 1=按点赞数
                     )
                 }
                 else -> {
@@ -110,6 +122,7 @@ object CommentRepository {
             
             val sortLabel = when (mode) {
                 2 -> "时间"
+                4 -> "点赞数"
                 1 -> "回复数"
                 else -> "热度"
             }
@@ -378,4 +391,3 @@ object CommentRepository {
         }
     }
 }
-

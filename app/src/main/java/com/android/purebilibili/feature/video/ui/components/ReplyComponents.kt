@@ -215,7 +215,7 @@ fun ReplyItemView(
                             .padding(4.dp)
                     ) {
                         Icon(
-                            imageVector = if (isLiked) CupertinoIcons.Filled.Heart else CupertinoIcons.Default.Heart,
+                            imageVector = if (isLiked) CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Default.HandThumbsup,
                             contentDescription = "Like",
                             tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)

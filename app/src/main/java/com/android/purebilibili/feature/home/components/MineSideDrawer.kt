@@ -9,11 +9,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +64,11 @@ fun MineSideDrawer(
     isBlurEnabled: Boolean = true // [新增] 模糊开关状态
 ) {
     val scope = rememberCoroutineScope()
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    // 侧边栏宽度自适应：避免 0.5f 导致文本被截断
+    val drawerWidth = remember(screenWidth) {
+        (screenWidth * 0.72f).coerceIn(280.dp, 360.dp)
+    }
     
     // 辅助函数：关闭侧边栏并执行回调
     fun closeAndRun(action: () -> Unit) {
@@ -110,13 +117,15 @@ fun MineSideDrawer(
         shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp), // 保持抽屉的右侧圆角
         modifier = Modifier
             .fillMaxHeight()
-            .fillMaxWidth(0.5f) // 宽度设为屏幕的一半，刚好卡在两列视频中间
+            .width(drawerWidth)
             .then(
                 if (hazeState != null && isBlurEnabled) {
                     Modifier.hazeEffect(
                         state = hazeState,
                         style = hazeStyle
-                    )
+                    ) {
+                        blurEnabled = true
+                    }
                 } else Modifier
             )
     ) {
@@ -125,6 +134,7 @@ fun MineSideDrawer(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .statusBarsPadding()
+                .navigationBarsPadding()
                 .padding(vertical = 12.dp)
         ) {
             // 1. 用户信息区域 - 可点击进入个人主页

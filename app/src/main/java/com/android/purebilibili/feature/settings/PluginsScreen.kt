@@ -1,6 +1,7 @@
 // 文件路径: feature/settings/PluginsScreen.kt
 package com.android.purebilibili.feature.settings
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -367,7 +368,7 @@ fun PluginsContent(
             text = {
                 Column {
                     Text(
-                        text = "输入 JSON 规则插件的下载链接",
+                        text = "输入 JSON 规则插件链接（支持任意返回 JSON 的 http/https 地址）",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -379,7 +380,7 @@ fun PluginsContent(
                             importError = null
                         },
                         label = { Text("插件 URL") },
-                        placeholder = { Text("https://xxx.json") },
+                        placeholder = { Text("https://example.com/plugin") },
                         singleLine = true,
                         isError = importError != null,
                         supportingText = importError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
@@ -403,19 +404,22 @@ fun PluginsContent(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (importUrl.isBlank()) {
+                        val normalizedUrl = importUrl.trim()
+                        if (normalizedUrl.isBlank()) {
                             importError = "请输入 URL"
                             return@TextButton
                         }
-                        
-                        if (!importUrl.endsWith(".json")) {
-                            importError = "链接必须以 .json 结尾"
+
+                        val uri = Uri.parse(normalizedUrl)
+                        val scheme = uri.scheme?.lowercase()
+                        if (scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
+                            importError = "请输入有效的 http/https 链接"
                             return@TextButton
                         }
-                        
+
                         isImporting = true
                         scope.launch {
-                            val result = com.android.purebilibili.core.plugin.json.JsonPluginManager.importFromUrl(importUrl)
+                            val result = com.android.purebilibili.core.plugin.json.JsonPluginManager.importFromUrl(normalizedUrl)
                             isImporting = false
                             
                             if (result.isSuccess) {
@@ -560,7 +564,10 @@ private fun PluginItem(
             val primaryColor = MaterialTheme.colorScheme.primary
             CupertinoSwitch(
                 checked = pluginInfo.enabled,
-                onCheckedChange = onToggle,
+                onCheckedChange = { enabled ->
+                    if (!plugin.unavailable) onToggle(enabled)
+                },
+                enabled = !plugin.unavailable,
                 colors = CupertinoSwitchDefaults.colors(
                     thumbColor = androidx.compose.ui.graphics.Color.White,
                     checkedTrackColor = primaryColor,
@@ -581,7 +588,7 @@ private fun PluginItem(
         
         // 展开的配置区域
         AnimatedVisibility(
-            visible = isExpanded && pluginInfo.enabled,
+            visible = isExpanded && (pluginInfo.enabled || plugin.unavailable),
             enter = expandVertically(),
             exit = shrinkVertically()
         ) {
@@ -592,7 +599,16 @@ private fun PluginItem(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                plugin.SettingsContent()
+                if (plugin.unavailable) {
+                    Text(
+                        text = plugin.unavailableReason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                } else {
+                    plugin.SettingsContent()
+                }
             }
         }
     }

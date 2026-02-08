@@ -2,8 +2,10 @@
 package com.android.purebilibili.core.plugin.json
 
 import android.content.Context
+import android.net.Uri
 import com.android.purebilibili.core.plugin.DanmakuItem
 import com.android.purebilibili.core.plugin.DanmakuStyle
+import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlinx.coroutines.Dispatchers
@@ -12,11 +14,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
-import java.net.URL
 
 private const val TAG = "JsonPluginManager"
 private const val STATS_PREFS = "json_plugin_stats"
+private const val ENABLED_PREFS = "json_plugins"
+private const val ENABLED_PREFIX = "enabled_"
+private val PLUGIN_ID_REGEX = Regex("^[a-zA-Z0-9_.-]{1,64}$")
 
 /**
  *  JSON 规则插件管理器
@@ -26,6 +32,12 @@ private const val STATS_PREFS = "json_plugin_stats"
 object JsonPluginManager {
     
     private val json = Json { ignoreUnknownKeys = true }
+    private val httpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+    }
     private lateinit var appContext: Context
     
     /** 已加载的插件列表 */
@@ -59,31 +71,26 @@ object JsonPluginManager {
     suspend fun importFromUrl(url: String): Result<JsonRulePlugin> {
         return withContext(Dispatchers.IO) {
             try {
-                Logger.d(TAG, " 下载插件: $url")
-                
-                //  使用带超时的 OkHttp 请求
-                val client = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                val normalizedUrl = url.trim()
+                validateImportUrl(normalizedUrl).onFailure { return@withContext Result.failure(it) }
+                Logger.d(TAG, " 下载插件: $normalizedUrl")
+
+                val request = Request.Builder()
+                    .url(normalizedUrl)
                     .build()
-                
-                val request = okhttp3.Request.Builder()
-                    .url(url)
-                    .build()
-                
-                val response = client.newCall(request).execute()
-                
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        Exception("下载失败: HTTP ${response.code} ${response.message}")
-                    )
+
+                val content = httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        return@withContext Result.failure(
+                            Exception("下载失败: HTTP ${response.code} ${response.message}")
+                        )
+                    }
+                    response.body?.string()
+                        ?: return@withContext Result.failure(Exception("服务器返回空内容"))
                 }
-                
-                val content = response.body?.string()
-                    ?: return@withContext Result.failure(Exception("服务器返回空内容"))
-                
+
                 Logger.d(TAG, "📄 下载内容长度: ${content.length}")
-                
+
                 val plugin = try {
                     json.decodeFromString<JsonRulePlugin>(content)
                 } catch (e: Exception) {
@@ -92,19 +99,25 @@ object JsonPluginManager {
                         Exception("JSON 解析失败: ${e.message?.take(100)}")
                     )
                 }
-                
-                // 验证插件类型
-                if (plugin.type !in listOf("feed", "danmaku")) {
-                    return@withContext Result.failure(Exception("不支持的插件类型: ${plugin.type}"))
+
+                validatePlugin(plugin)?.let { error ->
+                    return@withContext Result.failure(Exception(error))
                 }
-                
+
+                val existing = _plugins.value.find { it.plugin.id == plugin.id }
+                val enabled = existing?.enabled ?: true
+
                 // 保存到本地
                 savePlugin(plugin)
-                
+
                 // 添加到列表
-                val loaded = LoadedJsonPlugin(plugin, enabled = true, sourceUrl = url)
+                val loaded = LoadedJsonPlugin(plugin, enabled = enabled, sourceUrl = normalizedUrl)
                 _plugins.value = _plugins.value.filter { it.plugin.id != plugin.id } + loaded
-                
+                persistEnabledState(plugin.id, enabled)
+                if (plugin.type == "danmaku") {
+                    PluginManager.notifyDanmakuPluginsUpdated()
+                }
+
                 Logger.d(TAG, " 插件导入成功: ${plugin.name}")
                 Result.success(plugin)
             } catch (e: java.net.SocketTimeoutException) {
@@ -127,10 +140,17 @@ object JsonPluginManager {
      * 删除插件
      */
     fun removePlugin(pluginId: String) {
+        val removedType = _plugins.value.find { it.plugin.id == pluginId }?.plugin?.type
         val file = File(getPluginDir(), "$pluginId.json")
         if (file.exists()) file.delete()
         
         _plugins.value = _plugins.value.filter { it.plugin.id != pluginId }
+        _filterStats.value = _filterStats.value - pluginId
+        clearEnabledState(pluginId)
+        saveFilterStats()
+        if (removedType == "danmaku") {
+            PluginManager.notifyDanmakuPluginsUpdated()
+        }
         Logger.d(TAG, " 删除插件: $pluginId")
     }
     
@@ -138,13 +158,27 @@ object JsonPluginManager {
      * 启用/禁用插件
      */
     fun setEnabled(pluginId: String, enabled: Boolean) {
-        _plugins.value = _plugins.value.map { 
-            if (it.plugin.id == pluginId) it.copy(enabled = enabled) else it
+        val targetType = _plugins.value.find { it.plugin.id == pluginId }?.plugin?.type
+        if (targetType == null) {
+            Logger.w(TAG, " 插件不存在: $pluginId")
+            return
         }
-        
-        // 保存状态
-        val prefs = appContext.getSharedPreferences("json_plugins", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("enabled_$pluginId", enabled).apply()
+
+        var changed = false
+        _plugins.value = _plugins.value.map {
+            if (it.plugin.id == pluginId && it.enabled != enabled) {
+                changed = true
+                it.copy(enabled = enabled)
+            } else {
+                it
+            }
+        }
+        if (changed) {
+            persistEnabledState(pluginId, enabled)
+            if (targetType == "danmaku") {
+                PluginManager.notifyDanmakuPluginsUpdated()
+            }
+        }
     }
     
     // ============ 过滤方法 ============
@@ -163,31 +197,45 @@ object JsonPluginManager {
             _lastFilteredCount.value = 0
             return videos
         }
-        
+
         var filteredCount = 0
-        val result = videos.filter { video ->
-            feedPlugins.all { loaded ->
-                val show = RuleEngine.shouldShowVideo(video, loaded.plugin.rules)
-                //  记录过滤统计
-                if (!show) {
-                    filteredCount++
-                    val current = _filterStats.value.getOrDefault(loaded.plugin.id, 0)
-                    _filterStats.value = _filterStats.value + (loaded.plugin.id to (current + 1))
-                    Logger.d(TAG, "🚫 过滤视频: ${video.title.take(20)}... (插件: ${loaded.plugin.name})")
+        val statsDelta = mutableMapOf<String, Int>()
+        val result = ArrayList<VideoItem>(videos.size)
+
+        videos.forEach { video ->
+            var hiddenBy: LoadedJsonPlugin? = null
+            for (loaded in feedPlugins) {
+                if (!RuleEngine.shouldShowVideo(video, loaded.plugin.rules)) {
+                    hiddenBy = loaded
+                    break
                 }
-                show
+            }
+
+            if (hiddenBy == null) {
+                result.add(video)
+            } else {
+                filteredCount++
+                val pluginId = hiddenBy.plugin.id
+                statsDelta[pluginId] = statsDelta.getOrDefault(pluginId, 0) + 1
+                Logger.d(TAG, "🚫 过滤视频: ${video.title.take(20)}... (插件: ${hiddenBy.plugin.name})")
             }
         }
-        
-        //  保存统计到持久化存储
-        saveFilterStats()
-        
+
+        if (statsDelta.isNotEmpty()) {
+            val merged = _filterStats.value.toMutableMap()
+            statsDelta.forEach { (pluginId, delta) ->
+                merged[pluginId] = merged.getOrDefault(pluginId, 0) + delta
+            }
+            _filterStats.value = merged
+            saveFilterStats()
+        }
+
         //  更新最近过滤数量
         _lastFilteredCount.value = filteredCount
         if (filteredCount > 0) {
             Logger.d(TAG, " 本次过滤了 $filteredCount 个视频")
         }
-        
+
         return result
     }
     
@@ -195,6 +243,10 @@ object JsonPluginManager {
      *  更新插件规则
      */
     fun updatePlugin(plugin: JsonRulePlugin) {
+        validatePlugin(plugin)?.let { error ->
+            Logger.w(TAG, " 更新插件失败: $error")
+            return
+        }
         // 保存到本地
         savePlugin(plugin)
         
@@ -207,6 +259,10 @@ object JsonPluginManager {
         
         // 重置该插件的统计
         _filterStats.value = _filterStats.value - plugin.id
+        saveFilterStats()
+        if (plugin.type == "danmaku") {
+            PluginManager.notifyDanmakuPluginsUpdated()
+        }
         
         Logger.d(TAG, " 插件已更新: ${plugin.name}")
     }
@@ -278,6 +334,45 @@ object JsonPluginManager {
     }
     
     // ============ 私有方法 ============
+
+    private fun validateImportUrl(url: String): Result<Unit> {
+        if (url.isBlank()) return Result.failure(Exception("请输入插件链接"))
+        val uri = Uri.parse(url)
+        val scheme = uri.scheme?.lowercase()
+        if (scheme !in listOf("http", "https")) {
+            return Result.failure(Exception("仅支持 http/https 链接"))
+        }
+        if (uri.host.isNullOrBlank()) {
+            return Result.failure(Exception("链接格式不正确"))
+        }
+        return Result.success(Unit)
+    }
+
+    private fun validatePlugin(plugin: JsonRulePlugin): String? {
+        if (plugin.id.isBlank()) return "插件 ID 不能为空"
+        if (!PLUGIN_ID_REGEX.matches(plugin.id)) {
+            return "插件 ID 格式无效，仅支持字母数字/._-"
+        }
+        if (plugin.name.isBlank()) return "插件名称不能为空"
+        if (plugin.type !in setOf("feed", "danmaku")) {
+            return "不支持的插件类型: ${plugin.type}"
+        }
+        if (plugin.rules.isEmpty()) return "规则不能为空"
+        if (plugin.rules.any { it.toCondition() == null }) {
+            return "存在无效规则（缺少 condition 或 field/op/value）"
+        }
+        return null
+    }
+
+    private fun persistEnabledState(pluginId: String, enabled: Boolean) {
+        val prefs = appContext.getSharedPreferences(ENABLED_PREFS, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("$ENABLED_PREFIX$pluginId", enabled).apply()
+    }
+
+    private fun clearEnabledState(pluginId: String) {
+        val prefs = appContext.getSharedPreferences(ENABLED_PREFS, Context.MODE_PRIVATE)
+        prefs.edit().remove("$ENABLED_PREFIX$pluginId").apply()
+    }
     
     private fun getPluginDir(): File {
         val dir = File(appContext.filesDir, "json_plugins")
@@ -294,13 +389,19 @@ object JsonPluginManager {
         val dir = getPluginDir()
         if (!dir.exists()) return
         
-        val prefs = appContext.getSharedPreferences("json_plugins", Context.MODE_PRIVATE)
+        val prefs = appContext.getSharedPreferences(ENABLED_PREFS, Context.MODE_PRIVATE)
         
-        val loaded = dir.listFiles()?.mapNotNull { file ->
+        val loaded = dir.listFiles()
+            ?.sortedBy { it.name }
+            ?.mapNotNull { file ->
             try {
                 if (file.extension != "json") return@mapNotNull null
                 val plugin = json.decodeFromString<JsonRulePlugin>(file.readText())
-                val enabled = prefs.getBoolean("enabled_${plugin.id}", true)
+                validatePlugin(plugin)?.let {
+                    Logger.w(TAG, " 插件文件无效，已忽略: ${file.name} ($it)")
+                    return@mapNotNull null
+                }
+                val enabled = prefs.getBoolean("$ENABLED_PREFIX${plugin.id}", true)
                 LoadedJsonPlugin(plugin, enabled, sourceUrl = null)
             } catch (e: Exception) {
                 Logger.w(TAG, " 加载插件失败: ${file.name}")

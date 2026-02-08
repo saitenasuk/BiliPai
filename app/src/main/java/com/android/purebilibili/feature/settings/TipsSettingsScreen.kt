@@ -9,15 +9,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
+import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.InfoCircle
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronBackward
+
+private data class TipEntry(
+    val title: String,
+    val content: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,6 +31,69 @@ fun TipsSettingsScreen(
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         isVisible = true
+    }
+
+    val basicTips = remember {
+        listOf(
+            TipEntry(
+                title = "1. 摸鱼模式：评论区一滑隐藏播放器",
+                content = "在播放设置开启「上滑隐藏播放器」后，竖屏评论区上滑即可先隐藏画面，只留评论和声音。"
+            ),
+            TipEntry(
+                title = "2. 回顶部不用狂划",
+                content = "首页刷太深时，双击底栏「首页」图标，或双击顶部频道标题，可快速回到列表顶部。"
+            ),
+            TipEntry(
+                title = "3. 封面长按有快捷操作",
+                content = "长按视频卡片可快速预览，并直接执行「稍后再看」等常用动作。"
+            ),
+            TipEntry(
+                title = "4. 搜索不只搜视频",
+                content = "搜索页可切换「视频 / UP主 / 番剧 / 直播」，还能按分区、排序、时长做精确筛选。"
+            )
+        )
+    }
+
+    val hiddenTips = remember {
+        listOf(
+            TipEntry(
+                title = "5. 关闭自动连播，结尾更安静",
+                content = "在播放设置关闭「自动播放下一个」后，视频播完会停在结束态，不再自动连播。"
+            ),
+            TipEntry(
+                title = "6. 自动横竖屏更省手",
+                content = "开启「自动横竖屏切换」后，跟随手机方向自动进出全屏，单手看片更顺。"
+            ),
+            TipEntry(
+                title = "7. 小窗和画中画是两种玩法",
+                content = "播放设置中的「后台播放模式」可切换：默认后台播放或系统画中画；画中画需先授予权限。"
+            ),
+            TipEntry(
+                title = "8. 双击点赞可按喜好开关",
+                content = "若你容易误触，可在播放设置关闭「双击点赞」；喜欢快操作就保持开启。"
+            )
+        )
+    }
+
+    val advancedTips = remember {
+        listOf(
+            TipEntry(
+                title = "9. 空降助手能跳过片头广告",
+                content = "在设置开启「空降助手」后，可自动跳过赞助/片头片尾；也可改成仅提示不自动跳过。"
+            ),
+            TipEntry(
+                title = "10. 版本号连点有彩蛋",
+                content = "在设置页连续点击版本号会触发隐藏彩蛋提示，适合探索党。"
+            ),
+            TipEntry(
+                title = "11. 趣味彩蛋可随时关闭",
+                content = "如果不想看到趣味提示，可在设置里关闭「趣味彩蛋」，界面会更克制。"
+            ),
+            TipEntry(
+                title = "12. 链接默认打开可一步到位",
+                content = "在设置中配置「默认打开链接」后，点到 B 站链接可更稳定地直达应用内页面。"
+            )
+        )
     }
 
     Scaffold(
@@ -56,12 +123,34 @@ fun TipsSettingsScreen(
         ) {
             item {
                 Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
-                    IOSSectionTitle("隐藏操作")
+                    IOSSectionTitle("基础技巧")
                 }
             }
             item {
                 Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
-                    TipsSection()
+                    TipSection(items = basicTips)
+                }
+            }
+
+            item {
+                Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                    IOSSectionTitle("隐藏技巧")
+                }
+            }
+            item {
+                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                    TipSection(items = hiddenTips)
+                }
+            }
+
+            item {
+                Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
+                    IOSSectionTitle("进阶玩法")
+                }
+            }
+            item {
+                Box(modifier = Modifier.staggeredEntrance(5, isVisible)) {
+                    TipSection(items = advancedTips)
                 }
             }
         }
@@ -69,7 +158,7 @@ fun TipsSettingsScreen(
 }
 
 @Composable
-private fun TipsSection() {
+private fun TipSection(items: List<TipEntry>) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -77,30 +166,20 @@ private fun TipsSection() {
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surface)
     ) {
-        TipItem(
-            titile = "1. 摸鱼神器：下滑隐身",
-            content = "在视频详情页，手指轻轻往下一滑，播放器瞬间消失！\n此时视频声音继续播放，老板来了也不怕~"
-        )
-        TipDivider()
-        TipItem(
-            titile = "2. 咻的一下回顶部",
-            content = "首页刷太深回不去？双击底部的那个小房子图标，或者顶部的“推荐”二字，嗖的一下就回家啦！"
-        )
-        TipDivider()
-        TipItem(
-            titile = "3. 长按有惊喜",
-            content = "看到感兴趣的封面不要犹豫，长按它！\n超大图预览马上奉上，还能顺手点个“稍后再看”，简直是囤片党福音。"
-        )
-        TipDivider()
-        TipItem(
-            titile = "4. 左右横跳",
-            content = "首页不仅能上下刷，还能左右滑哦~\n在不同的频道分区之间反复横跳，总有一个适合你！"
-        )
+        items.forEachIndexed { index, tip ->
+            TipItem(
+                title = tip.title,
+                content = tip.content
+            )
+            if (index != items.lastIndex) {
+                TipDivider()
+            }
+        }
     }
 }
 
 @Composable
-private fun TipItem(titile: String, content: String) {
+private fun TipItem(title: String, content: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -111,12 +190,14 @@ private fun TipItem(titile: String, content: String) {
             imageVector = CupertinoIcons.Filled.InfoCircle,
             contentDescription = null,
             tint = com.android.purebilibili.core.theme.iOSBlue,
-            modifier = Modifier.size(20.dp).padding(top = 2.dp) // Align with text top
+            modifier = Modifier
+                .size(20.dp)
+                .padding(top = 2.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column {
             Text(
-                text = titile,
+                text = title,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -135,7 +216,7 @@ private fun TipItem(titile: String, content: String) {
 @Composable
 private fun TipDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(start = 48.dp), // Indent to align with text
+        modifier = Modifier.padding(start = 48.dp),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
         thickness = 0.5.dp
     )

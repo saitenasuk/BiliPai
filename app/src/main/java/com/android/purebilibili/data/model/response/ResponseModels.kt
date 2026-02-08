@@ -27,6 +27,8 @@ data class ReplyData(
     val topReplies: List<ReplyItem>? = null,
     //  [新增] 热门评论列表
     val hots: List<ReplyItem>? = null,
+    //  [新增] WBI API 置顶信息（top.upper/admin/vote）
+    val top: ReplyTop? = null,
     //  [新增] UP主信息（包含 UP 置顶评论）
     val upper: ReplyUpper? = null
 ) {
@@ -44,6 +46,10 @@ data class ReplyData(
     //  [新增] 获取置顶评论（WBI 和旧版 API 兼容）
     fun collectTopReplies(): List<ReplyItem> {
         val result = mutableListOf<ReplyItem>()
+        // WBI API: data.top.upper/admin/vote
+        top?.upper?.let { result.add(it) }
+        top?.admin?.let { result.add(it) }
+        top?.vote?.let { result.add(it) }
         // 添加 UP 置顶
         upper?.top?.let { result.add(it) }
         // 添加其他置顶
@@ -58,6 +64,13 @@ data class ReplyUpper(
     val mid: Long = 0,
     // UP 主置顶评论
     val top: ReplyItem? = null
+)
+
+@Serializable
+data class ReplyTop(
+    val admin: ReplyItem? = null,
+    val upper: ReplyItem? = null,
+    val vote: ReplyItem? = null
 )
 
 //  WBI API 的游标信息

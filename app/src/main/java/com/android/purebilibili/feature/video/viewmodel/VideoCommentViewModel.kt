@@ -8,13 +8,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-//  [修复] 评论排序模式
-// 根据 Bilibili WBI API 文档 (x/v2/reply/wbi/main)：mode=3(按热度), mode=2(按时间)
-// 旧版 API (x/v2/reply): sort=0(按时间), sort=1(按点赞), sort=2(按回复数)
+// 评论排序模式：
+// - mode=3: 最热（WBI）
+// - mode=2: 最新（Legacy sort=0）
+// - mode=4: 点赞最多（Legacy sort=1）
+// - mode=1: 回复最多（Legacy sort=2）
 enum class CommentSortMode(val apiMode: Int, val label: String) {
     HOT(3, "最热"),       // 按热度排序 (mode=3, 默认)
     NEWEST(2, "最新"),    // 按时间排序（最新优先）(mode=2)
-    REPLY(1, "回复最多")  // [新增] 按回复数排序 (使用旧版 API sort=2)
+    LIKE(4, "点赞"),      // 按点赞数排序 (使用旧版 API sort=1)
+    REPLY(1, "回复");     // 按回复数排序 (使用旧版 API sort=2)
+
+    companion object {
+        fun fromApiMode(mode: Int): CommentSortMode = entries.find { it.apiMode == mode } ?: HOT
+    }
 }
 
 // 评论状态
@@ -68,7 +75,11 @@ class VideoCommentViewModel : ViewModel() {
     private var allReplies: List<ReplyItem> = emptyList()
 
     // 初始化/重置
-    fun init(aid: Long, upMid: Long = 0) {
+    fun init(
+        aid: Long,
+        upMid: Long = 0,
+        preferredSortMode: CommentSortMode = CommentSortMode.HOT
+    ) {
         android.util.Log.d("CommentVM", " init called with aid=$aid, upMid=$upMid, currentAid=$currentAid")
         if (currentAid == aid && _commentState.value.upMid == upMid) {
             // [修复] 即使视频相同，也刷新 currentMid（防止登录状态变化后不更新）
@@ -80,7 +91,11 @@ class VideoCommentViewModel : ViewModel() {
         // 获取当前登录用户 mid
         val myMid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
         android.util.Log.d("CommentVM", " init: myMid=$myMid")
-        _commentState.value = CommentUiState(upMid = upMid, currentMid = myMid)
+        _commentState.value = CommentUiState(
+            sortMode = preferredSortMode,
+            upMid = upMid,
+            currentMid = myMid
+        )
         loadComments()
     }
     
@@ -113,7 +128,8 @@ class VideoCommentViewModel : ViewModel() {
         _commentState.value = CommentUiState(
             sortMode = mode,
             upOnlyFilter = false,  //  互斥：清除 UP 筛选
-            upMid = currentState.upMid
+            upMid = currentState.upMid,
+            currentMid = currentState.currentMid
         )
         loadComments()
     }
@@ -166,23 +182,30 @@ class VideoCommentViewModel : ViewModel() {
                 val current = _commentState.value
                 val newReplies = data.replies ?: emptyList()
                 
-                //  [新增] 第一页时添加置顶评论到列表开头
+                // 第一页时先合并置顶和热评
                 val topReplies = if (pageToLoad == 1) data.collectTopReplies() else emptyList()
+                val hotReplies = if (pageToLoad == 1) data.hots ?: emptyList() else emptyList()
                 
-                //  合并到原始列表（置顶评论在前）
+                // 合并到原始列表（置顶 -> 热评 -> 普通评论）
                 val combinedReplies = if (pageToLoad == 1) {
-                    (topReplies + newReplies).distinctBy { it.rpid }
+                    (topReplies + hotReplies + newReplies).distinctBy { it.rpid }
                 } else {
                     (allReplies + newReplies).distinctBy { it.rpid }
                 }
                 allReplies = combinedReplies
                 
-                //  [修复] 使用统一方法获取评论总数和结束标志 (兼容 WBI 和旧版 API)
+                // 统一获取评论总数和结束标志 (兼容 WBI 和旧版 API)
                 val totalCount = data.getAllCount()
-                val isNoNewReplies = newReplies.isEmpty()
-                val isEnd = data.getIsEnd(pageToLoad, combinedReplies.size) || isNoNewReplies
+                val isEnd = if (data.cursor.allCount > 0) {
+                    data.cursor.isEnd
+                } else {
+                    data.getIsEnd(pageToLoad, combinedReplies.size) || newReplies.isEmpty()
+                }
                 
-                android.util.Log.d("CommentVM", " loadComments result: page=$pageToLoad, new=${newReplies.size}, top=${topReplies.size}, total=${allReplies.size}, allCount=$totalCount, isEnd=$isEnd")
+                android.util.Log.d(
+                    "CommentVM",
+                    " loadComments result: page=$pageToLoad, new=${newReplies.size}, hot=${hotReplies.size}, top=${topReplies.size}, total=${allReplies.size}, allCount=$totalCount, isEnd=$isEnd"
+                )
                 
                 //  [修复] 加载后重新应用筛选（确保排序切换后筛选仍生效）
                 val filteredReplies = if (current.upOnlyFilter && current.upMid > 0) {
@@ -478,4 +501,3 @@ class VideoCommentViewModel : ViewModel() {
         }
     }
 }
-

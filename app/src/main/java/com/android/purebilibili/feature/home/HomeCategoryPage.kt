@@ -16,13 +16,8 @@ import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.LiveRoomCard
 import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
 
-import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.util.CardPositionManager
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import androidx.compose.ui.Alignment
-import kotlinx.coroutines.delay
 
 @Composable
 fun HomeCategoryPageContent(
@@ -40,18 +35,12 @@ fun HomeCategoryPageContent(
     onWatchLater: (String, Long) -> Unit,
     onDissolveComplete: (String) -> Unit,
     longPressCallback: (VideoItem) -> Unit, // [Feature] Long Press
+    displayMode: Int,
+    cardAnimationEnabled: Boolean,
+    cardTransitionEnabled: Boolean,
+    isDataSaverActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    // Read necessary settings
-    val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
-        initial = com.android.purebilibili.core.store.HomeSettings()
-    )
-    val displayMode = homeSettings.displayMode
-    val cardAnimationEnabled = homeSettings.cardAnimationEnabled
-    val cardTransitionEnabled = homeSettings.cardTransitionEnabled
-    val isDataSaverActive = remember { SettingsManager.isDataSaverActive(context) }
-    
     // Check for load more
     val shouldLoadMore by remember {
         derivedStateOf {
@@ -63,19 +52,6 @@ fun HomeCategoryPageContent(
     }
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) onLoadMore()
-    }
-
-    // [新增] 处理从详情页返回时的状态清理 (原逻辑位于 Animations.kt)
-    // 确保返回时跳过初始卡片的入场动画，但允许后续加载的卡片动画
-    LaunchedEffect(Unit) {
-        if (CardPositionManager.isReturningFromDetail) {
-             delay(100)
-             CardPositionManager.clearReturning()
-        }
-        if (CardPositionManager.isSwitchingCategory) {
-             delay(300)
-             CardPositionManager.isSwitchingCategory = false
-        }
     }
 
     LazyVerticalGrid(

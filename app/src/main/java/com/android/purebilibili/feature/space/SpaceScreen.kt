@@ -2029,7 +2029,7 @@ private fun SpaceHomeTopVideo(
                     )
                     Spacer(Modifier.width(12.dp))
                     Icon(
-                        CupertinoIcons.Default.Heart,
+                        CupertinoIcons.Default.HandThumbsup,
                         contentDescription = null,
                         modifier = Modifier.size(12.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
@@ -2246,7 +2246,7 @@ private fun SpaceDynamicCard(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        CupertinoIcons.Default.Heart,
+                        CupertinoIcons.Default.HandThumbsup,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)

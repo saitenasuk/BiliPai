@@ -3,9 +3,16 @@ package com.android.purebilibili.feature.login
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.res.Configuration
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.util.Base64
 import com.android.purebilibili.core.util.Logger
+import android.view.Gravity
 import android.view.ViewGroup
+import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
+import android.webkit.WebSettings
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -13,6 +20,8 @@ import android.webkit.WebViewClient
 import java.security.KeyFactory
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.Cipher
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * 极验验证管理器 (WebView 方案)
@@ -45,6 +54,8 @@ class CaptchaManager(private val activity: Activity) {
     ) {
         try {
             Logger.d(TAG, "Starting WebView captcha with gt=$gt, challenge=$challenge")
+            val isDarkMode = (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+            hideKeyboard()
             
             // 创建 WebView
             webView = WebView(activity).apply {
@@ -53,6 +64,8 @@ class CaptchaManager(private val activity: Activity) {
                 settings.allowFileAccess = true
                 settings.useWideViewPort = true
                 settings.loadWithOverviewMode = true
+                settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                setBackgroundColor(Color.TRANSPARENT)
                 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -96,7 +109,7 @@ class CaptchaManager(private val activity: Activity) {
             }
             
             // 加载极验验证 HTML
-            val html = generateGeetestHtml(gt, challenge)
+            val html = generateGeetestHtml(gt, challenge, isDarkMode)
             webView?.loadDataWithBaseURL(
                 "https://www.bilibili.com",
                 html,
@@ -105,8 +118,8 @@ class CaptchaManager(private val activity: Activity) {
                 null
             )
             
-            // 显示对话框 - 使用全屏对话框
-            dialog = AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Light_NoActionBar_Fullscreen)
+            // 显示对话框 - 居中卡片样式，避免全屏空白
+            dialog = AlertDialog.Builder(activity)
                 .setView(webView)
                 .setOnCancelListener {
                     onCancel()
@@ -115,11 +128,20 @@ class CaptchaManager(private val activity: Activity) {
             
             dialog?.show()
             
-            //  设置对话框为接近全屏
-            dialog?.window?.setLayout(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
+            dialog?.window?.apply {
+                setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                setGravity(Gravity.CENTER)
+                val widthPx = min(
+                    (activity.resources.displayMetrics.widthPixels * 0.92f).roundToInt(),
+                    dp(420)
+                )
+                setLayout(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT)
+                setDimAmount(0.42f)
+                setSoftInputMode(
+                    WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN or
+                        WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+                )
+            }
             
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e(TAG, "Failed to start captcha", e)
@@ -130,7 +152,14 @@ class CaptchaManager(private val activity: Activity) {
     /**
      * 生成极验验证 HTML
      */
-    private fun generateGeetestHtml(gt: String, challenge: String): String {
+    private fun generateGeetestHtml(gt: String, challenge: String, dark: Boolean): String {
+        val pageBg = if (dark) "#121620" else "#f5f7fb"
+        val cardBg = if (dark) "#1b2230" else "#ffffff"
+        val panelBg = if (dark) "#111722" else "#f4f7fc"
+        val titleColor = if (dark) "#f2f5fb" else "#1f2431"
+        val tipColor = if (dark) "#97a1b7" else "#7f889b"
+        val borderColor = if (dark) "rgba(255,255,255,0.10)" else "rgba(34,50,78,0.10)"
+
         return """
 <!DOCTYPE html>
 <html>
@@ -146,37 +175,38 @@ class CaptchaManager(private val activity: Activity) {
         }
         html, body {
             width: 100%;
-            height: 100%;
-            background: #f7f7f7;
+            background: ${pageBg};
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
         }
         .container {
             width: 100%;
-            min-height: 100%;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
+            justify-content: center;
             align-items: center;
-            padding: 20px;
-            padding-top: 60px;
+            padding: 16px 14px 18px;
+            background: ${cardBg};
+            border-radius: 20px;
+            border: 1px solid ${borderColor};
+            box-shadow: 0 12px 40px rgba(0,0,0,0.22);
         }
         .title {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
-            color: #333;
-            margin-bottom: 24px;
+            color: ${titleColor};
+            margin-bottom: 12px;
         }
         #captcha-container {
             width: 100%;
-            max-width: 340px;
-            background: white;
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            max-width: 360px;
+            background: ${panelBg};
+            border-radius: 14px;
+            padding: 12px;
+            border: 1px solid ${borderColor};
         }
         .loading {
             text-align: center;
-            color: #999;
+            color: ${tipColor};
             padding: 40px 0;
             font-size: 14px;
         }
@@ -197,9 +227,9 @@ class CaptchaManager(private val activity: Activity) {
         }
         .tip {
             text-align: center;
-            color: #999;
+            color: ${tipColor};
             font-size: 12px;
-            margin-top: 16px;
+            margin-top: 10px;
         }
     </style>
     <script src="https://static.geetest.com/static/js/gt.0.5.0.js"></script>
@@ -254,6 +284,18 @@ class CaptchaManager(private val activity: Activity) {
 </body>
 </html>
         """.trimIndent()
+    }
+
+    private fun dp(value: Int): Int = (value * activity.resources.displayMetrics.density).roundToInt()
+
+    private fun hideKeyboard() {
+        try {
+            val imm = activity.getSystemService(InputMethodManager::class.java)
+            val token = activity.currentFocus?.windowToken ?: activity.window.decorView.windowToken
+            imm?.hideSoftInputFromWindow(token, 0)
+            activity.currentFocus?.clearFocus()
+        } catch (_: Exception) {
+        }
     }
     
     /**

@@ -116,7 +116,8 @@ fun CinematicVideoCard(
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     val densityValue = density.density
-    var cardBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    // 记录卡片位置（非 Compose State，避免滚动时触发高频重组）
+    val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
     
     // 按压效果
     var isPressed by remember { mutableStateOf(false) }
@@ -141,7 +142,7 @@ fun CinematicVideoCard(
                 animationEnabled = animationEnabled && !CardPositionManager.isReturningFromDetail && !CardPositionManager.isSwitchingCategory
             )
             .onGloballyPositioned { coordinates ->
-                cardBounds = coordinates.boundsInRoot()
+                cardBoundsRef.value = coordinates.boundsInRoot()
             }
     ) {
         // 卡片主体容器
@@ -170,7 +171,7 @@ fun CinematicVideoCard(
                              }
                         },
                         onTap = {
-                            cardBounds?.let { bounds ->
+                            cardBoundsRef.value?.let { bounds ->
                                 CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
                             }
                             onClick(video.bvid, 0)

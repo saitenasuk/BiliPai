@@ -102,7 +102,7 @@ fun LandscapeTopControlBar(
         ) {
             // 点赞按钮（带数字）
             TopBarActionButton(
-                icon = CupertinoIcons.Default.Heart,
+                icon = CupertinoIcons.Default.HandThumbsup,
                 label = FormatUtils.formatStat(likeCount),
                 isActive = isLiked,
                 activeColor = MaterialTheme.colorScheme.primary,

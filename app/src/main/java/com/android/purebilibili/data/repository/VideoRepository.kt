@@ -322,6 +322,7 @@ object VideoRepository {
             
             val info = viewResp.data ?: throw Exception("视频详情为空: ${viewResp.code}")
             val cid = info.cid
+            val cacheBvid = info.bvid.ifBlank { bvid }
             
             //  [调试] 记录视频信息
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " getVideoDetails: bvid=${info.bvid}, aid=${info.aid}, cid=$cid, title=${info.title.take(20)}...")
@@ -330,17 +331,6 @@ object VideoRepository {
 
             // 🚀 [修复] 自动最高画质模式：跳过缓存，确保获取最新的高清流
             val isAutoHighestQuality = targetQuality != null && targetQuality >= 127
-            
-            //  [优化] 使用缓存加速重复播放 (但自动最高画质模式除外，或者是切换语言时)
-            if (!isAutoHighestQuality && audioLang == null) {
-                val cachedPlayData = PlayUrlCache.get(bvid, cid)
-                if (cachedPlayData != null) {
-                    com.android.purebilibili.core.util.Logger.d("VideoRepo", " Using cached PlayUrlData for bvid=$bvid")
-                    return@withContext Result.success(Pair(info, cachedPlayData))
-                }
-            } else {
-                com.android.purebilibili.core.util.Logger.d("VideoRepo", "🚀 Auto highest quality: skipping cache for bvid=$bvid")
-            }
 
             //  [优化] 根据登录和大会员状态选择起始画质
             val isLogin = !TokenManager.sessDataCache.isNullOrEmpty()
@@ -366,6 +356,27 @@ object VideoRepository {
             }
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " Selected startQuality=$startQuality (userSetting=$targetQuality, isAutoHighest=$isAutoHighestQuality, isLogin=$isLogin, isVip=$isVip)")
 
+            //  [优化] 使用缓存加速重复播放（默认语言 + 非自动最高画质）
+            if (!isAutoHighestQuality && audioLang == null) {
+                val cachedPlayData = PlayUrlCache.get(
+                    bvid = cacheBvid,
+                    cid = cid,
+                    requestedQuality = startQuality
+                )
+                if (cachedPlayData != null) {
+                    com.android.purebilibili.core.util.Logger.d(
+                        "VideoRepo",
+                        " Using cached PlayUrlData for bvid=$cacheBvid, requestedQuality=$startQuality"
+                    )
+                    return@withContext Result.success(Pair(info, cachedPlayData))
+                }
+            } else {
+                com.android.purebilibili.core.util.Logger.d(
+                    "VideoRepo",
+                    "🚀 Skip cache: bvid=$bvid, isAutoHighest=$isAutoHighestQuality, audioLang=${audioLang ?: "default"}"
+                )
+            }
+
             val playData = fetchPlayUrlRecursive(bvid, cid, startQuality, audioLang)
                 ?: throw Exception("无法获取任何画质的播放地址")
 
@@ -376,8 +387,16 @@ object VideoRepository {
 
             //  [优化] 缓存结果 (仅默认语言缓存)
             if (audioLang == null) {
-                PlayUrlCache.put(bvid, cid, playData, playData.quality)
-                com.android.purebilibili.core.util.Logger.d("VideoRepo", " Cached PlayUrlData for bvid=$bvid, cid=$cid")
+                PlayUrlCache.put(
+                    bvid = cacheBvid,
+                    cid = cid,
+                    data = playData,
+                    quality = startQuality
+                )
+                com.android.purebilibili.core.util.Logger.d(
+                    "VideoRepo",
+                    " Cached PlayUrlData for bvid=$cacheBvid, cid=$cid, requestedQuality=$startQuality, actualQuality=${playData.quality}"
+                )
             }
 
             Result.success(Pair(info, playData))

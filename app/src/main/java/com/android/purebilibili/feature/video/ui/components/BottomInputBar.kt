@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.Heart
+import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
 import io.github.alexzhirkevich.cupertino.icons.outlined.Star
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
@@ -94,7 +94,7 @@ fun BottomInputBar(
             ) {
                 // Like
                 IconActionButton(
-                    icon = if (isLiked) CupertinoIcons.Filled.Heart else CupertinoIcons.Outlined.Heart,
+                    icon = if (isLiked) CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Outlined.HandThumbsup,
                     label = "点赞",
                     tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     onClick = onLikeClick,

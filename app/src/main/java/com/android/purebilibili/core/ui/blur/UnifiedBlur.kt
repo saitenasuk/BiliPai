@@ -47,5 +47,7 @@ fun Modifier.unifiedBlur(
     }.hazeEffect(
         state = hazeState,
         style = blurStyle
-    )
+    ) {
+        blurEnabled = true
+    }
 }

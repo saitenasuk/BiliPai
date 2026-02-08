@@ -61,7 +61,7 @@ val allBottomBarTabs = listOf(
     BottomBarTabConfig("STORY", "短视频", CupertinoIcons.Default.PlayCircle, isDefault = false),  //  竖屏短视频
     BottomBarTabConfig("HISTORY", "历史", CupertinoIcons.Default.Clock, isDefault = true),
     BottomBarTabConfig("PROFILE", "我的", CupertinoIcons.Default.PersonCircle, isDefault = true),
-    BottomBarTabConfig("FAVORITE", "收藏", CupertinoIcons.Default.Heart, isDefault = false),
+    BottomBarTabConfig("FAVORITE", "收藏", CupertinoIcons.Default.HandThumbsup, isDefault = false),
     BottomBarTabConfig("LIVE", "直播", CupertinoIcons.Default.Tv, isDefault = false),
     BottomBarTabConfig("WATCHLATER", "稍后看", CupertinoIcons.Default.Clock, isDefault = false),
     BottomBarTabConfig("SETTINGS", "设置", CupertinoIcons.Default.Gearshape, isDefault = false)
@@ -322,7 +322,7 @@ fun BottomBarSettingsContent(
                                 // 三种模式选择按钮
                                 listOf(
                                     Triple(0, "图标+文字", CupertinoIcons.Default.House),
-                                    Triple(1, "仅图标", CupertinoIcons.Default.Heart),
+                                    Triple(1, "仅图标", CupertinoIcons.Default.HandThumbsup),
                                     Triple(2, "仅文字", CupertinoIcons.Default.Character)
                                 ).forEach { (mode, label, icon) ->
                                     val isSelected = labelMode == mode

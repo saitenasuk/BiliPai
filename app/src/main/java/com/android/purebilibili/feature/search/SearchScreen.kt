@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,6 +56,10 @@ import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard  
 import com.android.purebilibili.core.store.SettingsManager  //  读取动画设置
 import com.android.purebilibili.data.repository.SearchOrder
 import com.android.purebilibili.data.repository.SearchDuration
+import com.android.purebilibili.data.repository.SearchLiveOrder
+import com.android.purebilibili.data.repository.SearchOrderSort
+import com.android.purebilibili.data.repository.SearchUpOrder
+import com.android.purebilibili.data.repository.SearchUserType
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.util.FormatUtils
 import coil.compose.AsyncImage
@@ -183,9 +188,19 @@ fun SearchScreen(
                                             currentType = state.searchType,
                                             currentOrder = state.searchOrder,
                                             currentDuration = state.searchDuration,
+                                            currentVideoTid = state.videoTid,
+                                            currentUpOrder = state.upOrder,
+                                            currentUpOrderSort = state.upOrderSort,
+                                            currentUpUserType = state.upUserType,
+                                            currentLiveOrder = state.liveOrder,
                                             onTypeChange = { viewModel.setSearchType(it) },
                                             onOrderChange = { viewModel.setSearchOrder(it) },
-                                            onDurationChange = { viewModel.setSearchDuration(it) }
+                                            onDurationChange = { viewModel.setSearchDuration(it) },
+                                            onVideoTidChange = { viewModel.setVideoTid(it) },
+                                            onUpOrderChange = { viewModel.setUpOrder(it) },
+                                            onUpOrderSortChange = { viewModel.setUpOrderSort(it) },
+                                            onUpUserTypeChange = { viewModel.setUpUserType(it) },
+                                            onLiveOrderChange = { viewModel.setLiveOrder(it) }
                                         )
                                     }
 
@@ -281,17 +296,32 @@ fun SearchScreen(
                                             currentType = state.searchType,
                                             currentOrder = state.searchOrder,
                                             currentDuration = state.searchDuration,
+                                            currentVideoTid = state.videoTid,
+                                            currentUpOrder = state.upOrder,
+                                            currentUpOrderSort = state.upOrderSort,
+                                            currentUpUserType = state.upUserType,
+                                            currentLiveOrder = state.liveOrder,
                                             onTypeChange = { viewModel.setSearchType(it) },
                                             onOrderChange = { viewModel.setSearchOrder(it) },
-                                            onDurationChange = { viewModel.setSearchDuration(it) }
+                                            onDurationChange = { viewModel.setSearchDuration(it) },
+                                            onVideoTidChange = { viewModel.setVideoTid(it) },
+                                            onUpOrderChange = { viewModel.setUpOrder(it) },
+                                            onUpOrderSortChange = { viewModel.setUpOrderSort(it) },
+                                            onUpUserTypeChange = { viewModel.setUpUserType(it) },
+                                            onLiveOrderChange = { viewModel.setLiveOrder(it) }
                                         )
                                     }
 
-                                    items(state.upResults) { upItem ->
+                                    itemsIndexed(state.upResults) { index, upItem ->
                                         UpSearchResultCard(
                                             upItem = upItem,
                                             onClick = { onUpClick(upItem.mid) }
                                         )
+                                        if (index == state.upResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
+                                            LaunchedEffect(state.currentPage, state.searchType) {
+                                                viewModel.loadMoreResults()
+                                            }
+                                        }
                                     }
                                     
                                      // [新增] 空状态提示
@@ -310,6 +340,22 @@ fun SearchScreen(
                                             }
                                         }
                                     }
+                                    
+                                    if (state.isLoadingMore) {
+                                        item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 16.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(24.dp),
+                                                    strokeWidth = 2.dp
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             com.android.purebilibili.data.model.response.SearchType.BANGUMI -> {
@@ -324,17 +370,48 @@ fun SearchScreen(
                                             currentType = state.searchType,
                                             currentOrder = state.searchOrder,
                                             currentDuration = state.searchDuration,
+                                            currentVideoTid = state.videoTid,
+                                            currentUpOrder = state.upOrder,
+                                            currentUpOrderSort = state.upOrderSort,
+                                            currentUpUserType = state.upUserType,
+                                            currentLiveOrder = state.liveOrder,
                                             onTypeChange = { viewModel.setSearchType(it) },
                                             onOrderChange = { viewModel.setSearchOrder(it) },
-                                            onDurationChange = { viewModel.setSearchDuration(it) }
+                                            onDurationChange = { viewModel.setSearchDuration(it) },
+                                            onVideoTidChange = { viewModel.setVideoTid(it) },
+                                            onUpOrderChange = { viewModel.setUpOrder(it) },
+                                            onUpOrderSortChange = { viewModel.setUpOrderSort(it) },
+                                            onUpUserTypeChange = { viewModel.setUpUserType(it) },
+                                            onLiveOrderChange = { viewModel.setLiveOrder(it) }
                                         )
                                     }
 
-                                    items(state.bangumiResults) { bangumiItem ->
+                                    itemsIndexed(state.bangumiResults) { index, bangumiItem ->
                                         BangumiSearchResultCard(
                                             item = bangumiItem,
                                             onClick = { /* TODO: Navigate to bangumi detail */ }
                                         )
+                                        if (index == state.bangumiResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
+                                            LaunchedEffect(state.currentPage, state.searchType) {
+                                                viewModel.loadMoreResults()
+                                            }
+                                        }
+                                    }
+
+                                    if (state.isLoadingMore) {
+                                        item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 16.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(24.dp),
+                                                    strokeWidth = 2.dp
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -350,17 +427,32 @@ fun SearchScreen(
                                             currentType = state.searchType,
                                             currentOrder = state.searchOrder,
                                             currentDuration = state.searchDuration,
+                                            currentVideoTid = state.videoTid,
+                                            currentUpOrder = state.upOrder,
+                                            currentUpOrderSort = state.upOrderSort,
+                                            currentUpUserType = state.upUserType,
+                                            currentLiveOrder = state.liveOrder,
                                             onTypeChange = { viewModel.setSearchType(it) },
                                             onOrderChange = { viewModel.setSearchOrder(it) },
-                                            onDurationChange = { viewModel.setSearchDuration(it) }
+                                            onDurationChange = { viewModel.setSearchDuration(it) },
+                                            onVideoTidChange = { viewModel.setVideoTid(it) },
+                                            onUpOrderChange = { viewModel.setUpOrder(it) },
+                                            onUpOrderSortChange = { viewModel.setUpOrderSort(it) },
+                                            onUpUserTypeChange = { viewModel.setUpUserType(it) },
+                                            onLiveOrderChange = { viewModel.setLiveOrder(it) }
                                         )
                                     }
 
-                                    items(state.liveResults) { liveItem ->
+                                    itemsIndexed(state.liveResults) { index, liveItem ->
                                         LiveSearchResultCard(
                                             item = liveItem,
                                             onClick = { onLiveClick(liveItem.roomid, liveItem.title, liveItem.uname) }
                                         )
+                                        if (index == state.liveResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
+                                            LaunchedEffect(state.currentPage, state.searchType) {
+                                                viewModel.loadMoreResults()
+                                            }
+                                        }
                                     }
                                     
                                     // [新增] 空状态提示
@@ -375,6 +467,22 @@ fun SearchScreen(
                                                      color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                                      fontSize = 13.sp,
                                                      textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (state.isLoadingMore) {
+                                        item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 16.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(24.dp),
+                                                    strokeWidth = 2.dp
                                                 )
                                             }
                                         }
@@ -485,6 +593,7 @@ fun SearchScreen(
                 },
                 onClearQuery = { viewModel.onQueryChange("") },
                 focusRequester = searchFocusRequester,  //  传递 focusRequester
+                placeholder = state.defaultSearchHint.ifBlank { "搜索视频、UP主..." },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .unifiedBlur(
@@ -548,6 +657,7 @@ fun SearchTopBar(
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     onClearQuery: () -> Unit,
+    placeholder: String = "搜索视频、UP主...",
     focusRequester: androidx.compose.ui.focus.FocusRequester = remember { androidx.compose.ui.focus.FocusRequester() },
     modifier: Modifier = Modifier
 ) {
@@ -645,7 +755,7 @@ fun SearchTopBar(
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (query.isEmpty()) {
                                     Text(
-                                        "搜索视频、UP主...",
+                                        placeholder,
                                         style = TextStyle(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
                                             fontSize = 15.sp
@@ -994,12 +1104,44 @@ fun SearchFilterBar(
     currentType: com.android.purebilibili.data.model.response.SearchType,
     currentOrder: SearchOrder,
     currentDuration: SearchDuration,
+    currentVideoTid: Int,
+    currentUpOrder: SearchUpOrder,
+    currentUpOrderSort: SearchOrderSort,
+    currentUpUserType: SearchUserType,
+    currentLiveOrder: SearchLiveOrder,
     onTypeChange: (com.android.purebilibili.data.model.response.SearchType) -> Unit,
     onOrderChange: (SearchOrder) -> Unit,
-    onDurationChange: (SearchDuration) -> Unit
+    onDurationChange: (SearchDuration) -> Unit,
+    onVideoTidChange: (Int) -> Unit,
+    onUpOrderChange: (SearchUpOrder) -> Unit,
+    onUpOrderSortChange: (SearchOrderSort) -> Unit,
+    onUpUserTypeChange: (SearchUserType) -> Unit,
+    onLiveOrderChange: (SearchLiveOrder) -> Unit
 ) {
     var showOrderMenu by remember { mutableStateOf(false) }
     var showDurationMenu by remember { mutableStateOf(false) }
+    var showVideoTidMenu by remember { mutableStateOf(false) }
+    var showUpOrderMenu by remember { mutableStateOf(false) }
+    var showUpOrderSortMenu by remember { mutableStateOf(false) }
+    var showUpUserTypeMenu by remember { mutableStateOf(false) }
+    var showLiveOrderMenu by remember { mutableStateOf(false) }
+
+    val videoTidOptions = remember {
+        listOf(
+            0 to "全部分区",
+            1 to "动画",
+            3 to "音乐",
+            4 to "游戏",
+            5 to "娱乐",
+            36 to "科技",
+            119 to "鬼畜",
+            160 to "生活",
+            181 to "影视"
+        )
+    }
+    val selectedVideoTidName = remember(currentVideoTid, videoTidOptions) {
+        videoTidOptions.find { it.first == currentVideoTid }?.second ?: "分区$currentVideoTid"
+    }
     
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
@@ -1038,118 +1180,201 @@ fun SearchFilterBar(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-        // 排序选择
-        Box {
-            Surface(
-                onClick = { showOrderMenu = true },
-                color = if (currentOrder != SearchOrder.TOTALRANK) 
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) 
-                else 
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
+                Box {
+                    FilterMenuChip(
                         text = currentOrder.displayName,
-                        fontSize = 13.sp,
-                        color = if (currentOrder != SearchOrder.TOTALRANK) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
-                            MaterialTheme.colorScheme.onSurface
+                        highlighted = currentOrder != SearchOrder.TOTALRANK,
+                        onClick = { showOrderMenu = true }
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        CupertinoIcons.Default.ChevronDown,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = if (currentOrder != SearchOrder.TOTALRANK) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            DropdownMenu(
-                expanded = showOrderMenu,
-                onDismissRequest = { showOrderMenu = false }
-            ) {
-                SearchOrder.entries.forEach { order ->
-                    DropdownMenuItem(
-                        text = { 
-                            Text(
-                                order.displayName,
-                                color = if (order == currentOrder) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            ) 
-                        },
-                        onClick = {
-                            onOrderChange(order)
-                            showOrderMenu = false
+                    DropdownMenu(
+                        expanded = showOrderMenu,
+                        onDismissRequest = { showOrderMenu = false }
+                    ) {
+                        SearchOrder.entries.forEach { order ->
+                            DropdownMenuItem(
+                                text = { Text(order.displayName) },
+                                onClick = {
+                                    onOrderChange(order)
+                                    showOrderMenu = false
+                                }
+                            )
                         }
-                    )
+                    }
                 }
-            }
-        }
-        
-        // 时长选择
-        Box {
-            Surface(
-                onClick = { showDurationMenu = true },
-                color = if (currentDuration != SearchDuration.ALL) 
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) 
-                else 
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
+
+                Box {
+                    FilterMenuChip(
                         text = currentDuration.displayName,
-                        fontSize = 13.sp,
-                        color = if (currentDuration != SearchDuration.ALL) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
-                            MaterialTheme.colorScheme.onSurface
+                        highlighted = currentDuration != SearchDuration.ALL,
+                        onClick = { showDurationMenu = true }
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        CupertinoIcons.Default.ChevronDown,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = if (currentDuration != SearchDuration.ALL) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                    DropdownMenu(
+                        expanded = showDurationMenu,
+                        onDismissRequest = { showDurationMenu = false }
+                    ) {
+                        SearchDuration.entries.forEach { duration ->
+                            DropdownMenuItem(
+                                text = { Text(duration.displayName) },
+                                onClick = {
+                                    onDurationChange(duration)
+                                    showDurationMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Box {
+                    FilterMenuChip(
+                        text = selectedVideoTidName,
+                        highlighted = currentVideoTid != 0,
+                        onClick = { showVideoTidMenu = true }
                     )
+                    DropdownMenu(
+                        expanded = showVideoTidMenu,
+                        onDismissRequest = { showVideoTidMenu = false }
+                    ) {
+                        videoTidOptions.forEach { (tid, name) ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = {
+                                    onVideoTidChange(tid)
+                                    showVideoTidMenu = false
+                                }
+                            )
+                        }
+                    }
                 }
             }
-            
-            DropdownMenu(
-                expanded = showDurationMenu,
-                onDismissRequest = { showDurationMenu = false }
-            ) {
-                SearchDuration.entries.forEach { duration ->
-                    DropdownMenuItem(
-                        text = { 
-                            Text(
-                                duration.displayName,
-                                color = if (duration == currentDuration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            ) 
-                        },
-                        onClick = {
-                            onDurationChange(duration)
-                            showDurationMenu = false
-                        }
+        } else if (currentType == com.android.purebilibili.data.model.response.SearchType.UP) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box {
+                    FilterMenuChip(
+                        text = currentUpOrder.displayName,
+                        highlighted = currentUpOrder != SearchUpOrder.DEFAULT,
+                        onClick = { showUpOrderMenu = true }
                     )
+                    DropdownMenu(
+                        expanded = showUpOrderMenu,
+                        onDismissRequest = { showUpOrderMenu = false }
+                    ) {
+                        SearchUpOrder.entries.forEach { order ->
+                            DropdownMenuItem(
+                                text = { Text(order.displayName) },
+                                onClick = {
+                                    onUpOrderChange(order)
+                                    showUpOrderMenu = false
+                                }
+                            )
+                        }
+                    }
                 }
+
+                if (currentUpOrder != SearchUpOrder.DEFAULT) {
+                    Box {
+                        FilterMenuChip(
+                            text = currentUpOrderSort.displayName,
+                            highlighted = true,
+                            onClick = { showUpOrderSortMenu = true }
+                        )
+                        DropdownMenu(
+                            expanded = showUpOrderSortMenu,
+                            onDismissRequest = { showUpOrderSortMenu = false }
+                        ) {
+                            SearchOrderSort.entries.forEach { sort ->
+                                DropdownMenuItem(
+                                    text = { Text(sort.displayName) },
+                                    onClick = {
+                                        onUpOrderSortChange(sort)
+                                        showUpOrderSortMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Box {
+                    FilterMenuChip(
+                        text = currentUpUserType.displayName,
+                        highlighted = currentUpUserType != SearchUserType.ALL,
+                        onClick = { showUpUserTypeMenu = true }
+                    )
+                    DropdownMenu(
+                        expanded = showUpUserTypeMenu,
+                        onDismissRequest = { showUpUserTypeMenu = false }
+                    ) {
+                        SearchUserType.entries.forEach { userType ->
+                            DropdownMenuItem(
+                                text = { Text(userType.displayName) },
+                                onClick = {
+                                    onUpUserTypeChange(userType)
+                                    showUpUserTypeMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        } else if (currentType == com.android.purebilibili.data.model.response.SearchType.LIVE) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Box {
+                FilterMenuChip(
+                    text = currentLiveOrder.displayName,
+                    highlighted = currentLiveOrder != SearchLiveOrder.ONLINE,
+                    onClick = { showLiveOrderMenu = true }
+                )
+                DropdownMenu(
+                    expanded = showLiveOrderMenu,
+                    onDismissRequest = { showLiveOrderMenu = false }
+                ) {
+                    SearchLiveOrder.entries.forEach { order ->
+                        DropdownMenuItem(
+                            text = { Text(order.displayName) },
+                            onClick = {
+                                onLiveOrderChange(order)
+                                showLiveOrderMenu = false
+                            }
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FilterMenuChip(
+    text: String,
+    highlighted: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = if (highlighted) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        },
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = text,
+                fontSize = 13.sp,
+                color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                CupertinoIcons.Default.ChevronDown,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

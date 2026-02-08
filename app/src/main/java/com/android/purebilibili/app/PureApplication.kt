@@ -20,6 +20,8 @@ import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.core.util.AnalyticsHelper
+import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.feature.plugin.AdFilterPlugin
 import com.android.purebilibili.feature.plugin.DanmakuEnhancePlugin
@@ -40,6 +42,18 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
     
     //  保存 ImageLoader 引用以便在 onTrimMemory 中使用
     private var _imageLoader: ImageLoader? = null
+
+    private val telemetryListener = object : BackgroundManager.BackgroundStateListener {
+        override fun onEnterBackground() {
+            AnalyticsHelper.onAppBackground()
+            CrashReporter.setAppForegroundState(false)
+        }
+
+        override fun onEnterForeground() {
+            AnalyticsHelper.onAppForeground()
+            CrashReporter.setAppForegroundState(true)
+        }
+    }
     
     //  Coil 图片加载器 - 优化内存和磁盘缓存
     override fun newImageLoader(): ImageLoader {
@@ -90,6 +104,13 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         
         //  初始化 Firebase Analytics
         initAnalytics()
+
+        //  监听全局前后台状态，增强会话与崩溃上下文
+        BackgroundManager.addListener(telemetryListener)
+        if (!BackgroundManager.isInBackground) {
+            AnalyticsHelper.onAppForeground()
+            CrashReporter.setAppForegroundState(true)
+        }
         
         //  [冷启动优化] 延迟非关键初始化到主线程空闲时 (IdleHandler 确保首帧绘制后再执行)
         Looper.myQueue().addIdleHandler {
@@ -146,18 +167,16 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
             val prefs = getSharedPreferences("crash_tracking", Context.MODE_PRIVATE)
             val enabled = prefs.getBoolean("enabled", true)  // 默认开启
             
-            //  根据用户设置启用/禁用 Crashlytics
-            com.android.purebilibili.core.util.CrashReporter.setEnabled(enabled)
+            CrashReporter.init(this)
+            CrashReporter.installGlobalExceptionHandler()
+            CrashReporter.setEnabled(enabled)
             
             if (enabled) {
-                // 设置应用版本信息
-                val packageInfo = packageManager.getPackageInfo(packageName, 0)
-                com.android.purebilibili.core.util.CrashReporter.setCustomKey("app_version", packageInfo.versionName ?: "unknown")
-                com.android.purebilibili.core.util.CrashReporter.setCustomKey("version_code", packageInfo.versionCode)
-                
-                // 设置设备信息
-                com.android.purebilibili.core.util.CrashReporter.setCustomKey("device_model", android.os.Build.MODEL)
-                com.android.purebilibili.core.util.CrashReporter.setCustomKey("android_version", android.os.Build.VERSION.SDK_INT)
+                CrashReporter.syncUserContext(
+                    mid = TokenManager.midCache,
+                    isVip = TokenManager.isVipCache,
+                    privacyModeEnabled = SettingsManager.isPrivacyModeEnabledSync(this)
+                )
             }
             
             Logger.d(TAG, " Firebase Crashlytics initialized (enabled=$enabled)")
@@ -170,18 +189,23 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
     private fun initAnalytics() {
         try {
             // 初始化 AnalyticsHelper
-            com.android.purebilibili.core.util.AnalyticsHelper.init(this)
+            AnalyticsHelper.init(this)
             
             //  读取用户设置（默认开启）
             val prefs = getSharedPreferences("analytics_tracking", Context.MODE_PRIVATE)
             val enabled = prefs.getBoolean("enabled", true)  // 默认开启
             
             //  根据用户设置启用/禁用 Analytics
-            com.android.purebilibili.core.util.AnalyticsHelper.setEnabled(enabled)
+            AnalyticsHelper.setEnabled(enabled)
             
             if (enabled) {
+                AnalyticsHelper.syncUserContext(
+                    mid = TokenManager.midCache,
+                    isVip = TokenManager.isVipCache,
+                    privacyModeEnabled = SettingsManager.isPrivacyModeEnabledSync(this)
+                )
                 // 记录应用打开事件
-                com.android.purebilibili.core.util.AnalyticsHelper.logAppOpen()
+                AnalyticsHelper.logAppOpen()
             }
             
             Logger.d(TAG, " Firebase Analytics initialized (enabled=$enabled)")

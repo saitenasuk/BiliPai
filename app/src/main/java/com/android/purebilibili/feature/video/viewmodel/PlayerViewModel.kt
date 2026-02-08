@@ -212,7 +212,8 @@ class PlayerViewModel : ViewModel() {
     }
     
     fun showPlaybackEndedDialogIfNeeded() {
-        _showPlaybackEndedDialog.value = true
+        // UX: 用户关闭“自动播放下一个”后，播放结束不再弹强干扰对话框
+        _showPlaybackEndedDialog.value = false
     }
     
     // [New] Danmaku Input Dialog State (Kept)
@@ -433,8 +434,8 @@ class PlayerViewModel : ViewModel() {
                     if (PlaylistManager.isExternalPlaylist.value) {
                         playNextPageOrRecommended()
                     } else {
-                        // 自动播放关闭，显示选择对话框
-                        _showPlaybackEndedDialog.value = true
+                        // 自动播放关闭：保持结束态，不弹窗打断
+                        _showPlaybackEndedDialog.value = false
                     }
                 }
             }

@@ -1,5 +1,6 @@
 package com.android.purebilibili.data.model.response
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // --- 1. 热搜模型 (保持不变) ---
@@ -23,6 +24,21 @@ data class HotItem(
     val keyword: String = "",
     val show_name: String = "",
     val icon: String = ""
+)
+
+// --- 1.1 默认搜索占位词 ---
+@Serializable
+data class SearchDefaultResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: SearchDefaultData? = null
+)
+
+@Serializable
+data class SearchDefaultData(
+    @SerialName("show_name")
+    val showName: String = "",
+    val url: String = ""
 )
 
 // --- 2. 搜索结果模型 ---

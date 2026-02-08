@@ -276,7 +276,7 @@ fun ActionButtonsRow(
     ) {
         //  点赞
         BiliActionButton(
-            icon = if (isLiked) CupertinoIcons.Filled.Heart else CupertinoIcons.Default.Heart,
+            icon = if (isLiked) CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Default.HandThumbsup,
             text = FormatUtils.formatStat(info.stat.like.toLong()),
             isActive = isLiked,
             activeColor = BiliPink,
@@ -303,9 +303,9 @@ fun ActionButtonsRow(
 
         //  [问题12] 仅在 showTripleButton 为 true 时显示三连按钮
         if (showTripleButton) {
-            //  三连（❤心形图标）
+            //  三连（👍图标）
             BiliActionButton(
-                icon = CupertinoIcons.Filled.Heart,
+                icon = CupertinoIcons.Filled.HandThumbsup,
                 text = "三连",
                 isActive = false,
                 activeColor = Color(0xFFE91E63),

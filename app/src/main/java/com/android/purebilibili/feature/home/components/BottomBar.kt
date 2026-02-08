@@ -253,20 +253,16 @@ fun FrostedBottomBar(
         val itemCount = visibleItems.size + sidebarCount
         
         // itemWidth calculation
-        val contentWidth = availableWidth - (rowPadding * 2)
-        
-        // [平板适配] 优化底栏宽度：根据图标数量自适应，避免过度拉伸
-        // 假设每个图标最佳宽度约 80-100dp，按 88dp 计算较为紧凑且适中
+        // [修复] 使用“实际渲染宽度”计算 itemWidth，避免少于 4 个图标时指示器和图标错位。
+        // 内层容器用了 widthIn(max = targetMaxWidth)，所以可用宽度应与其保持一致。
         val optimalWidth = (itemCount * 88).dp
-        
+
         // 限制最大宽度 (平板适配)
         // 使用 min(640.dp, optimalWidth) 确保不超宽也不过窄
         val targetMaxWidth = if (optimalWidth < 640.dp) optimalWidth else 640.dp
-        
-        val maxContentWidth = if (isFloating && availableWidth > 640.dp) targetMaxWidth - (rowPadding * 2) else contentWidth
-        val finalContentWidth = if (maxContentWidth > contentWidth) contentWidth else maxContentWidth
-        
-        val itemWidth = finalContentWidth / itemCount
+        val renderedBarWidth = if (isFloating) minOf(availableWidth, targetMaxWidth) else availableWidth
+        val contentWidth = (renderedBarWidth - (rowPadding * 2)).coerceAtLeast(0.dp)
+        val itemWidth = if (itemCount > 0) contentWidth / itemCount else 0.dp
         
         // 📐 状态提升：DampedDragAnimationState
         val selectedIndex = visibleItems.indexOf(currentItem)
@@ -442,43 +438,43 @@ fun FrostedBottomBar(
                             // [LayerBackdrop Mode] Real background refraction using captured layer
                             val scrollValue = scrollState.floatValue
                             val isDark = isSystemInDarkTheme()
-                            
-                                if (homeSettings.liquidGlassStyle == LiquidGlassStyle.SIMP_MUSIC) {
-                                    // [Style: SimpMusic] Adaptive Lens with Vibrancy & Blur
-                                    this.simpMusicLiquidGlass(
-                                        backdrop = backdrop,
-                                        shape = barShape,
-                                        onLuminanceChanged = { contentLuminance = it }
-                                    )
-                                } else {
-                                    // [Style: Classic] BiliPai's Wavy Ripple
-                                    // [Visual Tuning] Glass Effect Parameters
-                                    // 1. Refraction: Much stronger lens effect for "thick liquid" feel
-                                    val dynamicRefractionAmount = 65f + (scrollValue * 0.05f).coerceIn(0f, 40f)
-                                    
-                                    this.drawBackdrop(
-                                        backdrop = backdrop,
-                                        shape = { barShape },
-                                        effects = {
-                                            lens(
-                                                refractionHeight = 200f, // Thicker glass lens
-                                                refractionAmount = dynamicRefractionAmount,
-                                                depthEffect = isFloating, // [Fix] Only show 3D rim/depth when floating, flat when docked
-                                                chromaticAberration = true // Enable for both themes for "premium" feel
-                                            )
-                                        },
-                                        onDrawSurface = {
-                                            // [Visual Tuning] Translucency & Readability
-                                            // Increased opacity to ensure text readability while maintaining "glass" look
-                                            // [Optimized] Improved legibility (Deep: 0.5, Light: 0.75)
-                                            val baseAlpha = if (isDark) 0.50f else 0.75f 
-                                            val scrollImpact = (scrollValue * 0.0005f).coerceIn(0f, 0.1f)
-                                            val overlayAlpha = baseAlpha + scrollImpact
-                                            
-                                            drawRect(barColor.copy(alpha = overlayAlpha))
-                                        }
-                                    )
-                                }
+
+                            if (homeSettings.liquidGlassStyle == LiquidGlassStyle.SIMP_MUSIC) {
+                                // [Style: SimpMusic] Adaptive Lens with Vibrancy & Blur
+                                this.simpMusicLiquidGlass(
+                                    backdrop = backdrop,
+                                    shape = barShape,
+                                    onLuminanceChanged = { contentLuminance = it }
+                                )
+                            } else {
+                                // [Style: Classic] BiliPai's Wavy Ripple
+                                // [Visual Tuning] Glass Effect Parameters
+                                // 1. Refraction: Much stronger lens effect for "thick liquid" feel
+                                val dynamicRefractionAmount = 65f + (scrollValue * 0.05f).coerceIn(0f, 40f)
+
+                                this.drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { barShape },
+                                    effects = {
+                                        lens(
+                                            refractionHeight = 200f, // Thicker glass lens
+                                            refractionAmount = dynamicRefractionAmount,
+                                            depthEffect = isFloating, // [Fix] Only show 3D rim/depth when floating, flat when docked
+                                            chromaticAberration = true // Enable for both themes for "premium" feel
+                                        )
+                                    },
+                                    onDrawSurface = {
+                                        // [Visual Tuning] Translucency & Readability
+                                        // Increased opacity to ensure text readability while maintaining "glass" look
+                                        // [Optimized] Improved legibility (Deep: 0.5, Light: 0.75)
+                                        val baseAlpha = if (isDark) 0.50f else 0.75f
+                                        val scrollImpact = (scrollValue * 0.0005f).coerceIn(0f, 0.1f)
+                                        val overlayAlpha = baseAlpha + scrollImpact
+
+                                        drawRect(barColor.copy(alpha = overlayAlpha))
+                                    }
+                                )
+                            }
                         } else if (showGlassEffect && isSupported && hazeState != null) {
                             // [Haze Fallback] Use Haze blur when no backdrop available
                             this
@@ -623,6 +619,7 @@ private fun BottomBarContent(
     contentLuminance: Float = 0f, // [New]
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC // [New]
 ) {
+    val scope = rememberCoroutineScope()
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -682,7 +679,24 @@ private fun BottomBarContent(
 
             Column(
                 modifier = Modifier.weight(1f).fillMaxHeight().offset(y = contentVerticalOffset)
-                    .then(if (isInteractive) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { isPending = true; haptic(HapticType.LIGHT); kotlinx.coroutines.MainScope().launch { kotlinx.coroutines.delay(100); onToggleSidebar(); isPending = false } } else Modifier),
+                    .then(
+                        if (isInteractive) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                isPending = true
+                                haptic(HapticType.LIGHT)
+                                scope.launch {
+                                    kotlinx.coroutines.delay(100)
+                                    onToggleSidebar()
+                                    isPending = false
+                                }
+                            }
+                        } else {
+                            Modifier
+                        }
+                    ),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
             ) {
                 Box(modifier = Modifier.size(26.dp)) {
@@ -729,6 +743,7 @@ private fun BottomBarItem(
     contentLuminance: Float = 0f, // [New]
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC // [New]
 ) {
+    val scope = rememberCoroutineScope()
     var isPending by remember { mutableStateOf(false) }
     val isDarkTheme = isSystemInDarkTheme()
     
@@ -831,7 +846,7 @@ private fun BottomBarItem(
                                 
                                 // 2. 视觉反馈 (Visual Feedback)
                                 isPending = true
-                                kotlinx.coroutines.MainScope().launch {
+                                scope.launch {
                                     // 晃动动画与导航并行执行
                                     wobbleAngle = 15f
                                     kotlinx.coroutines.delay(200) // 等待动画完成
@@ -856,7 +871,7 @@ private fun BottomBarItem(
                             
                             // 2. 视觉反馈 (Visual Feedback)
                             isPending = true
-                            kotlinx.coroutines.MainScope().launch {
+                            scope.launch {
                                 // 晃动动画与导航并行执行
                                 wobbleAngle = 15f
                                 kotlinx.coroutines.delay(200) // 等待动画完成

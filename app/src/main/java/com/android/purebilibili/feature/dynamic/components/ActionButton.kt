@@ -72,8 +72,8 @@ fun ActionButton(
     
     //  优雅的图标 - 根据状态切换填充/描边
     val buttonIcon = when {
-        isLike && isActive -> CupertinoIcons.Filled.Heart
-        isLike -> CupertinoIcons.Default.Heart
+        isLike && isActive -> CupertinoIcons.Filled.HandThumbsup
+        isLike -> CupertinoIcons.Default.HandThumbsup
         isForward -> CupertinoIcons.Default.ArrowTurnUpRight
         isComment -> CupertinoIcons.Default.Message
         else -> icon
@@ -118,4 +118,3 @@ fun ActionButton(
         }
     }
 }
-

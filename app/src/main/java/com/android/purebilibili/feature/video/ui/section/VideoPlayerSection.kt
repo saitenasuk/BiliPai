@@ -254,6 +254,8 @@ fun VideoPlayerSection(
     val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    //  共享弹幕管理器（用于所有 seek 路径的一致同步）
+    val danmakuManager = rememberDanmakuManager()
     
     var rootModifier = Modifier
         .fillMaxSize()
@@ -354,6 +356,7 @@ fun VideoPlayerSection(
                         onDragEnd = {
                             if (gestureMode == VideoGestureMode.Seek) {
                                 playerState.player.seekTo(seekTargetTime)
+                                danmakuManager.seekTo(seekTargetTime)
                                 playerState.player.play()
                             } else if (gestureMode == VideoGestureMode.SwipeToFullscreen) {
                                 //  阈值判定：上滑超过一定距离触发全屏
@@ -393,29 +396,44 @@ fun VideoPlayerSection(
                                     gestureMode = VideoGestureMode.Seek
                                     com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "🎯 Gesture: Seek (cumDx=$totalDragDistanceX, cumDy=$totalDragDistanceY)")
                                 } else {
-                                    // 根据起始 X 坐标判断区域 (左1/3=亮度, 右1/3=音量, 中间1/3=上滑全屏)
+                                    // 根据起始 X 坐标判断区域 (左1/3=亮度, 右1/3=音量, 中间1/3=功能区)
                                     val width = size.width.toFloat()
                                     val startX = change.position.x
+                                    val leftZoneEnd = width / 3f
+                                    val rightZoneStart = width * 2f / 3f
                                     
                                     gestureMode = if (!isFullscreen) {
                                         // 竖屏模式优化
-                                        // 左侧 15%: 亮度
-                                        // 右侧 15%: 音量
-                                        // 中间 70%: 上滑全屏 (避免误触)
+                                        // 左侧 1/3: 亮度
+                                        // 右侧 1/3: 音量
+                                        // 中间 1/3: 上滑全屏
                                         when {
-                                            startX < width * 0.15f -> VideoGestureMode.Brightness
-                                            startX > width * 0.85f -> VideoGestureMode.Volume
+                                            startX < leftZoneEnd -> VideoGestureMode.Brightness
+                                            startX > rightZoneStart -> VideoGestureMode.Volume
                                             else -> VideoGestureMode.SwipeToFullscreen
                                         }
                                     } else {
                                         // 横屏模式
-                                        // 左侧 50%: 亮度
-                                        // 右侧 50%: 音量
+                                        // 左侧 1/3: 亮度
+                                        // 右侧 1/3: 音量
+                                        // 中间 1/3: 忽略垂直手势，避免误触
                                         when {
-                                             startX < width * 0.5f -> VideoGestureMode.Brightness
-                                             else -> VideoGestureMode.Volume
+                                            startX < leftZoneEnd -> VideoGestureMode.Brightness
+                                            startX > rightZoneStart -> VideoGestureMode.Volume
+                                            else -> VideoGestureMode.None
                                         }
                                     }
+
+                                    // 横屏中间 1/3 的垂直手势直接忽略，避免误触亮度/音量
+                                    if (isFullscreen && gestureMode == VideoGestureMode.None) {
+                                        isGestureVisible = false
+                                        com.android.purebilibili.core.util.Logger.d(
+                                            "VideoPlayerSection",
+                                            "🎯 Gesture ignored in center zone (fullscreen, startX=$startX, width=$width)"
+                                        )
+                                        return@detectDragGestures
+                                    }
+
                                     com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "🎯 Gesture: $gestureMode (startX=$startX, width=$width, isFullscreen=$isFullscreen)")
                                 }
                             }
@@ -515,6 +533,7 @@ fun VideoPlayerSection(
                                     val seekMs = seekForwardSeconds * 1000L
                                     val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
                                     player.seekTo(newPos)
+                                    danmakuManager.seekTo(newPos)
                                     seekFeedbackText = "+${seekForwardSeconds}s"
                                     seekFeedbackVisible = true
                                     com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "⏩ DoubleTap right: +${seekForwardSeconds}s")
@@ -524,6 +543,7 @@ fun VideoPlayerSection(
                                     val seekMs = seekBackwardSeconds * 1000L
                                     val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
                                     player.seekTo(newPos)
+                                    danmakuManager.seekTo(newPos)
                                     seekFeedbackText = "-${seekBackwardSeconds}s"
                                     seekFeedbackVisible = true
                                     com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "⏪ DoubleTap left: -${seekBackwardSeconds}s")
@@ -554,9 +574,7 @@ fun VideoPlayerSection(
                 )
             }
     ) {
-        //  弹幕管理器 (使用单例模式，确保横竖屏切换时保持状态)
         val scope = rememberCoroutineScope()  //  用于设置弹幕开关
-        val danmakuManager = rememberDanmakuManager()
         
         //  弹幕开关设置
         val danmakuEnabled by com.android.purebilibili.core.store.SettingsManager
@@ -828,7 +846,11 @@ fun VideoPlayerSection(
                         android.util.Log.d("VideoPlayerSection", " DanmakuView update: size=${view.width}x${view.height}, isFullscreen=$isFullscreen")
                         // 只有当视图有有效尺寸时才 re-attach
                         if (view.width > 0 && view.height > 0) {
-                            danmakuManager.attachView(view)
+                            val sizeTag = "${view.width}x${view.height}"
+                            if (view.tag != sizeTag) {
+                                view.tag = sizeTag
+                                danmakuManager.attachView(view)
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxSize()
@@ -1147,6 +1169,11 @@ fun VideoPlayerSection(
                 onPipClick = onPipClick,
                 //  [新增] 拖动进度条开始时清除弹幕
                 onSeekStart = { danmakuManager.clear() },
+                //  [加固] 显式同步弹幕到新进度，避免某些设备 seek 回调时机差导致短暂不同步
+                onSeekTo = { position ->
+                    playerState.player.seekTo(position)
+                    danmakuManager.seekTo(position)
+                },
                 // [New] Codec & Audio
                 currentCodec = currentCodec,
                 onCodecChange = onCodecChange,

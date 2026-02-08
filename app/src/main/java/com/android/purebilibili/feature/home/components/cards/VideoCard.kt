@@ -110,8 +110,8 @@ fun ElegantVideoCard(
     }
     val densityValue = density.density  //  [新增] 屏幕密度值
     
-    //  记录卡片位置
-    var cardBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    //  记录卡片位置（非 Compose State，避免滚动时触发高频重组）
+    val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
     
     //  [交互优化] 按压缩放动画状态
     var isPressed by remember { mutableStateOf(false) }
@@ -137,11 +137,7 @@ fun ElegantVideoCard(
             )
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->
-                val newBounds = coordinates.boundsInRoot()
-                // 🚀 [性能优化] 仅当边界实际变化时才更新状态，减少无谓的重组
-                if (cardBounds != newBounds) {
-                    cardBounds = newBounds
-                }
+                cardBoundsRef.value = coordinates.boundsInRoot()
             }
             //  [修改] 父级容器仅处理点击跳转 (或者点击由子 View 分别处理)
             //  为了避免冲突，我们将手势下放到子 View
@@ -202,7 +198,7 @@ fun ElegantVideoCard(
                             }
                         },
                         onTap = {
-                            cardBounds?.let { bounds ->
+                            cardBoundsRef.value?.let { bounds ->
                                 CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
                             }
                             onClick(video.bvid, 0)
@@ -337,7 +333,7 @@ fun ElegantVideoCard(
                                 }
                             },
                             onTap = {
-                                cardBounds?.let { bounds ->
+                                cardBoundsRef.value?.let { bounds ->
                                     CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
                                 }
                                 onClick(video.bvid, 0)
@@ -364,7 +360,7 @@ fun ElegantVideoCard(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Filled.HeartSlash,
+                            imageVector = CupertinoIcons.Filled.HandThumbsup,
                             contentDescription = "取消收藏",
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)

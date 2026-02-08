@@ -113,6 +113,8 @@ object SettingsManager {
     private val KEY_BOTTOM_BAR_ORDER = stringPreferencesKey("bottom_bar_order")  // 逗号分隔的项目顺序
     private val KEY_BOTTOM_BAR_VISIBLE_TABS = stringPreferencesKey("bottom_bar_visible_tabs")  // 逗号分隔的可见项目
     private val KEY_BOTTOM_BAR_ITEM_COLORS = stringPreferencesKey("bottom_bar_item_colors")  //  格式: HOME:0,DYNAMIC:1,...
+    //  [新增] 评论默认排序（1=回复,2=最新,3=最热,4=点赞）
+    private val KEY_COMMENT_DEFAULT_SORT_MODE = intPreferencesKey("comment_default_sort_mode")
 
     /**
      *  合并首页相关设置为单一 Flow
@@ -480,7 +482,7 @@ object SettingsManager {
     
     //  [新增] --- 底栏模糊效果 ---
     fun getBottomBarBlurEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: false }
+        .map { preferences -> preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: true }
 
     suspend fun setBottomBarBlurEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] = value }
@@ -890,6 +892,30 @@ object SettingsManager {
     fun getAudioQualitySync(context: Context): Int {
         return context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
             .getInt("audio_quality", -1)
+    }
+
+    // --- 评论默认排序 (1=回复,2=最新,3=最热,4=点赞) ---
+    fun getCommentDefaultSortMode(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            val value = preferences[KEY_COMMENT_DEFAULT_SORT_MODE] ?: 3
+            if (value in 1..4) value else 3
+        }
+
+    suspend fun setCommentDefaultSortMode(context: Context, value: Int) {
+        val normalized = if (value in 1..4) value else 3
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_COMMENT_DEFAULT_SORT_MODE] = normalized
+        }
+        context.getSharedPreferences("comment_settings", Context.MODE_PRIVATE)
+            .edit()
+            .putInt("default_sort_mode", normalized)
+            .apply()
+    }
+
+    fun getCommentDefaultSortModeSync(context: Context): Int {
+        val value = context.getSharedPreferences("comment_settings", Context.MODE_PRIVATE)
+            .getInt("default_sort_mode", 3)
+        return if (value in 1..4) value else 3
     }
     
     // ==========  空降助手 (SponsorBlock) ==========

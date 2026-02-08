@@ -226,6 +226,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             val customBgUri = SettingsManager.getProfileBgUri(getApplication()).first() ?: ""
             TokenManager.clear(getApplication())
             _uiState.value = ProfileUiState.LoggedOut(topPhoto = customBgUri)
+            com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
+                mid = null,
+                isVip = false,
+                privacyModeEnabled = SettingsManager.isPrivacyModeEnabledSync(getApplication())
+            )
             //  记录登出事件
             com.android.purebilibili.core.util.AnalyticsHelper.logLogout()
         }

@@ -219,7 +219,7 @@ private fun CommentItem(reply: ReplyItem) {
             // 点赞数
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    CupertinoIcons.Default.Heart,
+                    CupertinoIcons.Default.HandThumbsup,
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f)

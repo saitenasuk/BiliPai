@@ -3,10 +3,14 @@ package com.android.purebilibili.core.util
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
+import com.android.purebilibili.BuildConfig
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TokenManager
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.ktx.analytics
 import com.google.firebase.analytics.ktx.logEvent
 import com.google.firebase.ktx.Firebase
+import java.util.Locale
 
 /**
  *  Firebase Analytics 工具类
@@ -25,6 +29,8 @@ object AnalyticsHelper {
     
     private var analytics: FirebaseAnalytics? = null
     private var isEnabled: Boolean = true
+    private var isInForeground: Boolean = false
+    private var sessionStartMs: Long = 0L
     
     /**
      * 初始化 Analytics (在 Application 中调用)
@@ -32,6 +38,14 @@ object AnalyticsHelper {
     fun init(context: Context) {
         try {
             analytics = Firebase.analytics
+            analytics?.setUserProperty("app_version", BuildConfig.VERSION_NAME)
+            analytics?.setUserProperty("build_type", BuildConfig.BUILD_TYPE)
+            analytics?.setUserProperty("locale", Locale.getDefault().toLanguageTag())
+            syncUserContext(
+                mid = TokenManager.midCache,
+                isVip = TokenManager.isVipCache,
+                privacyModeEnabled = SettingsManager.isPrivacyModeEnabledSync(context)
+            )
             Logger.d(TAG, " Firebase Analytics initialized")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to init Firebase Analytics", e)
@@ -45,6 +59,7 @@ object AnalyticsHelper {
         isEnabled = enabled
         try {
             analytics?.setAnalyticsCollectionEnabled(enabled)
+            CrashReporter.setLastEvent("analytics_collection_${if (enabled) "enabled" else "disabled"}")
             Logger.d(TAG, " Analytics collection ${if (enabled) "enabled" else "disabled"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set Analytics enabled state", e)
@@ -59,6 +74,8 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.setUserId(userId)
+            val mid = userId?.toLongOrNull()
+            CrashReporter.syncUserContext(mid = mid, isVip = null, privacyModeEnabled = null)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set user ID", e)
         }
@@ -73,6 +90,68 @@ object AnalyticsHelper {
             analytics?.setUserProperty(name, value)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set user property", e)
+        }
+    }
+
+    /**
+     * 同步用户上下文到 Analytics + Crashlytics
+     */
+    fun syncUserContext(mid: Long?, isVip: Boolean?, privacyModeEnabled: Boolean?) {
+        if (!isEnabled) return
+        try {
+            analytics?.setUserId(mid?.takeIf { it > 0 }?.toString())
+            analytics?.setUserProperty(
+                "login_state",
+                if (mid != null && mid > 0) "logged_in" else "guest"
+            )
+            isVip?.let { analytics?.setUserProperty("vip_state", if (it) "vip" else "normal") }
+            privacyModeEnabled?.let {
+                analytics?.setUserProperty("privacy_mode", if (it) "on" else "off")
+            }
+            CrashReporter.syncUserContext(mid, isVip, privacyModeEnabled)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync user context", e)
+        }
+    }
+
+    /**
+     * App 进入前台
+     */
+    fun onAppForeground() {
+        if (!isEnabled) return
+        if (isInForeground) return
+        sessionStartMs = System.currentTimeMillis()
+        isInForeground = true
+        try {
+            analytics?.logEvent("app_foreground") {
+                param("source", "process_lifecycle")
+            }
+            CrashReporter.setAppForegroundState(true)
+            CrashReporter.setLastEvent("app_foreground")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log app foreground", e)
+        }
+    }
+
+    /**
+     * App 进入后台
+     */
+    fun onAppBackground() {
+        if (!isEnabled) return
+        if (!isInForeground) return
+        val now = System.currentTimeMillis()
+        val sessionDurationSec = if (sessionStartMs > 0L) ((now - sessionStartMs) / 1000L).coerceAtLeast(0L) else 0L
+        isInForeground = false
+        try {
+            analytics?.logEvent("app_background") {
+                param("source", "process_lifecycle")
+                param("session_duration_sec", sessionDurationSec)
+            }
+            CrashReporter.setAppForegroundState(false)
+            CrashReporter.setLastEvent("app_background")
+            CrashReporter.setCustomKey("last_session_duration_sec", sessionDurationSec)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log app background", e)
         }
     }
     
@@ -90,6 +169,8 @@ object AnalyticsHelper {
                 param(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
                 screenClass?.let { param(FirebaseAnalytics.Param.SCREEN_CLASS, it) }
             }
+            CrashReporter.setLastScreen(screenName)
+            CrashReporter.setLastEvent("screen_view")
             Logger.d(TAG, " Screen view: $screenName")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log screen view", e)
@@ -122,6 +203,7 @@ object AnalyticsHelper {
                     param("duration_range", durationRange)
                 }
             }
+            CrashReporter.setLastEvent("video_play")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log video play", e)
         }
@@ -185,6 +267,7 @@ object AnalyticsHelper {
                 }
                 param("query_length", lengthRange)
             }
+            CrashReporter.setLastEvent("search")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log search", e)
         }
@@ -290,6 +373,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent(FirebaseAnalytics.Event.APP_OPEN, null)
+            CrashReporter.setLastEvent("app_open")
             Logger.d(TAG, " App open")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log app open", e)
@@ -305,6 +389,7 @@ object AnalyticsHelper {
             analytics?.logEvent(FirebaseAnalytics.Event.LOGIN) {
                 param(FirebaseAnalytics.Param.METHOD, method)
             }
+            CrashReporter.setLastEvent("login")
             Logger.d(TAG, " Login: $method")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log login", e)
@@ -318,6 +403,8 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("logout", null)
+            syncUserContext(mid = null, isVip = false, privacyModeEnabled = null)
+            CrashReporter.setLastEvent("logout")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log logout", e)
         }
@@ -368,6 +455,7 @@ object AnalyticsHelper {
                 param("setting_name", settingName)
                 param("setting_value", value)
             }
+            CrashReporter.setLastEvent("setting_change:$settingName")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log setting change", e)
         }
@@ -419,6 +507,7 @@ object AnalyticsHelper {
                 param("video_id", videoId)
                 param("error_type", errorType)
             }
+            CrashReporter.setLastEvent("video_error")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log video error", e)
         }
@@ -434,6 +523,7 @@ object AnalyticsHelper {
                 param("room_id", roomId.toString())
                 param("error_type", errorType)
             }
+            CrashReporter.setLastEvent("live_error")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log live error", e)
         }

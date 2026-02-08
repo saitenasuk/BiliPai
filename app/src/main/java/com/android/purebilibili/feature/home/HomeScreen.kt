@@ -68,10 +68,12 @@ import com.android.purebilibili.core.ui.LocalSharedTransitionScope  //  共享�
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard  //  粒子消散动画
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve      // 📳 iOS 风格抖动效果
 import com.android.purebilibili.core.util.responsiveContentWidth
+import com.android.purebilibili.core.util.CardPositionManager
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import coil.imageLoader
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged  //  性能优化：防止重复触发
+import kotlinx.coroutines.delay
 import androidx.compose.animation.ExperimentalSharedTransitionApi  //  共享过渡实验API
 import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
 import com.android.purebilibili.core.ui.LocalBottomBarVisible
@@ -128,7 +130,9 @@ fun HomeScreen(
         gridStates[category] = rememberLazyGridState()
     }
     val staggeredGridState = rememberLazyStaggeredGridState() // 🌊 瀑布流状态
-    val hazeState = remember { HazeState() }
+    val localHazeState = remember { HazeState(initialBlurEnabled = true) }
+    // 首页使用独立 HazeState，避免命中外层全局 source 的祖先过滤规则导致无模糊。
+    val hazeState = localHazeState
 
 
     // [Feature] Video Preview State (Global Scope)
@@ -186,6 +190,18 @@ fun HomeScreen(
     LaunchedEffect(isRefreshing) {
         if (isRefreshing) {
             gridStates[state.currentCategory]?.animateScrollToItem(0)
+        }
+    }
+
+    // 从详情页返回时仅清理一次全局卡片状态，避免每个分页重复触发
+    LaunchedEffect(Unit) {
+        if (CardPositionManager.isReturningFromDetail) {
+            delay(100)
+            CardPositionManager.clearReturning()
+        }
+        if (CardPositionManager.isSwitchingCategory) {
+            delay(300)
+            CardPositionManager.isSwitchingCategory = false
         }
     }
     
@@ -291,12 +307,16 @@ fun HomeScreen(
     val displayMode = homeSettings.displayMode
     val isBottomBarFloating = homeSettings.isBottomBarFloating
     val bottomBarLabelMode = homeSettings.bottomBarLabelMode
-    val isHeaderBlurEnabled = homeSettings.isHeaderBlurEnabled
+    // 顶部模糊开关直接读独立 Flow，避免聚合设置延迟/不同步导致首页状态错误。
+    val isHeaderBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
     val isBottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled
     val crashTrackingConsentShown = homeSettings.crashTrackingConsentShown
     val cardAnimationEnabled = homeSettings.cardAnimationEnabled      //  卡片进场动画开关
     val cardTransitionEnabled = homeSettings.cardTransitionEnabled    //  卡片过渡动画开关
     val isLiquidGlassEnabled = homeSettings.isLiquidGlassEnabled      //  流体玻璃特效开关
+    val isDataSaverActive = remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.isDataSaverActive(context)
+    }
     
     //  [新增] 底栏可见项目配置
     val orderedVisibleTabIds by SettingsManager.getOrderedVisibleTabs(context).collectAsState(
@@ -386,12 +406,6 @@ fun HomeScreen(
 
     val density = LocalDensity.current
     val navBarHeight = WindowInsets.navigationBars.getBottom(density).let { with(density) { it.toDp() } }
-    
-    val bottomBarHeight = if (isBottomBarFloating) {
-        84.dp + navBarHeight  // 72dp(栏高度) + 12dp(底部边距)
-    } else {
-        64.dp + navBarHeight  // 64dp(Docked模式)
-    }
 
     //  [修复] 动态计算内容顶部边距，防止被头部遮挡
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -444,6 +458,27 @@ fun HomeScreen(
     // 兼容代码：为了最小化改动，将 bottomBarVisible 指向全局状态
     // 注意：这里的 bottomBarVisible 现在是只读的，修改必须通过 setBottomBarVisible
     val bottomBarVisible = isGlobalBottomBarVisible
+    val bottomBarBodyHeight = when (bottomBarLabelMode) {
+        0 -> if (windowSizeClass.isTablet) 76.dp else 70.dp
+        2 -> if (windowSizeClass.isTablet) 56.dp else 54.dp
+        else -> if (windowSizeClass.isTablet) 68.dp else 62.dp
+    }
+    val dockedBarBodyHeight = when (bottomBarLabelMode) {
+        0 -> 72.dp
+        2 -> if (windowSizeClass.isTablet) 52.dp else 56.dp
+        else -> 64.dp
+    }
+    val bottomBarVerticalInset = if (isBottomBarFloating) {
+        if (windowSizeClass.isTablet) 20.dp else 16.dp
+    } else {
+        0.dp
+    }
+    val homeListBottomPadding = when {
+        useSideNavigation -> navBarHeight + 8.dp
+        !bottomBarVisible -> navBarHeight + 8.dp
+        isBottomBarFloating -> bottomBarBodyHeight + bottomBarVerticalInset + navBarHeight + 12.dp
+        else -> dockedBarBodyHeight + navBarHeight + 12.dp
+    }
     
     //  [修复] 跟踪是否正在导航到/从视频页 - 必须在 LaunchedEffect 之前声明
     var isVideoNavigating by remember { mutableStateOf(false) }
@@ -502,6 +537,27 @@ fun HomeScreen(
 
     // [New] State for side drawer
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var bottomBarVisibleBeforeDrawer by remember { mutableStateOf<Boolean?>(null) }
+    
+    // 抽屉打开时隐藏全局底栏，避免覆盖侧边栏底部内容
+    val isDrawerOpenOrOpening = drawerState.currentValue == DrawerValue.Open || drawerState.targetValue == DrawerValue.Open
+    LaunchedEffect(isDrawerOpenOrOpening, isGlobalBottomBarVisible, useSideNavigation) {
+        if (useSideNavigation) return@LaunchedEffect
+        
+        if (isDrawerOpenOrOpening) {
+            if (bottomBarVisibleBeforeDrawer == null) {
+                bottomBarVisibleBeforeDrawer = isGlobalBottomBarVisible
+            }
+            if (isGlobalBottomBarVisible) {
+                setBottomBarVisible(false)
+            }
+        } else {
+            bottomBarVisibleBeforeDrawer?.let { previousVisible ->
+                setBottomBarVisible(previousVisible)
+            }
+            bottomBarVisibleBeforeDrawer = null
+        }
+    }
     
     //  [修复] 使用 ViewModel 中的标签页显示索引（跨导航保持）
     // 当用户滑动到特殊分类时，标签页位置更新，但内容分类保持不变
@@ -622,14 +678,18 @@ fun HomeScreen(
                    // [Refactor] Use Box to allow overlay and proper blur nesting
                    // [新增] Video Preview State (Long Press)
 
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // 首页使用 Pager + Lazy 子层，source 挂在外层容器更稳定。
+                            .hazeSource(state = hazeState)
+                    ) {
                     // [Fix] Re-enabled default overscroll for better feedback
                         HorizontalPager(
                             state = pagerState,
                             beyondViewportPageCount = 1, // [Optimization] Preload adjacent pages to prevent swipe lag
                             modifier = Modifier
-                                .fillMaxSize()
-                                .hazeSource(state = hazeState), // [Restored] Always apply hazeSource for consistent blur
+                                .fillMaxSize(),
                             key = { index -> HomeCategory.entries[index].ordinal }
                         ) { page ->
                         val category = HomeCategory.entries[page]
@@ -707,12 +767,7 @@ fun HomeScreen(
                                  LazyVerticalGrid(
                                      columns = GridCells.Fixed(gridColumns),
                                      contentPadding = PaddingValues(
-                                         bottom = when {
-                                            useSideNavigation -> navBarHeight + 8.dp
-                                            isBottomBarFloating -> 100.dp
-                                            bottomBarVisible -> 64.dp + navBarHeight + 20.dp
-                                            else -> navBarHeight + 8.dp
-                                         },
+                                         bottom = homeListBottomPadding,
                                          start = 8.dp, end = 8.dp, top = listTopPadding // [Fix] Apply top padding to skeleton grid too
                                      ),
                                      horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -749,12 +804,7 @@ fun HomeScreen(
                                      gridState = pageGridState,
                                      gridColumns = gridColumns,
                                      contentPadding = PaddingValues(
-                                         bottom = when {
-                                            useSideNavigation -> navBarHeight + 8.dp
-                                            isBottomBarFloating -> 100.dp
-                                            bottomBarVisible -> 64.dp + navBarHeight + 20.dp
-                                            else -> navBarHeight + 8.dp
-                                         },
+                                         bottom = homeListBottomPadding,
                                          start = 8.dp, end = 8.dp, top = listTopPadding 
                                      ),
                                      dissolvingVideos = state.dissolvingVideos,
@@ -765,7 +815,11 @@ fun HomeScreen(
                                      onDismissVideo = onDismissVideoCallback,
                                      onWatchLater = onWatchLaterCallback,
                                      onDissolveComplete = onDissolveCompleteCallback,
-                                     longPressCallback = onLongPressCallback // [Feature] Pass callback
+                                     longPressCallback = onLongPressCallback, // [Feature] Pass callback
+                                     displayMode = displayMode,
+                                     cardAnimationEnabled = cardAnimationEnabled,
+                                     cardTransitionEnabled = cardTransitionEnabled,
+                                     isDataSaverActive = isDataSaverActive
                                  )
                              }
                              } // Close Box wrapper
@@ -962,25 +1016,8 @@ fun HomeScreen(
     //  滚动方向（简化版 - 不再需要复杂检测，因为标签页只在顶部显示）
     val isScrollingUp = true  // 保留参数兼容性
 
-    val shouldLoadMore by remember {
-        derivedStateOf {
-            val currentGridState = gridStates[state.currentCategory]
-            if (currentGridState == null) return@derivedStateOf false
-
-            val layoutInfo = currentGridState.layoutInfo
-            val totalItems = layoutInfo.totalItemsCount
-            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            totalItems > 0 && lastVisibleItemIndex >= totalItems - 4 && !state.isLoading && !isRefreshing
-        }
-    }
-    LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) viewModel.loadMore() }
-    
     //  [性能优化] 图片预加载 - 提前加载即将显示的视频封面
     // 📉 [省流量] 省流量模式下禁用预加载
-    val isDataSaverActive = remember {
-        com.android.purebilibili.core.store.SettingsManager.isDataSaverActive(context)
-    }
-    
     LaunchedEffect(state.currentCategory, isDataSaverActive) {
         // 📉 省流量模式下跳过预加载
         if (isDataSaverActive) return@LaunchedEffect
@@ -992,7 +1029,7 @@ fun HomeScreen(
             .collect { lastVisibleIndex ->
                 // Move heavy lifting to IO thread
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    val videos = state.videos
+                    val videos = state.categoryStates[state.currentCategory]?.videos ?: state.videos
                     val preloadStart = (lastVisibleIndex + 1).coerceAtMost(videos.size)
                     val preloadEnd = (lastVisibleIndex + 6).coerceAtMost(videos.size)  //  减少预加载数量
                     

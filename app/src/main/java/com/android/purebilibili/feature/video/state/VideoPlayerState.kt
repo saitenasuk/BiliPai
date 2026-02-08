@@ -514,8 +514,8 @@ fun rememberVideoPlayerState(
                     if (autoPlayEnabled) {
                         viewModel.playNextPageOrRecommended()
                     } else {
-                        // 确保调用正确的方法显示对话框
-                        viewModel.showPlaybackEndedDialogIfNeeded()
+                        // 自动播放关闭：保持结束态，不再弹播放完成对话框
+                        viewModel.dismissPlaybackEndedDialog()
                     }
                 }
                 if (playbackState == Player.STATE_READY) {

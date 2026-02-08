@@ -696,7 +696,7 @@ private fun PlaybackSettingsPage(hazeState: HazeState) {
         Spacer(modifier = Modifier.height(12.dp))
         
         FeatureListItem(
-            icon = "❤️",
+            icon = "👍",
             title = "双击点赞",
             description = "双击画面快速点赞，设置中可开关",
             animationProgress = animatedItems[6].value,

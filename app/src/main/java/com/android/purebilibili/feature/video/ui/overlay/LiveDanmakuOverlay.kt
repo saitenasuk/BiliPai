@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import android.graphics.Color as AndroidColor
+import android.os.SystemClock
 import android.view.ViewGroup
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -12,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.purebilibili.feature.live.LiveDanmakuItem
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.bytedance.danmaku.render.engine.control.DanmakuController
@@ -42,9 +44,10 @@ fun LiveDanmakuOverlay(
     
     // 使用稳定的状态管理
     var controller by remember { mutableStateOf<DanmakuController?>(null) }
-    var startTime by remember { mutableStateOf(0L) }
+    var startTime by remember { mutableLongStateOf(0L) }
     var isStarted by remember { mutableStateOf(false) }
     val danmakuList = remember { mutableListOf<DanmakuData>() }
+    val pendingDanmaku = remember { mutableListOf<DanmakuData>() }
 
     AndroidView(
         factory = { ctx ->
@@ -61,49 +64,73 @@ fun LiveDanmakuOverlay(
                     
                     // 保存引用
                     controller = this.controller
-                    startTime = System.currentTimeMillis()
+                    startTime = SystemClock.elapsedRealtime()
                     
-                    android.util.Log.d("LiveDanmakuOverlay", "🟢 DanmakuView created, starting controller")
+                    android.util.Log.d("LiveDanmakuOverlay", "DanmakuView created")
                     
                     // 启动渲染引擎
                     this.controller.start(0)
                     isStarted = true
                 } catch (e: Exception) {
-                    android.util.Log.e("LiveDanmakuOverlay", "❌ DanmakuView init failed: ${e.message}")
+                    android.util.Log.e("LiveDanmakuOverlay", "DanmakuView init failed: ${e.message}")
                 }
             }
         },
         modifier = modifier.fillMaxSize(),
-        update = { view ->
+        update = {
             try {
                 // 确保控制器正在运行
                 val ctrl = controller
                 if (ctrl != null && !isStarted) {
-                    android.util.Log.d("LiveDanmakuOverlay", "🟡 Controller not started, starting...")
-                    val currentTime = System.currentTimeMillis() - startTime
+                    val currentTime = SystemClock.elapsedRealtime() - startTime
                     ctrl.start(currentTime)
                     isStarted = true
                 }
             } catch (e: Exception) {
-                android.util.Log.e("LiveDanmakuOverlay", "❌ Update failed: ${e.message}")
+                android.util.Log.e("LiveDanmakuOverlay", "Update failed: ${e.message}")
             }
         }
     )
 
-    // 持续驱动播放时间更新 - 每帧调用 start() 来推进渲染
-    LaunchedEffect(Unit) {
-        while (isActive) { // 使用 isActive 检查，协程取消时自动退出
+    // 批量合并弹幕更新，避免每条弹幕都全量 setData 导致卡顿
+    LaunchedEffect(controller, isStarted) {
+        var tick = 0
+        while (isActive) {
             try {
                 val ctrl = controller
                 if (ctrl != null && isStarted) {
-                    val currentTime = System.currentTimeMillis() - startTime
-                    // 定期调用 start() 更新播放进度
+                    val currentTime = SystemClock.elapsedRealtime() - startTime
+                    var dataChanged = false
+
+                    if (pendingDanmaku.isNotEmpty()) {
+                        danmakuList.addAll(pendingDanmaku)
+                        pendingDanmaku.clear()
+                        dataChanged = true
+                    }
+
+                    if (dataChanged || tick % 10 == 0) {
+                        val expireBefore = currentTime - 20_000
+                        val beforeSize = danmakuList.size
+                        danmakuList.removeAll { it.showAtTime < expireBefore }
+                        if (beforeSize != danmakuList.size) {
+                            dataChanged = true
+                        }
+                    }
+
+                    if (dataChanged) {
+                        danmakuList.sortBy { it.showAtTime }
+                        ctrl.setData(danmakuList.toList(), 0)
+                        ctrl.invalidateView()
+                    }
+
+                    // 保持渲染时钟前进，但降频到 10fps 减轻主线程压力
                     ctrl.start(currentTime)
+                    tick++
                 }
             } catch (e: Exception) {
-                android.util.Log.e("LiveDanmakuOverlay", "❌ Render loop error: ${e.message}")
+                android.util.Log.e("LiveDanmakuOverlay", "Render loop error: ${e.message}")
             }
-            delay(50) // ~20fps 足够流畅
+            delay(100)
         }
     }
     
@@ -111,31 +138,14 @@ fun LiveDanmakuOverlay(
     LaunchedEffect(danmakuFlow) {
         danmakuFlow.collect { item ->
             try {
-                val ctrl = controller ?: return@collect
                 if (!isStarted) return@collect
-                
-                android.util.Log.d("LiveDanmakuOverlay", "🔴 Received: ${item.text}")
-                
-                // 计算当前相对时间
-                val currentTime = System.currentTimeMillis() - startTime
-                val danmakuData = createDanmakuData(item, currentTime, context, ctrl)
-                
-                // 添加到列表 (同步操作，避免并发问题)
-                synchronized(danmakuList) {
-                    // 移除过期弹幕 (20秒前)
-                    danmakuList.removeAll { it.showAtTime < currentTime - 20_000 }
-                    danmakuList.add(danmakuData)
-                    // 排序
-                    danmakuList.sortBy { it.showAtTime }
-                    
-                    android.util.Log.d("LiveDanmakuOverlay", "🔴 setData: size=${danmakuList.size}, time=$currentTime")
-                    
-                    // 更新数据
-                    ctrl.setData(danmakuList.toList(), currentTime)
-                }
-                ctrl.invalidateView()
+
+                // 计算当前相对时间（使用单调时钟，避免系统时间调整导致漂移）
+                val currentTime = SystemClock.elapsedRealtime() - startTime
+                val danmakuData = createDanmakuData(item, currentTime, context, controller)
+                pendingDanmaku.add(danmakuData)
             } catch (e: Exception) {
-                android.util.Log.e("LiveDanmakuOverlay", "❌ Danmaku collect error: ${e.message}")
+                android.util.Log.e("LiveDanmakuOverlay", "Danmaku collect error: ${e.message}")
             }
         }
     }
@@ -143,16 +153,15 @@ fun LiveDanmakuOverlay(
     // 清理
     DisposableEffect(Unit) {
         onDispose {
-            android.util.Log.d("LiveDanmakuOverlay", "🔴 Disposing DanmakuView")
+            android.util.Log.d("LiveDanmakuOverlay", "Disposing DanmakuView")
             try {
                 controller?.stop()
-                synchronized(danmakuList) {
-                    danmakuList.clear()
-                }
+                danmakuList.clear()
+                pendingDanmaku.clear()
                 isStarted = false
                 controller = null
             } catch (e: Exception) {
-                android.util.Log.e("LiveDanmakuOverlay", "❌ Dispose error: ${e.message}")
+                android.util.Log.e("LiveDanmakuOverlay", "Dispose error: ${e.message}")
             }
         }
     }

@@ -524,6 +524,7 @@ private fun VideoPageItem(
             onDismiss = { showCommentSheet = false },
             commentViewModel = commentViewModel,
             aid = aid,
+            upMid = authorMid,
             onUserClick = onUserClick
         )
         
@@ -534,4 +535,3 @@ private fun VideoPageItem(
         )
     }
 }
-

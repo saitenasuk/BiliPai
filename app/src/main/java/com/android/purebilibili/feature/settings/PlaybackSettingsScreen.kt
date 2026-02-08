@@ -471,7 +471,7 @@ fun PlaybackSettingsContent(
                         )
                         Divider()
                         IOSSwitchItem(
-                            icon = CupertinoIcons.Default.HeartCircle,
+                            icon = CupertinoIcons.Default.HandThumbsup,
                             title = "双击点赞",
                             subtitle = "双击视频画面快捷点赞",
                             checked = state.doubleTapLike,

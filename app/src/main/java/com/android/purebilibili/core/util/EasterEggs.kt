@@ -10,6 +10,7 @@ import kotlin.random.Random
  * 提供各种有趣的互动彩蛋
  */
 object EasterEggs {
+    const val VERSION_EASTER_EGG_THRESHOLD = 7
     
     // ═══════════════════════════════════════════════════
     // 🎉 下拉刷新趣味提示语
@@ -98,7 +99,10 @@ object EasterEggs {
      * @param clickCount 当前点击次数
      * @param threshold 触发彩蛋的阈值
      */
-    fun getVersionClickMessage(clickCount: Int, threshold: Int = 7): String {
+    fun getVersionClickMessage(
+        clickCount: Int,
+        threshold: Int = VERSION_EASTER_EGG_THRESHOLD
+    ): String {
         val remaining = threshold - clickCount
         return when {
             remaining > 3 -> "再点 $remaining 次有惊喜！"
@@ -113,7 +117,10 @@ object EasterEggs {
     /**
      * 判断是否触发了版本彩蛋
      */
-    fun isVersionEasterEggTriggered(clickCount: Int, threshold: Int = 7): Boolean {
+    fun isVersionEasterEggTriggered(
+        clickCount: Int,
+        threshold: Int = VERSION_EASTER_EGG_THRESHOLD
+    ): Boolean {
         return clickCount >= threshold
     }
     

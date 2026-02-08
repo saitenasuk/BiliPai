@@ -33,7 +33,7 @@ import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
 // Import reusable components from standalone files
 import com.android.purebilibili.feature.video.ui.components.QualitySelectionMenu
-import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenu
+import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuDialog
 import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.AspectRatioMenu
@@ -161,6 +161,8 @@ fun VideoPlayerOverlay(
     onPipClick: () -> Unit = {},
     //  [新增] 拖动进度条开始回调（用于清除弹幕）
     onSeekStart: () -> Unit = {},
+    //  [新增] 外部可接管 seek 行为（用于同步弹幕等）
+    onSeekTo: ((Long) -> Unit)? = null,
     // [New] Codec & Audio Params
     currentCodec: String = "hev1",
     onCodecChange: (String) -> Unit = {},
@@ -411,7 +413,7 @@ fun VideoPlayerOverlay(
                         // 检查播放器是否处于完成状态
                         if (player.playbackState == Player.STATE_ENDED) {
                             // 如果播放完成，先重置到开头，再重新播放
-                            player.seekTo(0)
+                            onSeekTo?.invoke(0L) ?: player.seekTo(0L)
                             player.play()
                             isPlaying = true
                         } else if (isPlaying) {
@@ -422,7 +424,7 @@ fun VideoPlayerOverlay(
                             isPlaying = true
                         }
                     },
-                    onSeek = { position -> player.seekTo(position) },
+                    onSeek = { position -> onSeekTo?.invoke(position) ?: player.seekTo(position) },
                     onSeekStart = onSeekStart,  //  拖动进度条开始时清除弹幕
                     onSpeedClick = { showSpeedMenu = true },
                     onRatioClick = { showRatioMenu = true },
@@ -575,32 +577,22 @@ fun VideoPlayerOverlay(
                     onQualitySelected(index)
                     showQualityMenu = false
                 },
-                onDismiss = { showQualityMenu = false }
+                onDismiss = { showQualityMenu = false },
+                useDialog = true
             )
         }
         
         // --- 7.  [新增] 倍速选择菜单 ---
         if (showSpeedMenu) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) { showSpeedMenu = false },
-                contentAlignment = Alignment.Center
-            ) {
-                SpeedSelectionMenu(
-                    currentSpeed = currentSpeed,
-                    onSpeedSelected = { speed ->
-                        currentSpeed = speed
-                        player.setPlaybackSpeed(speed)
-                        showSpeedMenu = false
-                    },
-                    onDismiss = { showSpeedMenu = false }
-                )
-            }
+            SpeedSelectionMenuDialog(
+                currentSpeed = currentSpeed,
+                onSpeedSelected = { speed ->
+                    currentSpeed = speed
+                    player.setPlaybackSpeed(speed)
+                    showSpeedMenu = false
+                },
+                onDismiss = { showSpeedMenu = false }
+            )
         }
         
         // --- 7.5  [新增] 视频比例选择菜单 ---
@@ -713,7 +705,7 @@ fun VideoPlayerOverlay(
             ChapterListPanel(
                 viewPoints = viewPoints,
                 currentPositionMs = progressState.current,
-                onSeek = { position -> player.seekTo(position) },
+                onSeek = { position -> onSeekTo?.invoke(position) ?: player.seekTo(position) },
                 onDismiss = { showChapterList = false }
             )
         }

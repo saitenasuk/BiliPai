@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.*
+import com.android.purebilibili.core.util.EasterEggs
 import com.android.purebilibili.core.ui.AppIcons
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
 import io.github.alexzhirkevich.cupertino.CupertinoSwitchDefaults
@@ -72,7 +74,7 @@ fun FollowAuthorSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Filled.Heart,
+            icon = CupertinoIcons.Filled.HandThumbsup,
             title = "打赏作者",
             value = "支持开发",
             onClick = onDonateClick,
@@ -320,8 +322,36 @@ fun AboutSection(
     onGithubClick: () -> Unit,
     onVersionClick: () -> Unit,
     onReplayOnboardingClick: () -> Unit,
-    onEasterEggChange: (Boolean) -> Unit
+    onEasterEggChange: (Boolean) -> Unit,
+    versionClickCount: Int = 0,
+    versionClickThreshold: Int = EasterEggs.VERSION_EASTER_EGG_THRESHOLD
 ) {
+    val safeThreshold = versionClickThreshold.coerceAtLeast(1)
+    val normalizedClickCount = versionClickCount.coerceAtLeast(0)
+    val versionProgress = normalizedClickCount.coerceAtMost(safeThreshold).toFloat() / safeThreshold
+    val versionIconTint = animateColorAsState(
+        targetValue = when {
+            normalizedClickCount >= safeThreshold -> iOSGreen
+            versionProgress >= 0.85f -> iOSOrange
+            versionProgress >= 0.5f -> iOSYellow
+            normalizedClickCount > 0 -> iOSBlue
+            else -> iOSTeal
+        },
+        label = "versionIconTint"
+    ).value
+    val versionHint = when {
+        normalizedClickCount <= 0 -> null
+        normalizedClickCount >= safeThreshold -> "彩蛋已解锁"
+        else -> "还差 ${safeThreshold - normalizedClickCount} 次"
+    }
+    val versionValue = buildString {
+        append("v$versionName")
+        versionHint?.let {
+            append(" · ")
+            append(it)
+        }
+    }
+
     SettingsGroup {
         SettingClickableItem(
             icon = CupertinoIcons.Default.DocText,
@@ -343,9 +373,9 @@ fun AboutSection(
         SettingClickableItem(
             icon = CupertinoIcons.Default.InfoCircle,
             title = "版本",
-            value = "v$versionName",
+            value = versionValue,
             onClick = onVersionClick,
-            iconTint = iOSTeal,
+            iconTint = versionIconTint,
             enableCopy = true
         )
         SettingsDivider(startIndent = 66.dp)

@@ -81,6 +81,8 @@ fun TabletSettingsLayout(
     analyticsEnabled: Boolean,
     pluginCount: Int,
     versionName: String,
+    versionClickCount: Int,
+    versionClickThreshold: Int,
     easterEggEnabled: Boolean,
     
     modifier: Modifier = Modifier
@@ -387,7 +389,9 @@ fun TabletSettingsLayout(
                                     onGithubClick = onGithubClick,
                                     onVersionClick = onVersionClick,
                                     onReplayOnboardingClick = onReplayOnboardingClick,
-                                    onEasterEggChange = onEasterEggChange
+                                    onEasterEggChange = onEasterEggChange,
+                                    versionClickCount = versionClickCount,
+                                    versionClickThreshold = versionClickThreshold
                                 )
                             }
                         }

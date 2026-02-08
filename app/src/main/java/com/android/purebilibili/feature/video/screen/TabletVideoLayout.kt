@@ -39,6 +39,7 @@ import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import kotlinx.coroutines.launch
 
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -262,6 +263,7 @@ private fun TabletSecondaryContent(
     var sourceRect by remember { mutableStateOf<Rect?>(null) }
     
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     
     // 图片预览对话框
     if (showImagePreview && previewImages.isNotEmpty()) {
@@ -323,7 +325,13 @@ private fun TabletSecondaryContent(
                             CommentSortFilterBar(
                                 count = commentState.replyCount,
                                 sortMode = commentState.sortMode,
-                                onSortModeChange = { commentViewModel.setSortMode(it) }
+                                onSortModeChange = { mode ->
+                                    commentViewModel.setSortMode(mode)
+                                    scope.launch {
+                                        com.android.purebilibili.core.store.SettingsManager
+                                            .setCommentDefaultSortMode(context, mode.apiMode)
+                                    }
+                                }
                             )
                         }
                         

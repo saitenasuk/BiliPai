@@ -615,6 +615,12 @@ interface SplashApi {
 }
 
 interface SearchApi {
+    @GET("x/web-interface/wbi/search/default")
+    suspend fun getDefaultSearch(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SearchDefaultResponse
+
+    @GET("x/web-interface/search/default")
+    suspend fun getDefaultSearchLegacy(): com.android.purebilibili.data.model.response.SearchDefaultResponse
+
     @GET("x/web-interface/search/square")
     suspend fun getHotSearch(@Query("limit") limit: Int = 10): HotSearchResponse
 
@@ -1284,7 +1290,25 @@ object NetworkModule {
                     " Sending request to ${original.url}, Referer: ${if (isWbiEndpoint) "OMITTED (WBI)" else referer}, hasSess=${!TokenManager.sessDataCache.isNullOrEmpty()}, hasCsrf=${!TokenManager.csrfCache.isNullOrEmpty()}"
                 )
 
-                chain.proceed(builder.build())
+                val request = builder.build()
+                try {
+                    val response = chain.proceed(request)
+                    if (response.code >= 500 || response.code == 429 || response.code == 412) {
+                        com.android.purebilibili.core.util.CrashReporter.reportApiError(
+                            endpoint = "${request.method} ${request.url.encodedPath}",
+                            httpCode = response.code,
+                            errorMessage = "HTTP ${response.code}"
+                        )
+                    }
+                    response
+                } catch (e: Exception) {
+                    com.android.purebilibili.core.util.CrashReporter.reportApiError(
+                        endpoint = "${request.method} ${request.url.encodedPath}",
+                        httpCode = -1,
+                        errorMessage = e.message ?: e.javaClass.simpleName
+                    )
+                    throw e
+                }
             }
             .build()
     }
@@ -1344,7 +1368,25 @@ object NetworkModule {
                     .header("Referer", referer)
                     .header("Origin", "https://www.bilibili.com")
                 
-                chain.proceed(builder.build())
+                val request = builder.build()
+                try {
+                    val response = chain.proceed(request)
+                    if (response.code >= 500 || response.code == 429 || response.code == 412) {
+                        com.android.purebilibili.core.util.CrashReporter.reportApiError(
+                            endpoint = "guest ${request.method} ${request.url.encodedPath}",
+                            httpCode = response.code,
+                            errorMessage = "HTTP ${response.code}"
+                        )
+                    }
+                    response
+                } catch (e: Exception) {
+                    com.android.purebilibili.core.util.CrashReporter.reportApiError(
+                        endpoint = "guest ${request.method} ${request.url.encodedPath}",
+                        httpCode = -1,
+                        errorMessage = e.message ?: e.javaClass.simpleName
+                    )
+                    throw e
+                }
             }
             .build()
     }

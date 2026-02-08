@@ -42,6 +42,7 @@ object DanmakuProto {
         val mode: Int = 1,          // 弹幕类型: 1-3滚动, 4底部, 5顶部
         val fontsize: Int = 25,     // 字体大小
         val color: Int = 0xFFFFFF,  // 颜色 RGB
+        val midHash: String = "",   // 用户 hash（可用于过滤）
         val content: String = "",   // 弹幕内容
         val weight: Int = 0,        // 权重 (AI过滤)
         val pool: Int = 0           // 弹幕池: 0普通, 1字幕, 2特殊
@@ -306,6 +307,7 @@ object DanmakuProto {
         var mode = 1
         var fontsize = 25
         var color = 0xFFFFFF
+        var midHash = ""
         var content = ""
         var weight = 0
         var pool = 0
@@ -324,7 +326,7 @@ object DanmakuProto {
                     3 -> mode = input.readVarint().toInt()      // mode
                     4 -> fontsize = input.readVarint().toInt()  // fontsize
                     5 -> color = input.readVarint().toInt()     // color
-                    6 -> input.readString()                     // midHash (skip)
+                    6 -> midHash = input.readString()           // midHash
                     7 -> content = input.readString()           // content
                     8 -> input.readVarint()                     // ctime (skip)
                     9 -> weight = input.readVarint().toInt()    // weight
@@ -346,6 +348,7 @@ object DanmakuProto {
             mode = mode,
             fontsize = fontsize,
             color = color,
+            midHash = midHash,
             content = content,
             weight = weight,
             pool = pool

@@ -10,11 +10,13 @@ import com.bytedance.danmaku.render.engine.render.draw.text.TextData
  * - pool: 弹幕池类型 (0:普通, 1:字幕, 2:特殊)
  */
 class WeightedTextData : TextData() {
+    var danmakuId: Long = 0L
+    var userHash: String = ""
     var weight: Int = 0
     var pool: Int = 0
     
     // 调试用
     override fun toString(): String {
-        return "WeightedTextData(text='$text', time=$showAtTime, weight=$weight)"
+        return "WeightedTextData(id=$danmakuId, userHash='$userHash', text='$text', time=$showAtTime, weight=$weight)"
     }
 }

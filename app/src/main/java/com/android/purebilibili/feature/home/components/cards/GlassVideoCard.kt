@@ -95,8 +95,8 @@ fun GlassVideoCard(
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     
-    //  记录卡片位置
-    var cardBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    //  记录卡片位置（非 Compose State，避免滚动时触发高频重组）
+    val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
     
     //  尝试获取共享元素作用域
     val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -150,7 +150,7 @@ fun GlassVideoCard(
             )
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->
-                cardBounds = coordinates.boundsInRoot()
+                cardBoundsRef.value = coordinates.boundsInRoot()
             }
     ) {
         //  [性能优化] 移除 blur() 层，改用静态渐变色
@@ -181,7 +181,7 @@ fun GlassVideoCard(
                                 showDismissMenu = true
                             },
                             onTap = {
-                                cardBounds?.let { bounds ->
+                                cardBoundsRef.value?.let { bounds ->
                                     CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx)
                                 }
                                 onClick(video.bvid, 0)
@@ -196,7 +196,7 @@ fun GlassVideoCard(
                             pressTranslationY = 8f,
                             hapticEnabled = true
                         ) {
-                            cardBounds?.let { bounds ->
+                            cardBoundsRef.value?.let { bounds ->
                                 CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx)
                             }
                             onClick(video.bvid, 0)

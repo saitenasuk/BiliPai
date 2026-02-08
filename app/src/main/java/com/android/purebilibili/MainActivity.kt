@@ -211,7 +211,10 @@ class MainActivity : ComponentActivity() {
             }
             
             //  全局 Haze 状态，用于实现毛玻璃效果
-            val mainHazeState = remember { dev.chrisbanes.haze.HazeState() }
+            // 强制启用 blur，避免部分设备（如 Android 12）默认降级为仅半透明遮罩
+            val mainHazeState = remember {
+                dev.chrisbanes.haze.HazeState(initialBlurEnabled = true)
+            }
             
             //  📐 [平板适配] 计算窗口尺寸类
             val windowSizeClass = com.android.purebilibili.core.util.calculateWindowSizeClass()

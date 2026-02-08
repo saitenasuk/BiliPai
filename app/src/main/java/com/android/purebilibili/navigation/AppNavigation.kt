@@ -167,7 +167,6 @@ fun AppNavigation(
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
         val currentBottomNavItem = BottomNavItem.entries.find { it.route == currentRoute } ?: BottomNavItem.HOME
-        val isTopLevelDestination = BottomNavItem.entries.any { it.route == currentRoute }
 
         // 设置状态
         val bottomBarVisibilityMode by SettingsManager.getBottomBarVisibilityMode(context).collectAsState(initial = SettingsManager.BottomBarVisibilityMode.ALWAYS_VISIBLE)
@@ -181,6 +180,9 @@ fun AppNavigation(
             orderedVisibleTabIds.mapNotNull { id -> 
                 BottomNavItem.entries.find { it.name == id }
             }
+        }
+        val visibleBottomBarRoutes = remember(visibleBottomBarItems) {
+            visibleBottomBarItems.map { it.route }.toSet()
         }
         
         val bottomBarItemColors by SettingsManager.getBottomBarItemColors(context).collectAsState(initial = emptyMap<String, Int>())
@@ -198,28 +200,17 @@ fun AppNavigation(
         // Expanded width starts at 840dp according to Material Design 3
         val useSideNavigation = screenWidthDp >= 840.dp && tabletUseSidebar
 
-        // 仅在非侧边栏模式且是一级页面(或设置页及其子页面)时显示底栏 (短视频页面专门隐藏)
-        val settingsRoutes = listOf(
-            ScreenRoutes.Settings.route,
-            // ScreenRoutes.AppearanceSettings.route, // [Modified] Hide bottom bar on Appearance Settings
-            // ScreenRoutes.PlaybackSettings.route, // [Modified] Hide bottom bar on Playback Settings
-            ScreenRoutes.IconSettings.route,
-            ScreenRoutes.AnimationSettings.route,
-            // ScreenRoutes.PermissionSettings.route, // [Modified] Hide bottom bar
-            ScreenRoutes.PluginsSettings.route,
-            ScreenRoutes.OpenSourceLicenses.route
-        )
-        
         // [修复] 平板模式下(宽度>=600dp)，进入设置页(Settings.route)时隐藏底栏
         // 因为平板设置页使用 SplitLayout，已经有自己的内部导航结构，不需要底栏
         val isTabletLayout = screenWidthDp >= 600.dp
         val isSettingsScreen = currentRoute == ScreenRoutes.Settings.route
         val shouldHideBottomBarOnTablet = isTabletLayout && isSettingsScreen
-        
-        val showBottomBar = (isTopLevelDestination || currentRoute in settingsRoutes) 
-                && !useSideNavigation 
-                && currentRoute != ScreenRoutes.Story.route
-                && !shouldHideBottomBarOnTablet
+
+        // [UX] 底栏仅在“用户配置为可见的一级入口”显示；Story 始终沉浸式隐藏。
+        val isBottomBarDestination = currentRoute != ScreenRoutes.Story.route && currentRoute in visibleBottomBarRoutes
+        val showBottomBar = isBottomBarDestination &&
+            !useSideNavigation &&
+            !shouldHideBottomBarOnTablet
         
         // 核心可见性逻辑：
         // 1. 永久隐藏模式 -> 始终隐藏
@@ -232,16 +223,15 @@ fun AppNavigation(
             isBottomBarVisible = true
         }
 
-        // [New Fix] 切换到顶级页面时，强制恢复底栏可见性
-        // 解决问题：从首页(已上滑隐藏)切换到其他Tab，或者从视频页返回时，确保底栏是可见的
+        // [New Fix] 切换到可显示底栏的主入口页面时，强制恢复底栏可见性
         LaunchedEffect(currentRoute) {
-            if (isTopLevelDestination) {
+            if (isBottomBarDestination) {
                 isBottomBarVisible = true
             }
         }
         
         // 最终决定是否显示：
-        // - 必须是顶层/白名单页面
+        // - 必须是用户配置的可见主入口页面
         // - 不是侧边栏模式
         // - 不是故事模式
         // - 且 (模式为始终显示 OR (模式为上滑隐藏 AND 当前状态为可见))
@@ -438,7 +428,20 @@ fun AppNavigation(
                 miniPlayerManager?.resetNavigationFlag()
                 onVideoDetailEnter()
                 onDispose {
-                    onVideoDetailExit()
+                    // [关键修复] 从视频A切到视频B时，旧页面 onDispose 会晚于新页面 onEnter。
+                    // 若此时仍在 video 路由，不能触发「退出视频页」状态，否则会导致 Home 后误暂停。
+                    val currentRoute = navController.currentBackStackEntry?.destination?.route
+                    val stillInVideoRoute = currentRoute?.substringBefore("/") == VideoRoute.base
+
+                    if (!stillInVideoRoute) {
+                        onVideoDetailExit()
+                    } else {
+                        com.android.purebilibili.core.util.Logger.d(
+                            "AppNavigation",
+                            "Skip onVideoDetailExit because destination is still video route: $currentRoute"
+                        )
+                    }
+
                     //  [修复] 只有在真正退出页面时才进入小窗模式
                     // 配置变化（如旋转）不应触发小窗模式
                     //  [新增] 进入音频模式时也不应触发小窗（检查目标路由）
@@ -446,7 +449,11 @@ fun AppNavigation(
                     // Update: use the state variable as a more reliable indicator
                     // val isNavigatingToAudioMode = currentDestination == ScreenRoutes.AudioMode.route
                     
-                    if (activity?.isChangingConfigurations != true && !isNavigatingToAudioMode) {
+                    if (!stillInVideoRoute && activity?.isChangingConfigurations != true && !isNavigatingToAudioMode) {
+                        // [关键修复] 兜底处理：系统返回手势可能不会走 VideoDetailScreen.handleBack。
+                        // 真正离开视频域时统一标记导航离开，避免后台播放状态残留。
+                        miniPlayerManager?.markLeavingByNavigation()
+
                         //  [修复] 只有在"应用内小窗"模式下才进入小窗
                         // 后台模式只播放音频，不显示小窗
                         if (miniPlayerManager?.shouldShowInAppMiniPlayer() == true) {
@@ -1278,12 +1285,10 @@ fun AppNavigation(
                             targetOffsetY = { it }
                         ) + fadeOut(animationSpec = tween(200))
                     ) {
-                       if (isBottomBarFloating) {
+                        if (isBottomBarFloating) {
                             // 悬浮式底栏
                             Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 20.dp), // 悬浮距离
+                                modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.Center
                             ) {
                                 FrostedBottomBar(

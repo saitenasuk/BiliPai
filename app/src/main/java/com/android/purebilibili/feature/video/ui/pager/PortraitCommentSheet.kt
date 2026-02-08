@@ -36,16 +36,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.feature.video.ui.components.ReplyHeader
+import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import kotlinx.coroutines.launch
 
 /**
  * Custom PortraitCommentSheet to avoid WindowInsets quirks of standard ModalBottomSheet.
@@ -58,8 +62,19 @@ fun PortraitCommentSheet(
     onDismiss: () -> Unit,
     commentViewModel: VideoCommentViewModel,
     aid: Long,
+    upMid: Long = 0,
     onUserClick: (Long) -> Unit
 ) {
+    val context = LocalContext.current
+    val defaultSortMode by com.android.purebilibili.core.store.SettingsManager
+        .getCommentDefaultSortMode(context)
+        .collectAsState(
+            initial = com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context)
+        )
+    val preferredSortMode = remember(defaultSortMode) {
+        CommentSortMode.fromApiMode(defaultSortMode)
+    }
+
     // 监听返回键
     BackHandler(enabled = visible) {
         val subState = commentViewModel.subReplyState.value
@@ -70,9 +85,9 @@ fun PortraitCommentSheet(
         }
     }
 
-    LaunchedEffect(aid, visible) {
+    LaunchedEffect(aid, visible, preferredSortMode, upMid) {
         if (visible) {
-             commentViewModel.init(aid)
+             commentViewModel.init(aid, upMid = upMid, preferredSortMode = preferredSortMode)
         }
     }
 
@@ -145,10 +160,23 @@ private fun MainCommentList(
     onUserClick: (Long) -> Unit
 ) {
     val state by viewModel.commentState.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     
     Column(modifier = Modifier.fillMaxSize()) {
-        // 头部
-        ReplyHeader(count = state.replyCount)
+        CommentSortFilterBar(
+            count = state.replyCount,
+            sortMode = state.sortMode,
+            onSortModeChange = { mode ->
+                viewModel.setSortMode(mode)
+                scope.launch {
+                    com.android.purebilibili.core.store.SettingsManager
+                        .setCommentDefaultSortMode(context, mode.apiMode)
+                }
+            },
+            upOnly = state.upOnlyFilter,
+            onUpOnlyToggle = { viewModel.toggleUpOnly() }
+        )
         
         if (state.isRepliesLoading && state.replies.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

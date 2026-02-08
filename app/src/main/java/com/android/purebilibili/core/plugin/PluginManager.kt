@@ -32,6 +32,10 @@ object PluginManager {
     /** 插件列表状态流 (用于 Compose 监听) */
     private val _pluginsFlow = MutableStateFlow<List<PluginInfo>>(emptyList())
     val pluginsFlow: StateFlow<List<PluginInfo>> = _pluginsFlow.asStateFlow()
+
+    /** 弹幕插件更新信号（用于播放中热刷新当前弹幕） */
+    private val _danmakuPluginUpdateToken = MutableStateFlow(0L)
+    val danmakuPluginUpdateToken: StateFlow<Long> = _danmakuPluginUpdateToken.asStateFlow()
     
     private var isInitialized = false
     private lateinit var appContext: Context
@@ -91,6 +95,7 @@ object PluginManager {
         
         val info = _plugins[index]
         val plugin = info.plugin
+        if (info.enabled == enabled) return
         
         try {
             if (enabled && !info.enabled) {
@@ -104,6 +109,10 @@ object PluginManager {
             // 更新状态
             _plugins[index] = info.copy(enabled = enabled)
             _pluginsFlow.value = _plugins.toList()
+
+            if (plugin is DanmakuPlugin) {
+                notifyDanmakuPluginsUpdated()
+            }
             
             // 持久化
             PluginStore.setEnabled(appContext, pluginId, enabled)
@@ -147,7 +156,14 @@ object PluginManager {
         if (feedPlugins.isEmpty()) return items
         
         return items.filter { item ->
-            feedPlugins.all { plugin -> plugin.shouldShowItem(item) }
+            feedPlugins.all { plugin ->
+                try {
+                    plugin.shouldShowItem(item)
+                } catch (e: Exception) {
+                    Logger.e(TAG, " Feed plugin failed: ${plugin.name}", e)
+                    true
+                }
+            }
         }
     }
     
@@ -155,6 +171,10 @@ object PluginManager {
      * 获取已启用插件数量
      */
     fun getEnabledCount(): Int = _plugins.count { it.enabled }
+
+    fun notifyDanmakuPluginsUpdated() {
+        _danmakuPluginUpdateToken.value = System.currentTimeMillis()
+    }
 }
 
 /**

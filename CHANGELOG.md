@@ -1,5 +1,27 @@
 # Changelog
 
+## [5.1.3] - 2026-02-08
+
+### ✨ New Features (新增功能)
+
+- **Search Upgrade**: Extended search types and interaction flow (视频/UP/番剧/直播), improved suggestion/discover results, and optimized pagination/loading behavior.
+- **Comment Preference**: Added configurable default comment sort preference and synchronized it across comment entry points.
+- **Danmaku Plugin 2.0**: Added user ID/hash blocking for danmaku plugins, plus in-play hot refresh when danmaku plugin configs/rules change.
+- **Fullscreen Clock**: Added a top time display in landscape/fullscreen overlays.
+- **Settings Tips Expansion**: Added more hidden usage tips in the tips page.
+- **Version Easter Egg**: Enhanced version-click visual/easter-egg effects and toggles.
+
+### 🛠 Improvements & Fixes (优化与修复)
+
+- **Bottom Bar UX**: Reworked bottom bar visibility rules for top-level destinations and fixed alignment/position issues when tab count changes.
+- **Playback Completion UX**: When "Auto-play next" is disabled, playback completion no longer forces intrusive action popups.
+- **Background Playback Fix**: Fixed an issue where switching recommended videos inside detail page could dirty lifecycle flags and cause unexpected pause on Home/background.
+- **Gesture Anti-MisTouch**: Brightness/volume vertical gestures are now limited to left/right one-third zones; center zone no longer triggers accidental adjustments.
+- **Like Icon Unification**: Replaced heart-like visuals with thumb-up style across key interaction surfaces.
+- **Comment Logic Reliability**: Fixed missing UP/置顶 comments under some sort modes and improved mixed-source comment loading behavior.
+- **Firebase Telemetry Hardening**: Strengthened Firebase Analytics + Crashlytics integration (user/session context, custom keys, screen/event tracing, and error domain reporting).
+- **General Stability**: Multiple UI/state synchronization fixes across home, video detail, plugin center, and settings.
+
 ## [5.1.1] - 2026-02-07
 
 ### ✨ New Features (新增功能)

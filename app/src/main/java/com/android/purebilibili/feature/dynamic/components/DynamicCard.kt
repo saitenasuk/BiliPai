@@ -354,8 +354,8 @@ fun DynamicCardV2(
             
             // 点赞按钮
             ActionButton(
-                icon = if (isLiked) io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Filled.Heart 
-                       else io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.Heart,
+                icon = if (isLiked) io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Filled.HandThumbsup
+                       else io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.HandThumbsup,
                 count = statModule.like.count,
                 label = "点赞",
                 isActive = isLiked,

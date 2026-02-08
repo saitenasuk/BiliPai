@@ -103,6 +103,8 @@ object DanmakuParser {
         
         // [API 完整利用] 使用 WeightedTextData 携带 weight 和 pool 信息
         return WeightedTextData().apply {
+            this.danmakuId = elem.id
+            this.userHash = elem.midHash
             this.text = elem.content
             this.showAtTime = elem.progress.toLong()
             this.layerType = layerType
@@ -240,14 +242,21 @@ object DanmakuParser {
             val timeMs = (timeSeconds * 1000).toLong()  // 转换为毫秒
             val fontSize = parts[2].toFloatOrNull() ?: 25f
             val colorInt = parts[3].toLongOrNull() ?: 0xFFFFFF
+            val pool = parts.getOrNull(5)?.toIntOrNull() ?: 0
+            val userHash = parts.getOrNull(6).orEmpty()
+            val danmakuId = parts.getOrNull(7)?.toLongOrNull() ?: 0L
             
             val layerType = mapLayerType(biliType)
             
-            return TextData().apply {
+            return WeightedTextData().apply {
+                this.danmakuId = danmakuId
+                this.userHash = userHash
+                this.pool = pool
                 this.text = content
                 this.showAtTime = timeMs
                 this.layerType = layerType
                 this.textColor = (colorInt.toInt() or 0xFF000000.toInt())
+                this.textSize = fontSize
             }
         } catch (e: Exception) {
             return null
@@ -264,5 +273,4 @@ object DanmakuParser {
         else -> LAYER_TYPE_SCROLL
     }
 }
-
 

@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.plugin.DanmakuItem
 import com.android.purebilibili.core.plugin.DanmakuPlugin
 import com.android.purebilibili.core.plugin.DanmakuStyle
+import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.core.util.Logger
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
@@ -42,15 +43,16 @@ class DanmakuEnhancePlugin : DanmakuPlugin {
     
     override val id = "danmaku_enhance"
     override val name = "弹幕增强"
-    override val description = "关键词屏蔽、同传弹幕高亮"
-    override val version = "1.0.0"
+    override val description = "关键词屏蔽、按用户ID屏蔽、同传弹幕高亮"
+    override val version = "1.1.0"
     override val author = "YangY"
     override val icon: ImageVector = CupertinoIcons.Default.TextBubble
-    override val unavailable = true
-    override val unavailableReason = "弹幕功能开发中"
     
     private var config: DanmakuEnhanceConfig = DanmakuEnhanceConfig()
     private var filteredCount = 0
+    private var blockedKeywordsCache: List<String> = splitKeywords(config.blockedKeywords)
+    private var blockedUsersCache: List<String> = splitKeywords(config.blockedUserIds)
+    private var highlightKeywordsCache: List<String> = splitKeywords(config.highlightKeywords)
 
     private suspend fun loadConfig(context: Context) {
         val jsonStr = PluginStore.getConfigJson(context, id)
@@ -61,10 +63,49 @@ class DanmakuEnhancePlugin : DanmakuPlugin {
                 Logger.e(TAG, "Failed to decode config", e)
             }
         }
+        refreshKeywordCache()
+    }
+
+    private fun splitKeywords(value: String): List<String> {
+        return value.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+    }
+
+    private fun refreshKeywordCache() {
+        blockedKeywordsCache = splitKeywords(config.blockedKeywords)
+        blockedUsersCache = splitKeywords(config.blockedUserIds)
+        highlightKeywordsCache = splitKeywords(config.highlightKeywords)
+    }
+
+    private suspend fun persistConfig(context: Context, newConfig: DanmakuEnhanceConfig) {
+        config = newConfig
+        refreshKeywordCache()
+        PluginStore.setConfigJson(context, id, Json.encodeToString(config))
+        PluginManager.notifyDanmakuPluginsUpdated()
+    }
+
+    private fun isUserBlocked(userId: String): Boolean {
+        if (userId.isBlank() || blockedUsersCache.isEmpty()) return false
+        val normalized = userId.trim().lowercase()
+        return blockedUsersCache.any { blocked ->
+            val target = blocked.trim().lowercase()
+            target.isNotBlank() && (
+                normalized == target ||
+                    normalized.startsWith(target) ||
+                    normalized.contains(target)
+                )
+        }
     }
     
     override suspend fun onEnable() {
         filteredCount = 0
+        try {
+            loadConfig(PluginManager.getContext())
+        } catch (e: Exception) {
+            Logger.w(TAG, "Load danmaku plugin config failed on enable: ${e.message}")
+        }
         Logger.d(TAG, " 弹幕增强已启用")
     }
     
@@ -75,32 +116,29 @@ class DanmakuEnhancePlugin : DanmakuPlugin {
     
     override fun filterDanmaku(danmaku: DanmakuItem): DanmakuItem? {
         if (!config.enableFilter) return danmaku
-        
-        val content = danmaku.content
-        
-        // 检查屏蔽关键词
-        val blockedKeywords = config.blockedKeywords.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        if (blockedKeywords.any { content.contains(it, ignoreCase = true) }) {
+
+        if (blockedKeywordsCache.any { danmaku.content.contains(it, ignoreCase = true) }) {
             filteredCount++
             return null
         }
-        
+
+        if (isUserBlocked(danmaku.userId)) {
+            filteredCount++
+            return null
+        }
+
         return danmaku
     }
     
     override fun styleDanmaku(danmaku: DanmakuItem): DanmakuStyle? {
         if (!config.enableHighlight) return null
-        
-        val content = danmaku.content
-        
-        // 检查高亮关键词（同传弹幕通常包含【】）
-        val highlightKeywords = config.highlightKeywords.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        
-        if (highlightKeywords.any { content.contains(it) }) {
+
+        if (highlightKeywordsCache.any { danmaku.content.contains(it, ignoreCase = true) }) {
             return DanmakuStyle(
-                borderColor = Color(0xFFFFD700),  // 金色边框
+                textColor = Color(0xFFFFD700),
                 backgroundColor = Color.Black.copy(alpha = 0.5f),
-                bold = true
+                bold = true,
+                scale = 1.05f
             )
         }
         
@@ -114,6 +152,7 @@ class DanmakuEnhancePlugin : DanmakuPlugin {
         var enableFilter by remember { mutableStateOf(config.enableFilter) }
         var enableHighlight by remember { mutableStateOf(config.enableHighlight) }
         var blockedKeywords by remember { mutableStateOf(config.blockedKeywords) }
+        var blockedUserIds by remember { mutableStateOf(config.blockedUserIds) }
         var highlightKeywords by remember { mutableStateOf(config.highlightKeywords) }
         
         // 加载配置
@@ -122,6 +161,7 @@ class DanmakuEnhancePlugin : DanmakuPlugin {
             enableFilter = config.enableFilter
             enableHighlight = config.enableHighlight
             blockedKeywords = config.blockedKeywords
+            blockedUserIds = config.blockedUserIds
             highlightKeywords = config.highlightKeywords
         }
         
@@ -144,9 +184,8 @@ class DanmakuEnhancePlugin : DanmakuPlugin {
                     checked = enableFilter,
                     onCheckedChange = { newValue ->
                         enableFilter = newValue
-                        config = config.copy(enableFilter = newValue)
                         scope.launch { 
-                            PluginStore.setConfigJson(context, id, Json.encodeToString(config)) 
+                            persistConfig(context, config.copy(enableFilter = newValue))
                         }
                     },
                     colors = CupertinoSwitchDefaults.colors(
@@ -163,13 +202,29 @@ class DanmakuEnhancePlugin : DanmakuPlugin {
                     value = blockedKeywords,
                     onValueChange = { newValue ->
                         blockedKeywords = newValue
-                        config = config.copy(blockedKeywords = newValue)
                         scope.launch { 
-                            PluginStore.setConfigJson(context, id, Json.encodeToString(config)) 
+                            persistConfig(context, config.copy(blockedKeywords = newValue))
                         }
                     },
                     label = { Text("屏蔽关键词") },
                     placeholder = { Text("用逗号分隔，如：剧透,前方高能") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
+                    maxLines = 3
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = blockedUserIds,
+                    onValueChange = { newValue ->
+                        blockedUserIds = newValue
+                        scope.launch {
+                            persistConfig(context, config.copy(blockedUserIds = newValue))
+                        }
+                    },
+                    label = { Text("屏蔽用户 ID/哈希") },
+                    placeholder = { Text("用逗号分隔，如：abc123,7f9d...,123456") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = false,
                     maxLines = 3
@@ -196,9 +251,8 @@ class DanmakuEnhancePlugin : DanmakuPlugin {
                     checked = enableHighlight,
                     onCheckedChange = { newValue ->
                         enableHighlight = newValue
-                        config = config.copy(enableHighlight = newValue)
                         scope.launch { 
-                            PluginStore.setConfigJson(context, id, Json.encodeToString(config)) 
+                            persistConfig(context, config.copy(enableHighlight = newValue))
                         }
                     },
                     colors = CupertinoSwitchDefaults.colors(
@@ -215,9 +269,8 @@ class DanmakuEnhancePlugin : DanmakuPlugin {
                     value = highlightKeywords,
                     onValueChange = { newValue ->
                         highlightKeywords = newValue
-                        config = config.copy(highlightKeywords = newValue)
                         scope.launch { 
-                            PluginStore.setConfigJson(context, id, Json.encodeToString(config)) 
+                            persistConfig(context, config.copy(highlightKeywords = newValue))
                         }
                     },
                     label = { Text("高亮关键词") },
@@ -239,5 +292,6 @@ data class DanmakuEnhanceConfig(
     val enableFilter: Boolean = true,
     val enableHighlight: Boolean = true,
     val blockedKeywords: String = "剧透,前方高能",
+    val blockedUserIds: String = "",
     val highlightKeywords: String = "【,】,同传,翻译"
 )

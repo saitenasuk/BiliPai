@@ -146,6 +146,12 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                                     _state.value = LoginState.Success
                                     //  记录登录事件
                                     com.android.purebilibili.core.util.AnalyticsHelper.logLogin("qrcode_web")
+                                    com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
+                                        mid = TokenManager.midCache,
+                                        isVip = TokenManager.isVipCache,
+                                        privacyModeEnabled = com.android.purebilibili.core.store.SettingsManager
+                                            .isPrivacyModeEnabledSync(getApplication())
+                                    )
                                 }
                             } else {
                                 _state.value = LoginState.Error("Cookie 解析失败")
@@ -389,6 +395,12 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = LoginState.Success
                 //  记录登录事件
                 com.android.purebilibili.core.util.AnalyticsHelper.logLogin("phone")
+                com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
+                    mid = TokenManager.midCache,
+                    isVip = TokenManager.isVipCache,
+                    privacyModeEnabled = com.android.purebilibili.core.store.SettingsManager
+                        .isPrivacyModeEnabledSync(getApplication())
+                )
             }
         } else {
             _state.value = LoginState.Error("Cookie 解析失败")
@@ -519,6 +531,12 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                                     _state.value = LoginState.Success
                                     //  记录登录事件
                                     com.android.purebilibili.core.util.AnalyticsHelper.logLogin("qrcode_tv")
+                                    com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
+                                        mid = TokenManager.midCache,
+                                        isVip = TokenManager.isVipCache,
+                                        privacyModeEnabled = com.android.purebilibili.core.store.SettingsManager
+                                            .isPrivacyModeEnabledSync(getApplication())
+                                    )
                                 }
                             } else {
                                 _state.value = LoginState.Error("登录数据解析失败")

@@ -42,6 +42,8 @@ fun CommentSortFilterBar(
     onUpOnlyToggle: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val sortModes = remember { CommentSortMode.entries.toList() }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -80,19 +82,10 @@ fun CommentSortFilterBar(
 
             // Segmented Control
             iOSSegmentedControl(
-                items = CommentSortMode.entries.map { it.label },
-                selectedIndex = when (sortMode) {
-                    CommentSortMode.HOT -> 0
-                    CommentSortMode.NEWEST -> 1
-                    CommentSortMode.REPLY -> 2
-                },
+                items = sortModes.map { it.label },
+                selectedIndex = sortModes.indexOf(sortMode).coerceAtLeast(0),
                 onScaleChange = { index ->
-                    val newMode = when (index) {
-                        0 -> CommentSortMode.HOT
-                        1 -> CommentSortMode.NEWEST
-                        else -> CommentSortMode.REPLY
-                    }
-                    onSortModeChange(newMode)
+                    sortModes.getOrNull(index)?.let(onSortModeChange)
                 }
             )
         }
@@ -113,6 +106,7 @@ fun iOSSegmentedControl(
     val selectedTextColor = MaterialTheme.colorScheme.onSurface
     val unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val cornerRadius = 8.dp
+    val segmentWidth = if (items.size >= 4) 52.dp else 60.dp
 
     Box(
         modifier = Modifier
@@ -128,7 +122,7 @@ fun iOSSegmentedControl(
                 Box(
                     modifier = Modifier
                         .weight(1f, fill = false) 
-                        .width(60.dp) // Fixed width for segments
+                        .width(segmentWidth)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(cornerRadius - 2.dp))
                         .clickable(
@@ -191,4 +185,3 @@ fun iOSToggleButton(
         )
     }
 }
-

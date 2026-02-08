@@ -16,7 +16,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -65,9 +67,11 @@ fun SettingsScreen(
     mainHazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val context = LocalContext.current
+    val hapticFeedback = LocalHapticFeedback.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val windowSizeClass = LocalWindowSizeClass.current
+    val versionClickThreshold = EasterEggs.VERSION_EASTER_EGG_THRESHOLD
     
     // State Collection
     val state by viewModel.state.collectAsState()
@@ -129,10 +133,22 @@ fun SettingsScreen(
     
     val onVersionClickAction: () -> Unit = {
         versionClickCount++
-        val message = EasterEggs.getVersionClickMessage(versionClickCount)
-        if (EasterEggs.isVersionEasterEggTriggered(versionClickCount)) {
+        val message = EasterEggs.getVersionClickMessage(
+            clickCount = versionClickCount,
+            threshold = versionClickThreshold
+        )
+        val remainingClicks = (versionClickThreshold - versionClickCount).coerceAtLeast(0)
+        val hapticType = if (remainingClicks <= 1) {
+            HapticFeedbackType.LongPress
+        } else {
+            HapticFeedbackType.TextHandleMove
+        }
+        hapticFeedback.performHapticFeedback(hapticType)
+
+        if (EasterEggs.isVersionEasterEggTriggered(versionClickCount, versionClickThreshold)) {
             showEasterEggDialog = true
-        } else if (versionClickCount >= 3) {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        } else if (versionClickCount >= 2 || remainingClicks <= 3) {
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
@@ -342,6 +358,8 @@ fun SettingsScreen(
                     analyticsEnabled = analyticsEnabled,
                     pluginCount = PluginManager.getEnabledCount(),
                     versionName = com.android.purebilibili.BuildConfig.VERSION_NAME,
+                    versionClickCount = versionClickCount,
+                    versionClickThreshold = versionClickThreshold,
                     easterEggEnabled = easterEggEnabled,
                     onDonateClick = { showDonateDialog = true },
                     onOpenLinksClick = onOpenLinksAction,
@@ -376,6 +394,8 @@ fun SettingsScreen(
                     analyticsEnabled = analyticsEnabled,
                     pluginCount = PluginManager.getEnabledCount(),
                     versionName = com.android.purebilibili.BuildConfig.VERSION_NAME,
+                    versionClickCount = versionClickCount,
+                    versionClickThreshold = versionClickThreshold,
                     easterEggEnabled = easterEggEnabled,
                     feedApiType = feedApiType,
                     onFeedApiTypeChange = { type ->
@@ -438,6 +458,8 @@ private fun MobileSettingsLayout(
     analyticsEnabled: Boolean,
     pluginCount: Int,
     versionName: String,
+    versionClickCount: Int,
+    versionClickThreshold: Int,
     easterEggEnabled: Boolean,
     feedApiType: SettingsManager.FeedApiType,
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit
@@ -569,7 +591,9 @@ private fun MobileSettingsLayout(
                         versionName, easterEggEnabled,
                         onLicenseClick, onGithubClick,
                         onVersionClick, onReplayOnboardingClick,
-                        onEasterEggChange
+                        onEasterEggChange,
+                        versionClickCount = versionClickCount,
+                        versionClickThreshold = versionClickThreshold
                     )
                 }
             }

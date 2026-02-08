@@ -122,7 +122,7 @@ fun LikeBurstAnimation(
         )
         
         Text(
-            text = "❤️",
+            text = "👍",
             fontSize = (32 * heartScale).sp,
             modifier = Modifier.offset(y = (-4).dp)
         )

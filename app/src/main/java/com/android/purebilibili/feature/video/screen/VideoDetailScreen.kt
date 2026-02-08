@@ -164,6 +164,18 @@ fun VideoDetailScreen(
     //  监听评论状态
     val commentState by commentViewModel.commentState.collectAsState()
     val subReplyState by commentViewModel.subReplyState.collectAsState()
+    val commentDefaultSortMode by com.android.purebilibili.core.store.SettingsManager
+        .getCommentDefaultSortMode(context)
+        .collectAsState(
+            initial = com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context)
+        )
+    val preferredCommentSortMode = remember(commentDefaultSortMode) {
+        CommentSortMode.fromApiMode(commentDefaultSortMode)
+    }
+    val sortPreferenceScope = rememberCoroutineScope()
+    val showFavoriteFolderDialog by viewModel.favoriteFolderDialogVisible.collectAsState()
+    val favoriteFolders by viewModel.favoriteFolders.collectAsState()
+    val isFavoriteFoldersLoading by viewModel.isFavoriteFoldersLoading.collectAsState()
     
     // [Blur] Haze State
     val hazeState = remember { HazeState() }
@@ -445,14 +457,21 @@ fun VideoDetailScreen(
     DisposableEffect(playerState) {
         onDispose {
             // 标记页面正在退出
-            // [修复] 只有在真正离开页面（isActuallyLeaving）或者 Activity 正在销毁且不是因为系统回收（isFinishing）时才标记
-            // 如果是因为后台回收（isFinishing=false），则保留播放状态
-            val isFinishingExit = activity?.isFinishing == true
-            if ((isActuallyLeaving || isFinishingExit) && !isNavigatingToAudioMode) {
-                com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "🛑 Disposing screen (user exit), notifying MiniPlayerManager")
+            // [修复] 仅在明确用户离开时标记导航退出。
+            // 系统返回手势的兜底由 AppNavigation 处理，避免“视频A->视频B”切换时误标记离开。
+            // 配置切换时不标记离开，避免旋转屏幕误暂停。
+            val isChangingConfigurations = activity?.isChangingConfigurations == true
+            if (isActuallyLeaving && !isNavigatingToAudioMode && !isChangingConfigurations) {
+                com.android.purebilibili.core.util.Logger.d(
+                    "VideoDetailScreen",
+                    "🛑 Disposing screen as navigation exit, notifying MiniPlayerManager"
+                )
                 miniPlayerManager?.markLeavingByNavigation()
             } else {
-                com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "💤 Screen disposed (possible background kill), keeping playback state")
+                com.android.purebilibili.core.util.Logger.d(
+                    "VideoDetailScreen",
+                    "💤 Screen disposed without navigation-exit mark (isActuallyLeaving=$isActuallyLeaving, audioMode=$isNavigatingToAudioMode, changingConfig=$isChangingConfigurations)"
+                )
             }
         }
     }
@@ -525,7 +544,7 @@ fun VideoDetailScreen(
             val success = uiState as PlayerUiState.Success
             
             // 初始化评论（传入 UP 主 mid 用于筛选）- 保持在主线程
-            commentViewModel.init(info.aid, info.owner.mid)
+            commentViewModel.init(info.aid, info.owner.mid, preferredCommentSortMode)
             
             playerState.updateMediaMetadata(
                 title = info.title,
@@ -1123,7 +1142,13 @@ fun VideoDetailScreen(
                                                         //  [新增] 评论排序/筛选参数
                                                         sortMode = commentState.sortMode,
                                                         upOnlyFilter = commentState.upOnlyFilter,
-                                                        onSortModeChange = { commentViewModel.setSortMode(it) },
+                                                        onSortModeChange = { mode ->
+                                                            commentViewModel.setSortMode(mode)
+                                                            sortPreferenceScope.launch {
+                                                                com.android.purebilibili.core.store.SettingsManager
+                                                                    .setCommentDefaultSortMode(context, mode.apiMode)
+                                                            }
+                                                        },
                                                         onUpOnlyToggle = { commentViewModel.toggleUpOnly() },
                                                         onFollowClick = { viewModel.toggleFollow() },
                                                         onFavoriteClick = { viewModel.showFavoriteFolderDialog() }, // [修改] 单击直接打开收藏夹选择
@@ -1151,9 +1176,9 @@ fun VideoDetailScreen(
                                                         transitionEnabled = transitionEnabled,
                                                         
                                                         // [新增] 收藏夹相关
-                                                        favoriteFolderDialogVisible = viewModel.favoriteFolderDialogVisible.collectAsState().value,
-                                                        favoriteFolders = viewModel.favoriteFolders.collectAsState().value,
-                                                        isFavoriteFoldersLoading = viewModel.isFavoriteFoldersLoading.collectAsState().value,
+                                                        favoriteFolderDialogVisible = showFavoriteFolderDialog,
+                                                        favoriteFolders = favoriteFolders,
+                                                        isFavoriteFoldersLoading = isFavoriteFoldersLoading,
                                                         onFavoriteLongClick = { viewModel.showFavoriteFolderDialog() },
                                                         onFavoriteFolderClick = { folder -> viewModel.addToFavoriteFolder(folder) },
                                                         onDismissFavoriteFolderDialog = { viewModel.dismissFavoriteFolderDialog() },
@@ -1724,10 +1749,6 @@ fun VideoDetailScreen(
         }
 
         // 📁 收藏夹选择弹窗
-        val showFavoriteFolderDialog by viewModel.favoriteFolderDialogVisible.collectAsState()
-        val favoriteFolders by viewModel.favoriteFolders.collectAsState()
-        val isFavoriteFoldersLoading by viewModel.isFavoriteFoldersLoading.collectAsState()
-        
         if (showFavoriteFolderDialog) {
             com.android.purebilibili.feature.video.ui.components.FavoriteFolderSheet(
                 folders = favoriteFolders,

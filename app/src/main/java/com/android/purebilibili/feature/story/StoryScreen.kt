@@ -286,7 +286,7 @@ private fun StoryPageContent(
                 showDoubleTapHeart = false
             }
             Icon(
-                Icons.Filled.Favorite,
+                Icons.Filled.ThumbUp,
                 contentDescription = null,
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -376,7 +376,7 @@ private fun RightActionBar(
         
         // 点赞
         ActionButton(
-            icon = Icons.Filled.Favorite,
+            icon = Icons.Filled.ThumbUp,
             count = formatCount(likeCount),
             tint = if (isLiked) com.android.purebilibili.core.theme.BiliPink else Color.White,
             onClick = {
@@ -554,5 +554,4 @@ private fun formatCount(count: Int): String {
         else -> count.toString()
     }
 }
-
 

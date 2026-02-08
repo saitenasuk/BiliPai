@@ -274,26 +274,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         videoResult.onSuccess { videos ->
             val validVideos = videos.filter { it.bvid.isNotEmpty() && it.title.isNotEmpty() }
             
-            //  应用原生 FeedPlugin 过滤器
-            val nativeFiltered = validVideos.filter { video ->
-                // [Feature] Block List Filter
-                if (video.owner.mid in blockedMids) return@filter false
-                
-                val plugins = PluginManager.getEnabledFeedPlugins()
-                if (plugins.isEmpty()) return@filter true
-                
-                plugins.all { plugin ->
-                    try {
-                        plugin.shouldShowItem(video)
-                    } catch (e: Exception) {
-                        Logger.e("HomeVM", "Plugin ${plugin.name} filter failed", e)
-                        true  // 过滤器失败时默认显示
-                    }
-                }
-            }
-            
-            //  [新增] 应用 JSON 规则插件过滤器
-            val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(nativeFiltered)
+            //  [Feature] 应用屏蔽 + 原生插件 + JSON 规则插件过滤器
+            val blockedFiltered = validVideos.filter { video -> video.owner.mid !in blockedMids }
+            val builtinFiltered = PluginManager.filterFeedItems(blockedFiltered)
+            val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager
+                .filterVideos(builtinFiltered)
             
             // Global deduplication for RECOMMEND only? Or per category? 
             // Usually Recommend needs global deduplication. Other categories might just need simple append.
@@ -568,6 +553,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val isVip = navData.vip.status == 1
                 com.android.purebilibili.core.store.TokenManager.isVipCache = isVip
                 com.android.purebilibili.core.store.TokenManager.midCache = navData.mid
+                com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
+                    mid = navData.mid,
+                    isVip = isVip,
+                    privacyModeEnabled = com.android.purebilibili.core.store.SettingsManager
+                        .isPrivacyModeEnabledSync(getApplication())
+                )
                 _uiState.value = _uiState.value.copy(
                     user = UserState(
                         isLogin = true,
@@ -586,6 +577,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 com.android.purebilibili.core.store.TokenManager.isVipCache = false
                 com.android.purebilibili.core.store.TokenManager.midCache = null
+                com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
+                    mid = null,
+                    isVip = false,
+                    privacyModeEnabled = com.android.purebilibili.core.store.SettingsManager
+                        .isPrivacyModeEnabledSync(getApplication())
+                )
                 _uiState.value = _uiState.value.copy(
                     user = UserState(isLogin = false),
                     followingMids = emptySet()

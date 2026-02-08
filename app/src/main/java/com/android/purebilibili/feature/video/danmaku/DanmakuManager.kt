@@ -2,26 +2,38 @@
 package com.android.purebilibili.feature.video.danmaku
 
 import android.content.Context
+import android.graphics.Typeface
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.android.purebilibili.core.plugin.DanmakuItem
+import com.android.purebilibili.core.plugin.DanmakuPlugin
+import com.android.purebilibili.core.plugin.DanmakuStyle
+import com.android.purebilibili.core.plugin.PluginManager
+import com.android.purebilibili.core.plugin.json.JsonPluginManager
 import com.bytedance.danmaku.render.engine.DanmakuView
 import com.bytedance.danmaku.render.engine.control.DanmakuController
 import com.bytedance.danmaku.render.engine.data.DanmakuData
+import com.bytedance.danmaku.render.engine.render.draw.text.TextData
+import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_BOTTOM_CENTER
+import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
+import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_TOP_CENTER
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
- import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 /**
  * 弹幕管理器（单例模式）
@@ -61,7 +73,7 @@ class DanmakuManager private constructor(
          * 更新 CoroutineScope（用于配置变化时）
          */
         fun updateScope(scope: CoroutineScope) {
-            instance?.scope = scope
+            instance?.updateScopeInternal(scope)
         }
         
         /**
@@ -88,6 +100,8 @@ class DanmakuManager private constructor(
     
     // 缓存解析后的弹幕数据（横竖屏切换时复用）
     private var cachedDanmakuList: List<DanmakuData>? = null
+    private var sourceDanmakuList: List<DanmakuData>? = null
+    private var sourceAdvancedDanmakuList: List<AdvancedDanmakuData>? = null
     private var rawDanmakuList: List<DanmakuData>? = null
     // [新增] 高级弹幕数据流
     private val _advancedDanmakuFlow = kotlinx.coroutines.flow.MutableStateFlow<List<AdvancedDanmakuData>>(emptyList())
@@ -97,9 +111,15 @@ class DanmakuManager private constructor(
     //  [新增] 记录原始弹幕滚动时间（用于倍速同步）
     private var originalMoveTime: Long = 8000L  // 默认 8 秒
     private var currentVideoSpeed: Float = 1.0f
+    private var pluginObserverJob: Job? = null
+    private var lastDanmakuPluginUpdateToken: Long = 0L
     
     // 配置
     val config = DanmakuConfig()
+
+    init {
+        startDanmakuPluginObserver()
+    }
     
     // 便捷属性访问器
     var isEnabled: Boolean
@@ -136,7 +156,303 @@ class DanmakuManager private constructor(
             config.displayAreaRatio = value
             applyConfigToController("displayArea")
         }
-    
+
+    private fun updateScopeInternal(newScope: CoroutineScope) {
+        if (scope === newScope) return
+        scope = newScope
+        startDanmakuPluginObserver()
+    }
+
+    private fun startDanmakuPluginObserver() {
+        pluginObserverJob?.cancel()
+        pluginObserverJob = scope.launch {
+            PluginManager.danmakuPluginUpdateToken.collect { token ->
+                if (token <= 0L || token == lastDanmakuPluginUpdateToken) return@collect
+                lastDanmakuPluginUpdateToken = token
+
+                if (isLoading || sourceDanmakuList == null) return@collect
+
+                val rebuilt = withContext(Dispatchers.Default) {
+                    rebuildDanmakuCacheFromSource("plugin_update")
+                }
+                if (!rebuilt) return@collect
+
+                withContext(Dispatchers.Main) {
+                    applyCachedDanmakuToController("plugin_update")
+                }
+            }
+        }
+    }
+
+    private fun rebuildDanmakuCacheFromSource(reason: String): Boolean {
+        val sourceStandard = sourceDanmakuList ?: return false
+        val sourceAdvanced = sourceAdvancedDanmakuList ?: emptyList()
+
+        val (filteredStandardList, filteredAdvancedList) =
+            applyDanmakuPluginPipeline(sourceStandard, sourceAdvanced)
+
+        if (filteredStandardList.isEmpty() && filteredAdvancedList.isEmpty()) {
+            cachedDanmakuList = emptyList()
+            rawDanmakuList = emptyList()
+            _advancedDanmakuFlow.value = emptyList()
+            Log.w(TAG, " Danmaku cache rebuilt ($reason): no visible items after filtering")
+            return false
+        }
+
+        rawDanmakuList = filteredStandardList
+
+        if (config.mergeDuplicates) {
+            val (mergedStandard, mergedAdvanced) = DanmakuMerger.merge(filteredStandardList)
+            cachedDanmakuList = mergedStandard
+            _advancedDanmakuFlow.value = filteredAdvancedList + mergedAdvanced
+        } else {
+            cachedDanmakuList = filteredStandardList
+            _advancedDanmakuFlow.value = filteredAdvancedList
+        }
+
+        Log.w(
+            TAG,
+            " Danmaku cache rebuilt ($reason): standard=${cachedDanmakuList?.size ?: 0}, advanced=${_advancedDanmakuFlow.value.size}"
+        )
+        return true
+    }
+
+    private fun applyCachedDanmakuToController(reason: String) {
+        val currentPos = player?.currentPosition ?: 0L
+        val list = cachedDanmakuList ?: emptyList()
+        if (list.isEmpty()) {
+            controller?.clear()
+            isPlaying = false
+            Log.w(TAG, " applyCachedDanmakuToController($reason): cleared (empty list)")
+            return
+        }
+
+        controller?.setData(list, 0)
+        controller?.invalidateView()
+        controller?.start(currentPos)
+
+        if (player?.isPlaying == true && config.isEnabled) {
+            isPlaying = true
+        } else {
+            controller?.pause()
+            isPlaying = false
+        }
+        Log.w(TAG, " applyCachedDanmakuToController($reason): size=${list.size}, pos=${currentPos}ms")
+    }
+
+    private fun TextData.copyForPluginPipeline(): TextData {
+        val copied = if (this is WeightedTextData) {
+            WeightedTextData().also {
+                it.danmakuId = this.danmakuId
+                it.userHash = this.userHash
+                it.weight = this.weight
+                it.pool = this.pool
+            }
+        } else {
+            TextData()
+        }
+        copied.text = text
+        copied.showAtTime = showAtTime
+        copied.layerType = layerType
+        copied.textColor = textColor
+        copied.textSize = textSize
+        copied.typeface = typeface
+        return copied
+    }
+
+    private fun applyDanmakuPluginPipeline(
+        standardDanmakuList: List<DanmakuData>,
+        advancedDanmakuList: List<AdvancedDanmakuData>
+    ): Pair<List<DanmakuData>, List<AdvancedDanmakuData>> {
+        val nativePlugins = PluginManager.getEnabledDanmakuPlugins()
+        val useJsonRules = JsonPluginManager.plugins.value.any { it.enabled && it.plugin.type == "danmaku" }
+        if (nativePlugins.isEmpty() && !useJsonRules) {
+            return Pair(standardDanmakuList, advancedDanmakuList)
+        }
+
+        var filteredStandardCount = 0
+        val filteredStandard = ArrayList<DanmakuData>(standardDanmakuList.size)
+        standardDanmakuList.forEach { data ->
+            val sourceTextData = data as? TextData
+            if (sourceTextData == null) {
+                filteredStandard.add(data)
+                return@forEach
+            }
+            val textData = sourceTextData.copyForPluginPipeline()
+
+            val sourceItem = textData.toPluginItem()
+            val filteredItem = runDanmakuFilters(sourceItem, nativePlugins, useJsonRules)
+            if (filteredItem == null) {
+                filteredStandardCount++
+                return@forEach
+            }
+
+            val style = collectDanmakuStyle(filteredItem, nativePlugins, useJsonRules)
+            textData.applyPluginResult(filteredItem, style)
+            filteredStandard.add(textData)
+        }
+
+        var filteredAdvancedCount = 0
+        val filteredAdvanced = ArrayList<AdvancedDanmakuData>(advancedDanmakuList.size)
+        advancedDanmakuList.forEach { data ->
+            val sourceItem = DanmakuItem(
+                id = parseAdvancedDanmakuId(data.id),
+                content = data.content,
+                timeMs = data.startTimeMs,
+                type = 7,
+                color = data.color and 0x00FFFFFF,
+                userId = ""
+            )
+
+            val filteredItem = runDanmakuFilters(sourceItem, nativePlugins, useJsonRules)
+            if (filteredItem == null) {
+                filteredAdvancedCount++
+                return@forEach
+            }
+
+            val style = collectDanmakuStyle(filteredItem, nativePlugins, useJsonRules)
+            var updated = data.copy(
+                content = filteredItem.content,
+                startTimeMs = filteredItem.timeMs,
+                color = filteredItem.color and 0x00FFFFFF
+            )
+            style?.textColor?.let { color ->
+                updated = updated.copy(color = color.toArgb() and 0x00FFFFFF)
+            }
+            if (style != null && abs(style.scale - 1.0f) > 0.01f) {
+                updated = updated.copy(
+                    fontSize = (updated.fontSize * style.scale).coerceIn(8f, 120f)
+                )
+            }
+            filteredAdvanced.add(updated)
+        }
+
+        if (filteredStandardCount > 0 || filteredAdvancedCount > 0) {
+            Log.w(
+                TAG,
+                " Danmaku plugin filter applied: standard -$filteredStandardCount, advanced -$filteredAdvancedCount"
+            )
+        }
+
+        return Pair(filteredStandard, filteredAdvanced)
+    }
+
+    private fun TextData.toPluginItem(): DanmakuItem {
+        val weighted = this as? WeightedTextData
+        val currentColor = textColor ?: 0xFFFFFF
+        return DanmakuItem(
+            id = weighted?.danmakuId ?: 0L,
+            content = text.orEmpty(),
+            timeMs = showAtTime,
+            type = mapLayerTypeToDanmakuType(layerType),
+            color = currentColor and 0x00FFFFFF,
+            userId = weighted?.userHash.orEmpty()
+        )
+    }
+
+    private fun TextData.applyPluginResult(item: DanmakuItem, style: DanmakuStyle?) {
+        text = item.content
+        showAtTime = item.timeMs
+        layerType = mapDanmakuTypeToLayerType(item.type)
+        textColor = (item.color and 0x00FFFFFF) or 0xFF000000.toInt()
+
+        style?.textColor?.let { color -> textColor = color.toArgb() }
+        if (style != null && abs(style.scale - 1.0f) > 0.01f) {
+            val currentSize = textSize ?: 25f
+            val baseSize = if (currentSize > 0f) currentSize else 25f
+            textSize = (baseSize * style.scale).coerceIn(12f, 96f)
+        }
+        typeface = if (style?.bold == true) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+    }
+
+    private fun runDanmakuFilters(
+        item: DanmakuItem,
+        nativePlugins: List<DanmakuPlugin>,
+        useJsonRules: Boolean
+    ): DanmakuItem? {
+        var current = item
+        nativePlugins.forEach { plugin ->
+            val filtered = try {
+                plugin.filterDanmaku(current)
+            } catch (e: Exception) {
+                Log.e(TAG, " Danmaku plugin filter failed: ${plugin.name}", e)
+                current
+            }
+            if (filtered == null) return null
+            current = filtered
+        }
+
+        if (useJsonRules) {
+            val shouldShow = try {
+                JsonPluginManager.shouldShowDanmaku(current)
+            } catch (e: Exception) {
+                Log.e(TAG, " JSON danmaku rule filter failed", e)
+                true
+            }
+            if (!shouldShow) return null
+        }
+
+        return current
+    }
+
+    private fun collectDanmakuStyle(
+        item: DanmakuItem,
+        nativePlugins: List<DanmakuPlugin>,
+        useJsonRules: Boolean
+    ): DanmakuStyle? {
+        var style: DanmakuStyle? = null
+        nativePlugins.forEach { plugin ->
+            val next = try {
+                plugin.styleDanmaku(item)
+            } catch (e: Exception) {
+                Log.e(TAG, " Danmaku plugin style failed: ${plugin.name}", e)
+                null
+            }
+            style = mergeDanmakuStyle(style, next)
+        }
+
+        if (useJsonRules) {
+            val next = try {
+                JsonPluginManager.getDanmakuStyle(item)
+            } catch (e: Exception) {
+                Log.e(TAG, " JSON danmaku rule style failed", e)
+                null
+            }
+            style = mergeDanmakuStyle(style, next)
+        }
+
+        return style
+    }
+
+    private fun mergeDanmakuStyle(base: DanmakuStyle?, incoming: DanmakuStyle?): DanmakuStyle? {
+        if (base == null) return incoming
+        if (incoming == null) return base
+        return DanmakuStyle(
+            textColor = incoming.textColor ?: base.textColor,
+            borderColor = incoming.borderColor ?: base.borderColor,
+            backgroundColor = incoming.backgroundColor ?: base.backgroundColor,
+            bold = base.bold || incoming.bold,
+            scale = if (abs(incoming.scale - 1.0f) > 0.01f) incoming.scale else base.scale
+        )
+    }
+
+    private fun mapLayerTypeToDanmakuType(layerType: Int): Int = when (layerType) {
+        LAYER_TYPE_BOTTOM_CENTER -> 4
+        LAYER_TYPE_TOP_CENTER -> 5
+        else -> 1
+    }
+
+    private fun mapDanmakuTypeToLayerType(type: Int): Int = when (type) {
+        4 -> LAYER_TYPE_BOTTOM_CENTER
+        5 -> LAYER_TYPE_TOP_CENTER
+        else -> LAYER_TYPE_SCROLL
+    }
+
+    private fun parseAdvancedDanmakuId(rawId: String): Long {
+        return rawId.toLongOrNull()
+            ?: rawId.filter { it.isDigit() }.toLongOrNull()
+            ?: 0L
+    }
 
 
     /**
@@ -186,31 +502,7 @@ class DanmakuManager private constructor(
             if (reason == "fontScale" || reason == "displayArea" || reason == "batch" || reason == "resize" || reason == "merge_changed") {
                 // 如果是合并状态改变，需要重新计算 cachedList
                 if (reason == "merge_changed") {
-                   rawDanmakuList?.let { raw ->
-                       if (config.mergeDuplicates) {
-                           val (mergedStandard, mergedAdvanced) = DanmakuMerger.merge(raw)
-                           cachedDanmakuList = mergedStandard
-                           
-                           // 注意：这里我们只能拿到最新的 rawAdvanced 吗?
-                           // 如果我们没有缓存 rawAdvancedList，那么每次切换都要重新解析是不现实的
-                           // 但这里我们假设 advancedDanmakuFlow.value 包含了 *基础* 高级弹幕
-                           // 问题：如果不保留 rawAdvancedList，我们无法区分哪些是基础的，哪些是合并产生的
-                           
-                           // 修正策略：我们需要缓存 rawAdvancedDanmakuList
-                           // 暂时简化：假设 advancedDanmakuFlow 目前只包含基础的 (如果没有触发合并)
-                           // 或者我们需要在 Manager 中新增字段 rawAdvancedDanmakuList
-                           
-                           // 临时回退方案：从 _advancedDanmakuFlow.value 中过滤掉 ID 以 "merged_" 开头的
-                           val currentAdvanced = _advancedDanmakuFlow.value.filter { !it.id.startsWith("merged_") }
-                           _advancedDanmakuFlow.value = currentAdvanced + mergedAdvanced
-                       } else {
-                           cachedDanmakuList = raw
-                           // 移除所有合并产生的高级弹幕
-                           val currentAdvanced = _advancedDanmakuFlow.value.filter { !it.id.startsWith("merged_") }
-                           _advancedDanmakuFlow.value = currentAdvanced
-                       }
-                       Log.w(TAG, " Merge setting changed: Standard size=${cachedDanmakuList?.size}")
-                   }
+                    rebuildDanmakuCacheFromSource("merge_changed")
                 }
             
                 cachedDanmakuList?.let { list ->
@@ -491,7 +783,10 @@ class DanmakuManager private constructor(
                 newPosition: Player.PositionInfo,
                 reason: Int
             ) {
-                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                val isSeekDiscontinuity =
+                    reason == Player.DISCONTINUITY_REASON_SEEK ||
+                        reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT
+                if (isSeekDiscontinuity) {
                     Log.w(TAG, " Seek detected: ${oldPosition.positionMs}ms -> ${newPosition.positionMs}ms")
                     
                     //  关键修复：Seek 时重新调用 setData(list, 0) + start(newPosition)
@@ -606,6 +901,9 @@ class DanmakuManager private constructor(
         isLoading = true
         cachedCid = cid
         cachedDanmakuList = null
+        sourceDanmakuList = null
+        sourceAdvancedDanmakuList = null
+        _advancedDanmakuFlow.value = emptyList()
         
         // 清除现有弹幕
         controller?.stop()
@@ -688,36 +986,19 @@ class DanmakuManager private constructor(
                     }
                 }
                 
-                if (parsedResult.standardList.isEmpty() && parsedResult.advancedList.isEmpty()) {
+                sourceDanmakuList = parsedResult.standardList
+                sourceAdvancedDanmakuList = parsedResult.advancedList + commandDmList
+
+                val rebuilt = withContext(Dispatchers.Default) {
+                    rebuildDanmakuCacheFromSource("load")
+                }
+
+                if (!rebuilt) {
                     Log.w(TAG, " No danmaku data available for cid=$cid")
                     withContext(Dispatchers.Main) {
                         isLoading = false
                     }
                     return@launch
-                }
-                
-                // 缓存高级弹幕 (基础解析结果 + Command Dms)
-                val baseAdvancedList = parsedResult.advancedList + commandDmList
-                
-                val danmakuList = parsedResult.standardList
-                // 恢复原始数据引用，用于合并功能切换
-                rawDanmakuList = danmakuList
-                
-                if (config.mergeDuplicates) {
-                    // 执行合并，现在返回 Pair(标准剩余, 高级合并项)
-                    val (mergedStandard, mergedAdvanced) = DanmakuMerger.merge(danmakuList)
-                    
-                    cachedDanmakuList = mergedStandard
-                    
-                    // 将合并产生的高级弹幕添加到总高级弹幕列表中
-                    // 注意：这里需要创建一个新的列表以合并两者
-                    val totalAdvanced = baseAdvancedList + mergedAdvanced
-                    _advancedDanmakuFlow.value = totalAdvanced
-                    
-                    Log.w(TAG, " Merged: Standard ${danmakuList.size}->${mergedStandard.size}, Advanced ${baseAdvancedList.size}->${totalAdvanced.size} (added ${mergedAdvanced.size} merged)")
-                } else {
-                    cachedDanmakuList = danmakuList
-                    _advancedDanmakuFlow.value = baseAdvancedList
                 }
                 
                 withContext(Dispatchers.Main) {
@@ -729,8 +1010,16 @@ class DanmakuManager private constructor(
                     
                     //  [核心修复] 先用 0 作为基准设置数据，再用实际位置启动
                     // 这与 Seek 处理器的模式一致，确保引擎知道完整的时间线
-                    Log.w(TAG, "📎 Calling setData with ${danmakuList.size} items, playTime=0 (base)")
-                    controller?.setData(danmakuList, 0)  // 基准时间 0
+                    // 注意：这里必须使用缓存后的最终列表（可能已经去重合并）
+                    val finalList = cachedDanmakuList ?: emptyList()
+                    if (finalList.isEmpty()) {
+                        controller?.clear()
+                        isPlaying = false
+                        Log.w(TAG, "📎 Final danmaku list empty after rebuild, cleared controller")
+                        return@withContext
+                    }
+                    Log.w(TAG, "📎 Calling setData with ${finalList.size} items, playTime=0 (base)")
+                    controller?.setData(finalList, 0)  // 基准时间 0
                     Log.w(TAG, "📎 setData completed")
                     
                     //  [关键] 强制刷新视图 - 与横竖屏切换路径一致
@@ -895,6 +1184,7 @@ class DanmakuManager private constructor(
         // 添加到缓存列表并排序
         // [核心修复] 必须按时间排序！渲染引擎依赖顺序数据，乱序会导致弹幕无法显示
         cachedDanmakuList = (cachedDanmakuList ?: emptyList()).plus(danmakuData).sortedBy { it.showAtTime }
+        sourceDanmakuList = (sourceDanmakuList ?: emptyList()).plus(danmakuData).sortedBy { it.showAtTime }
         Log.d(TAG, "📝 Added to cache and sorted, total: ${cachedDanmakuList?.size} danmakus")
         
         // 立即显示（通过重新设置数据并跳到当前位置）
@@ -995,9 +1285,15 @@ class DanmakuManager private constructor(
     fun release() {
         Log.d(TAG, " release")
         clearViewReference()
+        pluginObserverJob?.cancel()
+        pluginObserverJob = null
         
         // 清除缓存
         cachedDanmakuList = null
+        sourceDanmakuList = null
+        sourceAdvancedDanmakuList = null
+        rawDanmakuList = null
+        _advancedDanmakuFlow.value = emptyList()
         cachedCid = 0L
         
         Log.d(TAG, " DanmakuManager fully released")
