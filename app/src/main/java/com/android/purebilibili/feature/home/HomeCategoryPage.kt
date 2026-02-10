@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -39,6 +40,8 @@ fun HomeCategoryPageContent(
     cardAnimationEnabled: Boolean,
     cardTransitionEnabled: Boolean,
     isDataSaverActive: Boolean,
+    oldContentAnchorBvid: String? = null,
+    oldContentStartIndex: Int? = null,
     modifier: Modifier = Modifier,
 ) {
     // Check for load more
@@ -117,47 +120,64 @@ fun HomeCategoryPageContent(
         } else {
             // Video Category Content
             if (categoryState.videos.isNotEmpty()) {
-                itemsIndexed(
-                    items = categoryState.videos,
-                    key = { _, video -> video.bvid },
-                    contentType = { _, _ -> "video" }
-                ) { index, video ->
-                    val isDissolving = video.bvid in dissolvingVideos
-                    
-                    //  使用可消散卡片容器包装
-                    DissolvableVideoCard(
-                        isDissolving = isDissolving,
-                        onDissolveComplete = { onDissolveComplete(video.bvid) },
-                        cardId = video.bvid,
-                        modifier = Modifier.jiggleOnDissolve(video.bvid)
-                    ) {
-                        // Display Mode Logic
-                        when (displayMode) {
-                            1 -> {
-                                StoryVideoCard(
-                                    video = video,
-                                    index = index,
-                                    animationEnabled = cardAnimationEnabled,
-                                    transitionEnabled = cardTransitionEnabled,
-                                    onDismiss = { onDismissVideo(video.bvid) },
-                                    onLongClick = { longPressCallback(video) }, // [修复] 传递长按回调
-                                    onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
-                                )
-                            }
+                val shouldShowOldContentDivider = category == HomeCategory.RECOMMEND &&
+                    (
+                        (oldContentAnchorBvid != null && categoryState.videos.any { it.bvid == oldContentAnchorBvid }) ||
+                            (oldContentStartIndex != null && oldContentStartIndex > 0 && oldContentStartIndex < categoryState.videos.size)
+                        )
 
-                            else -> {
-                                ElegantVideoCard(
-                                    video = video,
-                                    index = index,
-                                    isFollowing = video.owner.mid in followingMids && category != HomeCategory.FOLLOW,
-                                    animationEnabled = cardAnimationEnabled,
-                                    transitionEnabled = cardTransitionEnabled,
-                                    isDataSaverActive = isDataSaverActive,
-                                    onDismiss = { onDismissVideo(video.bvid) },
-                                    onWatchLater = { onWatchLater(video.bvid, video.id) },
-                                    onLongClick = { longPressCallback(video) }, // [Feature] Long Press
-                                    onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
-                                )
+                categoryState.videos.forEachIndexed { index, video ->
+                    val shouldInsertDividerHere = shouldShowOldContentDivider && (
+                        (oldContentAnchorBvid != null && video.bvid == oldContentAnchorBvid && index > 0) ||
+                            (oldContentAnchorBvid == null && index == oldContentStartIndex)
+                        )
+                    if (shouldInsertDividerHere) {
+                        item(
+                            key = "old_content_divider_$index",
+                            span = { GridItemSpan(gridColumns) }
+                        ) {
+                            OldContentDivider()
+                        }
+                    }
+
+                    item(
+                        key = if (video.bvid.isNotBlank()) video.bvid else "video_${video.id}_$index"
+                    ) {
+                        val isDissolving = video.bvid in dissolvingVideos
+
+                        DissolvableVideoCard(
+                            isDissolving = isDissolving,
+                            onDissolveComplete = { onDissolveComplete(video.bvid) },
+                            cardId = video.bvid,
+                            modifier = Modifier.jiggleOnDissolve(video.bvid)
+                        ) {
+                            when (displayMode) {
+                                1 -> {
+                                    StoryVideoCard(
+                                        video = video,
+                                        index = index,
+                                        animationEnabled = cardAnimationEnabled,
+                                        transitionEnabled = cardTransitionEnabled,
+                                        onDismiss = { onDismissVideo(video.bvid) },
+                                        onLongClick = { longPressCallback(video) },
+                                        onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                    )
+                                }
+
+                                else -> {
+                                    ElegantVideoCard(
+                                        video = video,
+                                        index = index,
+                                        isFollowing = video.owner.mid in followingMids && category != HomeCategory.FOLLOW,
+                                        animationEnabled = cardAnimationEnabled,
+                                        transitionEnabled = cardTransitionEnabled,
+                                        isDataSaverActive = isDataSaverActive,
+                                        onDismiss = { onDismissVideo(video.bvid) },
+                                        onWatchLater = { onWatchLater(video.bvid, video.id) },
+                                        onLongClick = { longPressCallback(video) },
+                                        onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -188,5 +208,32 @@ fun HomeCategoryPageContent(
         item(span = { GridItemSpan(gridColumns) }) {
             Box(modifier = Modifier.fillMaxWidth().height(20.dp))
         }
+    }
+}
+
+@Composable
+private fun OldContentDivider() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
+        )
+        Text(
+            text = "以下是上次最新的视频",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 10.dp)
+        )
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
+        )
     }
 }

@@ -5,7 +5,10 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.plugin.PluginManager
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.data.repository.LiveRepository
 import kotlinx.coroutines.delay
@@ -32,6 +35,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var popularPage = 1  //  热门视频分页
     private var livePage = 1     //  直播分页
     private var hasMoreLiveData = true  //  是否还有更多直播数据
+    private var incrementalTimelineRefreshEnabled = false
     
     //  [新增] 会话级去重集合 (避免重复推荐)
     private val sessionSeenBvids = mutableSetOf<String>()
@@ -41,6 +45,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var blockedMids: Set<Long> = emptySet()
 
     init {
+        viewModelScope.launch {
+            SettingsManager.getIncrementalTimelineRefresh(getApplication()).collect { enabled ->
+                incrementalTimelineRefreshEnabled = enabled
+            }
+        }
         // Monitor blocked list
         viewModelScope.launch {
             blockedUpRepository.getAllBlockedUps().collect { list ->
@@ -198,14 +207,35 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (_isRefreshing.value) return
         viewModelScope.launch {
             _isRefreshing.value = true
-            fetchData(isLoadMore = false)
+            val refreshingCategory = _uiState.value.currentCategory
+            val previousRecommendTopBvid = if (refreshingCategory == HomeCategory.RECOMMEND) {
+                (_uiState.value.categoryStates[HomeCategory.RECOMMEND]?.videos
+                    ?: _uiState.value.videos).firstOrNull()?.bvid?.takeIf { it.isNotBlank() }
+            } else null
+            val newItemsCount = fetchData(isLoadMore = false, isManualRefresh = true)
             
             //  数据加载完成后再更新 refreshKey，避免闪烁
             //  刷新成功后显示趣味提示
             val refreshMessage = com.android.purebilibili.core.util.EasterEggs.getRefreshMessage()
+            val oldBoundary = _uiState.value.recommendOldContentStartIndex
+            val newBoundary = if (refreshingCategory == HomeCategory.RECOMMEND) {
+                if ((newItemsCount ?: 0) > 0) newItemsCount else null
+            } else {
+                oldBoundary
+            }
+            val oldAnchor = _uiState.value.recommendOldContentAnchorBvid
+            val newAnchor = if (refreshingCategory == HomeCategory.RECOMMEND) {
+                if ((newItemsCount ?: 0) > 0) previousRecommendTopBvid else null
+            } else {
+                oldAnchor
+            }
             _uiState.value = _uiState.value.copy(
                 refreshKey = System.currentTimeMillis(),
-                refreshMessage = refreshMessage
+                refreshMessage = refreshMessage,
+                refreshNewItemsCount = newItemsCount,
+                refreshNewItemsKey = if (newItemsCount != null) System.currentTimeMillis() else _uiState.value.refreshNewItemsKey,
+                recommendOldContentAnchorBvid = newAnchor,
+                recommendOldContentStartIndex = newBoundary
             )
             _isRefreshing.value = false
         }
@@ -228,8 +258,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun fetchData(isLoadMore: Boolean) {
+    private suspend fun fetchData(isLoadMore: Boolean, isManualRefresh: Boolean = false): Int? {
         val currentCategory = _uiState.value.currentCategory
+        var refreshNewItemsCount: Int? = null
         
         // 更新当前分类为加载状态
         updateCategoryState(currentCategory) { it.copy(isLoading = true, error = null) }
@@ -237,13 +268,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         //  直播分类单独处理 (TODO: Adapt fetchLiveRooms to use categoryStates)
         if (currentCategory == HomeCategory.LIVE) {
             fetchLiveRooms(isLoadMore)
-            return
+            return refreshNewItemsCount
         }
         
         //  关注动态分类单独处理 (TODO: Adapt fetchFollowFeed to use categoryStates)
         if (currentCategory == HomeCategory.FOLLOW) {
             fetchFollowFeed(isLoadMore)
-            return
+            return refreshNewItemsCount
         }
         
         val currentCategoryState = _uiState.value.categoryStates[currentCategory] ?: CategoryContent()
@@ -297,16 +328,35 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 
             sessionSeenBvids.addAll(uniqueNewVideos.map { it.bvid })
             
-            if (uniqueNewVideos.isNotEmpty()) {
+            val useIncrementalRecommendRefresh = !isLoadMore &&
+                currentCategory == HomeCategory.RECOMMEND &&
+                incrementalTimelineRefreshEnabled
+
+            if (uniqueNewVideos.isNotEmpty() || useIncrementalRecommendRefresh) {
+                var addedCount = 0
                 updateCategoryState(currentCategory) { oldState ->
+                    val mergedVideos = when {
+                        isLoadMore -> appendDistinctByKey(oldState.videos, uniqueNewVideos, ::videoItemKey)
+                        useIncrementalRecommendRefresh -> {
+                            val merged = prependDistinctByKey(oldState.videos, uniqueNewVideos, ::videoItemKey)
+                            addedCount = (merged.size - oldState.videos.size).coerceAtLeast(0)
+                            merged
+                        }
+                        else -> uniqueNewVideos
+                    }
+
                     oldState.copy(
-                        videos = if (isLoadMore) oldState.videos + uniqueNewVideos else uniqueNewVideos,
+                        videos = mergedVideos,
                         liveRooms = emptyList(),
                         isLoading = false,
                         error = null,
-                        pageIndex = if (isLoadMore) oldState.pageIndex + 1 else 1,
-                        hasMore = true // Assuming if we got data, there might be more
+                        pageIndex = if (isLoadMore) oldState.pageIndex + 1 else if (useIncrementalRecommendRefresh) oldState.pageIndex else 1,
+                        hasMore = true
                     )
+                }
+
+                if (useIncrementalRecommendRefresh && isManualRefresh) {
+                    refreshNewItemsCount = addedCount
                 }
                 // Update global helper vars if needed for Recommend
                 if (currentCategory == HomeCategory.RECOMMEND && isLoadMore) refreshIdx++
@@ -328,6 +378,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+        return refreshNewItemsCount
     }
     
     // Helper to update state for a specific category
@@ -405,24 +456,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 } else null
             }
             
-            if (videos.isNotEmpty()) {
-                updateCategoryState(HomeCategory.FOLLOW) { oldState ->
-                    oldState.copy(
-                        videos = if (isLoadMore) oldState.videos + videos else videos,
-                        liveRooms = emptyList(),
-                        isLoading = false,
-                        error = null,
-                        hasMore = true // Assume more unless empty
-                    )
+            updateCategoryState(HomeCategory.FOLLOW) { oldState ->
+                val mergedVideos = when {
+                    isLoadMore -> appendDistinctByKey(oldState.videos, videos, ::videoItemKey)
+                    incrementalTimelineRefreshEnabled -> prependDistinctByKey(oldState.videos, videos, ::videoItemKey)
+                    else -> videos
                 }
-            } else {
-                 updateCategoryState(HomeCategory.FOLLOW) { oldState ->
-                    oldState.copy(
-                        isLoading = false,
-                        error = if (!isLoadMore && oldState.videos.isEmpty()) "暂无关注动态，请先关注一些UP主" else null,
-                        hasMore = false
-                    )
-                }
+                oldState.copy(
+                    videos = mergedVideos,
+                    liveRooms = emptyList(),
+                    isLoading = false,
+                    error = if (!isLoadMore && mergedVideos.isEmpty()) "暂无关注动态，请先关注一些UP主" else null,
+                    hasMore = com.android.purebilibili.data.repository.DynamicRepository.hasMoreData()
+                )
             }
         }.onFailure { error ->
              updateCategoryState(HomeCategory.FOLLOW) { oldState ->
@@ -432,6 +478,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+    }
+
+    private fun videoItemKey(item: com.android.purebilibili.data.model.response.VideoItem): String {
+        if (item.bvid.isNotBlank()) return "bvid:${item.bvid}"
+        if (item.aid > 0) return "aid:${item.aid}"
+        if (item.id > 0) return "id:${item.id}"
+        return "${item.owner.mid}:${item.title}:${item.pubdate}"
     }
     
     //  解析时长文本 "10:24" -> 624 秒

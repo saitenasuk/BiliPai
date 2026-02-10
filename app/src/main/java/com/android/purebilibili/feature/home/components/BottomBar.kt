@@ -64,6 +64,8 @@ import dev.chrisbanes.haze.HazeStyle   // [New]
 import com.android.purebilibili.core.ui.effect.liquidGlassBackground // [New]
 // [LayerBackdrop] AndroidLiquidGlass library for real background refraction
 import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.lens
 import androidx.compose.foundation.shape.RoundedCornerShape as RoundedCornerShapeAlias
@@ -526,52 +528,62 @@ fun FrostedBottomBar(
                             // liquidGlass refracts the icons/text around indicator during horizontal swipe
                             // liquidGlass removed: Refraction now handled by LiquidIndicator using LayerBackdrop
                     ) {
-                        // 实体指示器背景 - 始终显示，提供选中项的背景色
-                        // liquidGlass 仅提供折射效果，指示器背景由 LiquidIndicator 提供
-                        // 实体指示器背景 - 始终显示，提供选中项的背景色
-                        // liquidGlass 仅提供折射效果，指示器背景由 LiquidIndicator 提供
-                         LiquidIndicator(
-                                 position = dampedDragState.value,
-                                 itemWidth = itemWidth,
-                                 itemCount = itemCount,
-                                 isDragging = dampedDragState.isDragging,
-                                 velocity = dampedDragState.velocity,
-                                 startPadding = rowPadding,
-                                 modifier = Modifier
-                                     .fillMaxSize()
-                                     .offset(y = contentVerticalOffset)
-                                     .alpha(indicatorAlpha),
-                                     isLiquidGlassEnabled = showGlassEffect,
-                                     liquidGlassStyle = homeSettings.liquidGlassStyle, // [New] Pass style
-                                     backdrop = backdrop, // [New] Pass backdrop for lens refraction
-                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                 )
+                        // 关键修复：
+                        // 1) 先把底栏图标层捕获到 local backdrop
+                        // 2) 指示器再基于该层做折射
+                        val iconBackdrop = rememberLayerBackdrop()
 
-                        BottomBarContent(
-                            visibleItems = visibleItems,
-                            selectedIndex = selectedIndex,
-                            itemColorIndices = itemColorIndices,
-                            onItemClick = onItemClick,
-                            onToggleSidebar = onToggleSidebar,
-                            isTablet = isTablet,
-                            labelMode = labelMode,
-                            hazeState = hazeState,
-                            haptic = haptic,
-                            debounceClick = debounceClick,
-                            onHomeDoubleTap = onHomeDoubleTap,
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .layerBackdrop(iconBackdrop)
+                        ) {
+                            BottomBarContent(
+                                visibleItems = visibleItems,
+                                selectedIndex = selectedIndex,
+                                itemColorIndices = itemColorIndices,
+                                onItemClick = onItemClick,
+                                onToggleSidebar = onToggleSidebar,
+                                isTablet = isTablet,
+                                labelMode = labelMode,
+                                hazeState = hazeState,
+                                haptic = haptic,
+                                debounceClick = debounceClick,
+                                onHomeDoubleTap = onHomeDoubleTap,
+                                itemWidth = itemWidth,
+                                rowPadding = rowPadding,
+                                contentVerticalOffset = contentVerticalOffset,
+                                isInteractive = true,
+                                currentPosition = dampedDragState.value,
+                                dragModifier = Modifier.horizontalDragGesture(
+                                    dragState = dampedDragState,
+                                    itemWidthPx = with(LocalDensity.current) { itemWidth.toPx() }
+                                ),
+                                // [New] Param for adaptive text color
+                                contentLuminance = contentLuminance,
+                                liquidGlassStyle = homeSettings.liquidGlassStyle
+                            )
+                        }
+
+                        LiquidIndicator(
+                            position = dampedDragState.value,
                             itemWidth = itemWidth,
-                            rowPadding = rowPadding,
-                            contentVerticalOffset = contentVerticalOffset,
-                            isInteractive = true,
-                            currentPosition = dampedDragState.value,
-                            dragModifier = Modifier.horizontalDragGesture(
-                                dragState = dampedDragState,
-                                itemWidthPx = with(LocalDensity.current) { itemWidth.toPx() }
-                            ),
-                            // [New] Param for adaptive text color
-                            contentLuminance = contentLuminance,
-                            liquidGlassStyle = homeSettings.liquidGlassStyle
-                       )
+                            itemCount = itemCount,
+                            isDragging = dampedDragState.isDragging,
+                            velocity = dampedDragState.velocity,
+                            startPadding = rowPadding,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .offset(y = contentVerticalOffset)
+                                .alpha(indicatorAlpha),
+                            isLiquidGlassEnabled = showGlassEffect,
+                            lensIntensityBoost = 1.85f,
+                            edgeWarpBoost = 1.92f,
+                            chromaticBoost = 1.75f,
+                            liquidGlassStyle = homeSettings.liquidGlassStyle, // [New] Pass style
+                            backdrop = iconBackdrop, // 使用图标层 backdrop，确保滑动时折射图标
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        )
                     }
                         
                         if (!isFloating) {

@@ -554,6 +554,7 @@ object SettingsManager {
     // ==========  弹幕设置 ==========
     
     private const val DANMAKU_DEFAULTS_VERSION = 2
+    private const val HOME_VISUAL_DEFAULTS_VERSION = 1
     private const val DEFAULT_DANMAKU_OPACITY = 0.85f
     private const val DEFAULT_DANMAKU_FONT_SCALE = 1.0f
     private const val DEFAULT_DANMAKU_SPEED = 1.0f
@@ -565,6 +566,7 @@ object SettingsManager {
     private val KEY_DANMAKU_SPEED = floatPreferencesKey("danmaku_speed")
     private val KEY_DANMAKU_AREA = floatPreferencesKey("danmaku_area")
     private val KEY_DANMAKU_DEFAULTS_VERSION = intPreferencesKey("danmaku_defaults_version")
+    private val KEY_HOME_VISUAL_DEFAULTS_VERSION = intPreferencesKey("home_visual_defaults_version")
     
     // --- 弹幕开关 ---
     fun getDanmakuEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
@@ -639,10 +641,27 @@ object SettingsManager {
             }
         }
     }
+
+    /**
+     * 启动时一次性迁移首页视觉默认值（仅在版本未迁移时覆盖）。
+     * 目标：默认开启底栏悬浮、液态玻璃、顶部模糊。
+     */
+    suspend fun ensureHomeVisualDefaults(context: Context) {
+        context.settingsDataStore.edit { preferences ->
+            val currentVersion = preferences[KEY_HOME_VISUAL_DEFAULTS_VERSION] ?: 0
+            if (currentVersion < HOME_VISUAL_DEFAULTS_VERSION) {
+                preferences[KEY_BOTTOM_BAR_FLOATING] = true
+                preferences[KEY_LIQUID_GLASS_ENABLED] = true
+                preferences[KEY_HEADER_BLUR_ENABLED] = true
+                preferences[KEY_HOME_VISUAL_DEFAULTS_VERSION] = HOME_VISUAL_DEFAULTS_VERSION
+            }
+        }
+    }
     
     // ==========  推荐流 API 类型 ==========
     
     private val KEY_FEED_API_TYPE = intPreferencesKey("feed_api_type")
+    private val KEY_INCREMENTAL_TIMELINE_REFRESH = booleanPreferencesKey("incremental_timeline_refresh")
     
     /**
      *  推荐流 API 类型
@@ -678,6 +697,16 @@ object SettingsManager {
         val value = context.getSharedPreferences("feed_api", Context.MODE_PRIVATE)
             .getInt("type", FeedApiType.WEB.value)
         return FeedApiType.fromValue(value)
+    }
+
+    // --- 时间线增量刷新开关 ---
+    fun getIncrementalTimelineRefresh(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_INCREMENTAL_TIMELINE_REFRESH] ?: false }
+
+    suspend fun setIncrementalTimelineRefresh(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_INCREMENTAL_TIMELINE_REFRESH] = value
+        }
     }
     
     // ==========  实验性功能 ==========

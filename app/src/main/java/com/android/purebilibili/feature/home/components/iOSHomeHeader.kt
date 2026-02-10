@@ -1,10 +1,14 @@
 // 文件路径: feature/home/components/iOSHomeHeader.kt
 package com.android.purebilibili.feature.home.components
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -19,15 +23,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance  //  状态栏亮度计算
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import com.kyant.backdrop.drawBackdrop 
-import com.kyant.backdrop.effects.lens 
-import com.android.purebilibili.core.ui.effect.simpMusicLiquidGlass 
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -41,6 +43,7 @@ import com.android.purebilibili.core.util.iOSTapEffect
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.core.theme.iOSSystemGray
+import com.android.purebilibili.core.store.LiquidGlassStyle
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.blur.unifiedBlur
@@ -105,12 +108,25 @@ fun iOSHomeHeader(
         label = "headerColor"
     )
 
+    val topTabStyle = resolveTopTabStyle(
+        isBottomBarFloating = homeSettings?.isBottomBarFloating == true,
+        isBottomBarBlurEnabled = homeSettings?.isBottomBarBlurEnabled == true,
+        isLiquidGlassEnabled = homeSettings?.isLiquidGlassEnabled == true
+    )
+    val isTabFloating = topTabStyle.floating
+    val isTabGlassEnabled = topTabStyle.materialMode == TopTabMaterialMode.LIQUID_GLASS
+    val isTabBlurEnabled = topTabStyle.materialMode == TopTabMaterialMode.BLUR
+    val isGlassSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    val liquidStyle = homeSettings?.liquidGlassStyle ?: LiquidGlassStyle.CLASSIC
+    val tabShape = RoundedCornerShape(if (isTabFloating) 22.dp else 0.dp)
+    val tabSurfaceColor = MaterialTheme.colorScheme.surface
+
     // [Optimization] Calculate layout values LOCALLY using deferred state read
     // This prevents HomeScreen from recomposing when headerOffset changes
     val headerOffset by remember { derivedStateOf(headerOffsetProvider) }
     
     val searchBarHeightDp = 52.dp
-    val tabRowHeightDp = 44.dp
+    val tabRowHeightDp = if (isTabFloating) 62.dp else 48.dp
     val searchBarHeightPx = with(density) { searchBarHeightDp.toPx() }
     val tabRowHeightPx = with(density) { tabRowHeightDp.toPx() }
 
@@ -132,7 +148,37 @@ fun iOSHomeHeader(
     val tabAlpha = if (headerOffset < tabCollapseStart && isHeaderCollapseEnabled) {
         (1f + (tabCollapseAmount / tabRowHeightPx)).coerceIn(0f, 1f)
     } else 1f
-    
+
+    val tabHorizontalPadding by animateDpAsState(
+        targetValue = if (isTabFloating) 16.dp else 0.dp,
+        animationSpec = tween(240),
+        label = "tabHorizontalPadding"
+    )
+    val tabVerticalPadding by animateDpAsState(
+        targetValue = if (isTabFloating) 4.dp else 0.dp,
+        animationSpec = tween(240),
+        label = "tabVerticalPadding"
+    )
+    val tabShadowElevation by animateDpAsState(
+        targetValue = if (isTabFloating) 8.dp else 0.dp,
+        animationSpec = tween(240),
+        label = "tabShadowElevation"
+    )
+    val tabOverlayAlpha by animateFloatAsState(
+        targetValue = when (topTabStyle.materialMode) {
+            TopTabMaterialMode.PLAIN -> if (isTabFloating) 0.95f else 1f
+            TopTabMaterialMode.BLUR -> 0.72f
+            TopTabMaterialMode.LIQUID_GLASS -> 0.22f
+        },
+        animationSpec = tween(220),
+        label = "tabOverlayAlpha"
+    )
+    val tabBorderAlpha by animateFloatAsState(
+        targetValue = if (!isTabFloating) 0f else if (isTabGlassEnabled) 0.56f else 0.35f,
+        animationSpec = tween(220),
+        label = "tabBorderAlpha"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -280,18 +326,70 @@ fun iOSHomeHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .zIndex(-1f) // Slide behind search bar
-                .zIndex(-1f) // Slide behind search bar
                 .height(currentTabHeight) // Use local derived value [Feature] Collapse Tabs
                 .graphicsLayer { alpha = tabAlpha } // Use local derived value
                 .clip(RoundedCornerShape(bottomStart = 0.dp, bottomEnd = 0.dp))
         ) {
-            CategoryTabRow(
-                selectedIndex = categoryIndex,
-                onCategorySelected = onCategorySelected,
-                onPartitionClick = onPartitionClick,
-                onLiveClick = onLiveClick,
-                pagerState = pagerState
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = tabHorizontalPadding, vertical = tabVerticalPadding)
+                    .then(
+                        if (isTabFloating) {
+                            Modifier.shadow(
+                                elevation = tabShadowElevation,
+                                shape = tabShape,
+                                ambientColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .clip(tabShape)
+                    .run {
+                        when {
+                            isTabGlassEnabled && hazeState != null -> {
+                                this
+                                    .unifiedBlur(hazeState)
+                                    .background(tabSurfaceColor.copy(alpha = tabOverlayAlpha))
+                            }
+
+                            isTabBlurEnabled && hazeState != null -> {
+                                this
+                                    .unifiedBlur(hazeState)
+                                    .background(tabSurfaceColor.copy(alpha = tabOverlayAlpha))
+                            }
+
+                            else -> {
+                                this.background(tabSurfaceColor.copy(alpha = tabOverlayAlpha))
+                            }
+                        }
+                    }
+                    .then(
+                        if (isTabFloating) {
+                            Modifier.border(
+                                width = 0.8.dp,
+                                color = Color.White.copy(alpha = tabBorderAlpha),
+                                shape = tabShape
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
+                CategoryTabRow(
+                    selectedIndex = categoryIndex,
+                    onCategorySelected = onCategorySelected,
+                    onPartitionClick = onPartitionClick,
+                    onLiveClick = onLiveClick,
+                    pagerState = pagerState,
+                    isLiquidGlassEnabled = isTabGlassEnabled && isGlassSupported,
+                    liquidGlassStyle = liquidStyle,
+                    backdrop = backdrop,
+                    isFloatingStyle = isTabFloating
+                )
+            }
         }
     }
 }

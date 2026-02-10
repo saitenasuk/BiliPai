@@ -1,6 +1,7 @@
 // 文件路径: feature/home/components/TopBar.kt
 package com.android.purebilibili.feature.home.components
 
+import android.os.SystemClock
 import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.animation.*
@@ -50,11 +51,17 @@ import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.feature.home.HomeCategory
+import com.android.purebilibili.feature.home.LocalHomeScrollOffset
+import com.android.purebilibili.core.store.LiquidGlassStyle
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.flow.map
+import kotlin.math.abs
 import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
 import com.android.purebilibili.core.ui.animation.horizontalDragGesture
 import androidx.compose.foundation.combinedClickable // [Added]
@@ -211,7 +218,11 @@ fun CategoryTabRow(
     onCategorySelected: (Int) -> Unit = {},
     onPartitionClick: () -> Unit = {},
     onLiveClick: () -> Unit = {},  // [新增] 直播分区点击回调
-    pagerState: androidx.compose.foundation.pager.PagerState? = null // [New] PagerState for sync
+    pagerState: androidx.compose.foundation.pager.PagerState? = null, // [New] PagerState for sync
+    isLiquidGlassEnabled: Boolean = false,
+    liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC,
+    backdrop: LayerBackdrop? = null,
+    isFloatingStyle: Boolean = false
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
@@ -220,11 +231,25 @@ fun CategoryTabRow(
     val haptic = com.android.purebilibili.core.util.rememberHapticFeedback()
     val scrollChannel = com.android.purebilibili.feature.home.LocalHomeScrollChannel.current
     val coroutineScope = rememberCoroutineScope()
+    val globalScrollOffsetState = LocalHomeScrollOffset.current
+    val tabRowHeight = if (isFloatingStyle) 62.dp else 48.dp
+    val actionButtonSize = if (isFloatingStyle) 50.dp else 44.dp
+    val actionButtonCorner = if (isFloatingStyle) 22.dp else 22.dp
+    val actionIconSize = if (isFloatingStyle) 22.dp else 20.dp
+    val topIndicatorHeight = 34.dp
+    val topIndicatorCorner = 16.dp
+    val topIndicatorWidthRatio = 0.78f
+    val topIndicatorMinWidth = 48.dp
+    val topIndicatorHorizontalInset = 16.dp
+    val floatingLiquidWidthMultiplier = 1.12f
+    val floatingLiquidMinWidth = 86.dp
+    val floatingLiquidMaxWidth = 112.dp
+    val floatingLiquidHeight = 48.dp
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(tabRowHeight)
             .padding(horizontal = 4.dp), 
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -251,7 +276,12 @@ fun CategoryTabRow(
             }
             
             // [简化] 是否正在交互（用于指示器缩放效果）
-            val isInteracting = pagerState?.isScrollInProgress == true
+            var isInteracting by remember { mutableStateOf(false) }
+            var indicatorVelocityPxPerSecond by remember { mutableFloatStateOf(0f) }
+            var lastPosition by remember { mutableFloatStateOf(currentPosition) }
+            var lastVerticalOffset by remember { mutableFloatStateOf(globalScrollOffsetState.floatValue) }
+            var lastTimeMs by remember { mutableLongStateOf(SystemClock.uptimeMillis()) }
+            var velocityDecayJob by remember { mutableStateOf<Job?>(null) }
             
             // 同步滚动位置：当选中索引变化时，自动滚动到可见区域
             LaunchedEffect(selectedIndex) {
@@ -265,6 +295,69 @@ fun CategoryTabRow(
                         ?: with(localDensity) { tabWidth.toPx() }
                 }
             }
+            val floatingIndicatorWidthPx by remember(isFloatingStyle) {
+                derivedStateOf {
+                    if (!isFloatingStyle) 0f
+                    else {
+                        val minWidthPx = with(localDensity) { floatingLiquidMinWidth.toPx() }
+                        val maxWidthPx = with(localDensity) { floatingLiquidMaxWidth.toPx() }
+                        (actualTabWidthPx * floatingLiquidWidthMultiplier).coerceIn(minWidthPx, maxWidthPx)
+                    }
+                }
+            }
+            val floatingInsetPx by remember(isFloatingStyle) {
+                derivedStateOf {
+                    if (!isFloatingStyle) 0f
+                    else {
+                        val edgePx = with(localDensity) { 1.dp.toPx() }
+                        ((floatingIndicatorWidthPx - actualTabWidthPx) / 2f).coerceAtLeast(0f) + edgePx
+                    }
+                }
+            }
+            val floatingInsetDp = with(localDensity) { floatingInsetPx.toDp() }
+
+            LaunchedEffect(isLiquidGlassEnabled) {
+                snapshotFlow { Triple(currentPosition, actualTabWidthPx, globalScrollOffsetState.floatValue) }
+                    .collect { (position, tabWidthPx, verticalOffsetPx) ->
+                        val now = SystemClock.uptimeMillis()
+                        val dt = (now - lastTimeMs).coerceAtLeast(1L)
+                        val horizontalDeltaPx = (position - lastPosition) * tabWidthPx
+                        val rawHorizontalVelocity = (horizontalDeltaPx * 1000f) / dt
+                        val verticalDeltaPx = verticalOffsetPx - lastVerticalOffset
+                        val rawVerticalVelocity = (verticalDeltaPx * 1000f) / dt
+                        val rawVelocity = resolveTopTabIndicatorVelocity(
+                            horizontalVelocityPxPerSecond = rawHorizontalVelocity,
+                            verticalVelocityPxPerSecond = rawVerticalVelocity,
+                            enableVerticalLiquidMotion = isLiquidGlassEnabled
+                        )
+                        indicatorVelocityPxPerSecond =
+                            indicatorVelocityPxPerSecond * 0.32f + rawVelocity * 0.68f
+                        isInteracting = shouldTopTabIndicatorBeInteracting(
+                            pagerIsScrolling = pagerState?.isScrollInProgress == true,
+                            combinedVelocityPxPerSecond = rawVelocity,
+                            verticalVelocityPxPerSecond = rawVerticalVelocity,
+                            liquidGlassEnabled = isLiquidGlassEnabled
+                        )
+                        lastPosition = position
+                        lastVerticalOffset = verticalOffsetPx
+                        lastTimeMs = now
+
+                        velocityDecayJob?.cancel()
+                        velocityDecayJob = coroutineScope.launch {
+                            delay(90)
+                            indicatorVelocityPxPerSecond *= 0.35f
+                            isInteracting = shouldTopTabIndicatorBeInteracting(
+                                pagerIsScrolling = pagerState?.isScrollInProgress == true,
+                                combinedVelocityPxPerSecond = indicatorVelocityPxPerSecond,
+                                verticalVelocityPxPerSecond = 0f,
+                                liquidGlassEnabled = isLiquidGlassEnabled
+                            )
+                            delay(90)
+                            indicatorVelocityPxPerSecond = 0f
+                            isInteracting = pagerState?.isScrollInProgress == true
+                        }
+                    }
+            }
 
             Box(modifier = Modifier.fillMaxSize()) {
                 // 1. [Layer] Background Liquid Indicator
@@ -275,7 +368,7 @@ fun CategoryTabRow(
                         if (visibleItems.isEmpty()) 0f
                         else {
                             val firstItem = visibleItems.first()
-                            firstItem.index * actualTabWidthPx - firstItem.offset.toFloat()
+                            firstItem.index * actualTabWidthPx - (firstItem.offset.toFloat() - floatingInsetPx)
                         }
                     }
                 }
@@ -283,12 +376,47 @@ fun CategoryTabRow(
                 Box(modifier = Modifier.graphicsLayer {
                     translationX = -scrollOffset
                 }) {
-                    SimpleLiquidIndicator(
-                        position = currentPosition,
-                        itemWidthPx = actualTabWidthPx,
-                        isDragging = isInteracting,
-                        modifier = Modifier.align(Alignment.CenterStart)
-                    )
+                    if (isFloatingStyle) {
+                        LiquidIndicator(
+                            position = currentPosition,
+                            itemWidth = with(localDensity) { actualTabWidthPx.toDp() },
+                            itemCount = categories.size,
+                            isDragging = isInteracting,
+                            velocity = indicatorVelocityPxPerSecond,
+                            startPadding = floatingInsetDp,
+                            modifier = Modifier.fillMaxSize(),
+                            isLiquidGlassEnabled = isLiquidGlassEnabled,
+                            clampToBounds = true,
+                            edgeInset = 1.dp,
+                            viewportShiftPx = scrollOffset,
+                            indicatorWidthMultiplier = floatingLiquidWidthMultiplier,
+                            indicatorMinWidth = floatingLiquidMinWidth,
+                            indicatorMaxWidth = floatingLiquidMaxWidth,
+                            indicatorHeight = floatingLiquidHeight,
+                            lensIntensityBoost = 1.85f,
+                            edgeWarpBoost = 1.92f,
+                            chromaticBoost = 1.75f,
+                            liquidGlassStyle = liquidGlassStyle,
+                            backdrop = backdrop,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        )
+                    } else {
+                        SimpleLiquidIndicator(
+                            position = currentPosition,
+                            itemWidthPx = actualTabWidthPx,
+                            isDragging = isInteracting,
+                            velocityPxPerSecond = indicatorVelocityPxPerSecond,
+                            isLiquidGlassEnabled = isLiquidGlassEnabled,
+                            liquidGlassStyle = liquidGlassStyle,
+                            backdrop = backdrop,
+                            indicatorHeight = topIndicatorHeight,
+                            cornerRadius = topIndicatorCorner,
+                            widthRatio = topIndicatorWidthRatio,
+                            minWidth = topIndicatorMinWidth,
+                            horizontalInset = topIndicatorHorizontalInset,
+                            modifier = Modifier.align(Alignment.CenterStart)
+                        )
+                    }
                 }
 
                 // 2. [Layer] Content Tabs
@@ -297,11 +425,9 @@ fun CategoryTabRow(
                     modifier = Modifier.fillMaxHeight(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Start,
-                    contentPadding = PaddingValues(horizontal = 0.dp),
-                    // [修复] 禁用惯性滚动，让 Tab 列表只能通过点击切换
-                    flingBehavior = object : androidx.compose.foundation.gestures.FlingBehavior {
-                        override suspend fun androidx.compose.foundation.gestures.ScrollScope.performFling(initialVelocity: Float): Float = 0f
-                    }
+                    contentPadding = PaddingValues(
+                        horizontal = if (isFloatingStyle) floatingInsetDp else 0.dp
+                    )
                 ) {
                     itemsIndexed(categories) { index, category ->
                         Box(
@@ -347,8 +473,8 @@ fun CategoryTabRow(
         //  分区按钮
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(22.dp))
+                .size(actionButtonSize)
+                .clip(RoundedCornerShape(actionButtonCorner))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
@@ -359,12 +485,38 @@ fun CategoryTabRow(
                 CupertinoIcons.Default.ListBullet,
                 contentDescription = "浏览全部分区",
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(actionIconSize)
             )
         }
         
         Spacer(modifier = Modifier.width(8.dp))
     }
+}
+
+internal fun resolveTopTabIndicatorVelocity(
+    horizontalVelocityPxPerSecond: Float,
+    verticalVelocityPxPerSecond: Float,
+    enableVerticalLiquidMotion: Boolean
+): Float {
+    val combined = if (enableVerticalLiquidMotion) {
+        horizontalVelocityPxPerSecond + verticalVelocityPxPerSecond
+    } else {
+        horizontalVelocityPxPerSecond
+    }
+    return combined.coerceIn(-4200f, 4200f)
+}
+
+internal fun shouldTopTabIndicatorBeInteracting(
+    pagerIsScrolling: Boolean,
+    combinedVelocityPxPerSecond: Float,
+    verticalVelocityPxPerSecond: Float,
+    liquidGlassEnabled: Boolean
+): Boolean {
+    if (pagerIsScrolling) return true
+    val combinedThreshold = if (liquidGlassEnabled) 20f else 60f
+    val verticalThreshold = if (liquidGlassEnabled) 12f else Float.MAX_VALUE
+    return abs(combinedVelocityPxPerSecond) > combinedThreshold ||
+        abs(verticalVelocityPxPerSecond) > verticalThreshold
 }
 
 

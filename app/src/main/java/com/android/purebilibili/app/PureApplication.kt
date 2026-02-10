@@ -89,6 +89,11 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         applyThemePreference()
         
         super.onCreate()
+
+        // 启动即确保首页视觉默认值生效：底栏悬浮 + 液态玻璃 + 顶部模糊
+        runBlocking(Dispatchers.IO) {
+            SettingsManager.ensureHomeVisualDefaults(this@PureApplication)
+        }
         
         //  关键初始化（同步，必须在启动时完成）
         NetworkModule.init(this)

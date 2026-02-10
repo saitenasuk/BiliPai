@@ -8,6 +8,9 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.util.appendDistinctByKey
+import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.data.model.response.LiveRoom
@@ -39,6 +42,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     
     //  [新增] 缓存关注列表
     private var cachedFollowings: List<FollowingUser> = emptyList()
+    private var incrementalTimelineRefreshEnabled: Boolean = false
 
     private val _uiState = MutableStateFlow(DynamicUiState())
     val uiState: StateFlow<DynamicUiState> = _uiState.asStateFlow()
@@ -73,6 +77,11 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     val displayMode: StateFlow<DynamicDisplayMode> = _displayMode.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            SettingsManager.getIncrementalTimelineRefresh(appContext).collect { enabled ->
+                incrementalTimelineRefreshEnabled = enabled
+            }
+        }
         loadUserPreferences()
         loadCachedDynamics()
         rebuildFollowedUsers()
@@ -472,8 +481,20 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
 
             result.fold(
                 onSuccess = { items ->
-                    val currentItems = if (refresh) emptyList() else _uiState.value.items
-                    val mergedItems = currentItems + items
+                    val currentItems = _uiState.value.items
+                    val mergedItems = when {
+                        refresh && incrementalTimelineRefreshEnabled -> prependDistinctByKey(
+                            existing = currentItems,
+                            incoming = items,
+                            keySelector = ::dynamicItemKey
+                        )
+                        refresh -> items
+                        else -> appendDistinctByKey(
+                            existing = currentItems,
+                            incoming = items,
+                            keySelector = ::dynamicItemKey
+                        )
+                    }
                     _uiState.value = _uiState.value.copy(
                         items = mergedItems,
                         isLoading = false,
@@ -504,6 +525,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     fun loadMore() {
         if (!_uiState.value.hasMore || _uiState.value.isLoading || _isRefreshing.value || isLoadingLocked) return
         loadDynamicFeed(refresh = false)
+    }
+
+    private fun dynamicItemKey(item: DynamicItem): String {
+        if (item.id_str.isNotBlank()) return item.id_str
+        val authorMid = item.modules.module_author?.mid ?: 0L
+        val pubTs = item.modules.module_author?.pub_ts ?: 0L
+        return "${item.type}-$authorMid-$pubTs"
     }
     
     // ====================  动态评论/点赞/转发功能 ====================

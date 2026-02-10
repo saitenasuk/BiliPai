@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.staggeredgrid.*  // 🌊 瀑布流布局
 import com.kyant.backdrop.backdrops.layerBackdrop // [Fix] Import for modifier
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -54,6 +55,7 @@ import com.android.purebilibili.feature.home.components.FrostedSideBar
 import com.android.purebilibili.feature.home.components.CategoryTabRow
 import com.android.purebilibili.feature.home.components.iOSHomeHeader  //  iOS 大标题头部
 import com.android.purebilibili.feature.home.components.iOSRefreshIndicator  //  iOS 下拉刷新指示器
+import com.android.purebilibili.feature.home.components.resolveTopTabStyle
 //  从 cards 子包导入卡片组件
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.LiveRoomCard
@@ -73,6 +75,7 @@ import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import coil.imageLoader
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged  //  性能优化：防止重复触发
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import androidx.compose.animation.ExperimentalSharedTransitionApi  //  共享过渡实验API
 import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
@@ -137,8 +140,7 @@ fun HomeScreen(
 
     // [Feature] Video Preview State (Global Scope)
     val targetVideoItemState = remember { mutableStateOf<VideoItem?>(null) }
-    // [Revert] Background capture removed for performance
-    // val homeBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    val homeBackdrop = rememberLayerBackdrop()
 
     val coroutineScope = rememberCoroutineScope() // 用于双击回顶动画
 
@@ -239,6 +241,8 @@ fun HomeScreen(
     //  [彩蛋] 彩蛋开关设置
     val easterEggEnabled by SettingsManager.getEasterEggEnabled(context).collectAsState(initial = true)
     var showEasterEggDialog by remember { mutableStateOf(false) }
+    var refreshDeltaTipText by remember { mutableStateOf<String?>(null) }
+    var dividerRevealRefreshKey by rememberSaveable { mutableLongStateOf(0L) }
     
     //  [彩蛋] 下拉刷新成功后显示趣味提示（仅在开关开启时）
     LaunchedEffect(state.refreshKey, easterEggEnabled) {
@@ -253,6 +257,42 @@ fun HomeScreen(
                 showEasterEggDialog = true
             }
         }
+    }
+
+    LaunchedEffect(state.refreshNewItemsKey) {
+        val count = state.refreshNewItemsCount ?: return@LaunchedEffect
+        refreshDeltaTipText = if (count > 0) "新增 $count 条内容" else "暂无新内容"
+        // 分割线需等待用户发生下滑后再展示
+        if (count > 0) dividerRevealRefreshKey = 0L
+        delay(2200)
+        refreshDeltaTipText = null
+    }
+
+    // 仅在推荐页检测“刷新后是否已下滑”，用于激活旧内容分割线
+    LaunchedEffect(
+        state.currentCategory,
+        state.refreshNewItemsKey,
+        state.recommendOldContentAnchorBvid,
+        state.categoryStates[HomeCategory.RECOMMEND]?.videos
+    ) {
+        if (state.currentCategory != HomeCategory.RECOMMEND) return@LaunchedEffect
+        if ((state.refreshNewItemsCount ?: 0) <= 0) return@LaunchedEffect
+        val targetKey = state.refreshNewItemsKey
+        if (targetKey <= 0L || dividerRevealRefreshKey == targetKey) return@LaunchedEffect
+
+        val anchorBvid = state.recommendOldContentAnchorBvid ?: return@LaunchedEffect
+        val recommendVideos = state.categoryStates[HomeCategory.RECOMMEND]?.videos ?: return@LaunchedEffect
+        val anchorIndex = recommendVideos.indexOfFirst { it.bvid == anchorBvid }
+        if (anchorIndex <= 0) return@LaunchedEffect
+
+        val recommendState = gridStates[HomeCategory.RECOMMEND] ?: return@LaunchedEffect
+        snapshotFlow {
+            val layoutInfo = recommendState.layoutInfo
+            val reachedByVisible = layoutInfo.visibleItemsInfo.any { it.index == anchorIndex }
+            val reachedByIndex = recommendState.firstVisibleItemIndex >= anchorIndex
+            reachedByVisible || reachedByIndex
+        }.first { it }
+        dividerRevealRefreshKey = targetKey
     }
     
     //  [彩蛋] 关闭确认对话框
@@ -574,8 +614,15 @@ fun HomeScreen(
     var headerOffsetHeightPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     
     // Constants
+    val topTabStyle = remember(isBottomBarFloating, isBottomBarBlurEnabled, isLiquidGlassEnabled) {
+        resolveTopTabStyle(
+            isBottomBarFloating = isBottomBarFloating,
+            isBottomBarBlurEnabled = isBottomBarBlurEnabled,
+            isLiquidGlassEnabled = isLiquidGlassEnabled
+        )
+    }
     val searchBarHeightDp = 52.dp 
-    val tabRowHeightDp = 44.dp
+    val tabRowHeightDp = if (topTabStyle.floating) 62.dp else 48.dp
     val headerHeightDp = searchBarHeightDp + tabRowHeightDp // Total height
     
     // Pixels
@@ -684,6 +731,7 @@ fun HomeScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .layerBackdrop(homeBackdrop)
                             // 首页使用 Pager + Lazy 子层，source 挂在外层容器更稳定。
                             .hazeSource(state = hazeState)
                     ) {
@@ -822,7 +870,23 @@ fun HomeScreen(
                                      displayMode = displayMode,
                                      cardAnimationEnabled = cardAnimationEnabled,
                                      cardTransitionEnabled = cardTransitionEnabled,
-                                     isDataSaverActive = isDataSaverActive
+                                     isDataSaverActive = isDataSaverActive,
+                                     oldContentAnchorBvid = if (category == HomeCategory.RECOMMEND &&
+                                         dividerRevealRefreshKey == state.refreshNewItemsKey
+                                     ) {
+                                         state.recommendOldContentAnchorBvid
+                                     } else {
+                                         null
+                                     },
+                                     oldContentStartIndex = if (category == HomeCategory.RECOMMEND) {
+                                         if (dividerRevealRefreshKey == state.refreshNewItemsKey) {
+                                             state.recommendOldContentStartIndex
+                                         } else {
+                                             null
+                                         }
+                                     } else {
+                                         null
+                                     }
                                  )
                              }
                              } // Close Box wrapper
@@ -878,10 +942,44 @@ fun HomeScreen(
             isRefreshing = isRefreshing,
             pullProgress = 0f, // [Fix] Outer header doesn't track inner pull state
             pagerState = pagerState,
-            // [Revert] backdrop removed
-            // backdrop = homeBackdrop,
+            backdrop = homeBackdrop,
             homeSettings = homeSettings
         )
+
+        AnimatedVisibility(
+            visible = refreshDeltaTipText != null,
+            enter = fadeIn(animationSpec = tween(180)) + slideInVertically(
+                animationSpec = tween(220),
+                initialOffsetY = { -it / 2 }
+            ),
+            exit = fadeOut(animationSpec = tween(220)) + slideOutVertically(
+                animationSpec = tween(220),
+                targetOffsetY = { -it / 2 }
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = listTopPadding + 8.dp)
+                .zIndex(90f)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+                    tonalElevation = 2.dp,
+                    shadowElevation = 6.dp
+                ) {
+                    Text(
+                        text = refreshDeltaTipText.orEmpty(),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
         // [Feature] Video Preview Overlay with Animation
         androidx.compose.animation.AnimatedVisibility(
             visible = targetVideoItemState.value != null,

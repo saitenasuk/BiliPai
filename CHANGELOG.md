@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.2.0] - 2026-02-10
+
+### ✨ New Features (新增功能)
+
+- **Top Tabs Style Sync**: Top category tab bar now follows bottom bar style linkage, supporting floating/non-floating, blur, and liquid glass modes with unified visual language.
+- **Refraction Upgrade**: Added stronger liquid lens profile for tab/bottom indicators during horizontal slide, with a clearer spherical feel and edge-space warp.
+- **Incremental Timeline Refresh**: Added optional incremental refresh for Recommend/Following/Dynamic feeds, preserving old content and prepending only new items.
+- **Refresh Delta Feedback**: Added "new items count" prompt after manual refresh and an old-content divider cue in Recommend.
+
+### 🛠 Improvements & Fixes (优化与修复)
+
+- **Top Indicator Geometry**: Refined top indicator size/shape/centering and boundary clamping to prevent clipping and offset drift when sliding.
+- **Bottom Indicator Refraction Source**: Fixed cases where icon/text were not clearly refracted by switching to icon-layer backdrop capture.
+- **Default Visual Bootstrapping**: Added one-time startup migration to ensure default Home visual settings are enabled on first launch after update:
+  - floating bottom bar
+  - liquid glass enabled
+  - top blur enabled
+- **Version Bump**: Updated app version to `5.2.0`.
+
 ## [5.1.4] - 2026-02-08
 
 ### 🛠 Improvements & Fixes (优化与修复)

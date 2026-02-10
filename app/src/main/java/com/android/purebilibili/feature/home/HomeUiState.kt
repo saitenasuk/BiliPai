@@ -90,6 +90,14 @@ data class HomeUiState(
     val displayedTabIndex: Int = 0,
     //  [彩蛋] 刷新成功后的趣味消息
     val refreshMessage: String? = null,
+    //  [新增] 增量刷新新增条数（null 表示不展示）
+    val refreshNewItemsCount: Int? = null,
+    //  [新增] 新增条数提示触发键（用于一次性 UI 动效）
+    val refreshNewItemsKey: Long = 0L,
+    //  [新增] 推荐流旧内容锚点（刷新前首条视频 bvid）
+    val recommendOldContentAnchorBvid: String? = null,
+    //  [新增] 推荐流中“旧内容起始”索引（用于插入分割线）
+    val recommendOldContentStartIndex: Int? = null,
     //  [新增] 正在消散动画中的视频 BVIDs（动画完成后移除）
     val dissolvingVideos: Set<String> = emptySet()
 )
