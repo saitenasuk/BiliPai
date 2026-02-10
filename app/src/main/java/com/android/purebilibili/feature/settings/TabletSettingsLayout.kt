@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.theme.iOSBlue
@@ -39,8 +40,8 @@ enum class SettingsCategory(
     val color: Color
 ) {
     GENERAL("常规", CupertinoIcons.Filled.Gearshape, iOSPink),
-    PRIVACY("隐私与安全", CupertinoIcons.Filled.Lock, iOSPurple),
-    STORAGE("数据与存储", CupertinoIcons.Filled.Folder, iOSBlue),
+    PRIVACY("隐私与安全", CupertinoIcons.Filled.HandRaised, iOSPurple),
+    STORAGE("内容与存储", CupertinoIcons.Filled.Folder, iOSBlue),
     DEVELOPER("开发者选项", CupertinoIcons.Filled.Hammer, iOSTeal),
     ABOUT("关于", CupertinoIcons.Filled.InfoCircle, iOSOrange)
 }
@@ -84,6 +85,10 @@ fun TabletSettingsLayout(
     versionClickCount: Int,
     versionClickThreshold: Int,
     easterEggEnabled: Boolean,
+    feedApiType: SettingsManager.FeedApiType,
+    onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
+    incrementalTimelineRefreshEnabled: Boolean,
+    onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
     
     modifier: Modifier = Modifier
 ) {
@@ -141,16 +146,7 @@ fun TabletSettingsLayout(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 16.dp, start = 8.dp)
                 )
-                
-                // Author Section in Sidebar
-                FollowAuthorSection(
-                    onTelegramClick = onTelegramClick,
-                    onTwitterClick = onTwitterClick,
-                    onDonateClick = onDonateClick
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
+
                 SettingsCategory.entries.forEach { category ->
                             val isSelected = category == selectedCategory
                     NavigationDrawerItem(
@@ -354,25 +350,34 @@ fun TabletSettingsLayout(
                             )
                             
                             when (category) {
-                                SettingsCategory.GENERAL -> GeneralSection(
-                                    onAppearanceClick = { activeDetail = SettingsDetail.APPEARANCE },
-                                    onPlaybackClick = { activeDetail = SettingsDetail.PLAYBACK },
-                                    onBottomBarClick = { activeDetail = SettingsDetail.BOTTOM_BAR },
-                                    onTipsClick = onTipsClick,
-                                    onOpenLinksClick = onOpenLinksClick
-                                )
+                                SettingsCategory.GENERAL -> {
+                                    GeneralSection(
+                                        onAppearanceClick = { activeDetail = SettingsDetail.APPEARANCE },
+                                        onPlaybackClick = { activeDetail = SettingsDetail.PLAYBACK },
+                                        onBottomBarClick = { activeDetail = SettingsDetail.BOTTOM_BAR }
+                                    )
+                                }
                                 SettingsCategory.PRIVACY -> PrivacySection(
                                     privacyModeEnabled = privacyModeEnabled,
                                     onPrivacyModeChange = onPrivacyModeChange,
                                     onPermissionClick = { activeDetail = SettingsDetail.PERMISSION },
                                     onBlockedListClick = { activeDetail = SettingsDetail.BLOCKED_LIST } // [New]
                                 )
-                                SettingsCategory.STORAGE -> DataStorageSection(
-                                    customDownloadPath = customDownloadPath,
-                                    cacheSize = cacheSize,
-                                    onDownloadPathClick = onDownloadPathClick,
-                                    onClearCacheClick = onClearCacheClick
-                                )
+                                SettingsCategory.STORAGE -> {
+                                    FeedApiSection(
+                                        feedApiType = feedApiType,
+                                        onFeedApiTypeChange = onFeedApiTypeChange,
+                                        incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
+                                        onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    DataStorageSection(
+                                        customDownloadPath = customDownloadPath,
+                                        cacheSize = cacheSize,
+                                        onDownloadPathClick = onDownloadPathClick,
+                                        onClearCacheClick = onClearCacheClick
+                                    )
+                                }
                                 SettingsCategory.DEVELOPER -> DeveloperSection(
                                     crashTrackingEnabled = crashTrackingEnabled,
                                     analyticsEnabled = analyticsEnabled,
@@ -382,17 +387,30 @@ fun TabletSettingsLayout(
                                     onPluginsClick = { activeDetail = SettingsDetail.PLUGINS },
                                     onExportLogsClick = onExportLogsClick
                                 )
-                                SettingsCategory.ABOUT -> AboutSection(
-                                    versionName = versionName,
-                                    easterEggEnabled = easterEggEnabled,
-                                    onLicenseClick = onLicenseClick,
-                                    onGithubClick = onGithubClick,
-                                    onVersionClick = onVersionClick,
-                                    onReplayOnboardingClick = onReplayOnboardingClick,
-                                    onEasterEggChange = onEasterEggChange,
-                                    versionClickCount = versionClickCount,
-                                    versionClickThreshold = versionClickThreshold
-                                )
+                                SettingsCategory.ABOUT -> {
+                                    FollowAuthorSection(
+                                        onTelegramClick = onTelegramClick,
+                                        onTwitterClick = onTwitterClick,
+                                        onDonateClick = onDonateClick
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    AboutSection(
+                                        versionName = versionName,
+                                        easterEggEnabled = easterEggEnabled,
+                                        onLicenseClick = onLicenseClick,
+                                        onGithubClick = onGithubClick,
+                                        onVersionClick = onVersionClick,
+                                        onReplayOnboardingClick = onReplayOnboardingClick,
+                                        onEasterEggChange = onEasterEggChange,
+                                        versionClickCount = versionClickCount,
+                                        versionClickThreshold = versionClickThreshold
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    SupportToolsSection(
+                                        onTipsClick = onTipsClick,
+                                        onOpenLinksClick = onOpenLinksClick
+                                    )
+                                }
                             }
                         }
                     }

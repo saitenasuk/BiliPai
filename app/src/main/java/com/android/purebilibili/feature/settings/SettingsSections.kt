@@ -88,9 +88,7 @@ fun FollowAuthorSection(
 fun GeneralSection(
     onAppearanceClick: () -> Unit,
     onPlaybackClick: () -> Unit,
-    onBottomBarClick: () -> Unit,
-    onTipsClick: () -> Unit, // [Feature] Tips
-    onOpenLinksClick: () -> Unit
+    onBottomBarClick: () -> Unit
 ) {
     SettingsGroup {
         SettingClickableItem(
@@ -116,9 +114,15 @@ fun GeneralSection(
             onClick = onBottomBarClick,
             iconTint = iOSBlue
         )
-        
-        SettingsDivider(startIndent = 66.dp)
-        // [Feature] 小贴士 & 隐藏操作
+    }
+}
+
+@Composable
+fun SupportToolsSection(
+    onTipsClick: () -> Unit,
+    onOpenLinksClick: () -> Unit
+) {
+    SettingsGroup {
         SettingClickableItem(
             icon = CupertinoIcons.Default.Lightbulb,
             title = "小贴士 & 隐藏操作",
@@ -126,14 +130,54 @@ fun GeneralSection(
             onClick = onTipsClick,
             iconTint = iOSOrange
         )
-        
         SettingsDivider(startIndent = 66.dp)
-        // [New] Open by Default Links
         SettingClickableItem(
             icon = CupertinoIcons.Default.Link,
             title = "默认打开链接",
             value = "设置应用链接支持",
             onClick = onOpenLinksClick,
+            iconTint = iOSTeal
+        )
+    }
+}
+
+@Composable
+fun SettingsSubpageEntrySection(
+    onContentAndStorageClick: () -> Unit,
+    onPrivacyAndSecurityClick: () -> Unit,
+    onExtensionsAndDebugClick: () -> Unit,
+    onAboutAndSupportClick: () -> Unit
+) {
+    SettingsGroup {
+        SettingClickableItem(
+            icon = CupertinoIcons.Default.FolderBadgePlus,
+            title = "内容与存储",
+            value = "推荐流、下载与缓存",
+            onClick = onContentAndStorageClick,
+            iconTint = iOSBlue
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
+            icon = CupertinoIcons.Default.HandRaised,
+            title = "隐私与安全",
+            value = "无痕模式、权限与黑名单",
+            onClick = onPrivacyAndSecurityClick,
+            iconTint = iOSPurple
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
+            icon = CupertinoIcons.Default.PuzzlepieceExtension,
+            title = "扩展与调试",
+            value = "插件、日志与数据采集",
+            onClick = onExtensionsAndDebugClick,
+            iconTint = iOSTeal
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
+            icon = CupertinoIcons.Default.InfoCircle,
+            title = "关于与支持",
+            value = "版本、开源、帮助与作者",
+            onClick = onAboutAndSupportClick,
             iconTint = iOSOrange
         )
     }
@@ -142,7 +186,9 @@ fun GeneralSection(
 @Composable
 fun FeedApiSection(
     feedApiType: com.android.purebilibili.core.store.SettingsManager.FeedApiType,
-    onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit
+    onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit,
+    incrementalTimelineRefreshEnabled: Boolean,
+    onIncrementalTimelineRefreshChange: (Boolean) -> Unit
 ) {
     SettingsGroup {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -202,6 +248,73 @@ fun FeedApiSection(
                     }
                 }
             }
+        }
+        SettingsDivider(startIndent = 66.dp)
+        FeedSwitchItem(
+            icon = CupertinoIcons.Default.ArrowTriangle2Circlepath,
+            title = "动态增量刷新",
+            subtitle = "下拉刷新时不重置列表，仅在顶部插入新内容",
+            checked = incrementalTimelineRefreshEnabled,
+            onCheckedChange = onIncrementalTimelineRefreshChange,
+            iconTint = iOSGreen
+        )
+    }
+}
+
+@Composable
+private fun FeedSwitchItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    iconTint: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(iconTint.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                CupertinoSwitch(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    colors = CupertinoSwitchDefaults.colors(
+                        thumbColor = Color.White,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        uncheckedTrackColor = Color(0xFFE9E9EA)
+                    )
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
         }
     }
 }
