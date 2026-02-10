@@ -2,6 +2,14 @@ package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
 
 // --- 1. 热搜模型 (保持不变) ---
 @Serializable
@@ -77,18 +85,24 @@ data class SearchTypeData(
 
 @Serializable
 data class SearchVideoItem(
+    @Serializable(with = FlexibleLongSerializer::class)
     val id: Long = 0,
     val bvid: String = "",
     val title: String = "",
     val pic: String = "",
     val author: String = "",
+    @Serializable(with = FlexibleIntSerializer::class)
     val play: Int = 0,
+    @Serializable(with = FlexibleIntSerializer::class)
     val video_review: Int = 0,
+    @Serializable(with = FlexibleStringSerializer::class)
     val duration: String = "",
     //  新增：发布时间戳（秒）
     //  新增：发布时间戳（秒）
+    @Serializable(with = FlexibleLongSerializer::class)
     val pubdate: Long = 0,
     //  [修复] 添加 mid 字段，用于屏蔽过滤
+    @Serializable(with = FlexibleLongSerializer::class)
     val mid: Long = 0
 ) {
     fun toVideoItem(): VideoItem {
@@ -120,6 +134,66 @@ data class SearchVideoItem(
             3 -> (parts[0].toIntOrNull() ?: 0) * 3600 + (parts[1].toIntOrNull() ?: 0) * 60 + (parts[2].toIntOrNull() ?: 0)
             else -> 0
         }
+    }
+}
+
+private fun parseFlexibleNumber(raw: String): Double? {
+    val text = raw.trim().replace(",", "")
+    if (text.isEmpty()) return null
+    return when {
+        text.endsWith("万") -> text.removeSuffix("万").toDoubleOrNull()?.times(10_000.0)
+        text.endsWith("亿") -> text.removeSuffix("亿").toDoubleOrNull()?.times(100_000_000.0)
+        else -> text.toDoubleOrNull()
+    }
+}
+
+object FlexibleLongSerializer : KSerializer<Long> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleLong", PrimitiveKind.LONG)
+
+    override fun serialize(encoder: Encoder, value: Long) {
+        encoder.encodeLong(value)
+    }
+
+    override fun deserialize(decoder: Decoder): Long {
+        if (decoder !is JsonDecoder) return decoder.decodeLong()
+        val element = decoder.decodeJsonElement()
+        val primitive = element as? JsonPrimitive ?: return 0L
+        val content = runCatching { primitive.content }.getOrNull() ?: return 0L
+        return parseFlexibleNumber(content)?.toLong() ?: 0L
+    }
+}
+
+object FlexibleIntSerializer : KSerializer<Int> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleInt", PrimitiveKind.INT)
+
+    override fun serialize(encoder: Encoder, value: Int) {
+        encoder.encodeInt(value)
+    }
+
+    override fun deserialize(decoder: Decoder): Int {
+        if (decoder !is JsonDecoder) return decoder.decodeInt()
+        val element = decoder.decodeJsonElement()
+        val primitive = element as? JsonPrimitive ?: return 0
+        val content = runCatching { primitive.content }.getOrNull() ?: return 0
+        return parseFlexibleNumber(content)?.toInt() ?: 0
+    }
+}
+
+object FlexibleStringSerializer : KSerializer<String> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleString", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: String) {
+        encoder.encodeString(value)
+    }
+
+    override fun deserialize(decoder: Decoder): String {
+        if (decoder !is JsonDecoder) return decoder.decodeString()
+        val element = decoder.decodeJsonElement()
+        val primitive = element as? JsonPrimitive ?: return ""
+        return runCatching { primitive.content }.getOrNull() ?: ""
     }
 }
 

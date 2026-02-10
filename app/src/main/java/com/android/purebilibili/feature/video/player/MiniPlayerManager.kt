@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import com.android.purebilibili.core.util.Logger
 import android.view.ViewGroup
 import androidx.compose.runtime.getValue
@@ -36,6 +37,7 @@ import coil.size.Scale
 import coil.transform.RoundedCornersTransformation
 import com.android.purebilibili.R
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +50,40 @@ private const val TAG = "MiniPlayerManager"
 private const val NOTIFICATION_ID = 1002
 private const val CHANNEL_ID = "mini_player_channel"
 private const val THEME_COLOR = 0xFFFB7299.toInt()
+private const val FOREGROUND_START_DEBOUNCE_MS = 1500L
+
+internal fun shouldShowInAppMiniPlayerByPolicy(
+    mode: SettingsManager.MiniPlayerMode,
+    isActive: Boolean,
+    isNavigatingToVideo: Boolean,
+    stopPlaybackOnExit: Boolean
+): Boolean {
+    if (stopPlaybackOnExit) return false
+    return mode == SettingsManager.MiniPlayerMode.IN_APP_ONLY && isActive && !isNavigatingToVideo
+}
+
+internal fun shouldEnterPipByPolicy(
+    mode: SettingsManager.MiniPlayerMode,
+    isActive: Boolean,
+    stopPlaybackOnExit: Boolean
+): Boolean {
+    if (stopPlaybackOnExit) return false
+    return mode == SettingsManager.MiniPlayerMode.SYSTEM_PIP && isActive
+}
+
+internal fun shouldContinueBackgroundAudioByPolicy(
+    mode: SettingsManager.MiniPlayerMode,
+    isActive: Boolean,
+    isLeavingByNavigation: Boolean,
+    stopPlaybackOnExit: Boolean
+): Boolean {
+    if (stopPlaybackOnExit) return false
+    return when (mode) {
+        SettingsManager.MiniPlayerMode.OFF -> isActive && !isLeavingByNavigation
+        SettingsManager.MiniPlayerMode.IN_APP_ONLY -> false
+        SettingsManager.MiniPlayerMode.SYSTEM_PIP -> false
+    }
+}
 
 /**
  *  全局小窗管理器
@@ -198,6 +234,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
     var progress by mutableFloatStateOf(0f)
         private set
 
+    @Volatile
+    private var playbackServiceRequested = false
+    @Volatile
+    private var lastForegroundStartAtMs = 0L
+
     // --- 当前视频信息 ---
     var currentBvid by mutableStateOf<String?>(null)
         private set
@@ -255,6 +296,26 @@ class MiniPlayerManager private constructor(private val context: Context) :
     //  [修复2] 检查是否有外部播放器
     val hasExternalPlayer: Boolean
         get() = _externalPlayer != null
+
+    /**
+     * 判断指定 player 是否仍由 MiniPlayerManager 持有。
+     * 仅用于销毁阶段的身份校验，避免误保留旧实例。
+     */
+    fun isPlayerManaged(target: ExoPlayer): Boolean {
+        return _externalPlayer === target || _player === target
+    }
+
+    /**
+     * 仅当外部播放器引用匹配目标实例时才清理，避免误清理新播放器引用。
+     */
+    fun clearExternalPlayerIfMatches(target: ExoPlayer): Boolean {
+        if (_externalPlayer === target) {
+            Logger.d(TAG, "clearExternalPlayerIfMatches: cleared external player ${target.hashCode()}")
+            _externalPlayer = null
+            return true
+        }
+        return false
+    }
     
     //  [修复2] 清除外部播放器引用（从小窗返回全屏时调用）
     fun resetExternalPlayer() {
@@ -330,8 +391,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun shouldShowInAppMiniPlayer(): Boolean {
         val mode = getCurrentMode()
-        val result = mode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY 
-            && isActive && !isNavigatingToVideo
+        val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
+        val result = shouldShowInAppMiniPlayerByPolicy(
+            mode = mode,
+            isActive = isActive,
+            isNavigatingToVideo = isNavigatingToVideo,
+            stopPlaybackOnExit = stopPlaybackOnExit
+        )
         Logger.d(TAG, "📲 shouldShowInAppMiniPlayer: mode=$mode, isActive=$isActive, navigating=$isNavigatingToVideo, result=$result")
         return result
     }
@@ -341,7 +407,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun shouldEnterPip(): Boolean {
         val mode = getCurrentMode()
-        val result = mode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP && isActive
+        val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
+        val result = shouldEnterPipByPolicy(
+            mode = mode,
+            isActive = isActive,
+            stopPlaybackOnExit = stopPlaybackOnExit
+        )
         Logger.d(TAG, " shouldEnterPip: mode=$mode, isActive=$isActive, result=$result")
         return result
     }
@@ -355,20 +426,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun shouldContinueBackgroundAudio(): Boolean {
         val mode = getCurrentMode()
-        return when (mode) {
-            com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF -> {
-                // 默认模式：只有切到桌面（非导航离开）才继续后台播放
-                isActive && !isLeavingByNavigation
-            }
-            com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY -> {
-                // 应用内小窗模式：由小窗接管，不需要后台音频
-                false
-            }
-            com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP -> {
-                // 画中画模式：由 PiP 接管
-                false
-            }
-        }
+        val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
+        return shouldContinueBackgroundAudioByPolicy(
+            mode = mode,
+            isActive = isActive,
+            isLeavingByNavigation = isLeavingByNavigation,
+            stopPlaybackOnExit = stopPlaybackOnExit
+        )
     }
     
     /**
@@ -391,7 +455,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
         // 原因：ON_PAUSE 事件可能在此标志设置之前触发，导致音频继续播放
         // 画中画模式说明："切到桌面进入系统画中画"，返回主页时应停止
         val mode = getCurrentMode()
-        if (mode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF ||
+        val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
+        if (stopPlaybackOnExit ||
+            mode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF ||
             mode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP) {
             Logger.d(TAG, "🔇 ${mode.label}：通过导航离开，立即停止播放")
             // 停止所有播放器（外部和内部）
@@ -401,6 +467,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             // 🔧 [修复] 标记非活跃状态，允许 VideoPlayerState.onDispose 正确释放资源
             // 解决音频泄漏问题：返回首页后音频仍继续播放
             isActive = false
+            playbackServiceRequested = false
             _externalPlayer = null
             Logger.d(TAG, "🔧 标记 isActive=false，清除外部播放器引用")
         }
@@ -588,6 +655,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
         
         isMiniMode = false
         isActive = false
+        playbackServiceRequested = false
+        lastForegroundStartAtMs = 0L
         isPlaying = false  //  [修复] 同步播放状态
         _externalPlayer = null
         currentBvid = null
@@ -949,17 +1018,31 @@ class MiniPlayerManager private constructor(private val context: Context) :
             val notification = builder.build()
             currentNotification = notification
             
-            // 启动前台服务以提升通知优先级
-            if (isActive) {
-                val serviceIntent = Intent(context, PlaybackService::class.java).apply {
-                    action = PlaybackService.ACTION_START_FOREGROUND
-                }
-                androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
-            }
+            requestForegroundServiceIfNeeded()
             
             notificationManager.notify(NOTIFICATION_ID, notification)
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e(TAG, "Failed to show notification", e)
         }
-}
+    }
+
+    private fun requestForegroundServiceIfNeeded() {
+        if (!isActive) return
+        val now = SystemClock.elapsedRealtime()
+        if (playbackServiceRequested && now - lastForegroundStartAtMs < FOREGROUND_START_DEBOUNCE_MS) {
+            return
+        }
+
+        val serviceIntent = Intent(context, PlaybackService::class.java).apply {
+            action = PlaybackService.ACTION_START_FOREGROUND
+        }
+        try {
+            androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent)
+            playbackServiceRequested = true
+            lastForegroundStartAtMs = now
+        } catch (e: Exception) {
+            playbackServiceRequested = false
+            Logger.e(TAG, "Failed to request foreground playback service", e)
+        }
+    }
 }

@@ -1,11 +1,11 @@
 package com.android.purebilibili.feature.video.ui.pager
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,6 +43,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -50,10 +51,13 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
+import com.android.purebilibili.feature.video.danmaku.DanmakuManager
+import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.overlay.PortraitFullscreenOverlay
@@ -85,10 +89,30 @@ fun PortraitVideoPager(
     commentViewModel: VideoCommentViewModel,
     initialStartPositionMs: Long = 0L,
     onProgressUpdate: (Long) -> Unit = {},
-    onUserClick: (Long) -> Unit
+    onUserClick: (Long) -> Unit,
+    onRotateToLandscape: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val danmakuManager = rememberDanmakuManager()
+    val danmakuEnabled by SettingsManager
+        .getDanmakuEnabled(context)
+        .collectAsState(initial = true)
+    val danmakuOpacity by SettingsManager
+        .getDanmakuOpacity(context)
+        .collectAsState(initial = 0.85f)
+    val danmakuFontScale by SettingsManager
+        .getDanmakuFontScale(context)
+        .collectAsState(initial = 1.0f)
+    val danmakuSpeed by SettingsManager
+        .getDanmakuSpeed(context)
+        .collectAsState(initial = 1.0f)
+    val danmakuDisplayArea by SettingsManager
+        .getDanmakuArea(context)
+        .collectAsState(initial = 0.5f)
+    val danmakuMergeDuplicates by SettingsManager
+        .getDanmakuMergeDuplicates(context)
+        .collectAsState(initial = true)
 
     // 构造页面列表：第一个是当前视频，后续是推荐视频
     // 构造页面列表：第一个是当前视频，后续是推荐视频
@@ -129,7 +153,14 @@ fun PortraitVideoPager(
 
     // [状态] 当前播放的视频 URL
     var currentPlayingBvid by remember { mutableStateOf<String?>(null) }
+    var currentPlayingCid by remember { mutableStateOf(0L) }
+    var currentPlayingAid by remember { mutableStateOf(0L) }
     var isLoading by remember { mutableStateOf(false) }
+
+    DisposableEffect(exoPlayer) {
+        danmakuManager.attachPlayer(exoPlayer)
+        onDispose { }
+    }
 
     // [逻辑] 切换视频源
     LaunchedEffect(pagerState.currentPage) {
@@ -148,8 +179,11 @@ fun PortraitVideoPager(
         // 停止上一个播放
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
+        danmakuManager.clear()
         isLoading = true
         currentPlayingBvid = bvid
+        currentPlayingCid = 0L
+        currentPlayingAid = aid
 
         // 加载新视频
         launch {
@@ -161,7 +195,7 @@ fun PortraitVideoPager(
                 )
                 
                 result.fold(
-                    onSuccess = { (_, playData) ->
+                    onSuccess = { (info, playData) ->
                         val videoUrl = playData.dash?.video?.firstOrNull()?.baseUrl 
                             ?: playData.durl?.firstOrNull()?.url
                         val audioUrl = playData.dash?.audio?.firstOrNull()?.baseUrl
@@ -187,6 +221,8 @@ fun PortraitVideoPager(
 
                             // [修复] 再次检查是否仍然是当前应该播放的视频，防止快速滑动时的竞态条件
                             if (currentPlayingBvid == bvid) {
+                                currentPlayingCid = info.cid
+                                currentPlayingAid = info.aid
                                 exoPlayer.setMediaSource(finalSource)
                                 exoPlayer.prepare()
                                 
@@ -221,6 +257,32 @@ fun PortraitVideoPager(
         }
     }
 
+    LaunchedEffect(currentPlayingCid, currentPlayingAid, danmakuEnabled, exoPlayer) {
+        if (currentPlayingCid > 0 && danmakuEnabled) {
+            danmakuManager.isEnabled = true
+            var durationMs = exoPlayer.duration
+            var retries = 0
+            while (durationMs <= 0 && retries < 50) {
+                delay(100)
+                durationMs = exoPlayer.duration
+                retries++
+            }
+            danmakuManager.loadDanmaku(currentPlayingCid, currentPlayingAid, durationMs.coerceAtLeast(0L))
+        } else {
+            danmakuManager.isEnabled = false
+        }
+    }
+
+    LaunchedEffect(danmakuOpacity, danmakuFontScale, danmakuSpeed, danmakuDisplayArea, danmakuMergeDuplicates) {
+        danmakuManager.updateSettings(
+            opacity = danmakuOpacity,
+            fontScale = danmakuFontScale,
+            speed = danmakuSpeed,
+            displayArea = danmakuDisplayArea,
+            mergeDuplicates = danmakuMergeDuplicates
+        )
+    }
+
     VerticalPager(
         state = pagerState,
         modifier = Modifier
@@ -239,7 +301,10 @@ fun PortraitVideoPager(
                 exoPlayer = exoPlayer, // [核心] 传递共享播放器
                 currentPlayingBvid = currentPlayingBvid, // [修复] 传递当前播放的 BVID 用于校验
                 isLoading = if (page == pagerState.currentPage) isLoading else false, // 只有当前页显示 Loading
-                onUserClick = onUserClick
+                danmakuManager = danmakuManager,
+                danmakuEnabled = danmakuEnabled,
+                onUserClick = onUserClick,
+                onRotateToLandscape = onRotateToLandscape
             )
         }
     }
@@ -256,17 +321,35 @@ private fun VideoPageItem(
     exoPlayer: ExoPlayer,
     currentPlayingBvid: String?, // [新增]
     isLoading: Boolean,
-    onUserClick: (Long) -> Unit
+    danmakuManager: DanmakuManager,
+    danmakuEnabled: Boolean,
+    onUserClick: (Long) -> Unit,
+    onRotateToLandscape: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     
     // [修复] 手动监听 ExoPlayer 播放状态，确保 UI 及时更新
     var isPlaying by remember { mutableStateOf(exoPlayer.isPlaying) }
+    var currentVideoAspect by remember {
+        mutableFloatStateOf(
+            exoPlayer.videoSize
+                .takeIf { it.width > 0 && it.height > 0 }
+                ?.let { it.width.toFloat() / it.height.toFloat() }
+                ?: (16f / 9f)
+        )
+    }
     
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying_: Boolean) {
                 isPlaying = isPlaying_
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    currentVideoAspect = videoSize.width.toFloat() / videoSize.height.toFloat()
+                }
             }
         }
         exoPlayer.addListener(listener)
@@ -351,6 +434,7 @@ private fun VideoPageItem(
                     onDragEnd = {
                         if (isCurrentPage && isSeekGesture) {
                             exoPlayer.seekTo(seekTargetPosition.toLong())
+                            danmakuManager.seekTo(seekTargetPosition.toLong())
                             isSeekGesture = false
                         }
                     },
@@ -369,21 +453,68 @@ private fun VideoPageItem(
         // 否则显示封面
         
         if (isCurrentPage && isPlayerReadyForThisVideo) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = exoPlayer
-                        useController = false
-                        setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                    }
-                },
-                update = { view ->
-                    if (view.player != exoPlayer) {
-                        view.player = exoPlayer
-                    }
-                },
+            BoxWithConstraints(
                 modifier = Modifier.fillMaxSize()
-            )
+            ) {
+                val safeAspect = currentVideoAspect.coerceAtLeast(0.1f)
+                val containerAspect = if (maxHeight.value > 0f) {
+                    maxWidth.value / maxHeight.value
+                } else {
+                    safeAspect
+                }
+                val viewportHeight = if (safeAspect > containerAspect) {
+                    maxWidth / safeAspect
+                } else {
+                    maxHeight
+                }
+                val viewportWidth = if (safeAspect > containerAspect) {
+                    maxWidth
+                } else {
+                    maxHeight * safeAspect
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(
+                            width = viewportWidth.coerceAtMost(maxWidth),
+                            height = viewportHeight.coerceAtMost(maxHeight)
+                        )
+                        .align(Alignment.Center)
+                ) {
+                    AndroidView(
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                player = exoPlayer
+                                useController = false
+                                setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
+                            }
+                        },
+                        update = { view ->
+                            if (view.player != exoPlayer) {
+                                view.player = exoPlayer
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    if (danmakuEnabled) {
+                        AndroidView(
+                            factory = { ctx ->
+                                com.bytedance.danmaku.render.engine.DanmakuView(ctx).apply {
+                                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                    danmakuManager.attachView(this)
+                                }
+                            },
+                            update = { view ->
+                                if (view.width > 0 && view.height > 0) {
+                                    danmakuManager.attachView(view)
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
         }
 
         // 封面图 (在加载中、未匹配到视频、或未开始播放时显示)
@@ -496,7 +627,7 @@ private fun VideoPageItem(
             currentSpeed = 1.0f,
             currentQualityLabel = "高清",
             currentRatio = VideoAspectRatio.FIT,
-            danmakuEnabled = true,
+            danmakuEnabled = danmakuEnabled,
             isStatusBarHidden = true,
             
             onBack = onBack,
@@ -505,16 +636,30 @@ private fun VideoPageItem(
                     if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                 }
             },
-            onSeek = { pos -> if (isCurrentPage) exoPlayer.seekTo(pos) },
+            onSeek = {
+                if (isCurrentPage) {
+                    exoPlayer.seekTo(it)
+                    danmakuManager.seekTo(it)
+                }
+            },
             onSeekStart = { },
             onSpeedClick = { },
             onQualityClick = { },
             onRatioClick = { },
-            onDanmakuToggle = { },
-            onDanmakuInputClick = { 
-                Toast.makeText(context, "暂不可用，后续更新", Toast.LENGTH_SHORT).show() 
+            onDanmakuToggle = {
+                val next = !danmakuEnabled
+                danmakuManager.isEnabled = next
+                scope.launch {
+                    SettingsManager.setDanmakuEnabled(context, next)
+                }
+            },
+            onDanmakuInputClick = {
+                if (isCurrentPage) {
+                    viewModel.showDanmakuSendDialog()
+                }
             },
             onToggleStatusBar = { },
+            onRotateToLandscape = onRotateToLandscape,
             
             showControls = isOverlayVisible && !showCommentSheet && !showDetailSheet
         )

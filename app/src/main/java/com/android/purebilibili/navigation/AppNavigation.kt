@@ -58,7 +58,8 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
 import com.android.purebilibili.core.ui.LocalBottomBarVisible
-import androidx.compose.ui.platform.LocalConfiguration // [新增]
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.shouldUseSidebarNavigationForLayout
 // import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass (Removed)
 // import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass (Removed)
 // import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass (Removed)
@@ -191,18 +192,17 @@ fun AppNavigation(
         val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(initial = com.android.purebilibili.core.store.HomeSettings())
 
         // 平板侧边栏模式 (替代 WindowSizeClass)
-        val configuration = LocalConfiguration.current
-        val screenWidthDp = configuration.screenWidthDp.dp
+        val windowSizeClass = LocalWindowSizeClass.current
         
         // [修复] 平板模式下，仅当用户开启侧边栏设置时才使用侧边导航
         val tabletUseSidebar by SettingsManager.getTabletUseSidebar(context).collectAsState(initial = false)
         
-        // Expanded width starts at 840dp according to Material Design 3
-        val useSideNavigation = screenWidthDp >= 840.dp && tabletUseSidebar
+        // 统一侧边栏判定策略：600dp+ 且用户开启侧边栏
+        val useSideNavigation = shouldUseSidebarNavigationForLayout(windowSizeClass, tabletUseSidebar)
 
         // [修复] 平板模式下(宽度>=600dp)，进入设置页(Settings.route)时隐藏底栏
         // 因为平板设置页使用 SplitLayout，已经有自己的内部导航结构，不需要底栏
-        val isTabletLayout = screenWidthDp >= 600.dp
+        val isTabletLayout = windowSizeClass.isTablet
         val isSettingsScreen = currentRoute == ScreenRoutes.Settings.route
         val shouldHideBottomBarOnTablet = isTabletLayout && isSettingsScreen
 

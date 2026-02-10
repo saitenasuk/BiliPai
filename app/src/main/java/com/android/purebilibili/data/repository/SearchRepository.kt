@@ -49,7 +49,11 @@ object SearchRepository {
 
             val response = api.search(signedParams)
             if (response.code != 0) {
-                return@withContext Result.failure(createSearchError(response.code, response.message))
+                com.android.purebilibili.core.util.Logger.w(
+                    "SearchRepo",
+                    "search(video) primary api failed: code=${response.code}, msg=${response.message}, fallback=all/v2"
+                )
+                return@withContext searchVideoFallback(keyword = keyword, page = page)
             }
             
             val videoList = response.data?.result
@@ -71,7 +75,12 @@ object SearchRepository {
             Result.success(Pair(videoList, pageInfo))
         } catch (e: Exception) {
             e.printStackTrace()
-            Result.failure(e)
+            com.android.purebilibili.core.util.Logger.e(
+                "SearchRepo",
+                "search(video) primary api exception, fallback=all/v2",
+                e
+            )
+            searchVideoFallback(keyword = keyword, page = page)
         }
     }
     
@@ -296,14 +305,66 @@ object SearchRepository {
     }
 
     private suspend fun signWithWbi(params: Map<String, String>): Map<String, String> {
-        val navResp = navApi.getNavInfo()
-        val wbiImg = navResp.data?.wbi_img
-        val imgKey = wbiImg?.img_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
-        val subKey = wbiImg?.sub_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
-        return if (imgKey.isNotEmpty() && subKey.isNotEmpty()) {
-            WbiUtils.sign(params, imgKey, subKey)
-        } else {
+        return try {
+            val navResp = navApi.getNavInfo()
+            val wbiImg = navResp.data?.wbi_img
+            val imgKey = wbiImg?.img_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
+            val subKey = wbiImg?.sub_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
+            if (imgKey.isNotEmpty() && subKey.isNotEmpty()) {
+                WbiUtils.sign(params, imgKey, subKey)
+            } else {
+                com.android.purebilibili.core.util.Logger.w(
+                    "SearchRepo",
+                    "signWithWbi: missing img/sub key, use unsigned params"
+                )
+                params
+            }
+        } catch (e: Exception) {
+            com.android.purebilibili.core.util.Logger.e(
+                "SearchRepo",
+                "signWithWbi: failed to load nav/wbi keys, use unsigned params",
+                e
+            )
             params
+        }
+    }
+
+    private suspend fun searchVideoFallback(
+        keyword: String,
+        page: Int
+    ): Result<Pair<List<VideoItem>, SearchPageInfo>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.searchAll(
+                    mapOf(
+                        "keyword" to keyword,
+                        "page" to page.toString()
+                    )
+                )
+
+                val videos = response.data?.result
+                    ?.firstOrNull { it.result_type == "video" }
+                    ?.data
+                    ?.map { it.toVideoItem() }
+                    ?: emptyList()
+
+                val pageInfo = SearchPageInfo(
+                    currentPage = page,
+                    totalPages = if (videos.size >= 20) page + 1 else page,
+                    totalResults = videos.size,
+                    hasMore = videos.size >= 20
+                )
+
+                com.android.purebilibili.core.util.Logger.d(
+                    "SearchRepo",
+                    "search(video) fallback result: size=${videos.size}, page=${pageInfo.currentPage}, hasMore=${pageInfo.hasMore}"
+                )
+
+                Result.success(Pair(videos, pageInfo))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Result.failure(e)
+            }
         }
     }
 

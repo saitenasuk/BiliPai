@@ -27,7 +27,6 @@ import androidx.media3.common.Player
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.session.MediaSession
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -65,11 +64,6 @@ class VideoPlayerState(
 ) {
     // 🎯 [修复] 使用 MiniPlayerManager 管理的全局 MediaSession
     private val miniPlayerManager = MiniPlayerManager.getInstance(context)
-    val mediaSession: MediaSession get() = miniPlayerManager.mediaSession ?: run {
-        // 安全回退，通常 MiniPlayerManager 会在 attachPlayer 期间创建 session
-        miniPlayerManager.ensurePlayer() // 这会确保产生一个 session
-        miniPlayerManager.mediaSession!!
-    }
     // 📱 竖屏视频状态 - 双重验证机制
     // 来源1: API dimension 字段（预判断，快速可用）
     // 来源2: 播放器 onVideoSizeChanged（精确验证，需要等待加载）
@@ -222,15 +216,20 @@ fun rememberVideoPlayerState(
 
     //  尝试复用 MiniPlayerManager 中已加载的 player
     val miniPlayerManager = MiniPlayerManager.getInstance(context)
-    val reuseFromMiniPlayer = miniPlayerManager.isActive && miniPlayerManager.currentBvid == bvid
+    // 仅在页面进入时判断一次，避免 setVideoInfo 更新状态后触发“同页重建 player”
+    val reuseFromMiniPlayerAtEntry = remember(bvid) {
+        miniPlayerManager.isActive &&
+            miniPlayerManager.currentBvid == bvid &&
+            miniPlayerManager.player != null
+    }
     
     //  [修复] 添加唯一 key 强制在每次进入时重新创建 player
     // 解决重复打开同一视频时 player 已被释放导致无声音的问题
     val playerCreationKey = remember { System.currentTimeMillis() }
     
-    val player = remember(context, bvid, reuseFromMiniPlayer, playerCreationKey) {
+    val player = remember(context, bvid, playerCreationKey) {
         // 如果小窗有这个视频的 player，直接复用
-        if (reuseFromMiniPlayer) {
+        if (reuseFromMiniPlayerAtEntry) {
             miniPlayerManager.player?.also {
                 com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " 复用小窗 player: bvid=$bvid")
             }
@@ -334,31 +333,28 @@ fun rememberVideoPlayerState(
         }
     }
 
-    DisposableEffect(player, holder.mediaSession) {
+    DisposableEffect(player) {
         onDispose {
             //  [新增] 保存播放进度到 ViewModel 缓存
             viewModel.saveCurrentPosition()
             
             //  检查是否有小窗在使用这个 player
             val miniPlayerManager = MiniPlayerManager.getInstance(context)
-            //  [修复] 使用 isActive 和 hasExternalPlayer 来判断是否保留 player
-            // isMiniMode 可能还没有被设置（AppNavigation.onDispose 可能在之后执行）
-            // 但如果 isActive 为 true b且当前 player 是被引用的外部 player，则不释放
-            val shouldKeepPlayer = miniPlayerManager.isActive && miniPlayerManager.hasExternalPlayer
+            // 仅当当前实例仍被 MiniPlayerManager 持有时才保留
+            val shouldKeepPlayer = miniPlayerManager.isActive && miniPlayerManager.isPlayerManaged(player)
             
             if (shouldKeepPlayer) {
                 // 小窗模式下不释放 player，只释放其他资源
-                com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " 小窗正在使用此 player，不释放")
+                com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " MiniPlayerManager 正在使用此 player，不释放")
             } else {
                 // 正常释放所有资源
                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 notificationManager.cancel(NOTIFICATION_ID)
                 
                 com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " 释放所有资源")
-                //  [修复2] 清除外部播放器引用，防止状态混乱
-                miniPlayerManager.resetExternalPlayer()
+                // 仅当引用匹配时才清理，避免误清理新页面正在使用的 player
+                miniPlayerManager.clearExternalPlayerIfMatches(player)
                 holder.release()  // 📱 释放视频尺寸监听器
-                holder.mediaSession.release()
                 player.release()
             }
             
@@ -533,14 +529,14 @@ fun rememberVideoPlayerState(
 
     //  [重构] 合并为单个 LaunchedEffect 确保执行顺序
     // 必须先 attachPlayer，再 loadVideo，否则 ViewModel 中的 exoPlayer 引用无效
-    LaunchedEffect(player, bvid, reuseFromMiniPlayer) {
+    LaunchedEffect(player, bvid, reuseFromMiniPlayerAtEntry) {
         // 1️⃣ 首先绑定 player
         viewModel.attachPlayer(player)
         
         // 2️⃣ 尝试从缓存恢复 UI 状态 (仅当复用播放器时)
         // 解决从小窗/后台返回时的网络请求错误问题
         var restored = false
-        if (reuseFromMiniPlayer) {
+        if (reuseFromMiniPlayerAtEntry) {
             val cachedState = miniPlayerManager.consumeCachedUiState()
             if (cachedState != null && cachedState.info.bvid == bvid) {
                 com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "♻️ Restoring cached UI state for $bvid")

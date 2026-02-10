@@ -100,6 +100,7 @@ fun PortraitFullscreenOverlay(
     onDanmakuToggle: () -> Unit,
     onDanmakuInputClick: () -> Unit,
     onToggleStatusBar: () -> Unit,
+    onRotateToLandscape: () -> Unit,
     
     modifier: Modifier = Modifier
 ) {
@@ -121,7 +122,8 @@ fun PortraitFullscreenOverlay(
                     onBack = onBack,
                     viewCount = statView,
                     isStatusBarHidden = isStatusBarHidden,
-                    onToggleStatusBar = onToggleStatusBar
+                    onToggleStatusBar = onToggleStatusBar,
+                    onRotateToLandscape = onRotateToLandscape
                 )
 
                 // 2. 右侧互动栏 (不再包含头像)
@@ -197,7 +199,8 @@ private fun PortraitTopControlBar(
     onBack: () -> Unit,
     viewCount: Int,
     isStatusBarHidden: Boolean,
-    onToggleStatusBar: () -> Unit
+    onToggleStatusBar: () -> Unit,
+    onRotateToLandscape: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -234,6 +237,16 @@ private fun PortraitTopControlBar(
         Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Text(
+                text = "横屏",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onRotateToLandscape() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
              Icon(
                  imageVector = Icons.Rounded.Search,
                  contentDescription = "搜索",

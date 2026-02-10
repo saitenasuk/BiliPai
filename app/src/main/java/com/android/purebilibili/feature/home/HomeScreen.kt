@@ -374,7 +374,10 @@ fun HomeScreen(
     
     //  📐 [大屏适配] 平板导航模式：根据用户偏好决定
     // 仅在平板且用户选择了侧边栏时使用侧边导航
-    val useSideNavigation = windowSizeClass.isExpandedScreen && tabletUseSidebar
+    val useSideNavigation = com.android.purebilibili.core.util.shouldUseSidebarNavigationForLayout(
+        windowSizeClass = windowSizeClass,
+        tabletUseSidebar = tabletUseSidebar
+    )
     
     //  📱 [切换导航模式] 处理函数
     val onToggleNavigationMode: () -> Unit = {

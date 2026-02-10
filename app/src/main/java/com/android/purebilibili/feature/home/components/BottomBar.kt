@@ -597,6 +597,13 @@ internal fun resolveBottomBarSurfaceColor(
     return surfaceColor.copy(alpha = alpha)
 }
 
+internal fun shouldUseHomeCombinedClickable(
+    item: BottomNavItem,
+    isSelected: Boolean
+): Boolean {
+    return item == BottomNavItem.HOME && isSelected
+}
+
 @Composable
 private fun BottomBarContent(
     visibleItems: List<BottomNavItem>,
@@ -833,8 +840,8 @@ private fun BottomBarItem(
             .fillMaxHeight()
             .offset(y = contentVerticalOffset)
             .then(
-                // 保持原样
-                if (item == BottomNavItem.HOME) {
+                // 仅当“当前已在首页”时保留双击手势，避免从其他页切首页产生点击延迟
+                if (shouldUseHomeCombinedClickable(item, isSelected)) {
                     Modifier.combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

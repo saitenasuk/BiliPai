@@ -45,6 +45,8 @@ data class PlayerProgress(
     val buffered: Long = 0L
 )
 
+internal fun shouldShowAspectRatioButtonInControlBar(isFullscreen: Boolean): Boolean = isFullscreen
+
 @Composable
 fun BottomControlBar(
     isPlaying: Boolean,
@@ -213,6 +215,17 @@ fun BottomControlBar(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable(onClick = onSpeedClick)
                 )
+
+                // 📺 横屏全屏模式下显示画面比例按钮
+                if (shouldShowAspectRatioButtonInControlBar(isFullscreen)) {
+                    Text(
+                        text = currentRatio.displayName,
+                        color = if (currentRatio == VideoAspectRatio.FIT) Color.White else MaterialTheme.colorScheme.primary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable(onClick = onRatioClick)
+                    )
+                }
 
                 // 📱 [修复] 竖屏全屏按钮 - 仅在非全屏模式下显示
                 if (!isFullscreen) {
