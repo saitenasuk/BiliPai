@@ -10,7 +10,6 @@ import com.android.purebilibili.BuildConfig
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.concurrent.ConcurrentLinkedDeque
 
 /**
  *  统一日志工具类
@@ -79,9 +78,13 @@ object Logger {
 object LogCollector {
     
     private const val MAX_ENTRIES = 1000
-    private val buffer = ConcurrentLinkedDeque<LogEntry>()
+    private const val DUPLICATE_SUPPRESS_WINDOW_MS = 250L
+    private val lock = Any()
+    private val buffer = ArrayDeque<LogEntry>(MAX_ENTRIES)
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
     private val fileDateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+    private var lastEntryFingerprint: String? = null
+    private var lastEntryTimestamp: Long = 0L
     
     /**
      * 日志条目
@@ -99,24 +102,38 @@ object LogCollector {
     }
     
     /**
-     * 添加日志条目（带隐私过滤）
+     * 添加日志条目（轻量路径，脱敏延后到导出）
      */
     fun add(level: String, tag: String, message: String) {
-        //  隐私过滤：脱敏敏感信息
-        val sanitizedMessage = sanitizeMessage(message)
-        
-        val entry = LogEntry(
-            timestamp = System.currentTimeMillis(),
-            level = level,
-            tag = tag,
-            message = sanitizedMessage
-        )
-        
-        buffer.addLast(entry)
-        
-        // 保持缓冲区大小
-        while (buffer.size > MAX_ENTRIES) {
-            buffer.pollFirst()
+        val now = System.currentTimeMillis()
+        val fingerprint = "$level|$tag|$message"
+        synchronized(lock) {
+            // 高频重复日志直接抑制，避免日志风暴拖垮主线程
+            if (fingerprint == lastEntryFingerprint &&
+                now - lastEntryTimestamp <= DUPLICATE_SUPPRESS_WINDOW_MS) {
+                lastEntryTimestamp = now
+                return
+            }
+
+            lastEntryFingerprint = fingerprint
+            lastEntryTimestamp = now
+
+            buffer.addLast(
+                LogEntry(
+                    timestamp = now,
+                    level = level,
+                    tag = tag,
+                    message = message
+                )
+            )
+
+            while (buffer.size > MAX_ENTRIES) {
+                if (buffer.isNotEmpty()) {
+                    buffer.removeFirst()
+                } else {
+                    break
+                }
+            }
         }
     }
     
@@ -263,18 +280,22 @@ object LogCollector {
     /**
      * 获取所有日志条目
      */
-    fun getEntries(): List<LogEntry> = buffer.toList()
+    fun getEntries(): List<LogEntry> = synchronized(lock) { buffer.toList() }
     
     /**
      * 获取日志条目数量
      */
-    fun getCount(): Int = buffer.size
+    fun getCount(): Int = synchronized(lock) { buffer.size }
     
     /**
      * 清空日志
      */
     fun clear() {
-        buffer.clear()
+        synchronized(lock) {
+            buffer.clear()
+            lastEntryFingerprint = null
+            lastEntryTimestamp = 0L
+        }
     }
     
     /**
@@ -304,7 +325,9 @@ object LogCollector {
                 appendLine()
             }
             
-            val content = header + entries.joinToString("\n") { it.format() }
+            val content = header + entries.joinToString("\n") { entry ->
+                entry.copy(message = sanitizeMessage(entry.message)).format()
+            }
             val fileName = "bilipai_log_${fileDateFormat.format(Date())}.txt"
             
             //  [优化] 保存到外部 Download 目录，MT 管理器可直接访问

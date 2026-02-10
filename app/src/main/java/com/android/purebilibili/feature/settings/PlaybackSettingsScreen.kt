@@ -102,6 +102,8 @@ fun PlaybackSettingsContent(
         .getMiniPlayerMode(context).collectAsState(
             initial = com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF
         )
+    val stopPlaybackOnExit by com.android.purebilibili.core.store.SettingsManager
+        .getStopPlaybackOnExit(context).collectAsState(initial = false)
     
     // ... [保留原有逻辑: checkPipPermission, gotoPipSettings] ...
     
@@ -207,24 +209,51 @@ fun PlaybackSettingsContent(
             item {
                 Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
                     val scope = rememberCoroutineScope()
-                    
-                    // 🔄 [简化] 只有两种模式：默认 和 画中画
-                    val modeOptions = com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.entries
                     var isExpanded by remember { mutableStateOf(false) }
+
+                    LaunchedEffect(stopPlaybackOnExit) {
+                        if (stopPlaybackOnExit) {
+                            isExpanded = false
+                        }
+                    }
+
+                    // 小窗播放模式（3 种）
+                    val modeOptions = com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.entries
                     
                     IOSGroup {
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Pip,
+                            title = "离开播放页后停止",
+                            subtitle = "不进入小窗/画中画，也不保留后台播放",
+                            checked = stopPlaybackOnExit,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setStopPlaybackOnExit(context, it)
+                                }
+                            },
+                            iconTint = iOSOrange
+                        )
+                        Divider()
+
                         //  点击展开模式选择
                         IOSClickableItem(
                             icon = CupertinoIcons.Default.Pip,
                             title = "后台播放模式",
-                            value = miniPlayerMode.label,
-                            onClick = { isExpanded = !isExpanded },
-                            iconTint = iOSTeal
+                            value = if (stopPlaybackOnExit) "已覆盖：离开即停止" else miniPlayerMode.label,
+                            onClick = if (stopPlaybackOnExit) null else ({ isExpanded = !isExpanded }),
+                            iconTint = if (stopPlaybackOnExit) iOSSystemGray else iOSTeal,
+                            textColor = if (stopPlaybackOnExit) {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            showChevron = !stopPlaybackOnExit
                         )
                         
-                        //  展开的模式选择列表（简化为2选项）
+                        //  展开的模式选择列表
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = isExpanded,
+                            visible = isExpanded && !stopPlaybackOnExit,
                             enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
                             exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
                         ) {
@@ -288,7 +317,8 @@ fun PlaybackSettingsContent(
                         }
                         
                         //  权限提示（仅当选择系统PiP且无权限时显示）
-                        if (miniPlayerMode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP 
+                        if (!stopPlaybackOnExit &&
+                            miniPlayerMode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP
                             && !checkPipPermission()) {
                             Divider()
                             Row(

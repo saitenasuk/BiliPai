@@ -401,12 +401,22 @@ class PlayerViewModel : ViewModel() {
     
     fun attachPlayer(player: ExoPlayer) {
         val changed = exoPlayer !== player
-        if (changed && exoPlayer != null) saveCurrentPosition()
+        val previousPlayer = exoPlayer
+
+        if (changed && previousPlayer != null) {
+            saveCurrentPosition()
+            // 切换播放器时立即停止旧实例，避免转场期间双播
+            previousPlayer.removeListener(playbackEndListener)
+            previousPlayer.playWhenReady = false
+            previousPlayer.pause()
+        }
+
         exoPlayer = player
         playbackUseCase.attachPlayer(player)
         player.volume = 1.0f
         
-        //  [新增] 添加播放完成监听器
+        // 防止重复添加同一个 listener（同一 player 多次 attach 的场景）
+        player.removeListener(playbackEndListener)
         player.addListener(playbackEndListener)
     }
     

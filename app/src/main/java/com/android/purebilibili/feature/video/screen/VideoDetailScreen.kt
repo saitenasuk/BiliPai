@@ -119,6 +119,7 @@ import com.android.purebilibili.feature.video.ui.components.BottomInputBar // [N
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.feature.video.ui.components.DanmakuContextMenu
+import kotlin.math.abs
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
@@ -408,16 +409,42 @@ fun VideoDetailScreen(
     
     // 🔧 [性能优化] 记录上次设置的 PiP bounds，避免重复设置
     var lastPipBounds by remember { mutableStateOf<android.graphics.Rect?>(null) }
-    var pipParamsInitialized by remember { mutableStateOf(false) }
+    var lastPipModeEnabled by remember { mutableStateOf<Boolean?>(null) }
+    var lastPipUpdateElapsedMs by remember { mutableStateOf(0L) }
+    val hasMeaningfulBoundsChange = remember {
+        { oldBounds: android.graphics.Rect?, newBounds: android.graphics.Rect? ->
+            when {
+                oldBounds == null && newBounds == null -> false
+                oldBounds == null || newBounds == null -> true
+                else -> {
+                    abs(oldBounds.left - newBounds.left) > 3 ||
+                        abs(oldBounds.top - newBounds.top) > 3 ||
+                        abs(oldBounds.right - newBounds.right) > 3 ||
+                        abs(oldBounds.bottom - newBounds.bottom) > 3
+                }
+            }
+        }
+    }
     
     LaunchedEffect(videoPlayerBounds, pipModeEnabled) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            // 🔧 [性能优化] 只有 bounds 真正变化或首次初始化时才更新 PiP 参数
-            val boundsChanged = videoPlayerBounds != lastPipBounds
-            if (!boundsChanged && pipParamsInitialized) return@LaunchedEffect
-            
-            lastPipBounds = videoPlayerBounds
-            pipParamsInitialized = true
+            val modeChanged = lastPipModeEnabled == null || lastPipModeEnabled != pipModeEnabled
+            val boundsChanged = hasMeaningfulBoundsChange(lastPipBounds, videoPlayerBounds)
+            if (!modeChanged) {
+                // OFF 模式只在切换当下更新一次，不跟随布局抖动反复设置
+                if (!pipModeEnabled) return@LaunchedEffect
+                if (!boundsChanged) return@LaunchedEffect
+
+                // 对布局连续变化节流，避免每帧 setPictureInPictureParams
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (now - lastPipUpdateElapsedMs < 400L) return@LaunchedEffect
+                lastPipUpdateElapsedMs = now
+            } else {
+                lastPipUpdateElapsedMs = android.os.SystemClock.elapsedRealtime()
+            }
+
+            lastPipBounds = videoPlayerBounds?.let { android.graphics.Rect(it) }
+            lastPipModeEnabled = pipModeEnabled
             
             activity?.let { act ->
                 val pipParamsBuilder = android.app.PictureInPictureParams.Builder()
@@ -436,7 +463,7 @@ fun VideoDetailScreen(
                 
                 act.setPictureInPictureParams(pipParamsBuilder.build())
                 com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", 
-                    " PiP参数更新: autoEnterEnabled=$pipModeEnabled")
+                    " PiP参数更新: autoEnterEnabled=$pipModeEnabled, modeChanged=$modeChanged, boundsChanged=$boundsChanged")
             }
         }
     }
@@ -504,6 +531,18 @@ fun VideoDetailScreen(
     val handlePipClick = {
         // 使用 MiniPlayerManager 进入应用内小窗模式
         miniPlayerManager?.let { manager ->
+            val stopPlaybackOnExit = com.android.purebilibili.core.store.SettingsManager
+                .getStopPlaybackOnExitSync(context)
+            if (stopPlaybackOnExit) {
+                com.android.purebilibili.core.util.Logger.d(
+                    "VideoDetailScreen",
+                    "Stop-on-exit enabled, skip mini mode and leave page directly"
+                )
+                manager.markLeavingByNavigation()
+                onBack()
+                return@let
+            }
+
             //  [埋点] PiP 进入事件
             com.android.purebilibili.core.util.AnalyticsHelper.logPictureInPicture(
                 videoId = currentBvid,
@@ -1375,7 +1414,11 @@ fun VideoDetailScreen(
                         playerState.player.seekTo(pos)
                     }
                 },
-                onUserClick = onUpClick
+                onUserClick = onUpClick,
+                onRotateToLandscape = {
+                    isPortraitFullscreen = false
+                    toggleFullscreen()
+                }
             )
         }
         //  [新增] 投币对话框

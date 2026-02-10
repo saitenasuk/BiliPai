@@ -115,6 +115,8 @@ object SettingsManager {
     private val KEY_BOTTOM_BAR_ITEM_COLORS = stringPreferencesKey("bottom_bar_item_colors")  //  格式: HOME:0,DYNAMIC:1,...
     //  [新增] 评论默认排序（1=回复,2=最新,3=最热,4=点赞）
     private val KEY_COMMENT_DEFAULT_SORT_MODE = intPreferencesKey("comment_default_sort_mode")
+    //  [新增] 离开播放页后停止播放（优先于小窗/画中画模式）
+    private val KEY_STOP_PLAYBACK_ON_EXIT = booleanPreferencesKey("stop_playback_on_exit")
 
     /**
      *  合并首页相关设置为单一 Flow
@@ -1045,6 +1047,28 @@ object SettingsManager {
         val value = context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
             .getInt("mode", MiniPlayerMode.OFF.value)
         return MiniPlayerMode.fromValue(value)
+    }
+
+    /**
+     * 离开播放页后停止播放（优先级高于后台播放模式）
+     * - true: 离开播放页立即停止，不进入小窗/画中画/后台播放
+     * - false: 按后台播放模式执行（默认）
+     */
+    fun getStopPlaybackOnExit(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_STOP_PLAYBACK_ON_EXIT] ?: false }
+
+    suspend fun setStopPlaybackOnExit(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_STOP_PLAYBACK_ON_EXIT] = value
+        }
+        // 同步到 SharedPreferences，供 MiniPlayerManager 同步读取
+        context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .edit().putBoolean("stop_playback_on_exit", value).apply()
+    }
+
+    fun getStopPlaybackOnExitSync(context: Context): Boolean {
+        return context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .getBoolean("stop_playback_on_exit", false)
     }
     
     // ==========  底栏显示模式 ==========

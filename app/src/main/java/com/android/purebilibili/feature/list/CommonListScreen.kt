@@ -52,6 +52,24 @@ import com.android.purebilibili.core.util.rememberResponsiveSpacing
 import com.android.purebilibili.core.util.rememberResponsiveValue
 import com.android.purebilibili.core.util.PinyinUtils
 
+internal enum class FavoriteContentMode {
+    BASE_LIST,
+    SINGLE_FOLDER,
+    PAGER
+}
+
+internal fun resolveFavoriteContentMode(
+    isFavoritePage: Boolean,
+    folderCount: Int
+): FavoriteContentMode {
+    if (!isFavoritePage) return FavoriteContentMode.BASE_LIST
+    return when {
+        folderCount > 1 -> FavoriteContentMode.PAGER
+        folderCount == 1 -> FavoriteContentMode.SINGLE_FOLDER
+        else -> FavoriteContentMode.BASE_LIST
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommonListScreen(
@@ -165,6 +183,10 @@ fun CommonListScreen(
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
     val selectedFolderIndex by favoriteViewModel?.selectedFolderIndex?.collectAsState() 
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val favoriteContentMode = resolveFavoriteContentMode(
+        isFavoritePage = favoriteViewModel != null,
+        folderCount = foldersState.size
+    )
     
     // [新增] Pager State (仅当有多个文件夹时使用)
     // 尽管 compose 会自动处理 rememberKey，但这里用 foldersState.size 作为 key 确保变化时重置
@@ -219,51 +241,73 @@ fun CommonListScreen(
                 .then(if (globalHazeState != null) Modifier.hazeSource(state = globalHazeState) else Modifier)
 
             Box(modifier = contentModifier) {
-                // [新增] 如果是收藏页面且有多个文件夹，显示 HorizontalPager
-                if (favoriteViewModel != null && foldersState.size > 1) {
-                    // [Feature] 联动 Pager -> ViewModel
-                    // 仅当 isUserAction 为 true 时才允许 Pager 驱动 ViewModel 变更
-                    var isUserAction by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                when (favoriteContentMode) {
+                    FavoriteContentMode.PAGER -> {
+                        val favoriteVm = requireNotNull(favoriteViewModel)
+                        // [Feature] 联动 Pager -> ViewModel
+                        // 仅当 isUserAction 为 true 时才允许 Pager 驱动 ViewModel 变更
+                        var isUserAction by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
-                    LaunchedEffect(pagerState) {
-                        pagerState.interactionSource.interactions.collect { interaction ->
-                             if (interaction is androidx.compose.foundation.interaction.DragInteraction.Start) {
-                                 isUserAction = true
-                             }
-                        }
-                    }
-
-                    LaunchedEffect(pagerState) {
-                        snapshotFlow { pagerState.settledPage }
-                            .collect { page ->
-                                if (isUserAction) {
-                                    favoriteViewModel.switchFolder(page)
-                                    isUserAction = false
+                        LaunchedEffect(pagerState) {
+                            pagerState.interactionSource.interactions.collect { interaction ->
+                                if (interaction is androidx.compose.foundation.interaction.DragInteraction.Start) {
+                                    isUserAction = true
                                 }
                             }
-                    }
-                    
-                    // 联动 ViewModel -> Pager (Tab click)
-                    LaunchedEffect(selectedFolderIndex) {
-                        if (pagerState.currentPage != selectedFolderIndex) {
-                            pagerState.animateScrollToPage(selectedFolderIndex)
+                        }
+
+                        LaunchedEffect(pagerState) {
+                            snapshotFlow { pagerState.settledPage }
+                                .collect { page ->
+                                    if (isUserAction) {
+                                        favoriteVm.switchFolder(page)
+                                        isUserAction = false
+                                    }
+                                }
+                        }
+
+                        // 联动 ViewModel -> Pager (Tab click)
+                        LaunchedEffect(selectedFolderIndex) {
+                            if (pagerState.currentPage != selectedFolderIndex) {
+                                pagerState.animateScrollToPage(selectedFolderIndex)
+                            }
+                        }
+
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize(),
+                            beyondViewportPageCount = 1 // 预加载
+                        ) { page ->
+                            // 获取当前页面的状态
+                            val folderUiState by favoriteVm.getFolderUiState(page).collectAsState()
+
+                            // 确保数据加载
+                            LaunchedEffect(page) {
+                                favoriteVm.loadFolder(page)
+                            }
+
+                            // 渲染通用列表内容 (复用下方逻辑，提取为组件)
+                            CommonListContent(
+                                items = folderUiState.items,
+                                isLoading = folderUiState.isLoading,
+                                error = folderUiState.error,
+                                searchQuery = searchQuery,
+                                columns = columns,
+                                spacing = spacing.medium,
+                                padding = PaddingValues(top = headerHeightDp, bottom = scaffoldPadding.calculateBottomPadding()),
+                                onVideoClick = onVideoClick,
+                                onLoadMore = { favoriteVm.loadMoreForFolder(page) },
+                                onUnfavorite = { video -> favoriteVm.removeVideo(video) }
+                            )
                         }
                     }
 
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
-                        beyondViewportPageCount = 1 // 预加载
-                    ) { page ->
-                        // 获取当前页面的状态
-                        val folderUiState by favoriteViewModel.getFolderUiState(page).collectAsState()
-                        
-                        // 确保数据加载
-                        LaunchedEffect(page) {
-                            favoriteViewModel.loadFolder(page)
+                    FavoriteContentMode.SINGLE_FOLDER -> {
+                        val favoriteVm = requireNotNull(favoriteViewModel)
+                        val folderUiState by favoriteVm.getFolderUiState(0).collectAsState()
+                        LaunchedEffect(favoriteVm) {
+                            favoriteVm.loadFolder(0)
                         }
-                        
-                        // 渲染通用列表内容 (复用下方逻辑，提取为组件)
                         CommonListContent(
                             items = folderUiState.items,
                             isLoading = folderUiState.isLoading,
@@ -273,12 +317,12 @@ fun CommonListScreen(
                             spacing = spacing.medium,
                             padding = PaddingValues(top = headerHeightDp, bottom = scaffoldPadding.calculateBottomPadding()),
                             onVideoClick = onVideoClick,
-                             onLoadMore = { favoriteViewModel.loadMoreForFolder(page) },
-                            onUnfavorite = { video -> favoriteViewModel.removeVideo(video) }
+                            onLoadMore = { favoriteVm.loadMoreForFolder(0) },
+                            onUnfavorite = { video -> favoriteVm.removeVideo(video) }
                         )
                     }
-                } else {
-                     CommonListContent(
+
+                    FavoriteContentMode.BASE_LIST -> CommonListContent(
                         items = state.items,
                         isLoading = state.isLoading,
                         error = state.error,
