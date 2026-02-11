@@ -58,6 +58,7 @@ fun SpaceScreen(
     mid: Long,
     onBack: () -> Unit,
     onVideoClick: (String) -> Unit,
+    onDynamicWebClick: (String) -> Unit = {},
     onViewAllClick: (String, Long, Long, String) -> Unit = { _, _, _, _ -> }, // type, id, mid, title
     viewModel: SpaceViewModel = viewModel(),
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -172,6 +173,7 @@ fun SpaceScreen(
                     SpaceContent(
                         state = state,
                         onVideoClick = onVideoClick,
+                        onDynamicWebClick = onDynamicWebClick,
                         onLoadMore = { viewModel.loadMoreVideos() },
                         onCategoryClick = { viewModel.selectCategory(it) },
                         onSortOrderClick = { viewModel.selectSortOrder(it) },
@@ -232,6 +234,7 @@ fun SpaceScreen(
 private fun SpaceContent(
     state: SpaceUiState.Success,
     onVideoClick: (String) -> Unit,
+    onDynamicWebClick: (String) -> Unit,
     onLoadMore: () -> Unit,
     onCategoryClick: (Int) -> Unit,  //  分类点击回调
     onSortOrderClick: (VideoSortOrder) -> Unit,  //  排序点击回调
@@ -639,7 +642,8 @@ private fun SpaceContent(
                         item(key = "dynamic_${dynamic.id_str}", span = { GridItemSpan(maxLineSpan) }) {
                             SpaceDynamicCard(
                                 dynamic = dynamic,
-                                onVideoClick = onVideoClick
+                                onVideoClick = onVideoClick,
+                                onDynamicWebClick = onDynamicWebClick
                             )
                             
                             // 触发加载更多
@@ -2086,17 +2090,27 @@ private fun SpaceHomeNotice(notice: String) {
 @Composable
 private fun SpaceDynamicCard(
     dynamic: SpaceDynamicItem,
-    onVideoClick: (String) -> Unit
+    onVideoClick: (String) -> Unit,
+    onDynamicWebClick: (String) -> Unit
 ) {
     val author = dynamic.modules.module_author
     val content = dynamic.modules.module_dynamic
     val stat = dynamic.modules.module_stat
     
+    val clickAction = remember(dynamic) { resolveSpaceDynamicClickAction(dynamic) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = clickAction != SpaceDynamicClickAction.None) {
+                when (clickAction) {
+                    is SpaceDynamicClickAction.OpenVideo -> onVideoClick(clickAction.bvid)
+                    is SpaceDynamicClickAction.OpenWeb -> onDynamicWebClick(clickAction.url)
+                    SpaceDynamicClickAction.None -> Unit
+                }
+            }
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .padding(12.dp)
     ) {

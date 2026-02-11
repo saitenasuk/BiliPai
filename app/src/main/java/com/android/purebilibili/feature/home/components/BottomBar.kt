@@ -68,6 +68,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.blur
 import androidx.compose.foundation.shape.RoundedCornerShape as RoundedCornerShapeAlias
 import androidx.compose.ui.Modifier.Companion.then
 import dev.chrisbanes.haze.hazeSource
@@ -370,6 +371,13 @@ fun FrostedBottomBar(
     // [Fix] 确保指示器互斥显示的最终逻辑
     // 当底栏停靠时，强制禁用液态玻璃（Liquid Glass），仅使用标准磨砂（Frosted Glass）
     val showGlassEffect = homeSettings.isLiquidGlassEnabled && isFloating
+    // [Refraction] 图标+文字模式下，提高镜片高度并轻微下移，让标签文字稳定进入折射区域
+    val bottomIndicatorHeight = when {
+        labelMode == 0 && isTablet -> 60.dp
+        labelMode == 0 -> 58.dp
+        else -> 54.dp
+    }
+    val bottomIndicatorYOffset = if (labelMode == 0) 2.dp else 0.dp
     
     // 🟢 最外层容器
     Box(
@@ -441,41 +449,59 @@ fun FrostedBottomBar(
                             val scrollValue = scrollState.floatValue
                             val isDark = isSystemInDarkTheme()
 
-                            if (homeSettings.liquidGlassStyle == LiquidGlassStyle.SIMP_MUSIC) {
-                                // [Style: SimpMusic] Adaptive Lens with Vibrancy & Blur
-                                this.simpMusicLiquidGlass(
-                                    backdrop = backdrop,
-                                    shape = barShape,
-                                    onLuminanceChanged = { contentLuminance = it }
-                                )
-                            } else {
-                                // [Style: Classic] BiliPai's Wavy Ripple
-                                // [Visual Tuning] Glass Effect Parameters
-                                // 1. Refraction: Much stronger lens effect for "thick liquid" feel
-                                val dynamicRefractionAmount = 65f + (scrollValue * 0.05f).coerceIn(0f, 40f)
-
-                                this.drawBackdrop(
-                                    backdrop = backdrop,
-                                    shape = { barShape },
-                                    effects = {
-                                        lens(
-                                            refractionHeight = 200f, // Thicker glass lens
-                                            refractionAmount = dynamicRefractionAmount,
-                                            depthEffect = isFloating, // [Fix] Only show 3D rim/depth when floating, flat when docked
-                                            chromaticAberration = true // Enable for both themes for "premium" feel
-                                        )
-                                    },
-                                    onDrawSurface = {
-                                        // [Visual Tuning] Translucency & Readability
-                                        // Increased opacity to ensure text readability while maintaining "glass" look
-                                        // [Optimized] Improved legibility (Deep: 0.5, Light: 0.75)
-                                        val baseAlpha = if (isDark) 0.50f else 0.75f
-                                        val scrollImpact = (scrollValue * 0.0005f).coerceIn(0f, 0.1f)
-                                        val overlayAlpha = baseAlpha + scrollImpact
-
-                                        drawRect(barColor.copy(alpha = overlayAlpha))
-                                    }
-                                )
+                            when (homeSettings.liquidGlassStyle) {
+                                LiquidGlassStyle.SIMP_MUSIC -> {
+                                    // [Style: SimpMusic] Adaptive Lens with Vibrancy & Blur
+                                    this.simpMusicLiquidGlass(
+                                        backdrop = backdrop,
+                                        shape = barShape,
+                                        onLuminanceChanged = { contentLuminance = it }
+                                    )
+                                }
+                                LiquidGlassStyle.IOS26 -> {
+                                    // [Style: iOS26] 恢复随纵向滚动变化的液态折射
+                                    val dynamicRefractionAmount = 44f + (scrollValue * 0.028f).coerceIn(0f, 22f)
+                                    this.drawBackdrop(
+                                        backdrop = backdrop,
+                                        shape = { barShape },
+                                        effects = {
+                                            lens(
+                                                refractionHeight = 148f,
+                                                refractionAmount = dynamicRefractionAmount,
+                                                depthEffect = isFloating,
+                                                chromaticAberration = false
+                                            )
+                                        },
+                                        onDrawSurface = {
+                                            val baseAlpha = if (isDark) 0.46f else 0.63f
+                                            val scrollImpact = (scrollValue * 0.00028f).coerceIn(0f, 0.05f)
+                                            drawRect(barColor.copy(alpha = baseAlpha + scrollImpact))
+                                            drawRect(Color.White.copy(alpha = if (isDark) 0.06f else 0.10f))
+                                        }
+                                    )
+                                }
+                                LiquidGlassStyle.CLASSIC -> {
+                                    // [Style: Classic] BiliPai's Wavy Ripple
+                                    val dynamicRefractionAmount = 65f + (scrollValue * 0.05f).coerceIn(0f, 40f)
+                                    this.drawBackdrop(
+                                        backdrop = backdrop,
+                                        shape = { barShape },
+                                        effects = {
+                                            lens(
+                                                refractionHeight = 200f,
+                                                refractionAmount = dynamicRefractionAmount,
+                                                depthEffect = isFloating,
+                                                chromaticAberration = true
+                                            )
+                                        },
+                                        onDrawSurface = {
+                                            val baseAlpha = if (isDark) 0.50f else 0.75f
+                                            val scrollImpact = (scrollValue * 0.0005f).coerceIn(0f, 0.1f)
+                                            val overlayAlpha = baseAlpha + scrollImpact
+                                            drawRect(barColor.copy(alpha = overlayAlpha))
+                                        }
+                                    )
+                                }
                             }
                         } else if (showGlassEffect && isSupported && hazeState != null) {
                             // [Haze Fallback] Use Haze blur when no backdrop available
@@ -574,15 +600,20 @@ fun FrostedBottomBar(
                             startPadding = rowPadding,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .offset(y = contentVerticalOffset)
+                                .offset(y = contentVerticalOffset + bottomIndicatorYOffset)
                                 .alpha(indicatorAlpha),
+                            indicatorHeight = bottomIndicatorHeight,
                             isLiquidGlassEnabled = showGlassEffect,
-                            lensIntensityBoost = 1.85f,
-                            edgeWarpBoost = 1.92f,
-                            chromaticBoost = 1.75f,
+                            lensIntensityBoost = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) 1.35f else 1.85f,
+                            edgeWarpBoost = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) 1.38f else 1.92f,
+                            chromaticBoost = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) 1.08f else 1.75f,
                             liquidGlassStyle = homeSettings.liquidGlassStyle, // [New] Pass style
                             backdrop = iconBackdrop, // 使用图标层 backdrop，确保滑动时折射图标
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            color = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) {
+                                Color.White.copy(alpha = if (isSystemInDarkTheme()) 0.09f else 0.14f)
+                            } else {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            }
                         )
                     }
                         

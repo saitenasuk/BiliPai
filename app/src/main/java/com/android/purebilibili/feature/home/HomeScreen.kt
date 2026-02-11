@@ -119,6 +119,8 @@ fun HomeScreen(
     onFavoriteClick: () -> Unit = {},  // 收藏页面
     onLiveListClick: () -> Unit = {},  // 直播列表页面
     onWatchLaterClick: () -> Unit = {},  // 稍后再看页面
+    onDownloadClick: () -> Unit = {},  // 离线缓存页面
+    onInboxClick: () -> Unit = {},  // 私信页面
     onStoryClick: () -> Unit = {},  //  [新增] 竖屏短视频
     globalHazeState: dev.chrisbanes.haze.HazeState? = null  //  [新增] 全局底栏模糊状态
 ) {
@@ -143,12 +145,16 @@ fun HomeScreen(
     val homeBackdrop = rememberLayerBackdrop()
 
     val coroutineScope = rememberCoroutineScope() // 用于双击回顶动画
+    // [Header] 首页重选/双击回顶时需要强制恢复顶部，避免自动收缩后残留空白区域
+    var headerOffsetHeightPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     // [新增] 监听全局回顶事件
     val scrollChannel = LocalHomeScrollChannel.current
     LaunchedEffect(scrollChannel) {
         scrollChannel?.receiveAsFlow()?.collect {
             launch {
+                // 双击首页回顶时强制展开顶部，避免收缩头部与回顶状态错位导致空白
+                headerOffsetHeightPx = 0f
                 val gridState = gridStates[state.currentCategory]
                 val isAtTop = gridState == null || (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 50)
 
@@ -164,6 +170,7 @@ fun HomeScreen(
                     }
                     gridState?.animateScrollToItem(0)
                 }
+                headerOffsetHeightPx = 0f
             }
         }
     }
@@ -259,11 +266,20 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(state.refreshNewItemsKey) {
+    LaunchedEffect(state.refreshNewItemsKey, state.refreshNewItemsHandledKey) {
+        val refreshKey = state.refreshNewItemsKey
+        if (!shouldHandleRefreshNewItemsEvent(refreshKey, state.refreshNewItemsHandledKey)) {
+            return@LaunchedEffect
+        }
         val count = state.refreshNewItemsCount ?: return@LaunchedEffect
+        if (state.currentCategory == HomeCategory.RECOMMEND && count > 0) {
+            // 增量刷新插入新内容后强制回到顶部，避免被锚定在刷新前位置。
+            gridStates[HomeCategory.RECOMMEND]?.scrollToItem(0)
+        }
         refreshDeltaTipText = if (count > 0) "新增 $count 条内容" else "暂无新内容"
         // 分割线需等待用户发生下滑后再展示
         if (count > 0) dividerRevealRefreshKey = 0L
+        viewModel.markRefreshNewItemsHandled(refreshKey)
         delay(2200)
         refreshDeltaTipText = null
     }
@@ -465,6 +481,7 @@ fun HomeScreen(
         when (item) {
             BottomNavItem.HOME -> {
                 coroutineScope.launch { 
+                    headerOffsetHeightPx = 0f
                     val gridState = gridStates[state.currentCategory]
                     val isAtTop = gridState == null || (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 50)
                     
@@ -475,8 +492,9 @@ fun HomeScreen(
                         if ((gridState?.firstVisibleItemIndex ?: 0) > 12) {
                             gridState?.scrollToItem(12)
                         }
-                        gridState?.animateScrollToItem(0) 
+                        gridState?.animateScrollToItem(0)
                     } 
+                    headerOffsetHeightPx = 0f
                 }
             }
             BottomNavItem.DYNAMIC -> onDynamicClick()
@@ -610,9 +628,6 @@ fun HomeScreen(
     //  逻辑优化：使用 nestedScrollConnection 监听滚动
     var isHeaderVisible by rememberSaveable { mutableStateOf(true) }
     
-    // [Header Animation] Use raw offset for fluid animation
-    var headerOffsetHeightPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-    
     // Constants
     val topTabStyle = remember(isBottomBarFloating, isBottomBarBlurEnabled, isLiquidGlassEnabled) {
         resolveTopTabStyle(
@@ -705,9 +720,9 @@ fun HomeScreen(
                     onLogout = { /* 登出后由 ProfileScreen 处理 */ },
                     onHistoryClick = onHistoryClick,
                     onFavoriteClick = onFavoriteClick,
-                    onDownloadClick = { /* TODO */ },
+                    onDownloadClick = onDownloadClick,
                     onWatchLaterClick = onWatchLaterClick,
-                    onInboxClick = { /* TODO */ },
+                    onInboxClick = onInboxClick,
                     onSettingsClick = onSettingsClick,
                     onProfileClick = onProfileClick,
                     hazeState = hazeState, // 传递毛玻璃状态
@@ -1196,7 +1211,11 @@ fun HomeScreen(
                 currentItem = currentNavItem,
                 onItemClick = handleNavItemClick,
                 onHomeDoubleTap = {
-                    coroutineScope.launch { gridStates[state.currentCategory]?.animateScrollToItem(0) }
+                    coroutineScope.launch {
+                        headerOffsetHeightPx = 0f
+                        gridStates[state.currentCategory]?.animateScrollToItem(0)
+                        headerOffsetHeightPx = 0f
+                    }
                 },
                 hazeState = if (isBottomBarBlurEnabled) hazeState else null,
                 visibleItems = visibleBottomBarItems,

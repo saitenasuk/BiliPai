@@ -174,6 +174,14 @@ fun AnimationSettingsContent(
                                             onClick = { viewModel.setLiquidGlassStyle(com.android.purebilibili.core.store.LiquidGlassStyle.SIMP_MUSIC) },
                                             modifier = Modifier.weight(1f)
                                         )
+                                        // iOS26
+                                        LiquidGlassStyleCard(
+                                            title = "iOS26",
+                                            subtitle = "层叠液态",
+                                            isSelected = state.liquidGlassStyle == com.android.purebilibili.core.store.LiquidGlassStyle.IOS26,
+                                            onClick = { viewModel.setLiquidGlassStyle(com.android.purebilibili.core.store.LiquidGlassStyle.IOS26) },
+                                            modifier = Modifier.weight(1f)
+                                        )
                                     }
                                 }
                             }

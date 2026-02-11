@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.store.LiquidGlassStyle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -97,5 +98,30 @@ class LiquidLensProfileTest {
 
         assertTrue(stronger.motionFraction > base.motionFraction)
         assertTrue(stronger.refractionAmount > base.refractionAmount)
+    }
+
+    @Test
+    fun `ios26 tuning keeps dynamic lens while controlling color split`() {
+        val classic = resolveLiquidStyleTuning(LiquidGlassStyle.CLASSIC)
+        val ios26 = resolveLiquidStyleTuning(LiquidGlassStyle.IOS26)
+
+        assertTrue(ios26.idleThresholdPxPerSecond > classic.idleThresholdPxPerSecond)
+        assertTrue(ios26.lensIntensityMultiplier > classic.lensIntensityMultiplier)
+        assertTrue(ios26.chromaticMultiplier < classic.chromaticMultiplier)
+        assertTrue(ios26.dragMotionFloor < classic.dragMotionFloor)
+        assertTrue(ios26.deformationMultiplier < classic.deformationMultiplier)
+        assertTrue(ios26.depthEffectEnabled)
+        assertTrue(ios26.allowChromaticAberration)
+    }
+
+    @Test
+    fun `idle state remains non refractive`() {
+        val idle = resolveLiquidLensProfile(
+            isDragging = false,
+            velocityPxPerSecond = 0f
+        )
+
+        assertFalse(idle.shouldRefract)
+        assertEquals(0f, idle.refractionAmount, 0.0001f)
     }
 }

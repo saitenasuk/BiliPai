@@ -94,6 +94,8 @@ data class HomeUiState(
     val refreshNewItemsCount: Int? = null,
     //  [新增] 新增条数提示触发键（用于一次性 UI 动效）
     val refreshNewItemsKey: Long = 0L,
+    //  [新增] 新增条数提示已消费键（防止离开页面后重复弹出）
+    val refreshNewItemsHandledKey: Long = 0L,
     //  [新增] 推荐流旧内容锚点（刷新前首条视频 bvid）
     val recommendOldContentAnchorBvid: String? = null,
     //  [新增] 推荐流中“旧内容起始”索引（用于插入分割线）

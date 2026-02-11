@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.2.1] - 2026-02-11
+
+### 🛠 Improvements & Fixes (优化与修复)
+
+- **Space Dynamic Navigation**: Fixed an issue where image/text dynamics in personal space could not be opened; now dynamic cards route correctly:
+  - video dynamics -> native video detail
+  - non-video dynamics -> dynamic detail page (`t.bilibili.com/{id_str}`)
+- **Home Double-Tap Stability**: Fixed blank area appearing when double-tapping Home from non-top position with "header auto-collapse" enabled; Home double-tap now restores top header/tabs before scroll/refresh.
+- **Liquid Glass Indicator Tuning**: Improved bottom bar indicator geometry in icon+text mode so labels participate in refraction more reliably.
+- **Version Bump**: Updated app version to `5.2.1`.
+
 ## [5.2.0] - 2026-02-10
 
 ### ✨ New Features (新增功能)

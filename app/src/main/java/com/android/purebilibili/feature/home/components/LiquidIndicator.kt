@@ -14,10 +14,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -70,14 +72,23 @@ fun LiquidIndicator(
     backdrop: LayerBackdrop? = null // [New] Backdrop for refraction
 ) {
     val density = LocalDensity.current
-    val lensProfile = remember(isDragging, velocity, lensIntensityBoost, edgeWarpBoost, chromaticBoost) {
+    val styleTuning = remember(liquidGlassStyle) { resolveLiquidStyleTuning(liquidGlassStyle) }
+    val lensProfile = remember(
+        isDragging,
+        velocity,
+        lensIntensityBoost,
+        edgeWarpBoost,
+        chromaticBoost,
+        liquidGlassStyle
+    ) {
         resolveLiquidLensProfile(
             isDragging = isDragging,
             velocityPxPerSecond = velocity,
-            dragMotionFloor = 0.38f,
-            lensIntensityBoost = lensIntensityBoost,
-            edgeWarpBoost = edgeWarpBoost,
-            chromaticBoost = chromaticBoost
+            idleThresholdPxPerSecond = styleTuning.idleThresholdPxPerSecond,
+            dragMotionFloor = styleTuning.dragMotionFloor,
+            lensIntensityBoost = lensIntensityBoost * styleTuning.lensIntensityMultiplier,
+            edgeWarpBoost = edgeWarpBoost * styleTuning.edgeWarpMultiplier,
+            chromaticBoost = chromaticBoost * styleTuning.chromaticMultiplier
         )
     }
     
@@ -94,7 +105,7 @@ fun LiquidIndicator(
     val centerOffsetPx = with(density) { (itemWidth.toPx() - indicatorWidth.toPx()) / 2 }
     
     // 速度形变
-    val deformation = lensProfile.motionFraction * 0.34f
+    val deformation = lensProfile.motionFraction * (0.34f * styleTuning.deformationMultiplier)
     
     val targetScaleX = 1f + deformation
     val targetScaleY = 1f - (deformation * 0.52f)
@@ -138,37 +149,9 @@ fun LiquidIndicator(
                 .run {
                     if (isLiquidGlassEnabled && backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         // [Effect] Strong refraction for the indicator (Magnifying Glass effect)
-                        if (liquidGlassStyle == LiquidGlassStyle.CLASSIC) {
-                            if (lensProfile.shouldRefract) {
-                                this.drawBackdrop(
-                                    backdrop = backdrop,
-                                    shape = { shape },
-                                    effects = {
-                                        lens(
-                                            refractionHeight = lensProfile.refractionHeight,
-                                            refractionAmount = lensProfile.refractionAmount,
-                                            depthEffect = true,
-                                            chromaticAberration = lensProfile.aberrationStrength > 0.01f
-                                        )
-                                    },
-                                    onDrawSurface = {
-                                        drawLiquidSphereSurface(color, lensProfile)
-                                    }
-                                )
-                            } else {
-                                // 静止态仅保留玻璃感，不做折射
-                                this.drawBackdrop(
-                                    backdrop = backdrop,
-                                    shape = { shape },
-                                    effects = { blur(18f) },
-                                    onDrawSurface = {
-                                        drawLiquidSphereSurface(color, lensProfile)
-                                    }
-                                )
-                            }
-                         } else {
-                             // [Style: SimpMusic] Frosted Glass (Blur Only, No Deformation)
-                             val blurRadius = 36f
+                        if (liquidGlassStyle == LiquidGlassStyle.SIMP_MUSIC) {
+                            // [Style: SimpMusic] Frosted Glass (Blur Only, No Deformation)
+                            val blurRadius = 36f
                             this.drawBackdrop(
                                 backdrop = backdrop,
                                 shape = { shape },
@@ -182,6 +165,43 @@ fun LiquidIndicator(
                                     drawRect(Color.White.copy(alpha = 0.08f))
                                 }
                             )
+                        } else {
+                            if (lensProfile.shouldRefract) {
+                                this.drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { shape },
+                                    effects = {
+                                        lens(
+                                            refractionHeight = lensProfile.refractionHeight,
+                                            refractionAmount = lensProfile.refractionAmount,
+                                            depthEffect = styleTuning.depthEffectEnabled,
+                                            chromaticAberration = styleTuning.allowChromaticAberration &&
+                                                lensProfile.aberrationStrength > 0.01f
+                                        )
+                                    },
+                                    onDrawSurface = {
+                                        drawLiquidSphereSurface(
+                                            baseColor = color,
+                                            lensProfile = lensProfile,
+                                            style = liquidGlassStyle
+                                        )
+                                    }
+                                )
+                            } else {
+                                // 静止态仅保留玻璃感，不做折射
+                                this.drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { shape },
+                                    effects = { blur(styleTuning.idleBlurRadius) },
+                                    onDrawSurface = {
+                                        drawLiquidSphereSurface(
+                                            baseColor = color,
+                                            lensProfile = lensProfile,
+                                            style = liquidGlassStyle
+                                        )
+                                    }
+                                )
+                            }
                         }
                     } else {
                         // Fallback
@@ -212,6 +232,7 @@ fun SimpleLiquidIndicator(
     isLiquidGlassEnabled: Boolean = false,
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC,
     backdrop: LayerBackdrop? = null,
+    indicatorColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
     indicatorHeight: Dp = 34.dp,
     cornerRadius: Dp = 16.dp,
     widthRatio: Float = 0.78f,
@@ -220,13 +241,18 @@ fun SimpleLiquidIndicator(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val lensProfile = remember(isDragging, velocityPxPerSecond) {
+    val styleTuning = remember(liquidGlassStyle) { resolveLiquidStyleTuning(liquidGlassStyle) }
+    val lensProfile = remember(isDragging, velocityPxPerSecond, liquidGlassStyle) {
         resolveLiquidLensProfile(
             isDragging = isDragging,
-            velocityPxPerSecond = velocityPxPerSecond
+            velocityPxPerSecond = velocityPxPerSecond,
+            idleThresholdPxPerSecond = styleTuning.idleThresholdPxPerSecond,
+            dragMotionFloor = styleTuning.dragMotionFloor,
+            lensIntensityBoost = styleTuning.lensIntensityMultiplier,
+            edgeWarpBoost = styleTuning.edgeWarpMultiplier,
+            chromaticBoost = styleTuning.chromaticMultiplier
         )
     }
-
     val minWidthPx = with(density) { minWidth.toPx() }
     val horizontalInsetPx = with(density) { horizontalInset.toPx() }
     val indicatorWidthPx = resolveTopTabIndicatorWidthPx(
@@ -242,18 +268,18 @@ fun SimpleLiquidIndicator(
     val centerOffsetPx = (itemWidthPx - indicatorWidthPx) / 2f
     
     val scale by animateFloatAsState(
-        targetValue = 1f + lensProfile.motionFraction * 0.12f,
+        targetValue = 1f + lensProfile.motionFraction * (0.12f * styleTuning.deformationMultiplier),
         animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
         label = "scale"
     )
-    val indicatorAlpha by animateFloatAsState(
-        targetValue = if (isLiquidGlassEnabled) 0.10f else 0.12f,
+    val indicatorAlphaScale by animateFloatAsState(
+        targetValue = if (isLiquidGlassEnabled) 0.92f else 1f,
         animationSpec = tween(180),
-        label = "indicatorAlpha"
+        label = "indicatorAlphaScale"
     )
-    
-    // [Updated] Match BottomBar style: Primary color with alpha
-    val indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = indicatorAlpha)
+    val resolvedIndicatorColor = indicatorColor.copy(
+        alpha = (indicatorColor.alpha * indicatorAlphaScale).coerceIn(0f, 1f)
+    )
     
     // [修复] 使用 BoxWithConstraints 获取父容器高度来计算垂直居中
     BoxWithConstraints(
@@ -269,13 +295,23 @@ fun SimpleLiquidIndicator(
                     translationY = verticalCenterOffsetPx
                     
                     this.scaleX = scale
-                    this.scaleY = 1f - lensProfile.motionFraction * 0.08f
+                    this.scaleY = 1f - lensProfile.motionFraction * (0.08f * styleTuning.deformationMultiplier)
                 }
                 .size(indicatorWidth, indicatorHeight)
                 .clip(RoundedCornerShape(cornerRadius))
                 .run {
                     if (isLiquidGlassEnabled && backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        if (liquidGlassStyle == LiquidGlassStyle.CLASSIC) {
+                        if (liquidGlassStyle == LiquidGlassStyle.SIMP_MUSIC) {
+                            this.drawBackdrop(
+                                backdrop = backdrop,
+                                shape = { RoundedCornerShape(cornerRadius) },
+                                    effects = { blur(32f) },
+                                    onDrawSurface = {
+                                        drawRect(resolvedIndicatorColor.copy(alpha = 0.16f))
+                                        drawRect(Color.White.copy(alpha = 0.06f))
+                                    }
+                                )
+                        } else {
                             if (lensProfile.shouldRefract) {
                                 this.drawBackdrop(
                                     backdrop = backdrop,
@@ -284,37 +320,36 @@ fun SimpleLiquidIndicator(
                                         lens(
                                             refractionHeight = lensProfile.refractionHeight,
                                             refractionAmount = lensProfile.refractionAmount,
-                                            depthEffect = true,
-                                            chromaticAberration = lensProfile.aberrationStrength > 0.01f
+                                            depthEffect = styleTuning.depthEffectEnabled,
+                                            chromaticAberration = styleTuning.allowChromaticAberration &&
+                                                lensProfile.aberrationStrength > 0.01f
                                         )
                                     },
                                     onDrawSurface = {
-                                        drawLiquidSphereSurface(indicatorColor, lensProfile)
+                                        drawLiquidSphereSurface(
+                                            baseColor = resolvedIndicatorColor,
+                                            lensProfile = lensProfile,
+                                            style = liquidGlassStyle
+                                        )
                                     }
                                 )
                             } else {
                                 this.drawBackdrop(
                                     backdrop = backdrop,
                                     shape = { RoundedCornerShape(cornerRadius) },
-                                    effects = { blur(16f) },
+                                    effects = { blur(styleTuning.idleBlurRadius) },
                                     onDrawSurface = {
-                                        drawLiquidSphereSurface(indicatorColor, lensProfile)
+                                        drawLiquidSphereSurface(
+                                            baseColor = resolvedIndicatorColor,
+                                            lensProfile = lensProfile,
+                                            style = liquidGlassStyle
+                                        )
                                     }
                                 )
                             }
-                        } else {
-                            this.drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { RoundedCornerShape(cornerRadius) },
-                                effects = { blur(32f) },
-                                onDrawSurface = {
-                                    drawRect(indicatorColor.copy(alpha = 0.16f))
-                                    drawRect(Color.White.copy(alpha = 0.06f))
-                                }
-                            )
                         }
                     } else {
-                        this.background(indicatorColor)
+                        this.background(resolvedIndicatorColor)
                     }
                 }
                 .border(
@@ -368,6 +403,54 @@ internal data class LiquidLensProfile(
     val aberrationStrength: Float
 )
 
+internal data class LiquidStyleTuning(
+    val idleThresholdPxPerSecond: Float,
+    val dragMotionFloor: Float,
+    val lensIntensityMultiplier: Float,
+    val edgeWarpMultiplier: Float,
+    val chromaticMultiplier: Float,
+    val deformationMultiplier: Float,
+    val idleBlurRadius: Float,
+    val depthEffectEnabled: Boolean,
+    val allowChromaticAberration: Boolean
+)
+
+internal fun resolveLiquidStyleTuning(style: LiquidGlassStyle): LiquidStyleTuning = when (style) {
+    LiquidGlassStyle.CLASSIC -> LiquidStyleTuning(
+        idleThresholdPxPerSecond = 110f,
+        dragMotionFloor = 0.38f,
+        lensIntensityMultiplier = 1f,
+        edgeWarpMultiplier = 1f,
+        chromaticMultiplier = 1f,
+        deformationMultiplier = 1f,
+        idleBlurRadius = 18f,
+        depthEffectEnabled = true,
+        allowChromaticAberration = true
+    )
+    LiquidGlassStyle.IOS26 -> LiquidStyleTuning(
+        idleThresholdPxPerSecond = 135f,
+        dragMotionFloor = 0.08f,
+        lensIntensityMultiplier = 1.06f,
+        edgeWarpMultiplier = 1.06f,
+        chromaticMultiplier = 0.62f,
+        deformationMultiplier = 0.72f,
+        idleBlurRadius = 20f,
+        depthEffectEnabled = true,
+        allowChromaticAberration = true
+    )
+    LiquidGlassStyle.SIMP_MUSIC -> LiquidStyleTuning(
+        idleThresholdPxPerSecond = 220f,
+        dragMotionFloor = 0.08f,
+        lensIntensityMultiplier = 0.6f,
+        edgeWarpMultiplier = 0.55f,
+        chromaticMultiplier = 0f,
+        deformationMultiplier = 0.45f,
+        idleBlurRadius = 32f,
+        depthEffectEnabled = false,
+        allowChromaticAberration = false
+    )
+}
+
 internal fun resolveLiquidLensProfile(
     isDragging: Boolean,
     velocityPxPerSecond: Float,
@@ -418,9 +501,43 @@ internal fun resolveLiquidLensProfile(
 
 private fun DrawScope.drawLiquidSphereSurface(
     baseColor: Color,
-    lensProfile: LiquidLensProfile
+    lensProfile: LiquidLensProfile,
+    style: LiquidGlassStyle
 ) {
     val isMoving = lensProfile.shouldRefract
+
+    if (style == LiquidGlassStyle.IOS26) {
+        // iOS26 目标：让真实内容折射主导，表面覆盖尽量轻，避免“脏色”。
+        drawRect(baseColor.copy(alpha = if (isMoving) 0.06f else 0.075f))
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = if (isMoving) 0.10f else 0.08f),
+                    Color.Transparent,
+                    Color.Black.copy(alpha = if (isMoving) 0.05f else 0.03f)
+                )
+            )
+        )
+
+        val ringAlpha = if (isMoving) 0.14f else 0.09f
+        val ringStroke = (size.minDimension * 0.05f).coerceAtLeast(1f)
+        drawRoundRect(
+            brush = Brush.sweepGradient(
+                colors = listOf(
+                    Color(0xFF87BFFF).copy(alpha = ringAlpha),
+                    Color(0xFF94E6E0).copy(alpha = ringAlpha * 0.8f),
+                    Color(0xFFFFB889).copy(alpha = ringAlpha * 0.72f),
+                    Color(0xFFA7A8FF).copy(alpha = ringAlpha * 0.76f),
+                    Color(0xFF87BFFF).copy(alpha = ringAlpha)
+                ),
+                center = Offset(size.width / 2f, size.height / 2f)
+            ),
+            cornerRadius = CornerRadius(size.height / 2f, size.height / 2f),
+            style = Stroke(width = ringStroke)
+        )
+        return
+    }
+
     val centerGlowAlpha = if (isMoving) lensProfile.centerHighlightAlpha else 0.10f
     val edgeShadeAlpha = if (isMoving) lensProfile.edgeCompressionAlpha else 0.03f
     val baseAlpha = if (isMoving) 0.08f else 0.14f
@@ -460,7 +577,6 @@ private fun DrawScope.drawLiquidSphereSurface(
         )
     )
 
-    // 运动时额外的红蓝边缘分离，强化“液态折射”感知
     if (isMoving && lensProfile.aberrationStrength > 0f) {
         val fringe = (lensProfile.aberrationStrength * 3.2f).coerceIn(0f, 0.18f)
         drawRect(

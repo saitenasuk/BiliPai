@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -177,6 +178,7 @@ fun PortraitVideoPager(
         if (currentPlayingBvid == bvid) return@LaunchedEffect
 
         // 停止上一个播放
+        exoPlayer.clearVideoSurface()
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
         danmakuManager.clear()
@@ -481,37 +483,40 @@ private fun VideoPageItem(
                         )
                         .align(Alignment.Center)
                 ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            PlayerView(ctx).apply {
-                                player = exoPlayer
-                                useController = false
-                                setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                            }
-                        },
-                        update = { view ->
-                            if (view.player != exoPlayer) {
-                                view.player = exoPlayer
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    if (danmakuEnabled) {
+                    key(currentPlayingBvid, bvid) {
                         AndroidView(
                             factory = { ctx ->
-                                com.bytedance.danmaku.render.engine.DanmakuView(ctx).apply {
-                                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                    danmakuManager.attachView(this)
+                                PlayerView(ctx).apply {
+                                    player = exoPlayer
+                                    useController = false
+                                    keepScreenOn = true
+                                    setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                                 }
                             },
                             update = { view ->
-                                if (view.width > 0 && view.height > 0) {
-                                    danmakuManager.attachView(view)
+                                if (view.player != exoPlayer) {
+                                    view.player = exoPlayer
                                 }
                             },
                             modifier = Modifier.fillMaxSize()
                         )
+
+                        if (danmakuEnabled) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    com.bytedance.danmaku.render.engine.DanmakuView(ctx).apply {
+                                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                        danmakuManager.attachView(this)
+                                    }
+                                },
+                                update = { view ->
+                                    if (view.width > 0 && view.height > 0) {
+                                        danmakuManager.attachView(view)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
             }

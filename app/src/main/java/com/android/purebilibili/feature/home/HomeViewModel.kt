@@ -9,6 +9,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.prependDistinctByKey
+import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.data.repository.LiveRepository
 import kotlinx.coroutines.delay
@@ -17,6 +18,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 // 状态类已移至 HomeUiState.kt
+
+internal fun trimIncrementalRefreshVideosToEvenCount(videos: List<VideoItem>): List<VideoItem> {
+    val size = videos.size
+    if (size <= 1 || size % 2 == 0) return videos
+    return videos.dropLast(1)
+}
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(
@@ -241,6 +248,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun markRefreshNewItemsHandled(key: Long) {
+        if (key <= 0L) return
+        val current = _uiState.value
+        if (key != current.refreshNewItemsKey || key <= current.refreshNewItemsHandledKey) return
+        _uiState.value = current.copy(refreshNewItemsHandledKey = key)
+    }
+
     fun loadMore() {
         val currentCategory = _uiState.value.currentCategory
         val categoryState = _uiState.value.categoryStates[currentCategory] ?: return
@@ -325,24 +339,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                  // Let's just stick to sessionSeenBvids if we want to avoid seeing same video anywhere.
                  filteredVideos.filter { it.bvid !in sessionSeenBvids }
             }
-                
-            sessionSeenBvids.addAll(uniqueNewVideos.map { it.bvid })
             
             val useIncrementalRecommendRefresh = !isLoadMore &&
                 currentCategory == HomeCategory.RECOMMEND &&
                 incrementalTimelineRefreshEnabled
 
-            if (uniqueNewVideos.isNotEmpty() || useIncrementalRecommendRefresh) {
+            val incomingVideos = if (useIncrementalRecommendRefresh) {
+                trimIncrementalRefreshVideosToEvenCount(uniqueNewVideos)
+            } else {
+                uniqueNewVideos
+            }
+
+            sessionSeenBvids.addAll(incomingVideos.map { it.bvid })
+            
+            if (incomingVideos.isNotEmpty() || useIncrementalRecommendRefresh) {
                 var addedCount = 0
                 updateCategoryState(currentCategory) { oldState ->
                     val mergedVideos = when {
-                        isLoadMore -> appendDistinctByKey(oldState.videos, uniqueNewVideos, ::videoItemKey)
+                        isLoadMore -> appendDistinctByKey(oldState.videos, incomingVideos, ::videoItemKey)
                         useIncrementalRecommendRefresh -> {
-                            val merged = prependDistinctByKey(oldState.videos, uniqueNewVideos, ::videoItemKey)
+                            val merged = prependDistinctByKey(oldState.videos, incomingVideos, ::videoItemKey)
                             addedCount = (merged.size - oldState.videos.size).coerceAtLeast(0)
                             merged
                         }
-                        else -> uniqueNewVideos
+                        else -> incomingVideos
                     }
 
                     oldState.copy(
@@ -406,7 +426,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         _uiState.value = newState
     }
-    
+
     //  [新增] 获取关注动态列表
     //  [新增] 获取关注动态列表
     private suspend fun fetchFollowFeed(isLoadMore: Boolean) {

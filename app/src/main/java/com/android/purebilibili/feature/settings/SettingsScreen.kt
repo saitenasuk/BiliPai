@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -508,6 +509,10 @@ private fun MobileSettingsLayout(
 ) {
     var activeSubpage by rememberSaveable { mutableStateOf<MobileSettingsSubpage?>(null) }
     var isVisible by remember(activeSubpage) { mutableStateOf(false) }
+
+    BackHandler(enabled = activeSubpage != null) {
+        activeSubpage = null
+    }
 
     LaunchedEffect(activeSubpage) { isVisible = true }
 

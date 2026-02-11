@@ -23,7 +23,8 @@ private val Context.settingsDataStore by preferencesDataStore(name = "settings_p
  */
 enum class LiquidGlassStyle(val value: Int) {
     CLASSIC(0),      // BiliPai's Wavy Ripple
-    SIMP_MUSIC(1);   // SimpMusic's Adaptive Lens
+    SIMP_MUSIC(1),   // SimpMusic's Adaptive Lens
+    IOS26(2);        // iOS26-like layered liquid glass
 
     companion object {
         fun fromValue(value: Int): LiquidGlassStyle = entries.find { it.value == value } ?: CLASSIC

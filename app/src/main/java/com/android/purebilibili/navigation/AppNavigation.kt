@@ -333,6 +333,8 @@ fun AppNavigation(
                     onFavoriteClick = { navigateTo(ScreenRoutes.Favorite.route) },
                     onLiveListClick = { navigateTo(ScreenRoutes.LiveList.route) },
                     onWatchLaterClick = { navigateTo(ScreenRoutes.WatchLater.route) },
+                    onDownloadClick = { navigateTo(ScreenRoutes.DownloadList.route) },
+                    onInboxClick = { navigateTo(ScreenRoutes.Inbox.route) },
                     onStoryClick = { navigateTo(ScreenRoutes.Story.route) },  //  [新增] 竖屏短视频
                     globalHazeState = mainHazeState  // [新增] 全局底栏模糊状态
                 )
@@ -1007,6 +1009,9 @@ fun AppNavigation(
                     mid = mid,
                     onBack = { navController.popBackStack() },
                     onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onDynamicWebClick = { url ->
+                        navController.navigate(ScreenRoutes.Web.createRoute(url, "动态详情"))
+                    },
                     onViewAllClick = { type, id, mid, title ->
                         navController.navigate(ScreenRoutes.SeasonSeriesDetail.createRoute(type, id, mid, title))
                     },

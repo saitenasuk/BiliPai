@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-02-08 · 文档已同步至 v5.1.4（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-02-11 · 文档已同步至 v5.2.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-5.1.4-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-5.2.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -370,17 +370,15 @@ app/src/main/java/com/android/purebilibili/
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v5.1.4 · 2026-02-08)
+### 最近更新 (v5.2.1 · 2026-02-11)
 
-- ✨ **搜索升级**：补齐搜索类型与交互流（视频 / UP / 番剧 / 直播），优化建议词与加载分页行为
-- ✨ **评论体验升级**：支持默认评论排序偏好，并修复特定排序下 UP 主/置顶评论无法显示的问题
-- ✨ **弹幕插件增强**：新增 UID/hash 级过滤能力，插件规则变更支持播放内热更新
-- 🛠 **播放体验修复**：修复了某些情景下出现的播放问题，提升播放稳定性
-- 🛠 **界面与数据追踪**：新增横屏顶部时间栏，强化 Firebase Analytics + Crashlytics 上报链路
+- 🛠 **空间动态修复**：修复个人空间动态中图文动态无法进入详情的问题，视频动态与图文动态均可正常跳转
+- 🛠 **首页双击修复**：修复开启顶部自动收缩后在非顶部双击首页出现空白的问题，并确保双击回顶时顶部标签自动恢复显示
+- 🛠 **液态玻璃优化**：优化底栏指示器折射区域，提升图标+文字模式下文字折射一致性
 
 ### 历史版本
 
-- v5.1.3 / v5.1.1 / v5.1.0 / v5.0.5 / v5.0.4 变更详情请查看 [CHANGELOG.md](CHANGELOG.md)
+- v5.2.0 / v5.1.4 / v5.1.3 / v5.1.1 / v5.1.0 / v5.0.5 / v5.0.4 变更详情请查看 [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
