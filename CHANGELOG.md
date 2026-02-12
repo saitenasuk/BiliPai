@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.2.3] - 2026-02-12
+
+### 🛠 Improvements & Fixes (优化与修复)
+
+- **App Icon Switching Fix**: Resolved icon switching errors caused by mismatched Telegram activity-alias names during app startup icon-state sync (`icon_telegram_pink`, `icon_telegram_purple`, `icon_telegram_dark`).
+- **Icon State Sync Stability**: Startup icon synchronization now correctly maps all Telegram icon keys to manifest-declared aliases, avoiding component lookup failures and failed sync logs.
+- **Version Bump**: Updated app version to `5.2.3`.
+
 ## [5.2.2] - 2026-02-11
 
 ### ✨ New Features (新增功能)

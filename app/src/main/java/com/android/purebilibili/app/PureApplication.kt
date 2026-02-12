@@ -324,9 +324,9 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                     "icon_flat" to "${packageName}.MainActivityAliasFlat",
                     "icon_telegram_blue" to "${packageName}.MainActivityAliasTelegramBlue",
                     "icon_telegram_green" to "${packageName}.MainActivityAliasGreen",
-                    "icon_telegram_pink" to "${packageName}.MainActivityAliasTelegramPink",
-                    "icon_telegram_purple" to "${packageName}.MainActivityAliasTelegramPurple",
-                    "icon_telegram_dark" to "${packageName}.MainActivityAliasTelegramDark",
+                    "icon_telegram_pink" to "${packageName}.MainActivityAliasPink",
+                    "icon_telegram_purple" to "${packageName}.MainActivityAliasPurple",
+                    "icon_telegram_dark" to "${packageName}.MainActivityAliasDark",
                     
                     // 兼容旧键名 (向后兼容)
                     "Yuki" to "${packageName}.MainActivityAliasYuki",
