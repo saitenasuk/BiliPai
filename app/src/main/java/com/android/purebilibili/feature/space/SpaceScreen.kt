@@ -250,6 +250,19 @@ private fun SpaceContent(
     animatedVisibilityScope: AnimatedVisibilityScope?
 ) {
     val context = LocalContext.current
+    val playSpaceVideo: (String) -> Unit = { clickedBvid ->
+        val externalPlaylist = buildExternalPlaylistFromSpaceVideos(
+            videos = state.videos,
+            clickedBvid = clickedBvid
+        )
+        if (externalPlaylist != null) {
+            com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
+                externalPlaylist.playlistItems,
+                externalPlaylist.startIndex
+            )
+        }
+        onVideoClick(clickedBvid)
+    }
     //  当前选中的 Tab（目前只实现投稿页）
     var selectedTab by remember { mutableIntStateOf(2) }  // 默认投稿
     
@@ -332,8 +345,8 @@ private fun SpaceContent(
                                 Row(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(16.dp))
-                                        .clickable { 
-                                            state.videos.firstOrNull()?.let { onVideoClick(it.bvid) }
+                                        .clickable {
+                                            state.videos.firstOrNull()?.let { playSpaceVideo(it.bvid) }
                                         }
                                         .padding(end = 16.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -393,7 +406,7 @@ private fun SpaceContent(
 
                                 SpaceVideoListItem(
                                     video = video,
-                                    onClick = { onVideoClick(video.bvid) },
+                                    onClick = { playSpaceVideo(video.bvid) },
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = animatedVisibilityScope
                                 )
@@ -553,7 +566,7 @@ private fun SpaceContent(
                         Box(modifier = Modifier.padding(horizontal = 8.dp)) {
                             SpaceHomeVideoCard(
                                 video = video,
-                                onClick = { onVideoClick(video.bvid) }
+                                onClick = { playSpaceVideo(video.bvid) }
                             )
                         }
                     }

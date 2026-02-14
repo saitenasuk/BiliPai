@@ -90,6 +90,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var blockedMids: Set<Long> = emptySet()
     private var historySampleCache: List<VideoItem> = emptyList()
     private var historySampleLoadedAtMs: Long = 0L
+    private val todayConsumedBvids = mutableSetOf<String>()
     private val todayDislikedBvids = mutableSetOf<String>()
     private val todayDislikedCreatorMids = mutableSetOf<Long>()
     private val todayDislikedKeywords = linkedSetOf<String>()
@@ -278,6 +279,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             queueLimit = runtime.queueBuildLimit,
             creatorSignals = creatorSignals,
             penaltySignals = TodayWatchPenaltySignals(
+                consumedBvids = todayConsumedBvids.toSet(),
                 dislikedBvids = todayDislikedBvids.toSet(),
                 dislikedCreatorMids = todayDislikedCreatorMids.toSet(),
                 dislikedKeywords = todayDislikedKeywords.toSet()
@@ -362,7 +364,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = currentState.copy(
                 currentCategory = category,
                 liveSubCategory = liveSubCategory,
-                displayedTabIndex = resolveHomeTopTabIndex(category)
+                displayedTabIndex = currentState.displayedTabIndex
             )
 
             //  [修复] 恢复“追番”分类的数据拉取逻辑，确保滑动到这些页面时有内容显示
@@ -385,7 +387,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     //  [新增] 更新显示的标签页索引（用于特殊分类，不改变内容只更新标签高亮）
     fun updateDisplayedTabIndex(index: Int) {
-        val normalized = index.coerceIn(0, (resolveHomeTopCategories().size - 1).coerceAtLeast(0))
+        val normalized = index.coerceAtLeast(0)
         _uiState.value = _uiState.value.copy(displayedTabIndex = normalized)
     }
     
@@ -419,6 +421,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    fun markTodayWatchVideoOpened(video: VideoItem) {
+        val bvid = video.bvid.takeIf { it.isNotBlank() } ?: return
+        todayConsumedBvids += bvid
+
+        val currentState = _uiState.value
+        val currentPlan = currentState.todayWatchPlan ?: return
+        val consumeUpdate = consumeVideoFromTodayWatchPlan(
+            plan = currentPlan,
+            consumedBvid = bvid,
+            queuePreviewLimit = currentState.todayWatchCardConfig.queuePreviewLimit
+        )
+        if (!consumeUpdate.consumedApplied) return
+
+        _uiState.value = currentState.copy(todayWatchPlan = consumeUpdate.updatedPlan)
+        if (consumeUpdate.shouldRefill && currentState.currentCategory == HomeCategory.RECOMMEND) {
+            viewModelScope.launch {
+                rebuildTodayWatchPlan()
+            }
+        }
+    }
     
     
     //  [新增] 切换直播子分类
@@ -437,7 +460,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    //  [新增] 添加到稀后再看
+    //  [新增] 添加到稍后再看
     fun addToWatchLater(bvid: String, aid: Long) {
         viewModelScope.launch {
             val result = com.android.purebilibili.data.repository.ActionRepository.toggleWatchLater(aid, true)

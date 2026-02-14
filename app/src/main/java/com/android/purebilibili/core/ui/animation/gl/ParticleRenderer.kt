@@ -13,7 +13,11 @@ import kotlin.random.Random
 class ParticleRenderer(
     private val textureBitmap: Bitmap?,
     private val onAnimationComplete: () -> Unit,
-    private val onFirstFrame: () -> Unit
+    private val onFirstFrame: () -> Unit,
+    private val animationDurationSec: Float = 2.0f,
+    private val particleStep: Int = 2,
+    private val waveDurationSec: Float = 0.4f,
+    private val waveRandomSec: Float = 0.1f
 ) : GLSurfaceView.Renderer {
 
     private var programHandle: Int = 0
@@ -170,7 +174,7 @@ class ParticleRenderer(
             onFirstFrame()
         }
 
-        if (currentTime > 2.0f) { // End animation after 2 seconds
+        if (currentTime > animationDurationSec) {
              onAnimationComplete()
         }
     }
@@ -190,7 +194,7 @@ class ParticleRenderer(
         
         // Sampling Step (Density)
         // Adjust this for performance vs quality. 2 = capture every 2nd pixel
-        val step = 2 
+        val step = particleStep.coerceIn(1, 6)
         
         for (y in 0 until height step step) {
             for (x in 0 until width step step) {
@@ -225,7 +229,7 @@ class ParticleRenderer(
                     
                     // Particles start dissolving quickly (0.0s to 0.5s range)
                     // Bottom-right particles start first (normalizedDist is small for them)
-                    tempStart.add(normalizedDist * 0.4f + Random.nextFloat() * 0.1f)
+                    tempStart.add(normalizedDist * waveDurationSec + Random.nextFloat() * waveRandomSec)
                 }
             }
         }

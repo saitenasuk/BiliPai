@@ -49,6 +49,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.feature.home.resolveHomeTopCategories
 
 /**
  *  简洁版首页头部 (带滚动隐藏/显示动画)
@@ -64,6 +65,7 @@ fun iOSHomeHeader(
     onAvatarClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
+    topCategories: List<String> = resolveHomeTopCategories().map { it.label },
     categoryIndex: Int,
     onCategorySelected: (Int) -> Unit,
     onPartitionClick: () -> Unit = {},  //  新增：分区按钮回调
@@ -379,6 +381,7 @@ fun iOSHomeHeader(
                     )
             ) {
                 CategoryTabRow(
+                    categories = topCategories,
                     selectedIndex = categoryIndex,
                     onCategorySelected = onCategorySelected,
                     onPartitionClick = onPartitionClick,

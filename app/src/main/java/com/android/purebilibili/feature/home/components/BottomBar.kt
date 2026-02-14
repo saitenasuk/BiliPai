@@ -132,8 +132,8 @@ enum class BottomNavItem(
     ),
     WATCHLATER(
         "稍后看",
-        { Icon(CupertinoIcons.Filled.Bookmark, contentDescription = "稀后再看") },
-        { Icon(CupertinoIcons.Outlined.Bookmark, contentDescription = "稀后再看") },
+        { Icon(CupertinoIcons.Filled.Bookmark, contentDescription = "稍后再看") },
+        { Icon(CupertinoIcons.Outlined.Bookmark, contentDescription = "稍后再看") },
         ScreenRoutes.WatchLater.route
     ),
     SETTINGS(

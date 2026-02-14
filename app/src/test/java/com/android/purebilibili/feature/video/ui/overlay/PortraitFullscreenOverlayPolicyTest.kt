@@ -31,4 +31,9 @@ class PortraitFullscreenOverlayPolicyTest {
     fun hideViewCountWhenNoData() {
         assertFalse(shouldShowPortraitViewCount(viewCount = 0, compactMode = false))
     }
+
+    @Test
+    fun hideTopMoreActionToAvoidDuplicateWithBottomBar() {
+        assertFalse(shouldShowPortraitTopMoreAction())
+    }
 }

@@ -91,6 +91,10 @@ internal fun resolveTopTabMinItemWidthDp(isFloatingStyle: Boolean): Float {
     return if (isFloatingStyle) 72f else 64f
 }
 
+internal fun shouldRouteTopTabToLivePage(categoryLabel: String): Boolean {
+    return categoryLabel == HomeCategory.LIVE.label
+}
+
 internal fun resolveTopTabItemWidthDp(
     containerWidthDp: Float,
     categoryCount: Int,
@@ -290,6 +294,7 @@ fun CategoryTabRow(
     backdrop: LayerBackdrop? = null,
     isFloatingStyle: Boolean = false
 ) {
+    val visualTuning = remember { resolveTopTabVisualTuning() }
     val primaryColor = MaterialTheme.colorScheme.primary
     val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
 
@@ -301,16 +306,16 @@ fun CategoryTabRow(
     val actionButtonSize = if (isFloatingStyle) 50.dp else 44.dp
     val actionButtonCorner = if (isFloatingStyle) 22.dp else 22.dp
     val actionIconSize = if (isFloatingStyle) 22.dp else 20.dp
-    val topIndicatorHeight = 34.dp
-    val topIndicatorCorner = 16.dp
-    val topIndicatorWidthRatio = 0.78f
-    val topIndicatorMinWidth = 48.dp
-    val topIndicatorHorizontalInset = 16.dp
-    val floatingLiquidWidthMultiplier = 1.42f
-    val floatingLiquidMinWidth = 104.dp
-    val floatingLiquidMaxWidth = 136.dp
-    val floatingLiquidMaxWidthToItemRatio = 1.42f
-    val floatingLiquidHeight = 52.dp
+    val topIndicatorHeight = visualTuning.nonFloatingIndicatorHeightDp.dp
+    val topIndicatorCorner = visualTuning.nonFloatingIndicatorCornerDp.dp
+    val topIndicatorWidthRatio = visualTuning.nonFloatingIndicatorWidthRatio
+    val topIndicatorMinWidth = visualTuning.nonFloatingIndicatorMinWidthDp.dp
+    val topIndicatorHorizontalInset = visualTuning.nonFloatingIndicatorHorizontalInsetDp.dp
+    val floatingLiquidWidthMultiplier = visualTuning.floatingIndicatorWidthMultiplier
+    val floatingLiquidMinWidth = visualTuning.floatingIndicatorMinWidthDp.dp
+    val floatingLiquidMaxWidth = visualTuning.floatingIndicatorMaxWidthDp.dp
+    val floatingLiquidMaxWidthToItemRatio = visualTuning.floatingIndicatorMaxWidthToItemRatio
+    val floatingLiquidHeight = visualTuning.floatingIndicatorHeightDp.dp
     val floatingIndicatorEdgeInset = 0.dp
     val floatingIndicatorLeftBias = 0.dp
 
@@ -543,8 +548,8 @@ fun CategoryTabRow(
                                     unselectedColor = unselectedColor,
                                     labelMode = labelMode,
                                     onClick = {
-                                        // [修复] 直播索引特殊处理
-                                        if (index == 3) {
+                                        // [修复] 直播由分类语义驱动，而不是固定索引，支持自定义排序
+                                        if (shouldRouteTopTabToLivePage(category)) {
                                             onLiveClick()
                                         } else {
                                             // [核心修复] 点击时让 Pager 滚动，指示器会自动跟随
@@ -676,9 +681,9 @@ fun CategoryTabItem(
      val showText = shouldShowTopTabText(normalizedLabelMode)
      val icon = resolveTopTabCategoryIcon(category)
      val iconSize = if (showText) 16.dp else 18.dp
-     val textSize = 11.sp
-     val textLineHeight = 11.sp
-     val contentMinHeight = 34.dp
+     val textSize = resolveTopTabLabelTextSizeSp(normalizedLabelMode).sp
+     val textLineHeight = resolveTopTabLabelLineHeightSp(normalizedLabelMode).sp
+     val contentMinHeight = resolveTopTabContentMinHeightDp().dp
      
      // [Updated] Louder Scale Effect
      val smoothFraction = androidx.compose.animation.core.FastOutSlowInEasing.transform(selectionFraction)

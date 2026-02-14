@@ -142,6 +142,59 @@ fun SupportToolsSection(
 }
 
 @Composable
+fun ReleaseChannelPinnedCard(
+    onGithubClick: () -> Unit,
+    onTelegramClick: () -> Unit,
+    onDisclaimerClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = CupertinoIcons.Default.Link,
+                    contentDescription = null,
+                    tint = iOSBlue,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "官方发布渠道仅限 GitHub / Telegram",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "不存在其他官方发布渠道，请注意安装来源安全。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onGithubClick) {
+                    Text("GitHub")
+                }
+                OutlinedButton(onClick = onTelegramClick) {
+                    Text("Telegram")
+                }
+                TextButton(onClick = onDisclaimerClick) {
+                    Text("完整声明")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun SettingsSubpageEntrySection(
     onContentAndStorageClick: () -> Unit,
     onPrivacyAndSecurityClick: () -> Unit,
@@ -431,6 +484,7 @@ fun DeveloperSection(
 fun AboutSection(
     versionName: String,
     easterEggEnabled: Boolean,
+    onDisclaimerClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onGithubClick: () -> Unit,
     onCheckUpdateClick: () -> Unit,
@@ -469,6 +523,14 @@ fun AboutSection(
     }
 
     SettingsGroup {
+        SettingClickableItem(
+            icon = CupertinoIcons.Default.Link,
+            title = "发布渠道声明",
+            value = "仅 GitHub / Telegram",
+            onClick = onDisclaimerClick,
+            iconTint = iOSBlue
+        )
+        SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
             icon = CupertinoIcons.Default.DocText,
             title = "开源许可证",

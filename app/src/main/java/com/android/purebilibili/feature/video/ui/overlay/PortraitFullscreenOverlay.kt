@@ -48,6 +48,8 @@ internal fun shouldShowPortraitViewCount(viewCount: Int, compactMode: Boolean): 
     return viewCount > 0 && !compactMode
 }
 
+internal fun shouldShowPortraitTopMoreAction(): Boolean = false
+
 /**
  * 竖屏全屏覆盖层 (B站官方风格) - 重构版
  */
@@ -84,6 +86,8 @@ fun PortraitFullscreenOverlay(
     
     // [新增] 详情点击
     onDetailClick: () -> Unit = {},
+    onTitleClick: () -> Unit = {},
+    onAuthorClick: () -> Unit = {},
     
     // 控制状态
     currentSpeed: Float,
@@ -133,7 +137,6 @@ fun PortraitFullscreenOverlay(
                     onDanmakuToggle = onDanmakuToggle,
                     isStatusBarHidden = isStatusBarHidden,
                     onToggleStatusBar = onToggleStatusBar,
-                    onRotateToLandscape = onRotateToLandscape,
                     onSearchClick = onSearchClick,
                     onMoreClick = onMoreClick
                 )
@@ -164,6 +167,8 @@ fun PortraitFullscreenOverlay(
                         title = title,
                         isFollowing = isFollowing,
                         onFollowClick = onFollowClick,
+                        onTitleClick = onTitleClick,
+                        onAuthorClick = onAuthorClick,
                         modifier = Modifier
                             .fillMaxWidth(0.85f) // 限制宽度避免遮挡右侧按钮
                             .padding(horizontal = 16.dp)
@@ -195,7 +200,7 @@ fun PortraitFullscreenOverlay(
                 // 4. 底部输入栏 (Input Bar) - Keep strict bottom alignment (Overlay)
                 PortraitBottomInputBar(
                     onInputClick = onDanmakuInputClick,
-                    onMoreClick = onDetailClick,
+                    onRotateClick = onRotateToLandscape,
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }
@@ -214,7 +219,6 @@ private fun PortraitTopControlBar(
     onDanmakuToggle: () -> Unit,
     isStatusBarHidden: Boolean,
     onToggleStatusBar: () -> Unit,
-    onRotateToLandscape: () -> Unit,
     onSearchClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
@@ -224,7 +228,6 @@ private fun PortraitTopControlBar(
     val verticalPadding = if (compactMode) 8.dp else 10.dp
     val iconSize = if (compactMode) 20.dp else 22.dp
     val actionSpacing = if (compactMode) 8.dp else 16.dp
-    val rotateText = if (compactMode) "横" else "横屏"
 
     Box(
         modifier = Modifier
@@ -258,19 +261,6 @@ private fun PortraitTopControlBar(
             }
         }
 
-        // 中间：横屏按钮（与左右区解耦，保证视觉居中）
-        Text(
-            text = rotateText,
-            color = Color.White,
-            fontSize = if (compactMode) 13.sp else 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .clip(RoundedCornerShape(10.dp))
-                .clickable { onRotateToLandscape() }
-                .padding(horizontal = if (compactMode) 6.dp else 8.dp, vertical = 4.dp)
-        )
-
         // 右上角功能区
         Row(
             modifier = Modifier.align(Alignment.CenterEnd),
@@ -293,13 +283,15 @@ private fun PortraitTopControlBar(
                     modifier = Modifier.size(iconSize)
                 )
             }
-            IconButton(onClick = onMoreClick) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "菜单",
-                    tint = Color.White,
-                    modifier = Modifier.size(iconSize)
-                )
+            if (shouldShowPortraitTopMoreAction()) {
+                IconButton(onClick = onMoreClick) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "菜单",
+                        tint = Color.White,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
             }
         }
     }
@@ -315,6 +307,8 @@ private fun PortraitVideoInfo(
     title: String,
     isFollowing: Boolean,
     onFollowClick: () -> Unit,
+    onTitleClick: () -> Unit,
+    onAuthorClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -323,7 +317,9 @@ private fun PortraitVideoInfo(
         // 第一行：头像 + 名字 + 关注按钮
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier
+                .padding(bottom = 8.dp)
+                .clickable { onAuthorClick() }
         ) {
             // 头像
             if (authorFace.isNotEmpty()) {
@@ -396,7 +392,8 @@ private fun PortraitVideoInfo(
             maxLines = 3,
             lineHeight = 22.sp,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.clickable { onTitleClick() }
         )
     }
 }

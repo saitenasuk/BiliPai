@@ -77,6 +77,9 @@ object SettingsManager {
     private val KEY_BOTTOM_BAR_LABEL_MODE = intPreferencesKey("bottom_bar_label_mode")
     //  [新增] 顶部标签显示模式 (0=图标+文字, 1=仅图标, 2=仅文字)
     private val KEY_TOP_TAB_LABEL_MODE = intPreferencesKey("top_tab_label_mode")
+    //  [新增] 顶部标签自定义 - 顺序和可见性
+    private val KEY_TOP_TAB_ORDER = stringPreferencesKey("top_tab_order")
+    private val KEY_TOP_TAB_VISIBLE_TABS = stringPreferencesKey("top_tab_visible_tabs")
     
     //  [新增] 开屏壁纸
     private val KEY_SPLASH_WALLPAPER_URI = stringPreferencesKey("splash_wallpaper_uri")
@@ -97,6 +100,9 @@ object SettingsManager {
         const val ICON_ONLY = 1
         const val TEXT_ONLY = 2
     }
+
+    private const val DEFAULT_TOP_TAB_ORDER = "RECOMMEND,FOLLOW,POPULAR,LIVE,GAME"
+    private const val DEFAULT_TOP_TAB_VISIBLE = "RECOMMEND,FOLLOW,POPULAR,LIVE,GAME"
     //  [新增] 模糊效果开关
     private val KEY_HEADER_BLUR_ENABLED = booleanPreferencesKey("header_blur_enabled")
     //  [新增] 首页顶部栏自动收缩 (Shrink)
@@ -492,6 +498,30 @@ object SettingsManager {
 
     suspend fun setTopTabLabelMode(context: Context, value: Int) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_TOP_TAB_LABEL_MODE] = value }
+    }
+
+    //  [新增] --- 顶部标签顺序配置 ---
+    fun getTopTabOrder(context: Context): Flow<List<String>> = context.settingsDataStore.data.map { prefs ->
+        val orderString = prefs[KEY_TOP_TAB_ORDER] ?: DEFAULT_TOP_TAB_ORDER
+        orderString.split(",").filter { it.isNotBlank() }
+    }
+
+    suspend fun setTopTabOrder(context: Context, order: List<String>) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[KEY_TOP_TAB_ORDER] = order.joinToString(",")
+        }
+    }
+
+    //  [新增] --- 顶部标签可见项配置 ---
+    fun getTopTabVisibleTabs(context: Context): Flow<Set<String>> = context.settingsDataStore.data.map { prefs ->
+        val tabsString = prefs[KEY_TOP_TAB_VISIBLE_TABS] ?: DEFAULT_TOP_TAB_VISIBLE
+        tabsString.split(",").filter { it.isNotBlank() }.toSet()
+    }
+
+    suspend fun setTopTabVisibleTabs(context: Context, tabs: Set<String>) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[KEY_TOP_TAB_VISIBLE_TABS] = tabs.joinToString(",")
+        }
     }
     
     //  [新增] --- 搜索框模糊效果 ---

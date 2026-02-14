@@ -245,7 +245,7 @@ fun BottomControlBar(
                         color = Color.White,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable(onClick = onToggleFullscreen)
+                        modifier = Modifier.clickable(onClick = onPortraitFullscreen)
                     )
                 }
 

@@ -471,6 +471,7 @@ fun VideoDetailScreen(
 
     // 📱 [修复] 提升竖屏全屏状态到 Screen 级别，防止 VideoPlayerState 重建时状态丢失
     var isPortraitFullscreen by rememberSaveable { mutableStateOf(false) }
+    val useSharedPortraitPlayer = true
     var portraitSyncSnapshotBvid by remember { mutableStateOf<String?>(null) }
     var portraitSyncSnapshotPositionMs by remember { mutableLongStateOf(0L) }
     var hasPendingPortraitSync by remember { mutableStateOf(false) }
@@ -481,8 +482,25 @@ fun VideoDetailScreen(
         context = context,
         viewModel = viewModel,
         bvid = currentBvid,
-        startPaused = isPortraitFullscreen
+        startPaused = isPortraitFullscreen && !useSharedPortraitPlayer
     )
+
+    var hasAppliedInitialPageSwitch by remember(currentBvid, cid) { mutableStateOf(false) }
+    LaunchedEffect(uiState, currentBvid, cid, hasAppliedInitialPageSwitch) {
+        if (hasAppliedInitialPageSwitch) return@LaunchedEffect
+        val success = uiState as? PlayerUiState.Success ?: return@LaunchedEffect
+        if (success.info.bvid != currentBvid) return@LaunchedEffect
+
+        val targetPageIndex = resolveInitialPageIndex(
+            requestedCid = cid,
+            currentCid = success.info.cid,
+            pages = success.info.pages
+        )
+        hasAppliedInitialPageSwitch = true
+        if (targetPageIndex != null) {
+            viewModel.switchPage(targetPageIndex)
+        }
+    }
 
     // 🎯 [修复] 确保在 VideoPlayerState 销毁之前通知 MiniPlayerManager 页面退出
     // 必须在 playerState 之后声明此 Effect，这样它会在 playerState.onDispose 之前执行（LIFO 顺序）
@@ -515,6 +533,14 @@ fun VideoDetailScreen(
     
     // 📱 [优化] 竖屏视频检测已移至 VideoPlayerState 集中管理
     val isVerticalVideo by playerState.isVerticalVideo.collectAsState()
+    val enterPortraitFullscreen = {
+        portraitSyncSnapshotBvid = (uiState as? PlayerUiState.Success)?.info?.bvid
+        portraitSyncSnapshotPositionMs = playerState.player.currentPosition.coerceAtLeast(0L)
+        hasPendingPortraitSync = false
+        isPortraitFullscreen = true
+    }
+    val shouldMirrorPortraitProgressToMainPlayer = com.android.purebilibili.feature.video.ui.pager
+        .shouldMirrorPortraitProgressToMainPlayer(useSharedPlayer = useSharedPortraitPlayer)
 
     val tryApplyPortraitProgressSync = remember(playerState, viewModel) {
         { snapshotBvid: String?, snapshotPositionMs: Long ->
@@ -537,17 +563,22 @@ fun VideoDetailScreen(
     // 同步状态到 playerState (可选，用于日志或内部逻辑)
     LaunchedEffect(isPortraitFullscreen) {
         playerState.setPortraitFullscreen(isPortraitFullscreen)
-        // [修复] 当状态变为 true 时，立即暂停住播放器
+        val shouldPauseMainPlayer = com.android.purebilibili.feature.video.ui.pager
+            .shouldPauseMainPlayerOnPortraitEnter(useSharedPlayer = useSharedPortraitPlayer)
         if (isPortraitFullscreen) {
-            playerState.player.pause()
-            playerState.player.volume = 0f
-            playerState.player.playWhenReady = false
+            if (shouldPauseMainPlayer) {
+                playerState.player.pause()
+                playerState.player.volume = 0f
+                playerState.player.playWhenReady = false
+            }
             portraitSyncSnapshotBvid = (uiState as? PlayerUiState.Success)?.info?.bvid
             portraitSyncSnapshotPositionMs = playerState.player.currentPosition.coerceAtLeast(0L)
-            hasPendingPortraitSync = true
+            hasPendingPortraitSync = shouldPauseMainPlayer
         } else {
-             // 退出时恢复音量 (不自动播放，等待用户操作或 onResume)
-             playerState.player.volume = 1f
+             if (shouldPauseMainPlayer) {
+                 // 退出时恢复音量 (不自动播放，等待用户操作或 onResume)
+                 playerState.player.volume = 1f
+             }
             val currentUiBvid = (viewModel.uiState.value as? PlayerUiState.Success)?.info?.bvid
             val targetBvid = pendingMainReloadBvidAfterPortrait ?: portraitSyncSnapshotBvid
             if (com.android.purebilibili.feature.video.ui.pager.shouldReloadMainPlayerAfterPortraitExit(
@@ -835,7 +866,16 @@ fun VideoDetailScreen(
                 // 📱 [新增] 竖屏全屏模式
                 isVerticalVideo = isVerticalVideo,
                 isPortraitFullscreen = isPortraitFullscreen,
-                onPortraitFullscreen = { isPortraitFullscreen = !isPortraitFullscreen },
+                onPortraitFullscreen = {
+                    if (!isPortraitFullscreen) {
+                        if (isFullscreenMode) {
+                            toggleFullscreen()
+                        }
+                        enterPortraitFullscreen()
+                    } else {
+                        isPortraitFullscreen = false
+                    }
+                },
                 // 🔁 [新增] 播放模式
                 currentPlayMode = currentPlayMode,
                 onPlayModeClick = { com.android.purebilibili.feature.video.player.PlaylistManager.togglePlayMode() },
@@ -1099,7 +1139,7 @@ fun VideoDetailScreen(
                         
                         // 📱 [新增] 竖屏全屏模式
                         isVerticalVideo = isVerticalVideo,
-                        onPortraitFullscreen = { isPortraitFullscreen = true },
+                        onPortraitFullscreen = enterPortraitFullscreen,
                         isPortraitFullscreen = isPortraitFullscreen,
 
                                 // 📲 [修复] 小窗模式 - 转移到应用内小窗而非直接进入系统 PiP
@@ -1432,14 +1472,6 @@ fun VideoDetailScreen(
         }
         
         if (showPortraitFullscreen && success != null) {
-            // 🛑 [修复] 进入竖屏模式时暂停主播放器，防止双重音频
-            LaunchedEffect(Unit) {
-                com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", "🔥 Entering Portrait Fullscreen, pausing main player")
-                // 强制暂停并确信
-                playerState.player.pause()
-                playerState.player.playWhenReady = false
-            }
-            
             // 竖屏全屏模式：使用 Pager 实现无缝滑动 (TikTok Style)
             com.android.purebilibili.feature.video.ui.pager.PortraitVideoPager(
                 initialBvid = success.info.bvid,
@@ -1453,23 +1485,28 @@ fun VideoDetailScreen(
                 },
                 viewModel = viewModel,
                 commentViewModel = commentViewModel,
+                sharedPlayer = if (useSharedPortraitPlayer) playerState.player else null,
                 // [新增] 进度同步
-                initialStartPositionMs = playerState.player.currentPosition,
+                initialStartPositionMs = portraitSyncSnapshotPositionMs,
                 onProgressUpdate = { bvid, pos ->
                     portraitSyncSnapshotBvid = bvid
                     portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
-                    hasPendingPortraitSync = true
-                    if (tryApplyPortraitProgressSync(bvid, portraitSyncSnapshotPositionMs)) {
-                        hasPendingPortraitSync = false
+                    if (shouldMirrorPortraitProgressToMainPlayer) {
+                        hasPendingPortraitSync = true
+                        if (tryApplyPortraitProgressSync(bvid, portraitSyncSnapshotPositionMs)) {
+                            hasPendingPortraitSync = false
+                        }
                     }
                 },
                 onExitSnapshot = { bvid, pos ->
                     portraitSyncSnapshotBvid = bvid
                     portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
                     pendingMainReloadBvidAfterPortrait = bvid
-                    hasPendingPortraitSync = true
-                    if (tryApplyPortraitProgressSync(bvid, portraitSyncSnapshotPositionMs)) {
-                        hasPendingPortraitSync = false
+                    if (shouldMirrorPortraitProgressToMainPlayer) {
+                        hasPendingPortraitSync = true
+                        if (tryApplyPortraitProgressSync(bvid, portraitSyncSnapshotPositionMs)) {
+                            hasPendingPortraitSync = false
+                        }
                     }
                 },
                 onSearchClick = onNavigateToSearch,

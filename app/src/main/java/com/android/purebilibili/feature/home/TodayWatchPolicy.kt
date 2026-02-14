@@ -24,6 +24,7 @@ internal data class TodayWatchCreatorSignal(
 )
 
 internal data class TodayWatchPenaltySignals(
+    val consumedBvids: Set<String> = emptySet(),
     val dislikedBvids: Set<String> = emptySet(),
     val dislikedCreatorMids: Set<Long> = emptySet(),
     val dislikedKeywords: Set<String> = emptySet()
@@ -86,6 +87,7 @@ internal fun buildTodayWatchPlan(
     val dedupCandidates = candidateVideos
         .asSequence()
         .filter { it.bvid.isNotBlank() && it.title.isNotBlank() }
+        .filter { it.bvid !in penaltySignals.consumedBvids }
         .distinctBy { it.bvid }
         .toList()
 

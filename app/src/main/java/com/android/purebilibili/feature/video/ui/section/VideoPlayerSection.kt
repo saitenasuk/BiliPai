@@ -694,7 +694,9 @@ fun VideoPlayerSection(
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
-                        player = playerState.player
+                        player = if (isPortraitFullscreen) null else playerState.player
+                        setKeepContentOnPlayerReset(true)
+                        setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                         setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)  // 禁用系统缓冲指示器，使用自定义iOS风格加载动画
                         useController = false
                         keepScreenOn = true
@@ -702,7 +704,7 @@ fun VideoPlayerSection(
                     }
                 },
                 update = { playerView ->
-                    playerView.player = playerState.player
+                    playerView.player = if (isPortraitFullscreen) null else playerState.player
                     playerView.resizeMode = currentAspectRatio.resizeMode
                 },
                 modifier = Modifier

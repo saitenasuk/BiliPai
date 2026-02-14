@@ -806,30 +806,27 @@ class PlayerViewModel : ViewModel() {
                             currentAudioLang = result.curAudioLang,
                             videoDurationMs = result.duration
                         )
-                        
-                        //  [新增] 异步加载关注列表（用于推荐视频的已关注标签）
-                        if (result.isLoggedIn) {
-                            // 加载全局列表
-                            loadFollowingMids()
-                            // [关键修复] 额外检查当前作者的关注状态 (防止列表分页不全)
-                            ensureFollowStatus(result.info.owner.mid, force = true)
-                        }
-                        
-                        //  异步加载视频标签
-                        loadVideoTags(bvid)
-                        
-                        // 🖼️ 异步加载视频预览图（用于进度条拖动预览）
-                        loadVideoshot(bvid, result.info.cid)
-                        
-                        // 📖 异步加载视频章节信息 & BGM
-                        loadPlayerInfo(bvid, result.info.cid)
 
-                        // 🤖 [新增] 异步加载 AI 总结
-                        loadAiSummary(bvid, result.info.cid, result.info.owner.mid)
-                        
-                        // 👀 [新增] 开始轮询在线观看人数
-                        startOnlineCountPolling(bvid, result.info.cid)
-                        
+                        // 首帧优先：非关键网络请求延后触发，减少启动时网络争用。
+                        val loadedBvid = result.info.bvid
+                        val loadedCid = result.info.cid
+                        val loadedOwnerMid = result.info.owner.mid
+                        viewModelScope.launch {
+                            delay(350L)
+                            val currentSuccess = _uiState.value as? PlayerUiState.Success
+                            if (currentSuccess?.info?.bvid != loadedBvid) return@launch
+
+                            if (result.isLoggedIn) {
+                                loadFollowingMids()
+                                ensureFollowStatus(loadedOwnerMid, force = true)
+                            }
+                            loadVideoTags(loadedBvid)
+                            loadVideoshot(loadedBvid, loadedCid)
+                            loadPlayerInfo(loadedBvid, loadedCid)
+                            loadAiSummary(loadedBvid, loadedCid, loadedOwnerMid)
+                            startOnlineCountPolling(loadedBvid, loadedCid)
+                        }
+
                         //  [新增] 更新播放列表
                         updatePlaylist(result.info, result.related)
                         
@@ -966,8 +963,8 @@ class PlayerViewModel : ViewModel() {
             Logger.d("PlayerVM", "🎵 播放列表已重置: 1 + ${relatedItems.size} 项")
         }
         
-        // 🚀 [优化] 预加载前 2 个推荐视频的 PlayUrl
-        preloadRelatedPlayUrls(related.take(2))
+        // 首播优先：仅在 Wi-Fi 下预加载 1 条，避免与当前视频抢带宽。
+        preloadRelatedPlayUrls(related.take(1))
     }
     
     /**
@@ -976,6 +973,11 @@ class PlayerViewModel : ViewModel() {
      */
     private fun preloadRelatedPlayUrls(videos: List<com.android.purebilibili.data.model.response.RelatedVideo>) {
         if (videos.isEmpty()) return
+        val context = appContext ?: return
+        if (!NetworkUtils.isWifi(context)) {
+            Logger.d("PlayerVM", "🚀 Skip preload on non-WiFi")
+            return
+        }
         
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             for (video in videos) {

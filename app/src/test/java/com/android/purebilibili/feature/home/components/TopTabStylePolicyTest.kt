@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TopTabStylePolicyTest {
@@ -75,5 +76,24 @@ class TopTabStylePolicyTest {
 
         assertEquals(false, state.floating)
         assertEquals(TopTabMaterialMode.PLAIN, state.materialMode)
+    }
+
+    @Test
+    fun `balanced visual tuning shrinks top indicator footprint`() {
+        val tuning = resolveTopTabVisualTuning()
+
+        assertTrue(tuning.nonFloatingIndicatorHeightDp < 34f)
+        assertTrue(tuning.nonFloatingIndicatorWidthRatio < 0.78f)
+        assertTrue(tuning.floatingIndicatorHeightDp < 52f)
+    }
+
+    @Test
+    fun `balanced visual tuning slightly increases tab text size but keeps compact`() {
+        val textSize = resolveTopTabLabelTextSizeSp(labelMode = 0)
+        val lineHeight = resolveTopTabLabelLineHeightSp(labelMode = 0)
+
+        assertTrue(textSize > 11f)
+        assertTrue(textSize < 12f)
+        assertTrue(lineHeight >= textSize)
     }
 }

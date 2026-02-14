@@ -4,7 +4,7 @@ package com.android.purebilibili.data.model.response
 import kotlinx.serialization.Serializable
 
 /**
- * 收藏夹和稀后再看相关数据模型
+ * 收藏夹和稍后再看相关数据模型
  * 从 ListModels.kt 拆分出来，提高代码可维护性
  */
 

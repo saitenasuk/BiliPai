@@ -52,6 +52,13 @@ data class BottomBarTabConfig(
     val isDefault: Boolean = true  // 是否为默认项（默认项不可删除）
 )
 
+data class TopTabConfig(
+    val id: String,
+    val label: String,
+    val icon: ImageVector,
+    val fixedVisible: Boolean = false
+)
+
 /**
  * 所有可用的底栏项目
  */
@@ -65,6 +72,19 @@ val allBottomBarTabs = listOf(
     BottomBarTabConfig("LIVE", "直播", CupertinoIcons.Default.Tv, isDefault = false),
     BottomBarTabConfig("WATCHLATER", "稍后看", CupertinoIcons.Default.Clock, isDefault = false),
     BottomBarTabConfig("SETTINGS", "设置", CupertinoIcons.Default.Gearshape, isDefault = false)
+)
+
+private val defaultTopTabIds = listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME")
+
+val allTopTabs = listOf(
+    TopTabConfig("RECOMMEND", "推荐", CupertinoIcons.Default.House, fixedVisible = true),
+    TopTabConfig("FOLLOW", "关注", CupertinoIcons.Default.Bell),
+    TopTabConfig("POPULAR", "热门", CupertinoIcons.Default.Newspaper),
+    TopTabConfig("LIVE", "直播", CupertinoIcons.Default.Video),
+    TopTabConfig("ANIME", "追番", CupertinoIcons.Default.Tv),
+    TopTabConfig("GAME", "游戏", CupertinoIcons.Default.PlayCircle),
+    TopTabConfig("KNOWLEDGE", "知识", CupertinoIcons.Default.Character),
+    TopTabConfig("TECH", "科技", CupertinoIcons.Default.Gearshape)
 )
 
 /**
@@ -115,10 +135,24 @@ fun BottomBarSettingsContent(
     // 读取当前配置
     val order by SettingsManager.getBottomBarOrder(context).collectAsState(initial = listOf("HOME", "DYNAMIC", "HISTORY", "PROFILE"))
     val visibleTabs by SettingsManager.getBottomBarVisibleTabs(context).collectAsState(initial = setOf("HOME", "DYNAMIC", "HISTORY", "PROFILE"))
+    val topTabOrder by SettingsManager.getTopTabOrder(context).collectAsState(initial = defaultTopTabIds)
+    val topTabVisible by SettingsManager.getTopTabVisibleTabs(context).collectAsState(initial = defaultTopTabIds.toSet())
     
     // 可编辑的本地状态
     var localOrder by remember(order) { mutableStateOf(order) }
     var localVisibleTabs by remember(visibleTabs) { mutableStateOf(visibleTabs) }
+    var localTopTabOrder by remember(topTabOrder) {
+        mutableStateOf(
+            (topTabOrder + allTopTabs.map { it.id })
+                .distinct()
+                .filter { id -> allTopTabs.any { it.id == id } }
+        )
+    }
+    var localTopTabVisible by remember(topTabVisible) {
+        mutableStateOf(
+            (topTabVisible.filter { id -> allTopTabs.any { it.id == id } }.toSet() + "RECOMMEND")
+        )
+    }
     
     // [新增] 监听顺序变化并保存
     fun onOrderChanged(fromIndex: Int, toIndex: Int) {
@@ -149,6 +183,34 @@ fun BottomBarSettingsContent(
             SettingsManager.setBottomBarOrder(context, localOrder)
             SettingsManager.setBottomBarVisibleTabs(context, localVisibleTabs)
         }
+    }
+
+    fun saveTopTabConfig() {
+        scope.launch {
+            SettingsManager.setTopTabOrder(context, localTopTabOrder)
+            SettingsManager.setTopTabVisibleTabs(context, localTopTabVisible + "RECOMMEND")
+        }
+    }
+
+    fun moveTopTab(tabId: String, direction: Int) {
+        val visibleOrder = localTopTabOrder.filter { it in localTopTabVisible }
+        val from = visibleOrder.indexOf(tabId)
+        if (from < 0) return
+        val to = (from + direction).coerceIn(0, visibleOrder.lastIndex)
+        if (to == from) return
+
+        val toId = visibleOrder[to]
+        val globalFrom = localTopTabOrder.indexOf(tabId)
+        val globalTo = localTopTabOrder.indexOf(toId)
+        if (globalFrom < 0 || globalTo < 0) return
+
+        val mutable = localTopTabOrder.toMutableList()
+        val item = mutable.removeAt(globalFrom)
+        mutable.add(globalTo, item)
+        // 推荐固定在首位
+        val withoutRecommend = mutable.filterNot { it == "RECOMMEND" }
+        localTopTabOrder = listOf("RECOMMEND") + withoutRecommend
+        saveTopTabConfig()
     }
     
     //  [新增] 保存颜色配置
@@ -438,6 +500,141 @@ fun BottomBarSettingsContent(
                 }
             }
 
+            // 顶部标签管理
+            item {
+                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                    IOSSectionTitle("顶部标签管理")
+                }
+            }
+
+            item {
+                Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
+                    IOSGroup {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "推荐固定显示。可调整其余标签的显示/隐藏与顺序。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            val visibleTopOrder = localTopTabOrder.filter { it in localTopTabVisible }
+                            Text(
+                                text = "已显示（上下按钮可排序）",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            visibleTopOrder.forEachIndexed { index, id ->
+                                val tab = allTopTabs.firstOrNull { it.id == id } ?: return@forEachIndexed
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = tab.icon,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = tab.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (tab.fixedVisible) {
+                                        Text(
+                                            text = "固定",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { moveTopTab(tab.id, -1) },
+                                        enabled = !tab.fixedVisible && index > 1
+                                    ) {
+                                        Icon(
+                                            CupertinoIcons.Default.ChevronUp,
+                                            contentDescription = "上移",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { moveTopTab(tab.id, 1) },
+                                        enabled = !tab.fixedVisible && index < visibleTopOrder.lastIndex
+                                    ) {
+                                        Icon(
+                                            CupertinoIcons.Default.ChevronDown,
+                                            contentDescription = "下移",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "可用标签",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            allTopTabs.forEach { tab ->
+                                val isVisibleTab = tab.id in localTopTabVisible
+                                val canToggle = if (tab.fixedVisible) {
+                                    false
+                                } else if (isVisibleTab) {
+                                    localTopTabVisible.size > 2
+                                } else {
+                                    true
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = tab.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    io.github.alexzhirkevich.cupertino.CupertinoSwitch(
+                                        checked = isVisibleTab,
+                                        onCheckedChange = { checked ->
+                                            if (!canToggle) return@CupertinoSwitch
+                                            localTopTabVisible = if (checked) {
+                                                localTopTabVisible + tab.id
+                                            } else {
+                                                localTopTabVisible - tab.id
+                                            }
+                                            if (checked && tab.id !in localTopTabOrder) {
+                                                localTopTabOrder = localTopTabOrder + tab.id
+                                            }
+                                            // 推荐固定在首位
+                                            val withoutRecommend = localTopTabOrder.filterNot { it == "RECOMMEND" }
+                                            localTopTabOrder = listOf("RECOMMEND") + withoutRecommend
+                                            saveTopTabConfig()
+                                        },
+                                        enabled = canToggle,
+                                        colors = io.github.alexzhirkevich.cupertino.CupertinoSwitchDefaults.colors(
+                                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // 当前底栏预览
             item {
                 Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
@@ -528,7 +725,10 @@ fun BottomBarSettingsContent(
                             onClick = {
                                 localOrder = listOf("HOME", "DYNAMIC", "HISTORY", "PROFILE")
                                 localVisibleTabs = setOf("HOME", "DYNAMIC", "HISTORY", "PROFILE")
+                                localTopTabOrder = defaultTopTabIds
+                                localTopTabVisible = defaultTopTabIds.toSet()
                                 saveConfig()
+                                saveTopTabConfig()
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = io.github.alexzhirkevich.cupertino.CupertinoButtonDefaults.borderedButtonColors(

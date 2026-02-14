@@ -15,6 +15,7 @@ import androidx.compose.runtime.collectAsState //  新增
 import androidx.compose.runtime.getValue //  新增
 import androidx.compose.runtime.LaunchedEffect // 新增
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -31,9 +32,14 @@ import com.android.purebilibili.feature.search.SearchScreen
 import com.android.purebilibili.feature.settings.SettingsScreen
 import com.android.purebilibili.feature.settings.AppearanceSettingsScreen
 import com.android.purebilibili.feature.settings.PlaybackSettingsScreen
+import com.android.purebilibili.feature.settings.OFFICIAL_GITHUB_URL
+import com.android.purebilibili.feature.settings.OFFICIAL_TELEGRAM_URL
+import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
+import com.android.purebilibili.feature.settings.ReleaseChannelDisclaimerDialog
 import com.android.purebilibili.feature.list.CommonListScreen
 import com.android.purebilibili.feature.list.HistoryViewModel
 import com.android.purebilibili.feature.list.FavoriteViewModel
+import com.android.purebilibili.feature.list.resolveHistoryPlaybackCid
 import com.android.purebilibili.feature.video.screen.VideoDetailScreen
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.dynamic.DynamicScreen
@@ -109,6 +115,7 @@ fun AppNavigation(
     
     //  读取卡片过渡动画设置（在 Composable 作用域内）
     val context = androidx.compose.ui.platform.LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val cardTransitionEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCardTransitionEnabled(context).collectAsState(initial = true)
 
@@ -162,6 +169,10 @@ fun AppNavigation(
     // 注意：这里仅读取初始状态用于设置 startDestination
     // 后续状态更新由 OnboardingScreen 完成
     val firstLaunchShown = welcomePrefs.getBoolean("first_launch_shown", false)
+    val launchDisclaimerAck = welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false)
+    var showLaunchDisclaimer by remember {
+        mutableStateOf(!firstLaunchShown && !launchDisclaimerAck)
+    }
     val startDestination = if (firstLaunchShown) ScreenRoutes.Home.route else ScreenRoutes.Onboarding.route
 
     SharedTransitionProvider {
@@ -611,6 +622,10 @@ fun AppNavigation(
                     onVideoClick = { bvid, cid ->
                         // [修复] 根据历史记录类型导航到不同页面
                         val historyItem = historyViewModel.getHistoryItem(bvid)
+                        val resolvedCid = resolveHistoryPlaybackCid(
+                            clickedCid = cid,
+                            historyItem = historyItem
+                        )
                         when (historyItem?.business) {
                             com.android.purebilibili.data.model.response.HistoryBusiness.PGC -> {
                                 // 番剧: 导航到番剧播放页
@@ -622,7 +637,7 @@ fun AppNavigation(
                                     navController.navigate(ScreenRoutes.BangumiDetail.createRoute(historyItem.seasonId, historyItem.epid))
                                 } else {
                                     // 异常情况，尝试普通视频方式
-                                    navigateToVideo(bvid, cid, "")
+                                    navigateToVideo(bvid, resolvedCid, "")
                                 }
                             }
                             com.android.purebilibili.data.model.response.HistoryBusiness.LIVE -> {
@@ -634,12 +649,12 @@ fun AppNavigation(
                                         historyItem.videoItem.owner.name
                                     ))
                                 } else {
-                                    navigateToVideo(bvid, cid, "")
+                                    navigateToVideo(bvid, resolvedCid, "")
                                 }
                             }
                             else -> {
                                 // 普通视频 (archive) 或未知类型
-                                navigateToVideo(bvid, cid, "")
+                                navigateToVideo(bvid, resolvedCid, "")
                             }
                         }
                     }
@@ -1352,6 +1367,18 @@ fun AppNavigation(
                         }
                     }
                 }
+            }
+
+            if (showLaunchDisclaimer) {
+                ReleaseChannelDisclaimerDialog(
+                    title = "首次使用声明",
+                    onDismiss = {
+                        showLaunchDisclaimer = false
+                        welcomePrefs.edit().putBoolean(RELEASE_DISCLAIMER_ACK_KEY, true).apply()
+                    },
+                    onOpenGithub = { uriHandler.openUri(OFFICIAL_GITHUB_URL) },
+                    onOpenTelegram = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) }
+                )
             }
         } // End of Main Box
         } // End of CompositionLocalProvider

@@ -23,11 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Bolt
-import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.rounded.Window
+import androidx.compose.material.icons.rounded.ScreenRotation
 
 /**
  * 竖屏模式底部的输入栏
@@ -36,7 +33,7 @@ import androidx.compose.material.icons.rounded.Window
 @Composable
 fun PortraitBottomInputBar(
     onInputClick: () -> Unit,
-    onMoreClick: () -> Unit,
+    onRotateClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -66,12 +63,16 @@ fun PortraitBottomInputBar(
         
         Spacer(modifier = Modifier.width(12.dp))
 
-        // 视图切换/更多 -> 点击展开简介
-        IconButton(
-            icon = Icons.Rounded.GridView,
-            desc = "简介",
-            onClick = onMoreClick
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                icon = Icons.Rounded.ScreenRotation,
+                desc = "切换横屏",
+                onClick = onRotateClick
+            )
+        }
     }
 }
 

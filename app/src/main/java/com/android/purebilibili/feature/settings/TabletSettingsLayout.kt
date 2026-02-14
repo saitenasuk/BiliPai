@@ -56,6 +56,7 @@ fun TabletSettingsLayout(
     onPluginsClick: () -> Unit,
     onExportLogsClick: () -> Unit,
     onLicenseClick: () -> Unit,
+    onDisclaimerClick: () -> Unit,
     onGithubClick: () -> Unit,
     onCheckUpdateClick: () -> Unit,
     onVersionClick: () -> Unit,
@@ -391,6 +392,12 @@ fun TabletSettingsLayout(
                                     onExportLogsClick = onExportLogsClick
                                 )
                                 SettingsCategory.ABOUT -> {
+                                    ReleaseChannelPinnedCard(
+                                        onGithubClick = onGithubClick,
+                                        onTelegramClick = onTelegramClick,
+                                        onDisclaimerClick = onDisclaimerClick
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     FollowAuthorSection(
                                         onTelegramClick = onTelegramClick,
                                         onTwitterClick = onTwitterClick,
@@ -400,6 +407,7 @@ fun TabletSettingsLayout(
                                     AboutSection(
                                         versionName = versionName,
                                         easterEggEnabled = easterEggEnabled,
+                                        onDisclaimerClick = onDisclaimerClick,
                                         onLicenseClick = onLicenseClick,
                                         onGithubClick = onGithubClick,
                                         onCheckUpdateClick = onCheckUpdateClick,

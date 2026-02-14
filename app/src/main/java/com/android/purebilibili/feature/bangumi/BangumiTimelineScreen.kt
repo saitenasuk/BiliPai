@@ -122,7 +122,8 @@ private fun TimelineView(
             ) {
                 items(
                     items = selectedDay.episodes,
-                    key = { it.episodeId }
+                    // [修复] 使用复合 key 防止 episodeId 重复导致崩溃
+                    key = { "${it.seasonId}_${it.episodeId}" }
                 ) { episode ->
                     TimelineEpisodeCard(
                         episode = episode,

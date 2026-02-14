@@ -8,3 +8,19 @@ internal fun shouldReloadMainPlayerAfterPortraitExit(
     if (currentBvid.isNullOrBlank()) return true
     return snapshotBvid != currentBvid
 }
+
+internal fun shouldPauseMainPlayerOnPortraitEnter(useSharedPlayer: Boolean): Boolean {
+    return !useSharedPlayer
+}
+
+internal fun resolvePortraitInitialPlayingBvid(
+    useSharedPlayer: Boolean,
+    initialBvid: String
+): String? {
+    if (!useSharedPlayer) return null
+    return initialBvid
+}
+
+internal fun shouldMirrorPortraitProgressToMainPlayer(useSharedPlayer: Boolean): Boolean {
+    return !useSharedPlayer
+}

@@ -49,6 +49,7 @@ data class HistoryData(
         return VideoItem(
             id = history?.oid ?: 0,
             bvid = history?.bvid ?: "",
+            cid = history?.cid ?: 0,
             title = title,
             pic = if (cover.isNotEmpty()) cover else pic,
             owner = Owner(mid = author_mid, name = author_name, face = author_face),
@@ -69,7 +70,10 @@ data class HistoryData(
             business = business,
             epid = history?.epid ?: 0,
             seasonId = if (business == HistoryBusiness.PGC) (history?.oid ?: 0) else 0,
-            roomId = if (business == HistoryBusiness.LIVE) (history?.oid ?: 0) else 0
+            roomId = if (business == HistoryBusiness.LIVE) (history?.oid ?: 0) else 0,
+            cid = history?.cid ?: 0,
+            page = history?.page ?: 1,
+            progress = progress
         )
     }
 }
@@ -109,5 +113,8 @@ data class HistoryItem(
     val business: HistoryBusiness, // 内容类型
     val epid: Long = 0,           // 番剧剧集 ID
     val seasonId: Long = 0,       // 番剧季 ID (oid)
-    val roomId: Long = 0          // 直播间 ID
+    val roomId: Long = 0,         // 直播间 ID
+    val cid: Long = 0,            // 历史分P CID
+    val page: Int = 1,            // 历史分P号
+    val progress: Int = -1        // 服务端历史进度（秒）
 )

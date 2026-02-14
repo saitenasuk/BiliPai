@@ -57,7 +57,7 @@ import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
 
-const val GITHUB_URL = "https://github.com/jay3-yy/BiliPai/"
+const val GITHUB_URL = OFFICIAL_GITHUB_URL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,6 +107,7 @@ fun SettingsScreen(
     var showDirectoryPicker by remember { mutableStateOf(false) }
     // [新增] 打赏对话框
     var showDonateDialog by remember { mutableStateOf(false) }
+    var showReleaseDisclaimerDialog by remember { mutableStateOf(false) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var updateStatusText by remember { mutableStateOf("点击检查") }
     var updateCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
@@ -167,9 +168,10 @@ fun SettingsScreen(
     }
     
     val onExportLogsAction: () -> Unit = { LogCollector.exportAndShare(context) }
-    val onTelegramClick: () -> Unit = { uriHandler.openUri("https://t.me/BiliPai") }
+    val onTelegramClick: () -> Unit = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) }
     val onTwitterClick: () -> Unit = { uriHandler.openUri("https://x.com/YangY_0x00") }
-    val onGithubClick: () -> Unit = { uriHandler.openUri(GITHUB_URL) }
+    val onGithubClick: () -> Unit = { uriHandler.openUri(OFFICIAL_GITHUB_URL) }
+    val onDisclaimerClick: () -> Unit = { showReleaseDisclaimerDialog = true }
     val onBlockedListClickAction: () -> Unit = { showBlockedList = true }
     val onCheckUpdateAction: () -> Unit = {
         if (isCheckingUpdate) {
@@ -339,6 +341,14 @@ fun SettingsScreen(
         DonateDialog(onDismiss = { showDonateDialog = false })
     }
 
+    if (showReleaseDisclaimerDialog) {
+        ReleaseChannelDisclaimerDialog(
+            onDismiss = { showReleaseDisclaimerDialog = false },
+            onOpenGithub = onGithubClick,
+            onOpenTelegram = onTelegramClick
+        )
+    }
+
     updateCheckResult?.let { info ->
         val notesPreview = info.releaseNotes.trim().let { notes ->
             if (notes.isBlank()) "暂无更新说明" else notes.take(240)
@@ -402,6 +412,7 @@ fun SettingsScreen(
                     onPluginsClick = onPluginsClick,
                     onExportLogsClick = onExportLogsAction,
                     onLicenseClick = onOpenSourceLicensesClick,
+                    onDisclaimerClick = onDisclaimerClick,
                     onGithubClick = onGithubClick,
                     onCheckUpdateClick = onCheckUpdateAction,
                     onVersionClick = onVersionClickAction,
@@ -458,6 +469,7 @@ fun SettingsScreen(
                     onPluginsClick = onPluginsClick,
                     onExportLogsClick = onExportLogsAction,
                     onLicenseClick = onOpenSourceLicensesClick,
+                    onDisclaimerClick = onDisclaimerClick,
                     onGithubClick = onGithubClick,
                     onCheckUpdateClick = onCheckUpdateAction,
                     onVersionClick = onVersionClickAction,
@@ -533,6 +545,7 @@ private fun MobileSettingsLayout(
     onPluginsClick: () -> Unit,
     onExportLogsClick: () -> Unit,
     onLicenseClick: () -> Unit,
+    onDisclaimerClick: () -> Unit,
     onGithubClick: () -> Unit,
     onCheckUpdateClick: () -> Unit,
     onVersionClick: () -> Unit,
@@ -749,11 +762,25 @@ private fun MobileSettingsLayout(
                         MobileSettingsSubpage.ABOUT_AND_SUPPORT -> {
                             item {
                                 Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
-                                    IOSSectionTitle("关注作者")
+                                    IOSSectionTitle("发布渠道")
                                 }
                             }
                             item {
                                 Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                                    ReleaseChannelPinnedCard(
+                                        onGithubClick = onGithubClick,
+                                        onTelegramClick = onTelegramClick,
+                                        onDisclaimerClick = onDisclaimerClick
+                                    )
+                                }
+                            }
+                            item {
+                                Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                                    IOSSectionTitle("关注作者")
+                                }
+                            }
+                            item {
+                                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
                                     FollowAuthorSection(
                                         onTelegramClick = onTelegramClick,
                                         onTwitterClick = onTwitterClick,
@@ -762,15 +789,16 @@ private fun MobileSettingsLayout(
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
                                     IOSSectionTitle("关于")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(5, isVisible)) {
                                     AboutSection(
                                         versionName = versionName,
                                         easterEggEnabled = easterEggEnabled,
+                                        onDisclaimerClick = onDisclaimerClick,
                                         onLicenseClick = onLicenseClick,
                                         onGithubClick = onGithubClick,
                                         onCheckUpdateClick = onCheckUpdateClick,
@@ -785,12 +813,12 @@ private fun MobileSettingsLayout(
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(6, isVisible)) {
                                     IOSSectionTitle("帮助与系统")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(5, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(7, isVisible)) {
                                     SupportToolsSection(
                                         onTipsClick = onTipsClick,
                                         onOpenLinksClick = onOpenLinksClick

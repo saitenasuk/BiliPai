@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.home.components
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TopTabLayoutPolicyTest {
@@ -26,5 +28,12 @@ class TopTabLayoutPolicyTest {
     @Test
     fun `wide containers should use proportional width`() {
         assertEquals(100f, resolveTopTabItemWidthDp(500f, 5, isFloatingStyle = true), 0.001f)
+    }
+
+    @Test
+    fun `live route decision should follow category label not fixed index`() {
+        assertTrue(shouldRouteTopTabToLivePage("直播"))
+        assertFalse(shouldRouteTopTabToLivePage("推荐"))
+        assertFalse(shouldRouteTopTabToLivePage("LIVE"))
     }
 }

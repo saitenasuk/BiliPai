@@ -302,7 +302,7 @@ fun MineSideDrawer(
                     HorizontalDivider(modifier = Modifier.padding(start = 48.dp), thickness = dividerThickness, color = dividerColor)
                     IOSClickableItem(
                         icon = CupertinoIcons.Outlined.Bookmark,
-                        title = "稀后再看",
+                        title = "稍后再看",
                         onClick = { closeAndRun(onWatchLaterClick) },
                         iconTint = iOSGreen,
                         textColor = activeContentColor,

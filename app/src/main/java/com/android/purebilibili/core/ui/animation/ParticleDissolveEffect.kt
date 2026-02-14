@@ -51,6 +51,38 @@ object DissolveAnimationManager {
     }
 }
 
+enum class DissolveAnimationPreset {
+    CLASSIC,
+    TELEGRAM_FAST
+}
+
+private data class DissolveAnimationParams(
+    val durationSec: Float,
+    val particleStep: Int,
+    val waveDurationSec: Float,
+    val waveRandomSec: Float,
+    val collapseDurationMs: Int
+)
+
+private fun DissolveAnimationPreset.params(): DissolveAnimationParams {
+    return when (this) {
+        DissolveAnimationPreset.CLASSIC -> DissolveAnimationParams(
+            durationSec = 1.8f,
+            particleStep = 2,
+            waveDurationSec = 0.35f,
+            waveRandomSec = 0.08f,
+            collapseDurationMs = 200
+        )
+        DissolveAnimationPreset.TELEGRAM_FAST -> DissolveAnimationParams(
+            durationSec = 0.82f,
+            particleStep = 3,
+            waveDurationSec = 0.16f,
+            waveRandomSec = 0.05f,
+            collapseDurationMs = 135
+        )
+    }
+}
+
 @Composable
 fun Modifier.jiggleOnDissolve(
     cardId: String,
@@ -102,18 +134,30 @@ fun DissolvableVideoCard(
     onDissolveComplete: () -> Unit,
     modifier: Modifier = Modifier,
     cardId: String = "",
+    preset: DissolveAnimationPreset = DissolveAnimationPreset.CLASSIC,
     content: @Composable () -> Unit
 ) {
+    val animationParams = remember(preset) { preset.params() }
     var cardSize by remember { mutableStateOf(IntSize.Zero) }
     var shouldCollapse by remember { mutableStateOf(false) }
     
-        // 动画：完成/收起 - 使用更快的动画
+    val collapseSpec: AnimationSpec<Float> = remember(animationParams.collapseDurationMs, preset) {
+        when (preset) {
+            DissolveAnimationPreset.CLASSIC -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessHigh
+            )
+            DissolveAnimationPreset.TELEGRAM_FAST -> tween(
+                durationMillis = animationParams.collapseDurationMs,
+                easing = FastOutSlowInEasing
+            )
+        }
+    }
+
+    // 动画：完成/收起
     val heightMultiplier by animateFloatAsState(
         targetValue = if (shouldCollapse) 0f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessHigh  //  更快的动画
-        ),
+        animationSpec = collapseSpec,
         label = "heightCollapse",
         finishedListener = {
              if (shouldCollapse) {
@@ -237,7 +281,13 @@ fun DissolvableVideoCard(
                         setZOrderOnTop(true)
                         holder.setFormat(PixelFormat.TRANSLUCENT)
                         
-                        setBitmap(captureBitmap!!)
+                        setBitmap(
+                            bitmap = captureBitmap!!,
+                            durationSec = animationParams.durationSec,
+                            particleStep = animationParams.particleStep,
+                            waveDurationSec = animationParams.waveDurationSec,
+                            waveRandomSec = animationParams.waveRandomSec
+                        )
                         setCallbacks(
                             complete = {
                                  // onDissolveComplete() // REMOVED: Don't dismiss yet
@@ -279,7 +329,13 @@ class GLParticleView(context: Context) : GLSurfaceView(context) {
         setEGLConfigChooser(8, 8, 8, 8, 16, 0) // Enable Alpha
     }
 
-    fun setBitmap(bitmap: Bitmap) {
+    fun setBitmap(
+        bitmap: Bitmap,
+        durationSec: Float = 2.0f,
+        particleStep: Int = 2,
+        waveDurationSec: Float = 0.4f,
+        waveRandomSec: Float = 0.1f
+    ) {
         renderer = ParticleRenderer(
             textureBitmap = bitmap,
             onAnimationComplete = {
@@ -287,7 +343,11 @@ class GLParticleView(context: Context) : GLSurfaceView(context) {
             },
             onFirstFrame = {
                 post { onFirstFrame?.invoke() }
-            }
+            },
+            animationDurationSec = durationSec,
+            particleStep = particleStep,
+            waveDurationSec = waveDurationSec,
+            waveRandomSec = waveRandomSec
         )
         setRenderer(renderer)
         renderMode = RENDERMODE_CONTINUOUSLY
@@ -299,4 +359,3 @@ class GLParticleView(context: Context) : GLSurfaceView(context) {
     }
 }
 // wait, I need to redefine GLParticleView properly to support both setup and logic
-

@@ -212,7 +212,7 @@ fun ElegantVideoCard(
                             cardBoundsRef.value?.let { bounds ->
                                 CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
                             }
-                            onClick(video.bvid, 0)
+                            onClick(video.bvid, video.cid)
                         }
                     )
                 }
@@ -348,7 +348,7 @@ fun ElegantVideoCard(
                                 cardBoundsRef.value?.let { bounds ->
                                     CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
                                 }
-                                onClick(video.bvid, 0)
+                                onClick(video.bvid, video.cid)
                             }
                         )
                     }

@@ -178,16 +178,50 @@ fun HomeScreen(
         }
     }
 
+    // [P2] 顶栏自定义：顺序与可见项从设置读取
+    val defaultTopTabIds = remember { resolveDefaultHomeTopTabIds() }
+    val topTabOrderIds by SettingsManager.getTopTabOrder(context).collectAsState(
+        initial = defaultTopTabIds
+    )
+    val topTabVisibleIds by SettingsManager.getTopTabVisibleTabs(context).collectAsState(
+        initial = defaultTopTabIds.toSet()
+    )
     // [Refactor] Hoist PagerState to be available for both Content and Header
     // 确保 pagerState 在所有作用域均可见，以便传给 iOSHomeHeader
-    val topCategories = remember { resolveHomeTopCategories() }
-    val initialPage = resolveHomeTopTabIndex(state.currentCategory)
+    val topCategories = remember(topTabOrderIds, topTabVisibleIds) {
+        resolveHomeTopCategories(
+            customOrderIds = topTabOrderIds,
+            visibleIds = topTabVisibleIds
+        )
+    }
+    val initialPage = resolveHomeTopTabIndex(state.currentCategory, topCategories)
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topCategories.size }
     
     // [修复] 监听 Pager 滑动，同步更新 ViewModel 分类
     LaunchedEffect(pagerState.currentPage) {
-        val targetCategory = resolveHomeCategoryForTopTab(pagerState.currentPage)
+        val targetCategory = resolveHomeCategoryForTopTab(
+            index = pagerState.currentPage,
+            topCategories = topCategories
+        )
         viewModel.switchCategory(targetCategory)
+    }
+
+    // [P2] 当前分类被隐藏时，自动落到首个可见分类
+    LaunchedEffect(topCategories) {
+        val firstVisible = topCategories.firstOrNull() ?: return@LaunchedEffect
+        if (state.currentCategory !in topCategories) {
+            viewModel.updateDisplayedTabIndex(0)
+            viewModel.switchCategory(firstVisible)
+        }
+    }
+
+    // [CrashFix] 顶栏配置变化导致页数收缩时，先钳制 pager 当前页，避免越界
+    LaunchedEffect(topCategories.size) {
+        if (topCategories.isEmpty()) return@LaunchedEffect
+        val lastIndex = topCategories.lastIndex
+        if (pagerState.currentPage > lastIndex) {
+            pagerState.scrollToPage(lastIndex)
+        }
     }
 
     // [修复] 监听 ViewModel 状态变化，同步更新 Pager 位置
@@ -629,9 +663,13 @@ fun HomeScreen(
         }
     }
     
-    //  [修复] 使用 ViewModel 中的标签页显示索引（跨导航保持）
-    // 当用户滑动到特殊分类时，标签页位置更新，但内容分类保持不变
-    val displayedTabIndex = state.displayedTabIndex.coerceIn(0, (topCategories.size - 1).coerceAtLeast(0))
+    // [P2] 优先按当前可见顶栏计算索引，避免自定义排序后高亮错位
+    val currentCategoryIndex = topCategories.indexOf(state.currentCategory)
+    val displayedTabIndex = if (currentCategoryIndex >= 0) {
+        currentCategoryIndex
+    } else {
+        state.displayedTabIndex.coerceIn(0, (topCategories.size - 1).coerceAtLeast(0))
+    }
 
     //  根据滚动距离动态调整 BottomBar 可见性
     //  逻辑优化：使用 nestedScrollConnection 监听滚动
@@ -716,6 +754,12 @@ fun HomeScreen(
              onVideoClick(bvid, aid, pic)
         }
     }
+    val onTodayWatchVideoClick: (VideoItem) -> Unit = remember(viewModel, wrappedOnVideoClick) {
+        { video ->
+            viewModel.markTodayWatchVideoOpened(video)
+            wrappedOnVideoClick(video.bvid, video.cid, video.pic)
+        }
+    }
 
     // [TodayWatch首曝] 冷启动启动窗口内自动回顶一次，确保用户能看到今日推荐单卡片。
     LaunchedEffect(
@@ -780,9 +824,9 @@ fun HomeScreen(
                             beyondViewportPageCount = 1, // [Optimization] Preload adjacent pages to prevent swipe lag
                             modifier = Modifier
                                 .fillMaxSize(),
-                            key = { index -> topCategories[index].ordinal }
+                            key = { index -> resolveHomeTopCategoryKey(topCategories, index) }
                         ) { page ->
-                        val category = topCategories[page]
+                        val category = resolveHomeTopCategoryOrNull(topCategories, page) ?: return@HorizontalPager
                         val categoryState = state.categoryStates[category] ?: com.android.purebilibili.feature.home.CategoryContent()
                         
                         //  独立的 PullToRefreshState，避免所有页面共享一个状态导致冲突
@@ -933,7 +977,8 @@ fun HomeScreen(
                                      todayWatchLoading = category == HomeCategory.RECOMMEND && state.todayWatchLoading,
                                      todayWatchError = if (category == HomeCategory.RECOMMEND) state.todayWatchError else null,
                                      todayWatchCardConfig = state.todayWatchCardConfig,
-                                     onTodayWatchModeChange = onTodayWatchModeChange
+                                     onTodayWatchModeChange = onTodayWatchModeChange,
+                                     onTodayWatchVideoClick = onTodayWatchVideoClick
                                  )
                              }
                              } // Close Box wrapper
@@ -967,10 +1012,13 @@ fun HomeScreen(
             },
             onSettingsClick = onSettingsClick,
             onSearchClick = onSearchClick,
+            topCategories = topCategories.map { it.label },
             categoryIndex = displayedTabIndex,
             onCategorySelected = { index ->
                 viewModel.updateDisplayedTabIndex(index)
-                viewModel.switchCategory(resolveHomeCategoryForTopTab(index))
+                topCategories.getOrNull(index)?.let { selectedCategory ->
+                    viewModel.switchCategory(selectedCategory)
+                }
             },
             onPartitionClick = onPartitionClick,
             onLiveClick = onLiveListClick,  // [修复] 直播分区点击导航到独立页面

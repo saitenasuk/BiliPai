@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.data.model.response.ViewInfo
+import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.core.util.FormatUtils
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -41,7 +42,12 @@ import kotlinx.coroutines.launch
 fun PortraitDetailSheet(
     visible: Boolean,
     onDismiss: () -> Unit,
-    info: ViewInfo?
+    info: ViewInfo?,
+    recommendationTitle: String = "推荐视频",
+    recommendations: List<RelatedVideo> = emptyList(),
+    onRecommendationClick: (String) -> Unit = {},
+    danmakuEnabled: Boolean = true,
+    onDanmakuToggle: () -> Unit = {}
 ) {
     if (!visible && info == null) return
 
@@ -114,12 +120,22 @@ fun PortraitDetailSheet(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Close",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = onDanmakuToggle) {
+                                Text(
+                                    text = if (danmakuEnabled) "弹幕开" else "弹幕关",
+                                    fontSize = 13.sp
+                                )
+                            }
+                            IconButton(onClick = onDismiss) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Close",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
@@ -244,6 +260,54 @@ fun PortraitDetailSheet(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                 modifier = Modifier.padding(bottom = 16.dp)
                             )
+
+                            if (recommendations.isNotEmpty()) {
+                                Text(
+                                    text = recommendationTitle,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(bottom = 10.dp)
+                                )
+
+                                recommendations.take(12).forEach { video ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .clickable { onRecommendationClick(video.bvid) }
+                                            .padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AsyncImage(
+                                            model = FormatUtils.fixImageUrl(video.pic),
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(width = 96.dp, height = 54.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color.Gray.copy(alpha = 0.2f)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(
+                                                text = video.title,
+                                                fontSize = 13.sp,
+                                                maxLines = 2,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "${video.owner.name} · ${FormatUtils.formatStat(video.stat.view.toLong())}播放",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             
                             // 标签 (Flow Layout usually, simplified here for now)
                             // TODO: If tags available in ViewInfo, display them.

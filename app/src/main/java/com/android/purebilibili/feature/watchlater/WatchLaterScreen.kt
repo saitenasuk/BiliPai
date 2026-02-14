@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.watchlater
 
 import android.app.Application
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.ExperimentalFoundationApi
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
+import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -27,6 +29,7 @@ import dev.chrisbanes.haze.HazeTint
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +51,9 @@ import com.android.purebilibili.data.model.response.Stat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 
 // 辅助函数：格式化时长
 private fun formatDuration(seconds: Int): String {
@@ -156,13 +162,21 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     /**
-     * 从稀后再看删除视频
+     * 从稍后再看删除视频
      */
     fun deleteItem(aid: Long) {
         // 乐观更新：直接从列表中移除，不需要重新请求
         val currentList = _uiState.value.items
         val newList = currentList.filter { it.id != aid }
-        _uiState.value = _uiState.value.copy(items = newList)
+        val removedBvid = currentList.firstOrNull { it.id == aid }?.bvid
+        _uiState.value = _uiState.value.copy(
+            items = newList,
+            dissolvingIds = if (removedBvid == null) {
+                _uiState.value.dissolvingIds
+            } else {
+                _uiState.value.dissolvingIds - removedBvid
+            }
+        )
 
         viewModelScope.launch {
             try {
@@ -174,17 +188,6 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                 }
                 val response = api.deleteFromWatchLater(aid = aid, csrf = csrf)
                 if (response.code == 0) {
-                    // 从列表中移除该项
-                    val currentItems = _uiState.value.items
-                    _uiState.value = _uiState.value.copy(
-                        items = currentItems.filter { 
-                            // VideoItem 没有 aid 字段，需要通过其他方式匹配
-                            // 由于删除是通过 aid 的，这里我们重新加载数据
-                            true
-                        }
-                    )
-                    // 重新加载数据以确保一致性
-                    // loadData()
                     android.widget.Toast.makeText(getApplication(), "已从稍后再看移除", android.widget.Toast.LENGTH_SHORT).show()
                 } else {
                     android.widget.Toast.makeText(getApplication(), "移除失败: ${response.message}", android.widget.Toast.LENGTH_SHORT).show()
@@ -192,6 +195,50 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
             } catch (e: Exception) {
                 e.printStackTrace()
                 android.widget.Toast.makeText(getApplication(), "移除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun deleteItems(aids: List<Long>) {
+        if (aids.isEmpty()) return
+        val aidSet = aids.toSet()
+        val snapshot = _uiState.value.items
+        _uiState.value = _uiState.value.copy(
+            items = snapshot.filterNot { it.id in aidSet },
+            dissolvingIds = _uiState.value.dissolvingIds - snapshot.filter { it.id in aidSet }.map { it.bvid }.toSet()
+        )
+
+        viewModelScope.launch {
+            try {
+                val api = NetworkModule.api
+                val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
+                if (csrf.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(items = snapshot)
+                    android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+
+                var successCount = 0
+                aids.forEach { aid ->
+                    runCatching {
+                        api.deleteFromWatchLater(aid = aid, csrf = csrf)
+                    }.onSuccess { response ->
+                        if (response.code == 0) successCount++
+                    }
+                }
+
+                if (successCount == aids.size) {
+                    android.widget.Toast.makeText(getApplication(), "已删除 ${aids.size} 个视频", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "批量删除完成：成功 $successCount / ${aids.size}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.widget.Toast.makeText(getApplication(), "批量删除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -217,6 +264,17 @@ fun WatchLaterScreen(
     val state by viewModel.uiState.collectAsState()
     val hazeState = remember { HazeState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    var isBatchMode by rememberSaveable { mutableStateOf(false) }
+    var selectedBvids by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var showBatchDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(state.items) {
+        val valid = state.items.map { it.bvid }.toSet()
+        selectedBvids = selectedBvids.filter { it in valid }.toSet()
+        if (isBatchMode && state.items.isEmpty()) {
+            isBatchMode = false
+        }
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -235,31 +293,64 @@ fun WatchLaterScreen(
                         }
                     },
                     actions = {
-                        // 🎵 [新增] 全部播放按钮
                         if (state.items.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    val externalPlaylist = buildExternalPlaylistFromWatchLater(
-                                        items = state.items,
-                                        clickedBvid = state.items.firstOrNull()?.bvid
-                                    ) ?: return@IconButton
+                            if (isBatchMode) {
+                                val allSelected = selectedBvids.size == state.items.size
+                                TextButton(
+                                    onClick = {
+                                        selectedBvids = if (allSelected) emptySet() else state.items.map { it.bvid }.toSet()
+                                    }
+                                ) {
+                                    Text(if (allSelected) "取消全选" else "全选")
+                                }
+                                TextButton(
+                                    enabled = selectedBvids.isNotEmpty(),
+                                    onClick = { showBatchDeleteConfirm = true }
+                                ) {
+                                    Text("删除(${selectedBvids.size})")
+                                }
+                                TextButton(
+                                    onClick = {
+                                        isBatchMode = false
+                                        selectedBvids = emptySet()
+                                    }
+                                ) {
+                                    Text("完成")
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = {
+                                        val externalPlaylist = buildExternalPlaylistFromWatchLater(
+                                            items = state.items,
+                                            clickedBvid = state.items.firstOrNull()?.bvid
+                                        ) ?: return@IconButton
 
-                                    com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
-                                        externalPlaylist.playlistItems,
-                                        externalPlaylist.startIndex
-                                    )
+                                        com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
+                                            externalPlaylist.playlistItems,
+                                            externalPlaylist.startIndex
+                                        )
 
-                                    onVideoClick(
-                                        state.items[externalPlaylist.startIndex].bvid,
-                                        0L
+                                        onVideoClick(
+                                            state.items[externalPlaylist.startIndex].bvid,
+                                            0L
+                                        )
+                                    }
+                                ) {
+                                    Icon(
+                                        CupertinoIcons.Filled.Play,
+                                        contentDescription = "全部播放",
+                                        tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
-                            ) {
-                                Icon(
-                                    CupertinoIcons.Filled.Play,
-                                    contentDescription = "全部播放",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
+
+                                TextButton(
+                                    onClick = {
+                                        isBatchMode = true
+                                        selectedBvids = emptySet()
+                                    }
+                                ) {
+                                    Text("批量删除")
+                                }
                             }
                         }
                     },
@@ -346,43 +437,115 @@ fun WatchLaterScreen(
                             key = { _, item -> item.bvid } 
                         ) { index, item ->
                             val isDissolving = item.bvid in state.dissolvingIds
+                            val isSelected = item.bvid in selectedBvids
                             
                             DissolvableVideoCard(
                                 isDissolving = isDissolving,
                                 onDissolveComplete = { viewModel.completeVideoDissolve(item.bvid) },
                                 cardId = item.bvid,
+                                preset = DissolveAnimationPreset.TELEGRAM_FAST,
                                 modifier = Modifier.jiggleOnDissolve(item.bvid)
                             ) {
-                                ElegantVideoCard(
-                                    video = item,
-                                    index = index,
-                                    animationEnabled = true, // 保留首页卡片动画
-                                    transitionEnabled = true, // 共享元素过渡
-                                    showPublishTime = true,
-                                    dismissMenuText = "\uD83D\uDDD1\uFE0F 删除",
-                                    // 触发 Thanos 响指动画 (开始消散)
-                                    onDismiss = { viewModel.startVideoDissolve(item.bvid) },  
-                                    onClick = { bvid, _ ->
-                                        val externalPlaylist = buildExternalPlaylistFromWatchLater(
-                                            items = state.items,
-                                            clickedBvid = bvid
-                                        )
-                                        if (externalPlaylist != null) {
-                                            com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
-                                                externalPlaylist.playlistItems,
-                                                externalPlaylist.startIndex
-                                            )
-                                        }
+                                Box {
+                                    ElegantVideoCard(
+                                        video = item,
+                                        index = index,
+                                        animationEnabled = true, // 保留首页卡片动画
+                                        transitionEnabled = true, // 共享元素过渡
+                                        showPublishTime = true,
+                                        dismissMenuText = "\uD83D\uDDD1\uFE0F 删除",
+                                        // 触发 Thanos 响指动画 (开始消散)
+                                        onDismiss = if (isBatchMode) null else ({ viewModel.startVideoDissolve(item.bvid) }),
+                                        onClick = { bvid, _ ->
+                                            if (isBatchMode) {
+                                                selectedBvids = if (bvid in selectedBvids) {
+                                                    selectedBvids - bvid
+                                                } else {
+                                                    selectedBvids + bvid
+                                                }
+                                            } else {
+                                                val externalPlaylist = buildExternalPlaylistFromWatchLater(
+                                                    items = state.items,
+                                                    clickedBvid = bvid
+                                                )
+                                                if (externalPlaylist != null) {
+                                                    com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
+                                                        externalPlaylist.playlistItems,
+                                                        externalPlaylist.startIndex
+                                                    )
+                                                }
 
-                                        onVideoClick(bvid, 0L)
+                                                onVideoClick(bvid, 0L)
+                                            }
+                                        }
+                                    )
+
+                                    if (isBatchMode) {
+                                        Box(
+                                            modifier = Modifier
+                                                .matchParentSize()
+                                                .border(
+                                                    width = if (isSelected) 2.dp else 1.dp,
+                                                    color = if (isSelected) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                                                    },
+                                                    shape = RoundedCornerShape(12.dp)
+                                                )
+                                                .background(
+                                                    if (isSelected) {
+                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                                                    } else {
+                                                        Color.Transparent
+                                                    },
+                                                    shape = RoundedCornerShape(12.dp)
+                                                )
+                                        )
+                                        Icon(
+                                            imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                                            contentDescription = if (isSelected) "已选择" else "未选择",
+                                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(8.dp)
+                                        )
                                     }
-                                )
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showBatchDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteConfirm = false },
+            title = { Text("批量删除") },
+            text = { Text("确认删除已选择的 ${selectedBvids.size} 个视频吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val aidList = state.items
+                            .filter { it.bvid in selectedBvids }
+                            .map { it.id }
+                        viewModel.deleteItems(aidList)
+                        selectedBvids = emptySet()
+                        isBatchMode = false
+                        showBatchDeleteConfirm = false
+                    }
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 

@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import com.android.purebilibili.core.util.responsiveContentWidth
@@ -66,6 +67,9 @@ fun HomeCategoryPageContent(
     todayWatchError: String? = null,
     todayWatchCardConfig: TodayWatchCardUiConfig = TodayWatchCardUiConfig(),
     onTodayWatchModeChange: (TodayWatchMode) -> Unit = {},
+    onTodayWatchVideoClick: (VideoItem) -> Unit = { video ->
+        onVideoClick(video.bvid, video.cid, video.pic)
+    },
     modifier: Modifier = Modifier,
 ) {
     // Check for load more
@@ -153,7 +157,7 @@ fun HomeCategoryPageContent(
                             error = todayWatchError,
                             cardConfig = todayWatchCardConfig,
                             onModeChange = onTodayWatchModeChange,
-                            onVideoClick = onVideoClick
+                            onVideoClick = onTodayWatchVideoClick
                         )
                     }
                 }
@@ -189,6 +193,7 @@ fun HomeCategoryPageContent(
                             isDissolving = isDissolving,
                             onDissolveComplete = { onDissolveComplete(video.bvid) },
                             cardId = video.bvid,
+                            preset = DissolveAnimationPreset.TELEGRAM_FAST,
                             modifier = Modifier.jiggleOnDissolve(video.bvid)
                         ) {
                             when (displayMode) {
@@ -260,7 +265,7 @@ private fun TodayWatchPlanCard(
     error: String?,
     cardConfig: TodayWatchCardUiConfig,
     onModeChange: (TodayWatchMode) -> Unit,
-    onVideoClick: (String, Long, String) -> Unit
+    onVideoClick: (VideoItem) -> Unit
 ) {
     var revealContent by remember(plan?.generatedAt, isLoading, cardConfig.enableWaterfallAnimation) {
         mutableStateOf(!cardConfig.enableWaterfallAnimation)
@@ -306,6 +311,11 @@ private fun TodayWatchPlanCard(
                     )
                 }
             }
+            Text(
+                text = "点开后会自动从推荐单移除；想换一批可下拉刷新推荐页。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             if (isLoading) {
                 Row(
@@ -405,7 +415,7 @@ private fun TodayWatchPlanCard(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onVideoClick(video.bvid, video.cid, video.pic) }
+                                    .clickable { onVideoClick(video) }
                                     .padding(vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalAlignment = Alignment.CenterVertically

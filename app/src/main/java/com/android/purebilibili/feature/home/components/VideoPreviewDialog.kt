@@ -45,6 +45,7 @@ import androidx.media3.common.Player
 import androidx.compose.material.icons.rounded.Fullscreen
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
+import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.zIndex
 
@@ -118,6 +119,8 @@ fun VideoPreviewDialog(
                 onNotInterested?.invoke()
             },
             cardId = video.bvid
+            ,
+            preset = DissolveAnimationPreset.TELEGRAM_FAST
         ) {
             Column(
                 modifier = Modifier

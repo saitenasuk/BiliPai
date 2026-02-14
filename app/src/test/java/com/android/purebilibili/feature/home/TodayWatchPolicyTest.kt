@@ -272,4 +272,38 @@ class TodayWatchPolicyTest {
         assertEquals("prefer_b", plan.videoQueue.firstOrNull()?.bvid)
         assertEquals(22L, plan.upRanks.firstOrNull()?.mid)
     }
+
+    @Test
+    fun `plan filters out consumed queue items`() {
+        val candidates = listOf(
+            VideoItem(
+                bvid = "keep",
+                owner = Owner(mid = 1, name = "UP-A"),
+                duration = 420,
+                stat = Stat(view = 8_000, danmaku = 40),
+                title = "保留视频"
+            ),
+            VideoItem(
+                bvid = "consumed",
+                owner = Owner(mid = 2, name = "UP-B"),
+                duration = 420,
+                stat = Stat(view = 8_000, danmaku = 40),
+                title = "已看视频"
+            )
+        )
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.RELAX,
+            eyeCareNightActive = false,
+            nowEpochSec = 1_700_010_000,
+            penaltySignals = TodayWatchPenaltySignals(
+                consumedBvids = setOf("consumed")
+            )
+        )
+
+        assertTrue(plan.videoQueue.any { it.bvid == "keep" })
+        assertFalse(plan.videoQueue.any { it.bvid == "consumed" })
+    }
 }
