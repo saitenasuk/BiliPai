@@ -44,6 +44,7 @@ import com.android.purebilibili.feature.video.screen.VideoDetailScreen
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.dynamic.DynamicScreen
 import com.android.purebilibili.feature.dynamic.LocalDynamicScrollChannel
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewOverlayHost
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.ProvideAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.SharedTransitionProvider
@@ -1380,6 +1381,12 @@ fun AppNavigation(
                     onOpenTelegram = { uriHandler.openUri(OFFICIAL_TELEGRAM_URL) }
                 )
             }
+
+            ImagePreviewOverlayHost(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(100f)
+            )
         } // End of Main Box
         } // End of CompositionLocalProvider
     }

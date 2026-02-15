@@ -925,20 +925,13 @@ class DanmakuManager private constructor(
                     
                     // 处理 Command Dms (如高能进度条提示, 互动弹幕)
                     if (viewReply.commandDms.isNotEmpty()) {
-                        commandDmList = viewReply.commandDms.map { cmd ->
-                            AdvancedDanmakuData(
-                                id = "cmd_${cmd.id}",
-                                content = cmd.content,
-                                startTimeMs = cmd.progress.toLong(),
-                                durationMs = 5000, // 默认 5 秒
-                                startX = 0.5f,     // 默认居中顶部
-                                startY = 0.1f,
-                                fontSize = 20f,
-                                color = 0xFFD700,  // 金色
-                                alpha = 0.9f
-                            )
+                        commandDmList = viewReply.commandDms.mapNotNull { cmd ->
+                            buildCommandDanmaku(cmd)
                         }
-                        Log.w(TAG, " Converted ${commandDmList.size} Command Dms to AdvancedDanmakuData")
+                        Log.w(
+                            TAG,
+                            " Converted ${commandDmList.size}/${viewReply.commandDms.size} Command Dms to AdvancedDanmakuData"
+                        )
                     }
                     
                     // TODO: specialDms 通常是 URL 列表，需要额外下载解析，暂跳过

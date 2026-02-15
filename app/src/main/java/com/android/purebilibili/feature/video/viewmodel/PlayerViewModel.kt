@@ -241,6 +241,7 @@ class PlayerViewModel : ViewModel() {
     private var heartbeatJob: Job? = null
     private var appContext: android.content.Context? = null  //  [新增] 保存 Context 用于网络检测
     private var hasUserStartedPlayback = false  // 🛡️ [修复] 用户是否主动开始播放（用于区分“加载已看完视频”和“自然播放结束”）
+    private var isPortraitPlaybackSessionActive = false
     private val followStatusCheckInFlight = mutableSetOf<Long>()
     private var lastCreatorSignalPositionSec: Long = -1L
     
@@ -262,6 +263,10 @@ class PlayerViewModel : ViewModel() {
     
     fun setAudioMode(enabled: Boolean) {
         _isInAudioMode.value = enabled
+    }
+
+    fun setPortraitPlaybackSessionActive(active: Boolean) {
+        isPortraitPlaybackSessionActive = active
     }
 
     //  Sleep Timer State
@@ -441,18 +446,41 @@ class PlayerViewModel : ViewModel() {
                 val context = appContext ?: return
                 val autoPlayEnabled = com.android.purebilibili.core.store.SettingsManager
                     .getAutoPlaySync(context)
-                
-                if (autoPlayEnabled) {
-                    // 🎵 [修复] 优先播放下一个分P，没有分P时再播放推荐视频
-                    playNextPageOrRecommended()
-                } else {
-                    // 🔒 [修复] 外部播放列表模式下自动播放下一个，不显示弹窗
-                    if (PlaylistManager.isExternalPlaylist.value) {
-                        playNextPageOrRecommended()
-                    } else {
-                        // 自动播放关闭：保持结束态，不弹窗打断
+
+                if (isPortraitPlaybackSessionActive) {
+                    Logger.d("PlayerVM", "📱 STATE_ENDED in portrait session, handled by portrait pager")
+                    return
+                }
+
+                val behavior = com.android.purebilibili.core.store.SettingsManager
+                    .getPlaybackCompletionBehaviorSync(context)
+                when (
+                    resolvePlaybackEndAction(
+                        behavior = behavior,
+                        autoPlayEnabled = autoPlayEnabled,
+                        isExternalPlaylist = PlaylistManager.isExternalPlaylist.value
+                    )
+                ) {
+                    PlaybackEndAction.STOP -> {
+                        // 自动播放关闭或策略为播完即止：保持结束态，不弹窗打断
                         _showPlaybackEndedDialog.value = false
                     }
+                    PlaybackEndAction.REPEAT_CURRENT -> {
+                        exoPlayer?.seekTo(0)
+                        exoPlayer?.playWhenReady = true
+                        exoPlayer?.play()
+                    }
+                    PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST -> {
+                        if (!playNextFromPlaylist(loopAtEnd = false)) {
+                            _showPlaybackEndedDialog.value = false
+                        }
+                    }
+                    PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST_LOOP -> {
+                        if (!playNextFromPlaylist(loopAtEnd = true)) {
+                            _showPlaybackEndedDialog.value = false
+                        }
+                    }
+                    PlaybackEndAction.AUTO_CONTINUE -> playNextPageOrRecommended()
                 }
             }
         }
@@ -509,6 +537,29 @@ class PlayerViewModel : ViewModel() {
                 else -> toast("没有更多视频")
             }
         }
+    }
+
+    private fun playNextFromPlaylist(loopAtEnd: Boolean): Boolean {
+        val items = PlaylistManager.playlist.value
+        if (items.isEmpty()) return false
+
+        val currentInfo = (_uiState.value as? PlayerUiState.Success)?.info
+        val currentIndex = PlaylistManager.currentIndex.value
+            .takeIf { it in items.indices }
+            ?: currentInfo?.bvid?.let { bvid ->
+                items.indexOfFirst { it.bvid == bvid }.takeIf { it >= 0 }
+            }
+            ?: 0
+
+        val nextIndex = when {
+            currentIndex < items.lastIndex -> currentIndex + 1
+            loopAtEnd -> 0
+            else -> return false
+        }
+
+        val target = PlaylistManager.playAt(nextIndex) ?: return false
+        loadVideo(target.bvid, autoPlay = true)
+        return true
     }
     
     /**

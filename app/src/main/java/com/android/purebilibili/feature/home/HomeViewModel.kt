@@ -60,7 +60,8 @@ private data class TodayWatchRuntimeConfig(
     val showUpRank: Boolean,
     val showReasonHint: Boolean,
     val enableWaterfallAnimation: Boolean,
-    val waterfallExponent: Float
+    val waterfallExponent: Float,
+    val collapsed: Boolean
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -121,7 +122,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         todayWatchPluginObserverJob = viewModelScope.launch {
                             plugin.configState.collect {
                                 val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
-                                if (runtime.enabled && _uiState.value.currentCategory == HomeCategory.RECOMMEND) {
+                                if (shouldAutoRebuildTodayWatchPlan(
+                                        currentCategory = _uiState.value.currentCategory,
+                                        isTodayWatchEnabled = runtime.enabled,
+                                        isTodayWatchCollapsed = runtime.collapsed
+                                    )
+                                ) {
                                     rebuildTodayWatchPlan()
                                 }
                             }
@@ -131,7 +137,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
-                if (runtime.enabled && _uiState.value.currentCategory == HomeCategory.RECOMMEND) {
+                if (shouldAutoRebuildTodayWatchPlan(
+                        currentCategory = _uiState.value.currentCategory,
+                        isTodayWatchEnabled = runtime.enabled,
+                        isTodayWatchCollapsed = runtime.collapsed
+                    )
+                ) {
                     rebuildTodayWatchPlan()
                 }
             }
@@ -165,7 +176,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         
         _uiState.value = newState
         viewModelScope.launch {
-            rebuildTodayWatchPlan()
+            val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
+            if (shouldAutoRebuildTodayWatchPlan(
+                    currentCategory = _uiState.value.currentCategory,
+                    isTodayWatchEnabled = runtime.enabled,
+                    isTodayWatchCollapsed = runtime.collapsed
+                )
+            ) {
+                rebuildTodayWatchPlan()
+            }
         }
     }
 
@@ -184,7 +203,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             showUpRank = config.showUpRank,
             showReasonHint = config.showReasonHint,
             enableWaterfallAnimation = config.enableWaterfallAnimation,
-            waterfallExponent = config.waterfallExponent
+            waterfallExponent = config.waterfallExponent,
+            collapsed = config.collapsed
         )
     }
 
@@ -199,6 +219,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         var nextState = currentState.copy(
             todayWatchPluginEnabled = runtime.enabled,
             todayWatchMode = runtime.mode,
+            todayWatchCollapsed = runtime.collapsed,
             todayWatchCardConfig = TodayWatchCardUiConfig(
                 showUpRank = runtime.showUpRank,
                 showReasonHint = runtime.showReasonHint,
@@ -230,6 +251,43 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(todayWatchMode = mode)
         viewModelScope.launch {
             rebuildTodayWatchPlan()
+        }
+    }
+
+    fun setTodayWatchCollapsed(collapsed: Boolean) {
+        val info = PluginManager.plugins.find { it.plugin.id == TodayWatchPlugin.PLUGIN_ID }
+        val plugin = info?.plugin as? TodayWatchPlugin
+        plugin?.updateConfig { current -> current.copy(collapsed = collapsed) }
+
+        val current = _uiState.value
+        if (current.todayWatchCollapsed == collapsed) return
+        _uiState.value = current.copy(todayWatchCollapsed = collapsed)
+
+        if (!collapsed) {
+            viewModelScope.launch {
+                val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
+                if (shouldAutoRebuildTodayWatchPlan(
+                        currentCategory = _uiState.value.currentCategory,
+                        isTodayWatchEnabled = runtime.enabled,
+                        isTodayWatchCollapsed = runtime.collapsed
+                    )
+                ) {
+                    rebuildTodayWatchPlan()
+                }
+            }
+        }
+    }
+
+    fun refreshTodayWatchOnly() {
+        val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
+        if (!runtime.enabled) return
+
+        todayConsumedBvids += collectTodayWatchConsumedForManualRefresh(
+            plan = _uiState.value.todayWatchPlan,
+            previewLimit = _uiState.value.todayWatchCardConfig.queuePreviewLimit
+        )
+        viewModelScope.launch {
+            rebuildTodayWatchPlan(forceReloadHistory = false)
         }
     }
 
@@ -380,7 +438,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (needFetch) {
                  fetchData(isLoadMore = false)
             } else if (category == HomeCategory.RECOMMEND) {
-                rebuildTodayWatchPlan()
+                val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
+                if (shouldAutoRebuildTodayWatchPlan(
+                        currentCategory = category,
+                        isTodayWatchEnabled = runtime.enabled,
+                        isTodayWatchCollapsed = runtime.collapsed
+                    )
+                ) {
+                    rebuildTodayWatchPlan()
+                }
             }
         }
     }
@@ -417,7 +483,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(dissolvingVideos = newDissolving)
         if (currentCategory == HomeCategory.RECOMMEND) {
             viewModelScope.launch {
-                rebuildTodayWatchPlan()
+                val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
+                if (shouldAutoRebuildTodayWatchPlan(
+                        currentCategory = currentCategory,
+                        isTodayWatchEnabled = runtime.enabled,
+                        isTodayWatchCollapsed = runtime.collapsed
+                    )
+                ) {
+                    rebuildTodayWatchPlan()
+                }
             }
         }
     }
@@ -736,7 +810,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             if (currentCategory == HomeCategory.RECOMMEND) {
                 viewModelScope.launch {
-                    rebuildTodayWatchPlan(forceReloadHistory = !isLoadMore && isManualRefresh)
+                    val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
+                    if (shouldAutoRebuildTodayWatchPlan(
+                            currentCategory = currentCategory,
+                            isTodayWatchEnabled = runtime.enabled,
+                            isTodayWatchCollapsed = runtime.collapsed
+                        )
+                    ) {
+                        rebuildTodayWatchPlan(forceReloadHistory = !isLoadMore && isManualRefresh)
+                    }
                 }
             }
         }.onFailure { error ->

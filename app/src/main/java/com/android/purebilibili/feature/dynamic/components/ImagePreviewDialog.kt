@@ -6,8 +6,11 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -31,6 +34,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.ImageLoader
@@ -40,6 +44,8 @@ import coil.request.SuccessResult
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -51,12 +57,90 @@ import androidx.compose.ui.graphics.toArgb
 /**
  *  图片预览对话框 - 支持左右滑动切换和3D立体动画
  */
+private val ImagePreviewOpenEasing = CubicBezierEasing(0.2f, 0.9f, 0.2f, 1f)
+private val ImagePreviewCloseEasing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
+
+private data class ImagePreviewOverlayRequest(
+    val token: Long,
+    val images: List<String>,
+    val initialIndex: Int,
+    val sourceRect: androidx.compose.ui.geometry.Rect?,
+    val onDismiss: () -> Unit
+)
+
+private object ImagePreviewOverlayController {
+    private val _request = MutableStateFlow<ImagePreviewOverlayRequest?>(null)
+    val request = _request.asStateFlow()
+
+    fun show(request: ImagePreviewOverlayRequest) {
+        _request.value = request
+    }
+
+    fun dismiss(token: Long? = null) {
+        val current = _request.value ?: return
+        if (token == null || current.token == token) {
+            _request.value = null
+        }
+    }
+}
+
 @Composable
 fun ImagePreviewDialog(
     images: List<String>,
     initialIndex: Int,
     sourceRect: androidx.compose.ui.geometry.Rect? = null,
     onDismiss: () -> Unit
+) {
+    val latestOnDismiss by rememberUpdatedState(onDismiss)
+    val requestToken = remember(images, initialIndex, sourceRect) { System.nanoTime() }
+
+    LaunchedEffect(requestToken) {
+        ImagePreviewOverlayController.show(
+            ImagePreviewOverlayRequest(
+                token = requestToken,
+                images = images,
+                initialIndex = initialIndex,
+                sourceRect = sourceRect,
+                onDismiss = { latestOnDismiss() }
+            )
+        )
+    }
+
+    DisposableEffect(requestToken) {
+        onDispose {
+            ImagePreviewOverlayController.dismiss(requestToken)
+        }
+    }
+}
+
+@Composable
+fun ImagePreviewOverlayHost(
+    modifier: Modifier = Modifier
+) {
+    val activeRequest by ImagePreviewOverlayController.request.collectAsState()
+    activeRequest?.let { request ->
+        ImagePreviewOverlayContent(
+            images = request.images,
+            initialIndex = request.initialIndex,
+            sourceRect = request.sourceRect,
+            onDismiss = {
+                ImagePreviewOverlayController.dismiss(request.token)
+                request.onDismiss()
+            },
+            modifier = modifier
+                .fillMaxSize()
+                .zIndex(100f)
+        )
+    }
+}
+
+@Composable
+private fun ImagePreviewOverlayContent(
+    images: List<String>,
+    initialIndex: Int,
+    sourceRect: androidx.compose.ui.geometry.Rect? = null,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -100,7 +184,7 @@ fun ImagePreviewDialog(
         animateTrigger.snapTo(0f)
         animateTrigger.animateTo(
             targetValue = 1f,
-            animationSpec = spring(dampingRatio = 0.86f, stiffness = 420f)
+            animationSpec = tween(durationMillis = 340, easing = ImagePreviewOpenEasing)
         )
     }
     
@@ -109,18 +193,18 @@ fun ImagePreviewDialog(
         if (isDismissing) return
         isDismissing = true
         scope.launch {
-            // 先轻微过冲再回到 source，形成符合物理直觉的回弹感
             val dismissMotion = imagePreviewDismissMotion()
+            val target = dismissMotion.settleTarget
             animateTrigger.animateTo(
-                targetValue = dismissMotion.overshootTarget,
-                animationSpec = spring(dampingRatio = 0.62f, stiffness = 650f)
-            )
-            animateTrigger.animateTo(
-                targetValue = dismissMotion.settleTarget,
-                animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f)
+                targetValue = target,
+                animationSpec = tween(durationMillis = 280, easing = ImagePreviewCloseEasing)
             )
             onDismiss()
         }
+    }
+
+    BackHandler(enabled = !isDismissing) {
+        triggerDismiss()
     }
 
     //  GIF 图片加载器
@@ -169,16 +253,9 @@ fun ImagePreviewDialog(
         normalizeImageUrl(images.getOrNull(pagerState.currentPage) ?: "")
     }
     
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = { triggerDismiss() },
-        properties = androidx.compose.ui.window.DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+    BoxWithConstraints(
+        modifier = modifier.fillMaxSize()
     ) {
-        BoxWithConstraints(
-            modifier = Modifier.fillMaxSize()
-        ) {
             val constraints = this
             val fullWidth = constraints.maxWidth
             val fullHeight = constraints.maxHeight
@@ -454,7 +531,6 @@ fun ImagePreviewDialog(
                     }
                 }
             }
-        }
     }
 }
 

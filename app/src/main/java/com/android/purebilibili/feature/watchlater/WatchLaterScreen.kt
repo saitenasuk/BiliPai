@@ -329,6 +329,8 @@ fun WatchLaterScreen(
                                             externalPlaylist.playlistItems,
                                             externalPlaylist.startIndex
                                         )
+                                        com.android.purebilibili.feature.video.player.PlaylistManager
+                                            .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
 
                                         onVideoClick(
                                             state.items[externalPlaylist.startIndex].bvid,
@@ -473,6 +475,8 @@ fun WatchLaterScreen(
                                                         externalPlaylist.playlistItems,
                                                         externalPlaylist.startIndex
                                                     )
+                                                    com.android.purebilibili.feature.video.player.PlaylistManager
+                                                        .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
                                                 }
 
                                                 onVideoClick(bvid, 0L)

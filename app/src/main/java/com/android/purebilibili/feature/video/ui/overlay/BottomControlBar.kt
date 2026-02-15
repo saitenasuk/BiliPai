@@ -82,6 +82,8 @@ fun BottomControlBar(
     onPortraitFullscreen: () -> Unit = {},
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
+    playbackOrderLabel: String = "",
+    onPlaybackOrderClick: () -> Unit = {},
     onPipClick: () -> Unit = {},
     
     modifier: Modifier = Modifier
@@ -216,6 +218,16 @@ fun BottomControlBar(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable(onClick = onSpeedClick)
                 )
+
+                if (playbackOrderLabel.isNotBlank()) {
+                    Text(
+                        text = playbackOrderLabel,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable(onClick = onPlaybackOrderClick)
+                    )
+                }
 
                 // 📺 横屏全屏模式下显示画面比例按钮
                 if (shouldShowAspectRatioButtonInControlBar(isFullscreen)) {

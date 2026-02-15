@@ -88,61 +88,81 @@ fun ActionButtonsRow(
             .background(MaterialTheme.colorScheme.surface)
             .animateContentSize() // 🚀 [优化] 使布局变化更平滑
             .padding(horizontal = 4.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom
     ) {
         // Like - 支持长按触发三连
-        TripleLikeActionButton(
-            isLiked = isLiked,
-            likeCount = FormatUtils.formatStat(info.stat.like.toLong()),
-            coinCount = FormatUtils.formatStat(info.stat.coin.toLong()),
-            isFavorited = isFavorited,
-            favoriteCount = FormatUtils.formatStat(info.stat.favorite.toLong()),
-            hasCoin = coinCount > 0,
-            onLikeClick = onLikeClick,
-            onTripleComplete = onTripleClick,
-            onProgressChange = { tripleProgress = it }
-        )
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            TripleLikeActionButton(
+                isLiked = isLiked,
+                likeCount = FormatUtils.formatStat(info.stat.like.toLong()),
+                coinCount = FormatUtils.formatStat(info.stat.coin.toLong()),
+                isFavorited = isFavorited,
+                favoriteCount = FormatUtils.formatStat(info.stat.favorite.toLong()),
+                hasCoin = coinCount > 0,
+                onLikeClick = onLikeClick,
+                onTripleComplete = onTripleClick,
+                onProgressChange = { tripleProgress = it }
+            )
+        }
 
         // Coin - 使用更为柔和的缩放 + 淡入淡出，并由于 AnimatedVisibility 会动态移除占位，解决了间距问题
-        androidx.compose.animation.AnimatedVisibility(
-            visible = !isTripleComboActive,
-            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.9f),
-            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.9f)
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center
         ) {
-            BiliActionButton(
-                icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
-                text = FormatUtils.formatStat(info.stat.coin.toLong()),
-                isActive = coinCount > 0,
-                activeColor = Color(0xFFFFB300),
-                onClick = onCoinClick
-            )
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !isTripleComboActive,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.9f),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.9f)
+            ) {
+                BiliActionButton(
+                    icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
+                    text = FormatUtils.formatStat(info.stat.coin.toLong()),
+                    isActive = coinCount > 0,
+                    activeColor = Color(0xFFFFB300),
+                    onClick = onCoinClick
+                )
+            }
         }
 
         // Favorite
-        androidx.compose.animation.AnimatedVisibility(
-            visible = !isTripleComboActive,
-            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.9f),
-            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.9f)
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center
         ) {
-            BiliActionButton(
-                icon = if (isFavorited) CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark,
-                text = FormatUtils.formatStat(info.stat.favorite.toLong()),
-                isActive = isFavorited,
-                activeColor = Color(0xFFFFC107),
-                onClick = onFavoriteClick,
-                onLongClick = onFavoriteLongClick
-            )
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !isTripleComboActive,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.9f),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.9f)
+            ) {
+                BiliActionButton(
+                    icon = if (isFavorited) CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark,
+                    text = FormatUtils.formatStat(info.stat.favorite.toLong()),
+                    isActive = isFavorited,
+                    activeColor = Color(0xFFFFC107),
+                    onClick = onFavoriteClick,
+                    onLongClick = onFavoriteLongClick
+                )
+            }
         }
         
         //  稍后再看
-        BiliActionButton(
-            icon = if (isInWatchLater) CupertinoIcons.Filled.Clock else CupertinoIcons.Default.Clock,
-            text = if (isInWatchLater) "已添加" else "稍后看",
-            isActive = isInWatchLater,
-            activeColor = Color(0xFF9C27B0),  // 紫色
-            onClick = onWatchLaterClick
-        )
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            BiliActionButton(
+                icon = if (isInWatchLater) CupertinoIcons.Filled.Clock else CupertinoIcons.Default.Clock,
+                text = if (isInWatchLater) "已添加" else "稍后看",
+                isActive = isInWatchLater,
+                activeColor = Color(0xFF9C27B0),  // 紫色
+                onClick = onWatchLaterClick
+            )
+        }
         
         //  Download
         val downloadText = when {
@@ -152,13 +172,18 @@ fun ActionButtonsRow(
         }
         val isDownloaded = downloadProgress >= 1f
         val isDownloading = downloadProgress in 0f..0.99f
-        BiliActionButton(
-            icon = if (isDownloaded) CupertinoIcons.Default.Checkmark else CupertinoIcons.Default.ArrowDown,
-            text = downloadText,
-            isActive = isDownloaded || isDownloading,
-            activeColor = if (isDownloaded) Color(0xFF4CAF50) else Color(0xFF2196F3),
-            onClick = onDownloadClick
-        )
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            BiliActionButton(
+                icon = if (isDownloaded) CupertinoIcons.Default.Checkmark else CupertinoIcons.Default.ArrowDown,
+                text = downloadText,
+                isActive = isDownloaded || isDownloading,
+                activeColor = if (isDownloaded) Color(0xFF4CAF50) else Color(0xFF2196F3),
+                onClick = onDownloadClick
+            )
+        }
 
     }
 }
@@ -287,8 +312,8 @@ fun TripleProgressIcon(
     modifier: Modifier = Modifier
 ) {
     val iconSize = 24.dp
-    val ringSize = iconSize + 12.dp
-    val strokeWidth = 2.5.dp
+    val ringSize = iconSize
+    val strokeWidth = 2.dp
     
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,

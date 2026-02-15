@@ -563,6 +563,7 @@ fun VideoDetailScreen(
     // 同步状态到 playerState (可选，用于日志或内部逻辑)
     LaunchedEffect(isPortraitFullscreen) {
         playerState.setPortraitFullscreen(isPortraitFullscreen)
+        viewModel.setPortraitPlaybackSessionActive(isPortraitFullscreen)
         val shouldPauseMainPlayer = com.android.purebilibili.feature.video.ui.pager
             .shouldPauseMainPlayerOnPortraitEnter(useSharedPlayer = useSharedPortraitPlayer)
         if (isPortraitFullscreen) {
@@ -589,6 +590,12 @@ fun VideoDetailScreen(
                 viewModel.loadVideo(targetBvid!!, autoPlay = true)
             }
             pendingMainReloadBvidAfterPortrait = null
+        }
+    }
+
+    DisposableEffect(viewModel) {
+        onDispose {
+            viewModel.setPortraitPlaybackSessionActive(false)
         }
     }
 
@@ -1472,9 +1479,10 @@ fun VideoDetailScreen(
         }
         
         if (showPortraitFullscreen && success != null) {
+            val portraitInitialBvid = pendingMainReloadBvidAfterPortrait ?: success.info.bvid
             // 竖屏全屏模式：使用 Pager 实现无缝滑动 (TikTok Style)
             com.android.purebilibili.feature.video.ui.pager.PortraitVideoPager(
-                initialBvid = success.info.bvid,
+                initialBvid = portraitInitialBvid,
                 initialInfo = success.info,
                 recommendations = success.related,
                 onBack = { isPortraitFullscreen = false },
@@ -1509,8 +1517,22 @@ fun VideoDetailScreen(
                         }
                     }
                 },
-                onSearchClick = onNavigateToSearch,
-                onUserClick = onUpClick,
+                onSearchClick = {
+                    if (com.android.purebilibili.feature.video.ui.pager
+                            .shouldExitPortraitForExternalNavigation(isPortraitFullscreen)
+                    ) {
+                        isPortraitFullscreen = false
+                    }
+                    onNavigateToSearch()
+                },
+                onUserClick = { mid ->
+                    if (com.android.purebilibili.feature.video.ui.pager
+                            .shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen)
+                    ) {
+                        isPortraitFullscreen = false
+                    }
+                    onUpClick(mid)
+                },
                 onRotateToLandscape = {
                     isPortraitFullscreen = false
                     toggleFullscreen()

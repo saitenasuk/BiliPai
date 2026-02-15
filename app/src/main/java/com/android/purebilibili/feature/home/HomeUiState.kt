@@ -141,5 +141,6 @@ data class HomeUiState(
     val todayWatchLoading: Boolean = false,
     val todayWatchError: String? = null,
     val todayWatchPluginEnabled: Boolean = false,
+    val todayWatchCollapsed: Boolean = false,
     val todayWatchCardConfig: TodayWatchCardUiConfig = TodayWatchCardUiConfig()
 )

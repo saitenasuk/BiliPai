@@ -33,6 +33,20 @@ enum class LiquidGlassStyle(val value: Int) {
     }
 }
 
+enum class PlaybackCompletionBehavior(val value: Int, val label: String) {
+    CONTINUE_CURRENT_LOGIC(0, "自动连播"),
+    STOP_AFTER_CURRENT(1, "播完暂停"),
+    PLAY_IN_ORDER(2, "顺序播放"),
+    REPEAT_ONE(3, "单个循环"),
+    LOOP_PLAYLIST(4, "列表循环");
+
+    companion object {
+        fun fromValue(value: Int): PlaybackCompletionBehavior {
+            return entries.find { it.value == value } ?: CONTINUE_CURRENT_LOGIC
+        }
+    }
+}
+
 data class HomeSettings(
     val displayMode: Int = 0,              // 展示模式 (0=网格, 1=故事卡片)
     val isBottomBarFloating: Boolean = true,
@@ -54,6 +68,7 @@ data class HomeSettings(
 object SettingsManager {
     // 键定义
     private val KEY_AUTO_PLAY = booleanPreferencesKey("auto_play")
+    private val KEY_PLAYBACK_COMPLETION_BEHAVIOR = intPreferencesKey("playback_completion_behavior")
     private val KEY_HW_DECODE = booleanPreferencesKey("hw_decode")
     private val KEY_THEME_MODE = intPreferencesKey("theme_mode_v2")
     private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
@@ -243,6 +258,35 @@ object SettingsManager {
     fun getAutoPlaySync(context: Context): Boolean {
         return context.getSharedPreferences("auto_play_cache", Context.MODE_PRIVATE)
             .getBoolean("auto_play_enabled", true)  // 默认开启
+    }
+
+    fun getPlaybackCompletionBehavior(context: Context): Flow<PlaybackCompletionBehavior> =
+        context.settingsDataStore.data.map { preferences ->
+            val value = preferences[KEY_PLAYBACK_COMPLETION_BEHAVIOR]
+                ?: PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC.value
+            PlaybackCompletionBehavior.fromValue(value)
+        }
+
+    suspend fun setPlaybackCompletionBehavior(
+        context: Context,
+        behavior: PlaybackCompletionBehavior
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_PLAYBACK_COMPLETION_BEHAVIOR] = behavior.value
+        }
+        context.getSharedPreferences("auto_play_cache", Context.MODE_PRIVATE)
+            .edit()
+            .putInt("playback_completion_behavior", behavior.value)
+            .apply()
+    }
+
+    fun getPlaybackCompletionBehaviorSync(context: Context): PlaybackCompletionBehavior {
+        val value = context.getSharedPreferences("auto_play_cache", Context.MODE_PRIVATE)
+            .getInt(
+                "playback_completion_behavior",
+                PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC.value
+            )
+        return PlaybackCompletionBehavior.fromValue(value)
     }
 
     // --- HW Decode ---

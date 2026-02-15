@@ -774,7 +774,7 @@ fun HomeScreen(
             startupElapsedMs = SystemClock.elapsedRealtime() - homeStartupElapsedAt,
             isPluginEnabled = state.todayWatchPluginEnabled,
             currentCategory = state.currentCategory,
-            hasTodayPlan = state.todayWatchPlan != null,
+            hasTodayPlan = state.todayWatchPlan != null && !state.todayWatchCollapsed,
             firstVisibleItemIndex = recommendGridState.firstVisibleItemIndex,
             firstVisibleItemOffset = recommendGridState.firstVisibleItemScrollOffset
         )
@@ -932,6 +932,8 @@ fun HomeScreen(
                                  val onLongPressCallback = remember(targetVideoItemState) { { item: VideoItem -> targetVideoItemState.value = item } }
                                  val onLiveClickCallback = remember(onLiveClick) { onLiveClick }
                                  val onTodayWatchModeChange = remember(viewModel) { { mode: TodayWatchMode -> viewModel.switchTodayWatchMode(mode) } }
+                                 val onTodayWatchCollapsedChange = remember(viewModel) { { collapsed: Boolean -> viewModel.setTodayWatchCollapsed(collapsed) } }
+                                 val onTodayWatchRefresh = remember(viewModel) { { viewModel.refreshTodayWatchOnly() } }
 
                                  HomeCategoryPageContent(
                                      category = category,
@@ -976,8 +978,11 @@ fun HomeScreen(
                                      todayWatchPlan = if (category == HomeCategory.RECOMMEND) state.todayWatchPlan else null,
                                      todayWatchLoading = category == HomeCategory.RECOMMEND && state.todayWatchLoading,
                                      todayWatchError = if (category == HomeCategory.RECOMMEND) state.todayWatchError else null,
+                                     todayWatchCollapsed = category == HomeCategory.RECOMMEND && state.todayWatchCollapsed,
                                      todayWatchCardConfig = state.todayWatchCardConfig,
                                      onTodayWatchModeChange = onTodayWatchModeChange,
+                                     onTodayWatchCollapsedChange = onTodayWatchCollapsedChange,
+                                     onTodayWatchRefresh = onTodayWatchRefresh,
                                      onTodayWatchVideoClick = onTodayWatchVideoClick
                                  )
                              }

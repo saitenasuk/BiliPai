@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.home
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -17,6 +21,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,8 +71,11 @@ fun HomeCategoryPageContent(
     todayWatchPlan: TodayWatchPlan? = null,
     todayWatchLoading: Boolean = false,
     todayWatchError: String? = null,
+    todayWatchCollapsed: Boolean = false,
     todayWatchCardConfig: TodayWatchCardUiConfig = TodayWatchCardUiConfig(),
     onTodayWatchModeChange: (TodayWatchMode) -> Unit = {},
+    onTodayWatchCollapsedChange: (Boolean) -> Unit = {},
+    onTodayWatchRefresh: () -> Unit = {},
     onTodayWatchVideoClick: (VideoItem) -> Unit = { video ->
         onVideoClick(video.bvid, video.cid, video.pic)
     },
@@ -155,8 +164,11 @@ fun HomeCategoryPageContent(
                             plan = todayWatchPlan,
                             isLoading = todayWatchLoading,
                             error = todayWatchError,
+                            collapsed = todayWatchCollapsed,
                             cardConfig = todayWatchCardConfig,
                             onModeChange = onTodayWatchModeChange,
+                            onCollapsedChange = onTodayWatchCollapsedChange,
+                            onRefresh = onTodayWatchRefresh,
                             onVideoClick = onTodayWatchVideoClick
                         )
                     }
@@ -263,8 +275,11 @@ private fun TodayWatchPlanCard(
     plan: TodayWatchPlan?,
     isLoading: Boolean,
     error: String?,
+    collapsed: Boolean,
     cardConfig: TodayWatchCardUiConfig,
     onModeChange: (TodayWatchMode) -> Unit,
+    onCollapsedChange: (Boolean) -> Unit,
+    onRefresh: () -> Unit,
     onVideoClick: (VideoItem) -> Unit
 ) {
     var revealContent by remember(plan?.generatedAt, isLoading, cardConfig.enableWaterfallAnimation) {
@@ -296,11 +311,59 @@ private fun TodayWatchPlanCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = "今日推荐单",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "今日推荐单",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    TextButton(
+                        enabled = !isLoading,
+                        onClick = onRefresh
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("刷新")
+                    }
+                    TextButton(
+                        onClick = { onCollapsedChange(!collapsed) }
+                    ) {
+                        Icon(
+                            imageVector = if (collapsed) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (collapsed) "展开" else "收起")
+                    }
+                }
+            }
+
+            if (collapsed) {
+                Text(
+                    text = "已收起推荐单。展开后恢复自动更新；也可以直接点“刷新”换一批。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (!error.isNullOrBlank()) {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                return@Column
+            }
 
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TodayWatchMode.entries.forEach { mode ->
@@ -312,7 +375,7 @@ private fun TodayWatchPlanCard(
                 }
             }
             Text(
-                text = "点开后会自动从推荐单移除；想换一批可下拉刷新推荐页。",
+                text = "点开后会自动从推荐单移除；想换一批可点右上角“刷新”。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

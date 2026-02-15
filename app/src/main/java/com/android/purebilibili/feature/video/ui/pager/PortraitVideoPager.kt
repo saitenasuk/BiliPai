@@ -55,18 +55,22 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
+import com.android.purebilibili.feature.video.player.PlaylistManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.overlay.PortraitFullscreenOverlay
+import com.android.purebilibili.feature.video.viewmodel.PlaybackEndAction
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
+import com.android.purebilibili.feature.video.viewmodel.resolvePlaybackEndAction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -124,9 +128,23 @@ fun PortraitVideoPager(
     val danmakuMergeDuplicates by SettingsManager
         .getDanmakuMergeDuplicates(context)
         .collectAsState(initial = true)
+    val autoPlayEnabled by SettingsManager
+        .getAutoPlay(context)
+        .collectAsState(initial = true)
+    val playbackCompletionBehavior by SettingsManager
+        .getPlaybackCompletionBehavior(context)
+        .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
+    val isExternalPlaylist by PlaylistManager.isExternalPlaylist.collectAsState()
 
     val baseRecommendations = remember {
         recommendations.distinctBy { it.bvid }
+    }
+    val initialPageIndex = remember(initialBvid, initialInfo.bvid, baseRecommendations) {
+        resolvePortraitInitialPageIndex(
+            initialBvid = initialBvid,
+            initialInfoBvid = initialInfo.bvid,
+            recommendations = baseRecommendations
+        )
     }
     val pageItems = remember {
         mutableStateListOf<Any>().apply {
@@ -170,7 +188,9 @@ fun PortraitVideoPager(
         }
     }
     
-    val pagerState = rememberPagerState(pageCount = { pageItems.size })
+    val pagerState = rememberPagerState(initialPage = initialPageIndex) {
+        pageItems.size
+    }
 
     // [重构] 优先复用主播放器；仅在未传入 sharedPlayer 时才创建页内播放器
     val exoPlayer = sharedPlayer ?: remember(context) {
@@ -232,6 +252,7 @@ fun PortraitVideoPager(
     var renderedFirstFrameGeneration by remember(useSharedPlayer, sharedPlayerHasFrameAtEntry) {
         mutableIntStateOf(if (sharedPlayerHasFrameAtEntry) 0 else -1)
     }
+    var lastAutoAdvancedBvid by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(exoPlayer) {
         danmakuManager.attachPlayer(exoPlayer)
@@ -273,6 +294,69 @@ fun PortraitVideoPager(
             if (!exoPlayer.isPlaying) {
                 exoPlayer.play()
             }
+        }
+    }
+
+    DisposableEffect(
+        exoPlayer,
+        pagerState,
+        pageItems.size,
+        currentPlayingBvid,
+        autoPlayEnabled,
+        playbackCompletionBehavior,
+        isExternalPlaylist
+    ) {
+        val autoAdvanceListener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState != Player.STATE_ENDED) return
+                when (
+                    resolvePlaybackEndAction(
+                        behavior = playbackCompletionBehavior,
+                        autoPlayEnabled = autoPlayEnabled,
+                        isExternalPlaylist = isExternalPlaylist
+                    )
+                ) {
+                    PlaybackEndAction.STOP -> return
+                    PlaybackEndAction.REPEAT_CURRENT -> {
+                        exoPlayer.seekTo(0)
+                        exoPlayer.playWhenReady = true
+                        exoPlayer.play()
+                    }
+                    PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST,
+                    PlaybackEndAction.AUTO_CONTINUE -> {
+                        val playingBvid = currentPlayingBvid ?: return
+                        if (lastAutoAdvancedBvid == playingBvid) return
+                        lastAutoAdvancedBvid = playingBvid
+
+                        val currentPage = pagerState.currentPage
+                        val nextPage = (currentPage + 1).coerceAtMost(pageItems.lastIndex)
+                        if (nextPage <= currentPage) return
+
+                        scope.launch {
+                            pagerState.animateScrollToPage(nextPage)
+                        }
+                    }
+                    PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST_LOOP -> {
+                        val playingBvid = currentPlayingBvid ?: return
+                        if (lastAutoAdvancedBvid == playingBvid) return
+                        lastAutoAdvancedBvid = playingBvid
+
+                        val currentPage = pagerState.currentPage
+                        val nextPage = if (currentPage < pageItems.lastIndex) {
+                            currentPage + 1
+                        } else {
+                            0
+                        }
+                        scope.launch {
+                            pagerState.animateScrollToPage(nextPage)
+                        }
+                    }
+                }
+            }
+        }
+        exoPlayer.addListener(autoAdvanceListener)
+        onDispose {
+            exoPlayer.removeListener(autoAdvanceListener)
         }
     }
 
@@ -576,6 +660,7 @@ private fun VideoPageItem(
     // 互动状态
     var showCommentSheet by remember { mutableStateOf(false) }
     var showDetailSheet by remember { mutableStateOf(false) }
+    var detailSheetUpOnlyMode by remember { mutableStateOf(false) }
     var isOverlayVisible by remember { mutableStateOf(true) }
 
     // 进度状态 (从播放器获取)
@@ -870,6 +955,21 @@ private fun VideoPageItem(
             recommendationVideos = recommendationVideos
         )
     }
+    val upOnlyVideos = remember(detailVideoList.videos, authorMid, bvid) {
+        detailVideoList.videos.filter { candidate ->
+            candidate.owner.mid == authorMid && candidate.bvid != bvid
+        }
+    }
+    val detailSheetTitle = remember(detailSheetUpOnlyMode, recommendationVideos.size, upOnlyVideos.size) {
+        if (detailSheetUpOnlyMode) {
+            if (upOnlyVideos.isEmpty()) "该 UP 暂无可切换视频" else "UP 主视频"
+        } else {
+            detailVideoList.title
+        }
+    }
+    val detailSheetVideos = remember(detailSheetUpOnlyMode, upOnlyVideos, detailVideoList.videos) {
+        if (detailSheetUpOnlyMode) upOnlyVideos else detailVideoList.videos
+    }
     val toggleDanmaku: () -> Unit = {
         val next = !danmakuEnabled
         danmakuManager.isEnabled = next
@@ -910,18 +1010,20 @@ private fun VideoPageItem(
             
             onDetailClick = {
                 if (portraitDetailInfo != null) {
+                    detailSheetUpOnlyMode = false
                     showDetailSheet = true
                 }
             },
             onTitleClick = {
                 if (portraitDetailInfo != null) {
+                    detailSheetUpOnlyMode = false
                     showDetailSheet = true
                 }
             },
             onAuthorClick = {
-                if (authorMid > 0L) {
-                    onExitSnapshot(bvid, exoPlayer.currentPosition)
-                    onUserClick(authorMid)
+                if (portraitDetailInfo != null) {
+                    detailSheetUpOnlyMode = true
+                    showDetailSheet = true
                 }
             },
             onLikeClick = { if (isCurrentModelVideo) viewModel.toggleLike() },
@@ -996,16 +1098,37 @@ private fun VideoPageItem(
         
         PortraitDetailSheet(
             visible = showDetailSheet,
-            onDismiss = { showDetailSheet = false },
+            onDismiss = {
+                showDetailSheet = false
+                detailSheetUpOnlyMode = false
+            },
             info = portraitDetailInfo,
-            recommendationTitle = detailVideoList.title,
-            recommendations = detailVideoList.videos,
+            recommendationTitle = detailSheetTitle,
+            recommendations = detailSheetVideos,
             onRecommendationClick = { targetBvid ->
                 showDetailSheet = false
+                detailSheetUpOnlyMode = false
                 onRequestVideoChange(targetBvid)
+            },
+            onAuthorClick = { mid ->
+                showDetailSheet = false
+                detailSheetUpOnlyMode = false
+                onExitSnapshot(bvid, exoPlayer.currentPosition)
+                onUserClick(mid)
             },
             danmakuEnabled = danmakuEnabled,
             onDanmakuToggle = toggleDanmaku
         )
     }
+}
+
+internal fun resolvePortraitInitialPageIndex(
+    initialBvid: String,
+    initialInfoBvid: String,
+    recommendations: List<RelatedVideo>
+): Int {
+    if (initialBvid == initialInfoBvid) return 0
+    val recommendationIndex = recommendations.indexOfFirst { it.bvid == initialBvid }
+    if (recommendationIndex < 0) return 0
+    return recommendationIndex + 1
 }

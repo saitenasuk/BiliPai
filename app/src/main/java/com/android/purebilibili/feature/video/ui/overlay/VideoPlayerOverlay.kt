@@ -49,6 +49,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 
 import androidx.compose.ui.platform.LocalContext
+import com.android.purebilibili.core.store.PlaybackCompletionBehavior
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.ShareUtils
 
 import androidx.compose.foundation.lazy.LazyColumn
@@ -206,12 +208,16 @@ fun VideoPlayerOverlay(
     var showVideoSettings by remember { mutableStateOf(false) }  //  新增
     var showChapterList by remember { mutableStateOf(false) }  // 📖 章节列表
     var showCastDialog by remember { mutableStateOf(false) }   // 📺 投屏对话框
+    var showPlaybackOrderSheet by remember { mutableStateOf(false) }
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
     //  使用传入的比例状态
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val playbackCompletionBehavior by SettingsManager
+        .getPlaybackCompletionBehavior(context)
+        .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
     
 
     //  双击检测状态
@@ -396,9 +402,9 @@ fun VideoPlayerOverlay(
                         isAudioOnly = isAudioOnly,
                         //  [新增] 投屏按钮
                         onCastClick = onCastClickAction,
-                        // 📱 [新增] 画质选择移到左上角
-                        currentQualityLabel = currentQualityLabel,
-                        onQualityClick = { showQualityMenu = true },
+                        // 📱 左上角改为弹幕开关，画质只保留底部入口
+                        danmakuEnabled = danmakuEnabled,
+                        onDanmakuToggle = onDanmakuToggle,
                         modifier = Modifier.align(Alignment.TopStart)
                     )
                 }
@@ -450,6 +456,11 @@ fun VideoPlayerOverlay(
                     // 🔁 [新增] 播放模式
                     currentPlayMode = currentPlayMode,
                     onPlayModeClick = onPlayModeClick,
+                    playbackOrderLabel = resolvePlaybackOrderDisplayLabel(
+                        behavior = playbackCompletionBehavior,
+                        compact = !isFullscreen
+                    ),
+                    onPlaybackOrderClick = { showPlaybackOrderSheet = true },
                     //  [修复] 传入 modifier 确保在底部
                     modifier = Modifier.align(Alignment.BottomStart)
                 )
@@ -700,6 +711,19 @@ fun VideoPlayerOverlay(
                 onDismiss = { showVideoSettings = false }
             )
         }
+
+        if (showPlaybackOrderSheet) {
+            PlaybackOrderSelectionSheet(
+                currentBehavior = playbackCompletionBehavior,
+                onSelect = { behavior ->
+                    scope.launch {
+                        SettingsManager.setPlaybackCompletionBehavior(context, behavior)
+                    }
+                    showPlaybackOrderSheet = false
+                },
+                onDismiss = { showPlaybackOrderSheet = false }
+            )
+        }
         
         // --- 10. 📖 [新增] 章节列表面板 ---
         if (showChapterList && viewPoints.isNotEmpty()) {
@@ -773,7 +797,7 @@ fun VideoPlayerOverlay(
 /**
  *  竖屏模式顶部控制栏
  * 
- * 包含返回首页按钮、画质选择、设置按钮和分享按钮
+ * 包含返回首页按钮、弹幕开关、设置按钮和分享按钮
  */
 @Composable
 private fun PortraitTopBar(
@@ -785,9 +809,9 @@ private fun PortraitTopBar(
     isAudioOnly: Boolean,
     // 📺 [新增] 投屏
     onCastClick: () -> Unit = {},
-    // 📱 [新增] 画质选择 - 移到左上角
-    currentQualityLabel: String = "",
-    onQualityClick: () -> Unit = {},
+    // 📱 左上角快捷入口：弹幕开关
+    danmakuEnabled: Boolean = true,
+    onDanmakuToggle: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -797,7 +821,7 @@ private fun PortraitTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 左侧：返回按钮 + 画质选择
+        // 左侧：返回按钮 + 弹幕开关
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -815,21 +839,18 @@ private fun PortraitTopBar(
                 )
             }
             
-            // 📱 画质选择按钮 - 移到左上角
-            if (currentQualityLabel.isNotEmpty()) {
-                Surface(
-                    onClick = onQualityClick,
-                    color = Color.White.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Text(
-                        text = currentQualityLabel,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+            Surface(
+                onClick = onDanmakuToggle,
+                color = if (danmakuEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(4.dp)
+            ) {
+                Text(
+                    text = if (danmakuEnabled) "弹幕开" else "弹幕关",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
             
             // 👀 在线人数

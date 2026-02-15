@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.theme.iOSOrange
@@ -465,6 +466,9 @@ fun PlaybackSettingsContent(
                     //  [新增] 自动播放下一个
                     val autoPlayEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getAutoPlay(context).collectAsState(initial = true)
+                    val playbackCompletionBehavior by com.android.purebilibili.core.store.SettingsManager
+                        .getPlaybackCompletionBehavior(context)
+                        .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
                     
                     IOSGroup {
                         // --- Click to Play ---
@@ -499,6 +503,47 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
+                        Divider()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "选择播放顺序",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(
+                                    PlaybackCompletionBehavior.STOP_AFTER_CURRENT,
+                                    PlaybackCompletionBehavior.PLAY_IN_ORDER,
+                                    PlaybackCompletionBehavior.REPEAT_ONE,
+                                    PlaybackCompletionBehavior.LOOP_PLAYLIST,
+                                    PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC
+                                ).forEach { behavior ->
+                                    FilterChip(
+                                        selected = playbackCompletionBehavior == behavior,
+                                        onClick = {
+                                            scope.launch {
+                                                com.android.purebilibili.core.store.SettingsManager
+                                                    .setPlaybackCompletionBehavior(context, behavior)
+                                            }
+                                        },
+                                        label = { Text(behavior.label) }
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "稍后再看推荐选择“顺序播放”即可连续播放下一条，不需要退出重选。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Divider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.HandThumbsup,

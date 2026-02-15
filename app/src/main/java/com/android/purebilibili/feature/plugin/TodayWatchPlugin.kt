@@ -67,6 +67,7 @@ data class TodayWatchPluginConfig(
     val showReasonHint: Boolean = true,
     val enableWaterfallAnimation: Boolean = true,
     val waterfallExponent: Float = 1.38f,
+    val collapsed: Boolean = false,
     val refreshTriggerToken: Long = 0L
 )
 

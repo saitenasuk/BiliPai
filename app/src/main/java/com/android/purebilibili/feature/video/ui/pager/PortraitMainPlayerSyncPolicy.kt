@@ -24,3 +24,11 @@ internal fun resolvePortraitInitialPlayingBvid(
 internal fun shouldMirrorPortraitProgressToMainPlayer(useSharedPlayer: Boolean): Boolean {
     return !useSharedPlayer
 }
+
+internal fun shouldExitPortraitForExternalNavigation(isPortraitFullscreen: Boolean): Boolean {
+    return isPortraitFullscreen
+}
+
+internal fun shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen: Boolean): Boolean {
+    return false
+}

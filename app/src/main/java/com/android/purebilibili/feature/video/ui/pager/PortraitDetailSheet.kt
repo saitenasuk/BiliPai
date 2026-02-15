@@ -46,6 +46,7 @@ fun PortraitDetailSheet(
     recommendationTitle: String = "推荐视频",
     recommendations: List<RelatedVideo> = emptyList(),
     onRecommendationClick: (String) -> Unit = {},
+    onAuthorClick: (Long) -> Unit = {},
     danmakuEnabled: Boolean = true,
     onDanmakuToggle: () -> Unit = {}
 ) {
@@ -217,11 +218,16 @@ fun PortraitDetailSheet(
                             ) {
                                 AsyncImage(
                                     model = info.owner.face,
-                                    contentDescription = null,
+                                    contentDescription = "${info.owner.name} 头像",
                                     modifier = Modifier
                                         .size(34.dp)
                                         .clip(CircleShape)
-                                        .background(Color.Gray.copy(alpha = 0.2f)),
+                                        .background(Color.Gray.copy(alpha = 0.2f))
+                                        .clickable {
+                                            if (info.owner.mid > 0L) {
+                                                onAuthorClick(info.owner.mid)
+                                            }
+                                        },
                                     contentScale = ContentScale.Crop
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))

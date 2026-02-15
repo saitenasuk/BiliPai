@@ -37,8 +37,6 @@ import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.feature.video.player.PlaylistManager
-import com.android.purebilibili.feature.video.player.PlayMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -494,26 +492,6 @@ fun rememberVideoPlayerState(
             }
             
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) {
-                    //  检查播放模式
-                    val currentMode = PlaylistManager.playMode.value
-                    
-                    //  优先级 1: 单曲循环 (强制重播)
-                    if (currentMode == PlayMode.REPEAT_ONE) {
-                            player.seekTo(0)
-                            player.play()
-                            return
-                    }
-                    
-                    //  优先级 2: 自动播放设置
-                    val autoPlayEnabled = SettingsManager.getAutoPlaySync(context)
-                    if (autoPlayEnabled) {
-                        viewModel.playNextPageOrRecommended()
-                    } else {
-                        // 自动播放关闭：保持结束态，不再弹播放完成对话框
-                        viewModel.dismissPlaybackEndedDialog()
-                    }
-                }
                 if (playbackState == Player.STATE_READY) {
                     // 播放成功，重置所有计数
                     retryCountRef.count = 0

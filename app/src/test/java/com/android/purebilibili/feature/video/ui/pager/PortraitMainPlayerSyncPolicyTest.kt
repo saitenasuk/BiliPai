@@ -80,4 +80,16 @@ class PortraitMainPlayerSyncPolicyTest {
         assertFalse(shouldMirrorPortraitProgressToMainPlayer(useSharedPlayer = true))
         assertTrue(shouldMirrorPortraitProgressToMainPlayer(useSharedPlayer = false))
     }
+
+    @Test
+    fun externalNavigation_shouldExitPortraitBeforeJumping() {
+        assertTrue(shouldExitPortraitForExternalNavigation(isPortraitFullscreen = true))
+        assertFalse(shouldExitPortraitForExternalNavigation(isPortraitFullscreen = false))
+    }
+
+    @Test
+    fun userSpaceNavigation_shouldKeepPortraitState() {
+        assertFalse(shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen = true))
+        assertFalse(shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen = false))
+    }
 }
