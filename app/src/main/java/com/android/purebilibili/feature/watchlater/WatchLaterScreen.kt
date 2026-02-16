@@ -44,6 +44,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.Owner
@@ -264,6 +269,25 @@ fun WatchLaterScreen(
     val state by viewModel.uiState.collectAsState()
     val hazeState = remember { HazeState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val context = LocalContext.current
+    val windowSizeClass = LocalWindowSizeClass.current
+    val isTvDevice = rememberIsTvDevice()
+    val tvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
+    val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
+    val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = true)
+    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, tvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = tvPerformanceProfileEnabled
+        )
+    }
+    val cardMotionTier = resolveEffectiveMotionTier(
+        baseTier = deviceUiProfile.motionTier,
+        animationEnabled = cardAnimationEnabled
+    )
     var isBatchMode by rememberSaveable { mutableStateOf(false) }
     var selectedBvids by rememberSaveable { mutableStateOf(setOf<String>()) }
     var showBatchDeleteConfirm by rememberSaveable { mutableStateOf(false) }
@@ -418,7 +442,6 @@ fun WatchLaterScreen(
                 }
                 else -> {
                     // 计算合适的列数
-                    val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
                     val minColWidth = if (windowSizeClass.isExpandedScreen) 240.dp else 170.dp
                     
                     LazyVerticalGrid(
@@ -452,8 +475,9 @@ fun WatchLaterScreen(
                                     ElegantVideoCard(
                                         video = item,
                                         index = index,
-                                        animationEnabled = true, // 保留首页卡片动画
-                                        transitionEnabled = true, // 共享元素过渡
+                                        animationEnabled = cardAnimationEnabled,
+                                        motionTier = cardMotionTier,
+                                        transitionEnabled = cardTransitionEnabled,
                                         showPublishTime = true,
                                         dismissMenuText = "\uD83D\uDDD1\uFE0F 删除",
                                         // 触发 Thanos 响指动画 (开始消散)

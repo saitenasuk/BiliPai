@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Cast
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -60,6 +63,14 @@ fun TopControlBar(
     onMoreClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveTopControlBarLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
     val currentTimeText by produceState(initialValue = formatCurrentTime()) {
         while (true) {
             value = formatCurrentTime()
@@ -73,7 +84,10 @@ fun TopControlBar(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isFullscreen) Modifier.statusBarsPadding() else Modifier)
-            .padding(horizontal = 24.dp, vertical = 10.dp)
+            .padding(
+                horizontal = layoutPolicy.horizontalPaddingDp.dp,
+                vertical = layoutPolicy.verticalPaddingDp.dp
+            )
     ) {
         // 顶部时间栏
         Row(
@@ -83,12 +97,12 @@ fun TopControlBar(
             Text(
                 text = currentTimeText,
                 color = Color.White.copy(alpha = 0.9f),
-                fontSize = 13.sp,
+                fontSize = layoutPolicy.timeFontSp.sp,
                 fontWeight = FontWeight.SemiBold
             )
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(layoutPolicy.timeBottomSpacingDp.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -102,23 +116,23 @@ fun TopControlBar(
                 // Back Button
                 IconButton(
                     onClick = onBack,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
                 ) {
                     Icon(
                         imageVector = CupertinoIcons.Default.ChevronBackward, 
                         contentDescription = "Back", 
                         tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                     )
                 }
                 
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(layoutPolicy.backToTitleSpacingDp.dp))
 
                 // 标题与右侧图标保持同一行
                 Text(
                     text = title,
                     color = Color.White,
-                    fontSize = 16.sp,
+                    fontSize = layoutPolicy.titleFontSp.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     modifier = Modifier
@@ -127,19 +141,21 @@ fun TopControlBar(
                 )
             }
             
-            Spacer(modifier = Modifier.width(24.dp)) // Space between text and actions
+            Spacer(modifier = Modifier.width(layoutPolicy.sectionGapDp.dp)) // Space between text and actions
             
             // --- Right Section: Actions ---
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
+                horizontalArrangement = Arrangement.spacedBy(layoutPolicy.actionSpacingDp.dp)
             ) {
                 // Like
                 ActionIcon(
                     icon = if (isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
                     contentDescription = "点赞",
                     isActive = isLiked,
-                    onClick = onLikeClick
+                    onClick = onLikeClick,
+                    buttonSizeDp = layoutPolicy.buttonSizeDp,
+                    iconSizeDp = layoutPolicy.iconSizeDp
                 )
                 
                 // Dislike
@@ -147,7 +163,9 @@ fun TopControlBar(
                     icon = Icons.Outlined.ThumbDown,
                     contentDescription = "不喜欢",
                     isActive = false,
-                    onClick = onDislikeClick
+                    onClick = onDislikeClick,
+                    buttonSizeDp = layoutPolicy.buttonSizeDp,
+                    iconSizeDp = layoutPolicy.iconSizeDp
                 )
                 
                 // Coin
@@ -155,7 +173,9 @@ fun TopControlBar(
                     icon = if (isCoined) Icons.Rounded.MonetizationOn else Icons.Outlined.MonetizationOn,
                     contentDescription = "投币",
                     isActive = isCoined,
-                    onClick = onCoinClick
+                    onClick = onCoinClick,
+                    buttonSizeDp = layoutPolicy.buttonSizeDp,
+                    iconSizeDp = layoutPolicy.iconSizeDp
                 )
                 
                 // Share
@@ -163,7 +183,9 @@ fun TopControlBar(
                     icon = Icons.Outlined.Share,
                     contentDescription = "分享",
                     isActive = false,
-                    onClick = onShareClick
+                    onClick = onShareClick,
+                    buttonSizeDp = layoutPolicy.buttonSizeDp,
+                    iconSizeDp = layoutPolicy.iconSizeDp
                 )
 
                 // Cast (Added back)
@@ -171,19 +193,21 @@ fun TopControlBar(
                     icon = Icons.Outlined.Cast,
                     contentDescription = "投屏",
                     isActive = false,
-                    onClick = onCastClick
+                    onClick = onCastClick,
+                    buttonSizeDp = layoutPolicy.buttonSizeDp,
+                    iconSizeDp = layoutPolicy.iconSizeDp
                 )
                 
                 // More (Three dots)
                 IconButton(
                     onClick = onMoreClick,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.MoreVert,
                         contentDescription = "更多",
                         tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                     )
                 }
             }
@@ -194,9 +218,12 @@ fun TopControlBar(
             Text(
                 text = onlineCount,
                 color = Color.White.copy(alpha = 0.8f),
-                fontSize = 12.sp,
+                fontSize = layoutPolicy.onlineCountFontSp.sp,
                 fontWeight = FontWeight.Normal,
-                modifier = Modifier.padding(start = 48.dp, top = 2.dp)
+                modifier = Modifier.padding(
+                    start = layoutPolicy.onlineCountStartPaddingDp.dp,
+                    top = layoutPolicy.onlineCountTopPaddingDp.dp
+                )
             )
         }
     }
@@ -212,17 +239,19 @@ private fun ActionIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     isActive: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    buttonSizeDp: Int = 32,
+    iconSizeDp: Int = 24
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(32.dp)
+        modifier = Modifier.size(buttonSizeDp.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(iconSizeDp.dp)
         )
     }
 }

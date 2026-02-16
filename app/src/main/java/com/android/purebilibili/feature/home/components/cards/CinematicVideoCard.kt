@@ -58,11 +58,13 @@ import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.data.model.response.VideoItem
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import androidx.compose.ui.text.font.FontFamily
@@ -78,6 +80,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import com.android.purebilibili.core.ui.animation.TvFocusCardEmphasis
+import com.android.purebilibili.core.ui.animation.tvFocusableJiggle
 import io.github.alexzhirkevich.cupertino.icons.filled.PlayCircle
 import io.github.alexzhirkevich.cupertino.icons.filled.BubbleLeft
 
@@ -92,6 +96,7 @@ fun CinematicVideoCard(
     index: Int,
     isFollowing: Boolean = false,
     animationEnabled: Boolean = true,
+    motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false,
     isDataSaverActive: Boolean = false,
     onDismiss: (() -> Unit)? = null,
@@ -99,6 +104,7 @@ fun CinematicVideoCard(
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
+    val isTvDevice = rememberIsTvDevice()
     
     // 动态圆角 - 略大一点的圆角以适配大图卡片
     val cornerRadiusScale = LocalCornerRadiusScale.current
@@ -136,10 +142,18 @@ fun CinematicVideoCard(
             .fillMaxWidth()
             .padding(bottom = 24.dp, start = 16.dp, end = 16.dp) // 增加间距
             .scale(scale)
+            .tvFocusableJiggle(
+                isTv = isTvDevice,
+                screenWidthDp = configuration.screenWidthDp,
+                reducedMotion = !animationEnabled,
+                cardEmphasis = TvFocusCardEmphasis.Large,
+                motionTier = motionTier
+            )
             .animateEnter(
                 index = index,
                 key = Unit,
-                animationEnabled = animationEnabled && !CardPositionManager.isReturningFromDetail && !CardPositionManager.isSwitchingCategory
+                animationEnabled = animationEnabled && !CardPositionManager.isReturningFromDetail && !CardPositionManager.isSwitchingCategory,
+                motionTier = motionTier
             )
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()

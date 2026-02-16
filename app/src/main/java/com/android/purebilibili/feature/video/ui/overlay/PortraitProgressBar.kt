@@ -27,6 +27,8 @@ import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,18 +47,30 @@ fun PortraitBottomContainer(
     onSeekStart: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolvePortraitProgressBarLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp, start = 8.dp, end = 8.dp) // 底部留一点边距
-            .height(48.dp) // 📱 [修复] 增大触摸热区高度
+            .padding(
+                bottom = layoutPolicy.bottomPaddingDp.dp,
+                start = layoutPolicy.horizontalPaddingDp.dp,
+                end = layoutPolicy.horizontalPaddingDp.dp
+            )
+            .height(layoutPolicy.touchAreaHeightDp.dp)
         ,
         contentAlignment = Alignment.Center
     ) {
          ThinWigglyProgressBar(
             progress = progress,
+            layoutPolicy = layoutPolicy,
             onSeek = { fraction ->
                  val target = (fraction * duration).toLong()
                  onSeek(target)
@@ -76,6 +90,7 @@ fun PortraitBottomContainer(
 @Composable
 fun ThinWigglyProgressBar(
     progress: Float,
+    layoutPolicy: PortraitProgressBarLayoutPolicy,
     onSeek: (Float) -> Unit,
     onSeekStart: () -> Unit,
     duration: Long,
@@ -89,12 +104,16 @@ fun ThinWigglyProgressBar(
     
     // 动画状态
     val barHeight by animateDpAsState(
-        targetValue = if (isDragging) 12.dp else 3.dp, // 📱 [修复] 默认高度从 2dp 增加到 3dp
+        targetValue = if (isDragging) {
+            layoutPolicy.draggingTrackHeightDp.dp
+        } else {
+            layoutPolicy.idleTrackHeightDp.dp
+        },
         label = "barHeight"
     )
     
     val thumbSize by animateDpAsState(
-        targetValue = if (isDragging) 12.dp else 0.dp, // 拖拽时显示滑块，平时隐藏
+        targetValue = if (isDragging) layoutPolicy.draggingThumbSizeDp.dp else 0.dp,
         label = "thumbSize"
     )
 
@@ -149,7 +168,10 @@ fun ThinWigglyProgressBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(barHeight)
-                .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                .background(
+                    Color.White.copy(alpha = 0.3f),
+                    RoundedCornerShape(layoutPolicy.trackCornerRadiusDp.dp)
+                )
         )
         
         // 进度 (当前进度)
@@ -157,7 +179,10 @@ fun ThinWigglyProgressBar(
             modifier = Modifier
                 .fillMaxWidth(displayProgress)
                 .height(barHeight)
-                .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(4.dp))
+                .background(
+                    Color.White.copy(alpha = 0.9f),
+                    RoundedCornerShape(layoutPolicy.trackCornerRadiusDp.dp)
+                )
         )
         
         // 滑块 (Thumb) - 仅拖拽时显示
@@ -185,17 +210,23 @@ fun ThinWigglyProgressBar(
              Box(
                  modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .offset(y = (-40).dp) // 向上偏移
+                    .offset(y = layoutPolicy.bubbleOffsetYDp.dp)
              ) {
                  Text(
                      text = timeText,
                      color = Color.White,
-                     fontSize = 18.sp,
+                     fontSize = layoutPolicy.bubbleFontSp.sp,
                      fontWeight = FontWeight.Bold,
                      style = MaterialTheme.typography.titleLarge,
                      modifier = Modifier
-                         .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                         .padding(horizontal = 12.dp, vertical = 6.dp)
+                         .background(
+                             Color.Black.copy(alpha = 0.5f),
+                             RoundedCornerShape(layoutPolicy.bubbleCornerRadiusDp.dp)
+                         )
+                         .padding(
+                             horizontal = layoutPolicy.bubbleHorizontalPaddingDp.dp,
+                             vertical = layoutPolicy.bubbleVerticalPaddingDp.dp
+                         )
                  )
              }
         }

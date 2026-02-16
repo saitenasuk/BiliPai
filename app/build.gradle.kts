@@ -16,6 +16,12 @@ android {
     namespace = "com.android.purebilibili"
     compileSdk = 36
 
+    // 投屏服务进程开关：
+    // 默认独立 :cast 进程（通过 CastBridgeService 做跨进程 IPC）
+    // 如需快速回滚，可传 -PcastServiceProcess=com.android.purebilibili
+    val castServiceProcess =
+        (project.findProperty("castServiceProcess") as String?) ?: ":cast"
+
     defaultConfig {
         applicationId = "com.android.purebilibili"
         minSdk = 26
@@ -35,6 +41,8 @@ android {
             // arm64-v8a: 现代 64 位真机 (Pixel、三星、小米等)
             abiFilters += listOf("arm64-v8a")
         }
+
+        manifestPlaceholders["castServiceProcess"] = castServiceProcess
     }
     
     // 🔥 ABI 分包 - 暂时禁用，只生成 64 位 APK
@@ -85,6 +93,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        aidl = true
     }
 
     packaging {

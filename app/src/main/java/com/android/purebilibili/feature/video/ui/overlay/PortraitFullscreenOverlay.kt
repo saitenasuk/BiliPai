@@ -38,11 +38,10 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.MoreVert
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
-
-internal fun shouldUseCompactPortraitTopBar(screenWidthDp: Int): Boolean = screenWidthDp <= 360
 
 internal fun shouldShowPortraitViewCount(viewCount: Int, compactMode: Boolean): Boolean {
     return viewCount > 0 && !compactMode
@@ -116,6 +115,15 @@ fun PortraitFullscreenOverlay(
     
     modifier: Modifier = Modifier
 ) {
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolvePortraitFullscreenOverlayLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+
     Box(
         modifier = modifier.fillMaxSize()
     ) {
@@ -131,6 +139,7 @@ fun PortraitFullscreenOverlay(
                 
                 // 1. 顶部栏 (返回 + 观看人数)
                 PortraitTopControlBar(
+                    layoutPolicy = layoutPolicy,
                     onBack = onBack,
                     viewCount = statView,
                     danmakuEnabled = danmakuEnabled,
@@ -162,6 +171,7 @@ fun PortraitFullscreenOverlay(
                 ) {
                     // 视频信息 (Video Info)
                     PortraitVideoInfo(
+                        layoutPolicy = layoutPolicy,
                         authorName = authorName,
                         authorFace = authorFace,
                         title = title,
@@ -170,9 +180,9 @@ fun PortraitFullscreenOverlay(
                         onTitleClick = onTitleClick,
                         onAuthorClick = onAuthorClick,
                         modifier = Modifier
-                            .fillMaxWidth(0.85f) // 限制宽度避免遮挡右侧按钮
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 12.dp) // 这里的 padding 只是为了与下方进度条保持一点距离
+                            .fillMaxWidth(layoutPolicy.infoWidthFraction)
+                            .padding(horizontal = layoutPolicy.infoHorizontalPaddingDp.dp)
+                            .padding(bottom = layoutPolicy.infoBottomPaddingDp.dp)
                     )
                     
                     // 底部进度条 (Progress Bar)
@@ -194,7 +204,7 @@ fun PortraitFullscreenOverlay(
                     // Original: Modifier.align(Alignment.BottomCenter)
                     
                     // Let's add a Spacer. Assuming Input Bar height ~50dp + margins.
-                    Spacer(modifier = Modifier.height(52.dp)) 
+                    Spacer(modifier = Modifier.height(layoutPolicy.bottomInputSpacerHeightDp.dp))
                 }
 
                 // 4. 底部输入栏 (Input Bar) - Keep strict bottom alignment (Overlay)
@@ -213,6 +223,7 @@ fun PortraitFullscreenOverlay(
  */
 @Composable
 private fun PortraitTopControlBar(
+    layoutPolicy: PortraitFullscreenOverlayLayoutPolicy,
     onBack: () -> Unit,
     viewCount: Int,
     danmakuEnabled: Boolean,
@@ -222,18 +233,14 @@ private fun PortraitTopControlBar(
     onSearchClick: () -> Unit,
     onMoreClick: () -> Unit
 ) {
-    val configuration = LocalConfiguration.current
-    val compactMode = shouldUseCompactPortraitTopBar(configuration.screenWidthDp)
-    val horizontalPadding = if (compactMode) 10.dp else 16.dp
-    val verticalPadding = if (compactMode) 8.dp else 10.dp
-    val iconSize = if (compactMode) 20.dp else 22.dp
-    val actionSpacing = if (compactMode) 8.dp else 16.dp
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
+            .padding(
+                horizontal = layoutPolicy.topHorizontalPaddingDp.dp,
+                vertical = layoutPolicy.topVerticalPaddingDp.dp
+            ),
     ) {
         // 左侧：返回 + 观看人数
         Row(
@@ -242,21 +249,22 @@ private fun PortraitTopControlBar(
         ) {
             IconButton(
                 onClick = onBack,
-                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent),
+                modifier = Modifier.size(layoutPolicy.topBackButtonSizeDp.dp)
             ) {
                 Icon(
                     imageVector = CupertinoIcons.Default.ChevronBackward,
                     contentDescription = "返回",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(layoutPolicy.topBackIconSizeDp.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(4.dp))
-            if (shouldShowPortraitViewCount(viewCount = viewCount, compactMode = compactMode)) {
+            Spacer(modifier = Modifier.width(layoutPolicy.topViewCountStartSpacingDp.dp))
+            if (shouldShowPortraitViewCount(viewCount = viewCount, compactMode = layoutPolicy.compactMode)) {
                 Text(
                     text = "${FormatUtils.formatStat(viewCount.toLong())}播放",
                     color = Color.White.copy(alpha = 0.8f),
-                    fontSize = if (compactMode) 11.sp else 12.sp
+                    fontSize = layoutPolicy.topViewCountFontSp.sp
                 )
             }
         }
@@ -265,14 +273,14 @@ private fun PortraitTopControlBar(
         Row(
             modifier = Modifier.align(Alignment.CenterEnd),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(actionSpacing)
+            horizontalArrangement = Arrangement.spacedBy(layoutPolicy.topActionSpacingDp.dp)
         ) {
             IconButton(onClick = onDanmakuToggle) {
                 Icon(
                     imageVector = if (danmakuEnabled) CupertinoIcons.Default.TextBubble else CupertinoIcons.Outlined.TextBubble,
                     contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
                     tint = if (danmakuEnabled) Color.White else Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.size(iconSize)
+                    modifier = Modifier.size(layoutPolicy.topActionIconSizeDp.dp)
                 )
             }
             IconButton(onClick = onSearchClick) {
@@ -280,7 +288,7 @@ private fun PortraitTopControlBar(
                     imageVector = Icons.Rounded.Search,
                     contentDescription = "搜索",
                     tint = Color.White,
-                    modifier = Modifier.size(iconSize)
+                    modifier = Modifier.size(layoutPolicy.topActionIconSizeDp.dp)
                 )
             }
             if (shouldShowPortraitTopMoreAction()) {
@@ -289,7 +297,7 @@ private fun PortraitTopControlBar(
                         imageVector = Icons.Rounded.MoreVert,
                         contentDescription = "菜单",
                         tint = Color.White,
-                        modifier = Modifier.size(iconSize)
+                        modifier = Modifier.size(layoutPolicy.topActionIconSizeDp.dp)
                     )
                 }
             }
@@ -302,6 +310,7 @@ private fun PortraitTopControlBar(
  */
 @Composable
 private fun PortraitVideoInfo(
+    layoutPolicy: PortraitFullscreenOverlayLayoutPolicy,
     authorName: String,
     authorFace: String,
     title: String,
@@ -318,7 +327,7 @@ private fun PortraitVideoInfo(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .padding(bottom = 8.dp)
+                .padding(bottom = layoutPolicy.authorRowBottomPaddingDp.dp)
                 .clickable { onAuthorClick() }
         ) {
             // 头像
@@ -328,24 +337,24 @@ private fun PortraitVideoInfo(
                     contentDescription = authorName,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(layoutPolicy.avatarSizeDp.dp)
                         .clip(CircleShape)
                         .background(Color.Gray)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(layoutPolicy.avatarNameSpacingDp.dp))
             }
             
             // 名字
             Text(
                 text = "@$authorName",
                 color = Color.White,
-                fontSize = 16.sp,
+                fontSize = layoutPolicy.authorNameFontSp.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(layoutPolicy.avatarNameSpacingDp.dp))
             
             // 关注按钮
             val isFollowed = isFollowing
@@ -355,29 +364,29 @@ private fun PortraitVideoInfo(
             val iconVisible = !isFollowed
 
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(layoutPolicy.followButtonCornerRadiusDp.dp),
                 color = buttonColor,
                 modifier = Modifier
-                    .height(26.dp)
+                    .height(layoutPolicy.followButtonHeightDp.dp)
                     .clickable { onFollowClick() }
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 10.dp)
+                    modifier = Modifier.padding(horizontal = layoutPolicy.followButtonHorizontalPaddingDp.dp)
                 ) {
                     if (iconVisible) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = null,
                             tint = contentColor,
-                            modifier = Modifier.size(12.dp)
+                            modifier = Modifier.size(layoutPolicy.followIconSizeDp.dp)
                         )
-                        Spacer(modifier = Modifier.width(2.dp))
+                        Spacer(modifier = Modifier.width(layoutPolicy.followIconSpacingDp.dp))
                     }
                     Text(
                         text = buttonText,
                         color = contentColor,
-                        fontSize = 11.sp,
+                        fontSize = layoutPolicy.followTextFontSp.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -388,9 +397,9 @@ private fun PortraitVideoInfo(
         Text(
             text = title,
             color = Color.White.copy(alpha = 0.9f),
-            fontSize = 15.sp,
+            fontSize = layoutPolicy.titleFontSp.sp,
             maxLines = 3,
-            lineHeight = 22.sp,
+            lineHeight = layoutPolicy.titleLineHeightSp.sp,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.clickable { onTitleClick() }

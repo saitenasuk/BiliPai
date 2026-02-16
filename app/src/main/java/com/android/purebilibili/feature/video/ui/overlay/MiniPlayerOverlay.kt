@@ -40,14 +40,13 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.media3.ui.PlayerView
 //  已改用 MaterialTheme.colorScheme.primary
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private const val TAG = "MiniPlayerOverlay"
 private const val AUTO_HIDE_DELAY_MS = 3000L
-private val STASHED_WIDTH = 40.dp
-private val STASHED_HEIGHT = 48.dp
 
 /**
  *  小窗播放器覆盖层
@@ -78,15 +77,19 @@ fun MiniPlayerOverlay(
 
     
     val configuration = LocalConfiguration.current
+    val isTvDevice = rememberIsTvDevice()
     val density = LocalDensity.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveMiniPlayerOverlayLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
 
-    //  [适配] 平板设备增加小窗尺寸
-    val isTablet = configuration.screenWidthDp >= 600
-    // [修改] 缩小平板小窗尺寸 (360 -> 280, 202 -> 157)
-    val miniPlayerWidth = if (isTablet) 280.dp else 220.dp
-    val miniPlayerHeight = if (isTablet) 157.dp else 130.dp
-    val padding = 12.dp
-    val headerHeight = 28.dp // 顶部可拖动区域高度
+    val miniPlayerWidth = layoutPolicy.miniPlayerWidthDp.dp
+    val miniPlayerHeight = layoutPolicy.miniPlayerHeightDp.dp
+    val padding = layoutPolicy.outerPaddingDp.dp
+    val headerHeight = layoutPolicy.headerHeightDp.dp // 顶部可拖动区域高度
 
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
@@ -108,7 +111,11 @@ fun MiniPlayerOverlay(
     }
     var offsetY by remember(cardBounds) { 
         mutableFloatStateOf(
-            cardBounds?.top ?: (screenHeightPx - miniPlayerHeightPx - paddingPx - 100.dp.value * density.density)
+            cardBounds?.top ?: (
+                screenHeightPx - miniPlayerHeightPx - paddingPx - with(density) {
+                    layoutPolicy.dragBottomInsetDp.dp.toPx()
+                }
+            )
         ) 
     }
     
@@ -180,7 +187,7 @@ fun MiniPlayerOverlay(
             0f // 左侧贴边
         } else {
             // 右侧贴边
-            with(density) { screenWidthPx - STASHED_WIDTH.toPx() }
+            with(density) { screenWidthPx - layoutPolicy.stashedWidthDp.dp.toPx() }
         }
     } else {
         offsetX
@@ -234,6 +241,7 @@ fun MiniPlayerOverlay(
                 modifier = Modifier
                     .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
                     .zIndex(101f),
+                layoutPolicy = layoutPolicy,
                 side = stashSide,
                 onUnstash = {
                     isStashed = false
@@ -249,8 +257,8 @@ fun MiniPlayerOverlay(
                 onDrag = { deltaY ->
                     with(density) {
                         stashedOffsetY = (stashedOffsetY + deltaY).coerceIn(
-                            paddingPx + 50.dp.toPx(),
-                            screenHeightPx - paddingPx - 100.dp.toPx()
+                            paddingPx + layoutPolicy.dragTopInsetDp.dp.toPx(),
+                            screenHeightPx - paddingPx - layoutPolicy.dragBottomInsetDp.dp.toPx()
                         )
                     }
                 }
@@ -262,10 +270,13 @@ fun MiniPlayerOverlay(
                     .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
                     .width(miniPlayerWidth)
                     .height(miniPlayerHeight)
-                    .shadow(16.dp, RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
+                    .shadow(
+                        layoutPolicy.cardShadowDp.dp,
+                        RoundedCornerShape(layoutPolicy.cardCornerRadiusDp.dp)
+                    ),
+                shape = RoundedCornerShape(layoutPolicy.cardCornerRadiusDp.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Black),
-                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = layoutPolicy.cardElevationDp.dp)
             ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // 视频画面
@@ -281,7 +292,7 @@ fun MiniPlayerOverlay(
                         update = { view -> view.player = exoPlayer },
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(layoutPolicy.cardCornerRadiusDp.dp))
                             //  视频区域：左右滑动调节进度
                             .pointerInput(Unit) {
                                 detectHorizontalDragGestures(
@@ -358,8 +369,10 @@ fun MiniPlayerOverlay(
                                         screenWidthPx - miniPlayerWidthPx - paddingPx
                                     }
                                     offsetY = offsetY.coerceIn(
-                                        paddingPx + 50.dp.value * density.density,
-                                        screenHeightPx - miniPlayerHeightPx - paddingPx - 100.dp.value * density.density
+                                        paddingPx + with(density) { layoutPolicy.dragTopInsetDp.dp.toPx() },
+                                        screenHeightPx - miniPlayerHeightPx - paddingPx - with(density) {
+                                            layoutPolicy.dragBottomInsetDp.dp.toPx()
+                                        }
                                     )
                                 },
                                 onDragCancel = {
@@ -377,21 +390,24 @@ fun MiniPlayerOverlay(
                     Text(
                         text = miniPlayerManager.currentTitle,
                         color = Color.White,
-                        fontSize = 11.sp,
+                        fontSize = layoutPolicy.titleFontSp.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .align(Alignment.CenterStart)
-                            .padding(start = 8.dp, end = 60.dp)
+                            .padding(
+                                start = layoutPolicy.titleStartPaddingDp.dp,
+                                end = layoutPolicy.titleEndPaddingDp.dp
+                            )
                     )
                     
                     //  右上角按钮组
                     Row(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .padding(end = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            .padding(end = layoutPolicy.headerButtonRowEndPaddingDp.dp),
+                        horizontalArrangement = Arrangement.spacedBy(layoutPolicy.headerButtonSpacingDp.dp)
                     ) {
                         // [新增] 贴边隐藏按钮
                         Surface(
@@ -406,7 +422,7 @@ fun MiniPlayerOverlay(
                                 stashedOffsetY = offsetY
                                 isStashed = true
                             },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
                             shape = CircleShape,
                             color = Color.Black.copy(alpha = 0.5f)
                         ) {
@@ -414,14 +430,16 @@ fun MiniPlayerOverlay(
                                 imageVector = CupertinoIcons.Default.Minus, // 使用 Minus 图标作为隐藏/最小化
                                 contentDescription = "隐藏",
                                 tint = Color.White,
-                                modifier = Modifier.padding(5.dp).size(14.dp)
+                                modifier = Modifier
+                                    .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
+                                    .size(layoutPolicy.headerButtonIconSizeDp.dp)
                             )
                         }
 
                         // 展开按钮
                         Surface(
                             onClick = { onExpandClick() },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
                             shape = CircleShape,
                             color = Color.Black.copy(alpha = 0.5f)
                         ) {
@@ -429,14 +447,16 @@ fun MiniPlayerOverlay(
                                 imageVector = CupertinoIcons.Default.ArrowUpLeftAndArrowDownRight,
                                 contentDescription = "展开",
                                 tint = Color.White,
-                                modifier = Modifier.padding(5.dp).size(14.dp)
+                                modifier = Modifier
+                                    .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
+                                    .size(layoutPolicy.headerButtonIconSizeDp.dp)
                             )
                         }
                         
                         // 关闭按钮
                         Surface(
                             onClick = { miniPlayerManager.dismiss() },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(layoutPolicy.headerButtonSizeDp.dp),
                             shape = CircleShape,
                             color = com.android.purebilibili.core.theme.iOSRed.copy(alpha = 0.7f)
                         ) {
@@ -444,7 +464,9 @@ fun MiniPlayerOverlay(
                                 imageVector = CupertinoIcons.Default.Xmark,
                                 contentDescription = "关闭",
                                 tint = Color.White,
-                                modifier = Modifier.padding(4.dp).size(16.dp)
+                                modifier = Modifier
+                                    .padding(layoutPolicy.headerButtonIconPaddingDp.dp)
+                                    .size(layoutPolicy.headerButtonIconSizeDp.dp)
                             )
                         }
                     }
@@ -456,7 +478,7 @@ fun MiniPlayerOverlay(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(40.dp)
+                            .height(layoutPolicy.controlsGradientHeightDp.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
@@ -479,32 +501,41 @@ fun MiniPlayerOverlay(
                             imageVector = if (isPlaying) CupertinoIcons.Default.Pause else CupertinoIcons.Default.Play,
                             contentDescription = if (isPlaying) "暂停" else "播放",
                             tint = Color.White,
-                            modifier = Modifier.padding(10.dp).size(28.dp)
+                            modifier = Modifier
+                                .padding(layoutPolicy.centerPlayIconPaddingDp.dp)
+                                .size(layoutPolicy.centerPlayIconSizeDp.dp)
                         )
                     }
                     
                     // 底部提示
                     if (isDraggingProgress) {
                         Surface(
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = layoutPolicy.seekHintBottomPaddingDp.dp),
+                            shape = RoundedCornerShape(layoutPolicy.seekHintCornerRadiusDp.dp),
                             color = Color.Black.copy(alpha = 0.7f)
                         ) {
                             val timeText = "${formatMiniTime(seekPreviewPosition)} / ${formatMiniTime(duration)}"
                             Text(
                                 text = timeText,
                                 color = Color.White,
-                                fontSize = 12.sp,
+                                fontSize = layoutPolicy.seekHintFontSp.sp,
                                 fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                modifier = Modifier.padding(
+                                    horizontal = layoutPolicy.seekHintHorizontalPaddingDp.dp,
+                                    vertical = layoutPolicy.seekHintVerticalPaddingDp.dp
+                                )
                             )
                         }
                     } else if (!isDraggingPosition) {
                         Text(
                             text = "拖动顶部移动 | 左右滑动调进度",
                             color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 9.sp,
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp)
+                            fontSize = layoutPolicy.dragHintFontSp.sp,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = layoutPolicy.dragHintBottomPaddingDp.dp)
                         )
                     }
                 }
@@ -514,9 +545,14 @@ fun MiniPlayerOverlay(
                     progress = { currentProgress },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(3.dp)
+                        .height(layoutPolicy.progressBarHeightDp.dp)
                         .align(Alignment.BottomCenter)
-                        .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)),
+                        .clip(
+                            RoundedCornerShape(
+                                bottomStart = layoutPolicy.cardCornerRadiusDp.dp,
+                                bottomEnd = layoutPolicy.cardCornerRadiusDp.dp
+                            )
+                        ),
                     color = if (isDraggingProgress) Color.Yellow else MaterialTheme.colorScheme.primary,
                     trackColor = Color.White.copy(alpha = 0.3f)
                 )
@@ -532,6 +568,7 @@ fun MiniPlayerOverlay(
 @Composable
 private fun StashedMiniPlayerView(
     modifier: Modifier,
+    layoutPolicy: MiniPlayerOverlayLayoutPolicy,
     side: com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition,
     onUnstash: () -> Unit,
     onDrag: (Float) -> Unit
@@ -539,15 +576,21 @@ private fun StashedMiniPlayerView(
     val isLeft = side == com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT
     // 形状：贴边的一侧是平的，另一侧是圆的
     val shape = if (isLeft) {
-        RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
+        RoundedCornerShape(
+            topEnd = layoutPolicy.cardCornerRadiusDp.dp + layoutPolicy.stashedSideCornerExtraDp.dp,
+            bottomEnd = layoutPolicy.cardCornerRadiusDp.dp + layoutPolicy.stashedSideCornerExtraDp.dp
+        )
     } else {
-        RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp)
+        RoundedCornerShape(
+            topStart = layoutPolicy.cardCornerRadiusDp.dp + layoutPolicy.stashedSideCornerExtraDp.dp,
+            bottomStart = layoutPolicy.cardCornerRadiusDp.dp + layoutPolicy.stashedSideCornerExtraDp.dp
+        )
     }
 
     Surface(
         modifier = modifier
-            .width(40.dp)
-            .height(48.dp)
+            .width(layoutPolicy.stashedWidthDp.dp)
+            .height(layoutPolicy.stashedHeightDp.dp)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDrag = { change, dragAmount ->
@@ -555,10 +598,10 @@ private fun StashedMiniPlayerView(
                         onDrag(dragAmount.y)
                     }
                 )
-            },
+        },
         shape = shape,
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
-        shadowElevation = 8.dp,
+        shadowElevation = layoutPolicy.stashedShadowDp.dp,
         onClick = onUnstash
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -566,7 +609,7 @@ private fun StashedMiniPlayerView(
                 imageVector = if (isLeft) Icons.Filled.ChevronRight else Icons.Filled.ChevronLeft,
                 contentDescription = "Show",
                 tint = Color.White,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(layoutPolicy.stashedIconSizeDp.dp)
             )
         }
     }

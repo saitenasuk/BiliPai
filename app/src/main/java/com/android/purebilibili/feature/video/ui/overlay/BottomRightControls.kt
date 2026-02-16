@@ -16,9 +16,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.feature.video.ui.components.*
+import com.android.purebilibili.core.util.rememberIsTvDevice
 
 /**
  *  横屏播放器底部右侧控制按钮组
@@ -41,11 +43,19 @@ fun BottomRightControls(
 ) {
     var showSpeedMenu by remember { mutableStateOf(false) }
     var showRatioMenu by remember { mutableStateOf(false) }
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveBottomRightControlsLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
     
     Box(modifier = modifier) {
         // 控制按钮行
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(layoutPolicy.rowSpacingDp.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 倍速按钮
@@ -57,6 +67,7 @@ fun BottomRightControls(
             // 画质按钮
             QualityButton(
                 qualityText = currentQualityText,
+                layoutPolicy = layoutPolicy,
                 onClick = { showSpeedMenu = false; showRatioMenu = false; onQualityClick() }
             )
             
@@ -74,7 +85,7 @@ fun BottomRightControls(
             exit = fadeOut() + slideOutVertically { it },
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .offset(y = (-10).dp)
+                .offset(y = layoutPolicy.menuOffsetYDp.dp)
         ) {
             SpeedSelectionMenu(
                 currentSpeed = currentSpeed,
@@ -90,7 +101,7 @@ fun BottomRightControls(
             exit = fadeOut() + slideOutVertically { it },
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .offset(y = (-10).dp)
+                .offset(y = layoutPolicy.menuOffsetYDp.dp)
         ) {
             AspectRatioMenu(
                 currentRatio = currentRatio,
@@ -107,20 +118,24 @@ fun BottomRightControls(
 @Composable
 private fun QualityButton(
     qualityText: String,
+    layoutPolicy: BottomRightControlsLayoutPolicy,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
         onClick = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(layoutPolicy.chipCornerRadiusDp.dp),
         color = Color.Black.copy(alpha = 0.5f)
     ) {
         Text(
             text = qualityText,
             color = Color.White,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            fontSize = layoutPolicy.chipFontSp.sp,
+            modifier = Modifier.padding(
+                horizontal = layoutPolicy.chipHorizontalPaddingDp.dp,
+                vertical = layoutPolicy.chipVerticalPaddingDp.dp
+            )
         )
     }
 }

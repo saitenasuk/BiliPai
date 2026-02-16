@@ -17,6 +17,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.launch
@@ -83,6 +89,38 @@ fun AnimationSettingsContent(
     state: SettingsUiState,
     viewModel: SettingsViewModel
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val isTvDevice = rememberIsTvDevice()
+    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
+    val windowSizeClass = LocalWindowSizeClass.current
+    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+        )
+    }
+    val effectiveMotionTier = resolveEffectiveMotionTier(
+        baseTier = deviceUiProfile.motionTier,
+        animationEnabled = state.cardAnimationEnabled
+    )
+    val motionTierLabel = remember(effectiveMotionTier) {
+        when (effectiveMotionTier) {
+            MotionTier.Reduced -> "Reduced（低动效）"
+            MotionTier.Normal -> "Normal（标准）"
+            MotionTier.Enhanced -> "Enhanced（增强）"
+        }
+    }
+    val motionTierHint = remember(effectiveMotionTier) {
+        when (effectiveMotionTier) {
+            MotionTier.Reduced -> "更短延迟与更弱位移，优先稳定和性能"
+            MotionTier.Normal -> "平衡性能与动效，适合大多数设备"
+            MotionTier.Enhanced -> "更明显的层级与动势，适合大屏展示"
+        }
+    }
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
 
@@ -94,12 +132,12 @@ fun AnimationSettingsContent(
             //  卡片动画
             //  卡片动画
             item {
-                Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("卡片动画")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.WandAndStars,
@@ -118,19 +156,60 @@ fun AnimationSettingsContent(
                             onCheckedChange = { viewModel.toggleCardTransition(it) },
                             iconTint = iOSTeal
                         )
+                        Divider()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = "当前有效动画档位",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = motionTierLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = motionTierHint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
             
             // ✨ 视觉效果
             item {
-                Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("视觉效果")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
+                        if (isTvDevice) {
+                            IOSSwitchItem(
+                                icon = CupertinoIcons.Default.Tv,
+                                title = "TV 性能档",
+                                subtitle = "TV 默认开启，降低高开销特效与动画",
+                                checked = isTvPerformanceProfileEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch {
+                                        SettingsManager.setTvPerformanceProfileEnabled(context, enabled)
+                                    }
+                                },
+                                iconTint = iOSTeal
+                            )
+                            Divider()
+                        }
+
                         // Android 13+ 显示液态玻璃
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                              IOSSwitchItem(
@@ -222,12 +301,12 @@ fun AnimationSettingsContent(
             // 📐 底栏样式
             // 📐 底栏样式
             item {
-                Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(4, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("底栏样式")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(5, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(5, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.RectangleStack,
@@ -244,7 +323,7 @@ fun AnimationSettingsContent(
             //  提示
             //  提示
             item {
-                Box(modifier = Modifier.staggeredEntrance(6, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(6, isVisible, motionTier = effectiveMotionTier)) {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()

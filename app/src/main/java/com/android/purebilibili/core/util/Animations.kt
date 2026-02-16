@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import com.android.purebilibili.core.ui.adaptive.MotionTier
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -90,6 +91,46 @@ object iOSSpringSpecs {
     )
 }
 
+data class EnterMotionPolicy(
+    val staggerStepMs: Int,
+    val maxStaggerMs: Int,
+    val initialScale: Float,
+    val translationFactor: Float,
+    val dampingRatio: Float,
+    val stiffness: Float
+)
+
+fun resolveEnterMotionPolicy(motionTier: MotionTier): EnterMotionPolicy {
+    return when (motionTier) {
+        MotionTier.Reduced -> EnterMotionPolicy(
+            staggerStepMs = 10,
+            maxStaggerMs = 60,
+            initialScale = 0.97f,
+            translationFactor = 0.35f,
+            dampingRatio = 0.92f,
+            stiffness = 720f
+        )
+
+        MotionTier.Enhanced -> EnterMotionPolicy(
+            staggerStepMs = 24,
+            maxStaggerMs = 180,
+            initialScale = 0.88f,
+            translationFactor = 1.1f,
+            dampingRatio = 0.62f,
+            stiffness = 320f
+        )
+
+        MotionTier.Normal -> EnterMotionPolicy(
+            staggerStepMs = 30,
+            maxStaggerMs = 200,
+            initialScale = 0.9f,
+            translationFactor = 1f,
+            dampingRatio = 0.7f,
+            stiffness = 350f
+        )
+    }
+}
+
 /**
  *  列表项进场动画 (Premium 非线性动画)
  * 
@@ -108,7 +149,8 @@ fun Modifier.animateEnter(
     index: Int = 0,
     key: Any? = Unit,
     initialOffsetY: Float = 60f,  // 🚀 [优化] 减少位移距离
-    animationEnabled: Boolean = true
+    animationEnabled: Boolean = true,
+    motionTier: MotionTier = MotionTier.Normal
 ): Modifier = composed {
 
     // 🚀 [优化] 如果动画被禁用，直接返回无动画效果
@@ -116,13 +158,14 @@ fun Modifier.animateEnter(
         return@composed this
     }
 
-    
+    val motionPolicy = remember(motionTier) { resolveEnterMotionPolicy(motionTier) }
+
     // 🚀 [性能优化] 使用单一进度值驱动所有动画属性
     // 替代原来的 3 个 Animatable 对象，减少内存分配和协程开销
     var animationStarted by remember(key) { mutableStateOf(false) }
     
-    // 计算交错延迟：每个卡片延迟 30ms，最多 200ms
-    val delayMs = (index * 30).coerceAtMost(200)
+    // 计算交错延迟（按 MotionTier 分档）
+    val delayMs = (index * motionPolicy.staggerStepMs).coerceAtMost(motionPolicy.maxStaggerMs)
     
     LaunchedEffect(key) {
         delay(delayMs.toLong())
@@ -132,17 +175,17 @@ fun Modifier.animateEnter(
     val progress by animateFloatAsState(
         targetValue = if (animationStarted) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 0.7f,    // 轻微过冲
-            stiffness = 350f        // 适中的弹性
+            dampingRatio = motionPolicy.dampingRatio,
+            stiffness = motionPolicy.stiffness
         ),
         label = "enterProgress"
     )
     
     this.graphicsLayer {
         alpha = progress
-        translationY = initialOffsetY * (1f - progress)
-        scaleX = 0.9f + 0.1f * progress
-        scaleY = 0.9f + 0.1f * progress
+        translationY = (initialOffsetY * motionPolicy.translationFactor) * (1f - progress)
+        scaleX = motionPolicy.initialScale + (1f - motionPolicy.initialScale) * progress
+        scaleY = motionPolicy.initialScale + (1f - motionPolicy.initialScale) * progress
     }
 }
 

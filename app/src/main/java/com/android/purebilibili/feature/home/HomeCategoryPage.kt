@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
+import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
@@ -62,6 +63,7 @@ fun HomeCategoryPageContent(
     longPressCallback: (VideoItem) -> Unit, // [Feature] Long Press
     displayMode: Int,
     cardAnimationEnabled: Boolean,
+    cardMotionTier: MotionTier = MotionTier.Normal,
     cardTransitionEnabled: Boolean,
     isDataSaverActive: Boolean,
     oldContentAnchorBvid: String? = null,
@@ -214,6 +216,7 @@ fun HomeCategoryPageContent(
                                         video = video,
                                         index = index,
                                         animationEnabled = cardAnimationEnabled,
+                                        motionTier = cardMotionTier,
                                         transitionEnabled = cardTransitionEnabled,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onLongClick = { longPressCallback(video) },
@@ -227,6 +230,7 @@ fun HomeCategoryPageContent(
                                         index = index,
                                         isFollowing = video.owner.mid in followingMids && category != HomeCategory.FOLLOW,
                                         animationEnabled = cardAnimationEnabled,
+                                        motionTier = cardMotionTier,
                                         transitionEnabled = cardTransitionEnabled,
                                         isDataSaverActive = isDataSaverActive,
                                         onDismiss = { onDismissVideo(video.bvid) },

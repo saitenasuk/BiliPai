@@ -78,7 +78,8 @@ fun iOSHomeHeader(
     pagerState: androidx.compose.foundation.pager.PagerState? = null, // [New] PagerState for sync
     // [New] LayerBackdrop for liquid glass effect
     backdrop: com.kyant.backdrop.backdrops.LayerBackdrop? = null,
-    homeSettings: com.android.purebilibili.core.store.HomeSettings? = null
+    homeSettings: com.android.purebilibili.core.store.HomeSettings? = null,
+    topTabsVisible: Boolean = true
 ) {
     val haptic = rememberHapticFeedback()
     val density = LocalDensity.current
@@ -174,6 +175,11 @@ fun iOSHomeHeader(
         },
         animationSpec = tween(220),
         label = "tabOverlayAlpha"
+    )
+    val tabContentAlpha by animateFloatAsState(
+        targetValue = if (topTabsVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "tabContentAlpha"
     )
     val tabBorderAlpha by animateFloatAsState(
         targetValue = if (!isTabFloating) 0f else if (isTabGlassEnabled) 0.56f else 0.35f,
@@ -329,7 +335,7 @@ fun iOSHomeHeader(
                 .fillMaxWidth()
                 .zIndex(-1f) // Slide behind search bar
                 .height(currentTabHeight) // Use local derived value [Feature] Collapse Tabs
-                .graphicsLayer { alpha = tabAlpha } // Use local derived value
+                .graphicsLayer { alpha = tabAlpha * tabContentAlpha } // Use local derived value
                 .clip(RoundedCornerShape(bottomStart = 0.dp, bottomEnd = 0.dp))
         ) {
             Box(
@@ -380,20 +386,28 @@ fun iOSHomeHeader(
                         }
                     )
             ) {
-                CategoryTabRow(
-                    categories = topCategories,
-                    selectedIndex = categoryIndex,
-                    onCategorySelected = onCategorySelected,
-                    onPartitionClick = onPartitionClick,
-                    onLiveClick = onLiveClick,
-                    pagerState = pagerState,
-                    labelMode = homeSettings?.topTabLabelMode
-                        ?: com.android.purebilibili.core.store.SettingsManager.TopTabLabelMode.TEXT_ONLY,
-                    isLiquidGlassEnabled = isTabGlassEnabled && isGlassSupported,
-                    liquidGlassStyle = liquidStyle,
-                    backdrop = backdrop,
-                    isFloatingStyle = isTabFloating
-                )
+                if (tabContentAlpha > 0.01f) {
+                    CategoryTabRow(
+                        categories = topCategories,
+                        selectedIndex = categoryIndex,
+                        onCategorySelected = { index ->
+                            if (topTabsVisible) onCategorySelected(index)
+                        },
+                        onPartitionClick = {
+                            if (topTabsVisible) onPartitionClick()
+                        },
+                        onLiveClick = {
+                            if (topTabsVisible) onLiveClick()
+                        },
+                        pagerState = pagerState,
+                        labelMode = homeSettings?.topTabLabelMode
+                            ?: com.android.purebilibili.core.store.SettingsManager.TopTabLabelMode.TEXT_ONLY,
+                        isLiquidGlassEnabled = isTabGlassEnabled && isGlassSupported,
+                        liquidGlassStyle = liquidStyle,
+                        backdrop = backdrop,
+                        isFloatingStyle = isTabFloating
+                    )
+                }
             }
         }
     }

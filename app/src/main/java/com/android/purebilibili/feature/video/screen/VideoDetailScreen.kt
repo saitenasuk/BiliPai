@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.view.KeyEvent
 import android.view.Window
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
@@ -27,6 +28,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -50,8 +52,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -109,6 +114,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 // 📱 [新增] 竖屏全屏
 import com.android.purebilibili.feature.video.ui.overlay.PortraitFullscreenOverlay
@@ -144,6 +150,7 @@ fun VideoDetailScreen(
     onBgmClick: (BgmInfo) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val isTvDevice = rememberIsTvDevice()
     val view = LocalView.current
     val configuration = LocalConfiguration.current
     val uiState by viewModel.uiState.collectAsState()
@@ -190,6 +197,9 @@ fun VideoDetailScreen(
     //     .collectAsState(initial = false)
 
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val tvDetailPlayerFocusRequester = remember { FocusRequester() }
+    val tvDetailContentFocusRequester = remember { FocusRequester() }
+    var tvDetailFocusTarget by remember { mutableStateOf(VideoDetailTvFocusTarget.PLAYER) }
     
     // 📐 [大屏适配] 仅 Expanded 才启用平板分栏布局
     val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
@@ -206,6 +216,14 @@ fun VideoDetailScreen(
         userRequestedFullscreen
     } else {
         isLandscape
+    }
+
+    LaunchedEffect(isTvDevice, isFullscreenMode, useTabletLayout) {
+        if (isTvDevice && !isFullscreenMode && !useTabletLayout) {
+            tvDetailFocusTarget = resolveInitialVideoDetailTvFocusTarget(isTv = true)
+                ?: VideoDetailTvFocusTarget.PLAYER
+            tvDetailPlayerFocusRequester.requestFocus()
+        }
     }
 
     var isPipMode by remember { mutableStateOf(isInPipMode) }
@@ -743,7 +761,7 @@ fun VideoDetailScreen(
                 
                 if (wasFullscreen && !userRequestedFullscreen) {
                     // check if it is a phone
-                    if (configuration.smallestScreenWidthDp < 600) {
+                    if (configuration.smallestScreenWidthDp < 600 && !isTvDevice) {
                         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     }
                 }
@@ -771,9 +789,12 @@ fun VideoDetailScreen(
     }
     
     // 📱 [新增] 拦截系统返回键：手机横屏进入了平板分栏模式，应切换回竖屏而非退出
-    val isPhoneInLandscapeSplitView = useTabletLayout && 
-        configuration.smallestScreenWidthDp < 600 && 
-        configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isPhoneInLandscapeSplitView = shouldRotateToPortraitOnSplitBack(
+        useTabletLayout = useTabletLayout,
+        smallestScreenWidthDp = configuration.smallestScreenWidthDp,
+        orientation = configuration.orientation,
+        isTvDevice = isTvDevice
+    )
     
     BackHandler(enabled = isPhoneInLandscapeSplitView && !isFullscreenMode && !isPortraitFullscreen) {
         com.android.purebilibili.core.util.Logger.d(
@@ -903,7 +924,8 @@ fun VideoDetailScreen(
                 onCoin = { viewModel.showCoinDialog() },
                 onToggleFavorite = { viewModel.showFavoriteFolderDialog() },
                 onTriple = { viewModel.doTripleAction() },
-                onRelatedVideoClick = onVideoClick
+                onRelatedVideoClick = onVideoClick,
+                tvFocusRequester = tvDetailPlayerFocusRequester
             )
         } else {
                 //  沉浸式布局：视频延伸到状态栏 + 内容区域
@@ -929,18 +951,22 @@ fun VideoDetailScreen(
                             // 📱 手机误入平板模式（如横屏宽度触发 Expanded），点击返回应切换回竖屏
                             // 🔧 [修复] 检查 smallestScreenWidthDp 确保这不是真正的平板
                             val smallestWidth = configuration.smallestScreenWidthDp
-                            val isPhone = smallestWidth < 600
                             val currentOrientation = configuration.orientation
-                            val isInLandscape = currentOrientation == Configuration.ORIENTATION_LANDSCAPE
+                            val shouldRotatePortrait = shouldRotateToPortraitOnSplitBack(
+                                useTabletLayout = true,
+                                smallestScreenWidthDp = smallestWidth,
+                                orientation = currentOrientation,
+                                isTvDevice = isTvDevice
+                            )
                             
                             com.android.purebilibili.core.util.Logger.d(
                                 "VideoDetailScreen", 
-                                "📱 onBack clicked: smallestWidth=$smallestWidth, isPhone=$isPhone, " +
-                                "orientation=$currentOrientation, isLandscape=$isInLandscape, " +
+                                "📱 onBack clicked: smallestWidth=$smallestWidth, shouldRotatePortrait=$shouldRotatePortrait, " +
+                                "orientation=$currentOrientation, " +
                                 "activity=${activity != null}"
                             )
                             
-                            if (isPhone && isInLandscape) {
+                            if (shouldRotatePortrait) {
                                 com.android.purebilibili.core.util.Logger.d(
                                     "VideoDetailScreen", 
                                     "📱 Rotating to PORTRAIT"
@@ -1160,7 +1186,19 @@ fun VideoDetailScreen(
                                 onAudioLangChange = { viewModel.changeAudioLanguage(it) },
                                 // [New Actions]
                                 onSaveCover = { viewModel.saveCover(context) },
-                                onDownloadAudio = { viewModel.downloadAudio(context) }
+                                onDownloadAudio = { viewModel.downloadAudio(context) },
+                                tvFocusRequester = tvDetailPlayerFocusRequester,
+                                onTvMoveFocusDown = {
+                                    val nextTarget = resolveVideoDetailTvFocusTarget(
+                                        current = tvDetailFocusTarget,
+                                        keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
+                                        action = KeyEvent.ACTION_UP
+                                    )
+                                    tvDetailFocusTarget = nextTarget
+                                    if (nextTarget == VideoDetailTvFocusTarget.CONTENT) {
+                                        tvDetailContentFocusRequester.requestFocus()
+                                    }
+                                }
                                 //  空降助手 - 已由插件系统自动处理
                                 // sponsorSegment = sponsorSegment,
                                 // showSponsorSkipButton = showSponsorSkipButton,
@@ -1174,6 +1212,34 @@ fun VideoDetailScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
+                            .then(
+                                if (isTvDevice) {
+                                    Modifier
+                                        .focusRequester(tvDetailContentFocusRequester)
+                                        .focusable()
+                                        .onPreviewKeyEvent { event ->
+                                            val nativeEvent = event.nativeKeyEvent
+                                            val nextTarget = resolveVideoDetailTvFocusTarget(
+                                                current = tvDetailFocusTarget,
+                                                keyCode = nativeEvent.keyCode,
+                                                action = nativeEvent.action
+                                            )
+                                            if (nextTarget != tvDetailFocusTarget) {
+                                                tvDetailFocusTarget = nextTarget
+                                                if (nextTarget == VideoDetailTvFocusTarget.PLAYER) {
+                                                    tvDetailPlayerFocusRequester.requestFocus()
+                                                } else {
+                                                    tvDetailContentFocusRequester.requestFocus()
+                                                }
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                } else {
+                                    Modifier
+                                }
+                            )
                             // .nestedScroll(nestedScrollConnection) // [Remove] 移除嵌套滚动，确保 Tabs 正常滑动
                     ) {
                         when (uiState) {
@@ -2016,6 +2082,18 @@ private fun Context.findActivity(): Activity? {
         context = context.baseContext
     }
     return null
+}
+
+internal fun shouldRotateToPortraitOnSplitBack(
+    useTabletLayout: Boolean,
+    smallestScreenWidthDp: Int,
+    orientation: Int,
+    isTvDevice: Boolean
+): Boolean {
+    return useTabletLayout &&
+        !isTvDevice &&
+        smallestScreenWidthDp < 600 &&
+        orientation == Configuration.ORIENTATION_LANDSCAPE
 }
 
 // VideoContentSection 已提取到 VideoContentSection.kt

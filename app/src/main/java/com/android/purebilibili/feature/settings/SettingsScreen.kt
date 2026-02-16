@@ -46,6 +46,9 @@ import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.EasterEggs
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LogCollector
+import com.android.purebilibili.core.util.rememberIsTvDevice
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.plugin.PluginManager
 
 import dev.chrisbanes.haze.hazeSource
@@ -78,7 +81,8 @@ fun SettingsScreen(
     val hapticFeedback = LocalHapticFeedback.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
-    val windowSizeClass = LocalWindowSizeClass.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isTvDevice = rememberIsTvDevice()
     val versionClickThreshold = EasterEggs.VERSION_EASTER_EGG_THRESHOLD
     
     // State Collection
@@ -403,7 +407,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .hazeSource(state = activeHazeState)
         ) {
-            if (windowSizeClass.shouldUseSplitLayout) {
+            if (shouldUseSettingsSplitLayout(widthDp = configuration.screenWidthDp, isTv = isTvDevice)) {
                 TabletSettingsLayout(
                     onBack = onBack,
                     onAppearanceClick = onAppearanceClick,
@@ -495,6 +499,7 @@ fun SettingsScreen(
                     easterEggEnabled = easterEggEnabled,
                     updateStatusText = updateStatusText,
                     isCheckingUpdate = isCheckingUpdate,
+                    cardAnimationEnabled = state.cardAnimationEnabled,
                     feedApiType = feedApiType,
                     onFeedApiTypeChange = { type ->
                         scope.launch {
@@ -577,6 +582,7 @@ private fun MobileSettingsLayout(
     easterEggEnabled: Boolean,
     updateStatusText: String,
     isCheckingUpdate: Boolean,
+    cardAnimationEnabled: Boolean,
     feedApiType: SettingsManager.FeedApiType,
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
@@ -584,6 +590,25 @@ private fun MobileSettingsLayout(
 ) {
     var activeSubpage by rememberSaveable { mutableStateOf<MobileSettingsSubpage?>(null) }
     var isVisible by remember(activeSubpage) { mutableStateOf(false) }
+    val context = LocalContext.current
+    val isTvDevice = rememberIsTvDevice()
+    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
+    val windowSizeClass = LocalWindowSizeClass.current
+    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+        )
+    }
+    val effectiveMotionTier = remember(deviceUiProfile.motionTier, cardAnimationEnabled) {
+        resolveEffectiveMotionTier(
+            baseTier = deviceUiProfile.motionTier,
+            animationEnabled = cardAnimationEnabled
+        )
+    }
 
     BackHandler(enabled = activeSubpage != null) {
         activeSubpage = null
@@ -648,12 +673,12 @@ private fun MobileSettingsLayout(
             ) {
                 if (subpage == null) {
                     item {
-                        Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+                        Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                             IOSSectionTitle("核心设置")
                         }
                     }
                     item {
-                        Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                        Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                             GeneralSection(
                                 onAppearanceClick = onAppearanceClick,
                                 onPlaybackClick = onPlaybackClick,
@@ -662,12 +687,12 @@ private fun MobileSettingsLayout(
                         }
                     }
                     item {
-                        Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                        Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
                             IOSSectionTitle("更多分类")
                         }
                     }
                     item {
-                        Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                        Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
                             SettingsSubpageEntrySection(
                                 onContentAndStorageClick = {
                                     activeSubpage = MobileSettingsSubpage.CONTENT_AND_STORAGE
@@ -689,12 +714,12 @@ private fun MobileSettingsLayout(
                     when (subpage) {
                         MobileSettingsSubpage.CONTENT_AND_STORAGE -> {
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                                     IOSSectionTitle("推荐流")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                                     FeedApiSection(
                                         feedApiType = feedApiType,
                                         onFeedApiTypeChange = onFeedApiTypeChange,
@@ -704,12 +729,12 @@ private fun MobileSettingsLayout(
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
                                     IOSSectionTitle("数据与存储")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
                                     DataStorageSection(
                                         customDownloadPath = customDownloadPath,
                                         cacheSize = cacheSize,
@@ -722,12 +747,12 @@ private fun MobileSettingsLayout(
 
                         MobileSettingsSubpage.PRIVACY_AND_SECURITY -> {
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                                     IOSSectionTitle("隐私与安全")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                                     PrivacySection(
                                         privacyModeEnabled = privacyModeEnabled,
                                         onPrivacyModeChange = onPrivacyModeChange,
@@ -740,12 +765,12 @@ private fun MobileSettingsLayout(
 
                         MobileSettingsSubpage.EXTENSIONS_AND_DEBUG -> {
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                                     IOSSectionTitle("扩展与调试")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                                     DeveloperSection(
                                         crashTrackingEnabled = crashTrackingEnabled,
                                         analyticsEnabled = analyticsEnabled,
@@ -761,12 +786,12 @@ private fun MobileSettingsLayout(
 
                         MobileSettingsSubpage.ABOUT_AND_SUPPORT -> {
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                                     IOSSectionTitle("发布渠道")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                                     ReleaseChannelPinnedCard(
                                         onGithubClick = onGithubClick,
                                         onTelegramClick = onTelegramClick,
@@ -775,12 +800,12 @@ private fun MobileSettingsLayout(
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
                                     IOSSectionTitle("关注作者")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
                                     FollowAuthorSection(
                                         onTelegramClick = onTelegramClick,
                                         onTwitterClick = onTwitterClick,
@@ -789,12 +814,12 @@ private fun MobileSettingsLayout(
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(4, isVisible, motionTier = effectiveMotionTier)) {
                                     IOSSectionTitle("关于")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(5, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(5, isVisible, motionTier = effectiveMotionTier)) {
                                     AboutSection(
                                         versionName = versionName,
                                         easterEggEnabled = easterEggEnabled,
@@ -813,12 +838,12 @@ private fun MobileSettingsLayout(
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(6, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(6, isVisible, motionTier = effectiveMotionTier)) {
                                     IOSSectionTitle("帮助与系统")
                                 }
                             }
                             item {
-                                Box(modifier = Modifier.staggeredEntrance(7, isVisible)) {
+                                Box(modifier = Modifier.staggeredEntrance(7, isVisible, motionTier = effectiveMotionTier)) {
                                     SupportToolsSection(
                                         onTipsClick = onTipsClick,
                                         onOpenLinksClick = onOpenLinksClick

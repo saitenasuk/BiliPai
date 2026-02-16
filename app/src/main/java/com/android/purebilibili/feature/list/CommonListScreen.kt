@@ -15,6 +15,9 @@ import androidx.compose.ui.layout.onGloballyPositioned // [New]
 import com.android.purebilibili.core.store.SettingsManager // [New]
 import com.android.purebilibili.core.ui.blur.BlurIntensity // [New]
 import com.android.purebilibili.core.ui.blur.BlurStyles // [New]
+import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -37,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -47,7 +51,9 @@ import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.VideoGridItemSkeleton
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.rememberAdaptiveGridColumns
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.rememberResponsiveSpacing
 import com.android.purebilibili.core.util.rememberResponsiveValue
 import com.android.purebilibili.core.util.PinyinUtils
@@ -86,6 +92,22 @@ fun CommonListScreen(
     // 平板端(Expanded)使用较大的最小宽度以避免卡片过小
     val context = LocalContext.current
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(initial = com.android.purebilibili.core.store.HomeSettings())
+    val isTvDevice = rememberIsTvDevice()
+    val windowSizeClass = LocalWindowSizeClass.current
+    val tvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
+    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, tvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = tvPerformanceProfileEnabled
+        )
+    }
+    val cardMotionTier = resolveEffectiveMotionTier(
+        baseTier = deviceUiProfile.motionTier,
+        animationEnabled = homeSettings.cardAnimationEnabled
+    )
     
     val minColWidth = rememberResponsiveValue(compact = 170.dp, medium = 170.dp, expanded = 240.dp)
     val adaptiveColumns = rememberAdaptiveGridColumns(minColumnWidth = minColWidth)
@@ -295,6 +317,9 @@ fun CommonListScreen(
                                 columns = columns,
                                 spacing = spacing.medium,
                                 padding = PaddingValues(top = headerHeightDp, bottom = scaffoldPadding.calculateBottomPadding()),
+                                cardAnimationEnabled = homeSettings.cardAnimationEnabled,
+                                cardTransitionEnabled = homeSettings.cardTransitionEnabled,
+                                cardMotionTier = cardMotionTier,
                                 onVideoClick = onVideoClick,
                                 onLoadMore = { favoriteVm.loadMoreForFolder(page) },
                                 onUnfavorite = { video -> favoriteVm.removeVideo(video) }
@@ -316,6 +341,9 @@ fun CommonListScreen(
                             columns = columns,
                             spacing = spacing.medium,
                             padding = PaddingValues(top = headerHeightDp, bottom = scaffoldPadding.calculateBottomPadding()),
+                            cardAnimationEnabled = homeSettings.cardAnimationEnabled,
+                            cardTransitionEnabled = homeSettings.cardTransitionEnabled,
+                            cardMotionTier = cardMotionTier,
                             onVideoClick = onVideoClick,
                             onLoadMore = { favoriteVm.loadMoreForFolder(0) },
                             onUnfavorite = { video -> favoriteVm.removeVideo(video) }
@@ -330,6 +358,9 @@ fun CommonListScreen(
                         columns = columns,
                         spacing = spacing.medium,
                         padding = PaddingValues(top = headerHeightDp, bottom = scaffoldPadding.calculateBottomPadding()),
+                        cardAnimationEnabled = homeSettings.cardAnimationEnabled,
+                        cardTransitionEnabled = homeSettings.cardTransitionEnabled,
+                        cardMotionTier = cardMotionTier,
                         onVideoClick = onVideoClick,
                         onLoadMore = { 
                             favoriteViewModel?.loadMore()
@@ -435,6 +466,9 @@ fun CommonListContent(
     columns: Int,
     spacing: androidx.compose.ui.unit.Dp,
     padding: PaddingValues,
+    cardAnimationEnabled: Boolean,
+    cardTransitionEnabled: Boolean,
+    cardMotionTier: MotionTier,
     onVideoClick: (String, Long) -> Unit,
     onLoadMore: () -> Unit,
     onUnfavorite: ((com.android.purebilibili.data.model.response.VideoItem) -> Unit)?
@@ -513,8 +547,9 @@ fun CommonListContent(
                     ElegantVideoCard(
                         video = video,
                         index = index,
-                        animationEnabled = true,
-                        transitionEnabled = true,
+                        animationEnabled = cardAnimationEnabled,
+                        motionTier = cardMotionTier,
+                        transitionEnabled = cardTransitionEnabled,
                         onClick = { bvid, cid -> onVideoClick(bvid, cid) },
                         onUnfavorite = if (onUnfavorite != null) { { onUnfavorite(video) } } else null
                     )

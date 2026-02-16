@@ -28,11 +28,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSSystemGray
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
@@ -82,9 +87,27 @@ fun PlaybackSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isTvDevice = rememberIsTvDevice()
+    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
+    val windowSizeClass = LocalWindowSizeClass.current
     // val state by viewModel.state.collectAsState() // Moved to parameter
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     var isVisible by remember { mutableStateOf(false) }
+    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+        )
+    }
+    val effectiveMotionTier = remember(deviceUiProfile.motionTier, state.cardAnimationEnabled) {
+        resolveEffectiveMotionTier(
+            baseTier = deviceUiProfile.motionTier,
+            animationEnabled = state.cardAnimationEnabled
+        )
+    }
 
     LaunchedEffect(Unit) {
         isVisible = true
@@ -178,12 +201,12 @@ fun PlaybackSettingsContent(
             //  解码设置
             //  解码设置
             item {
-                Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("解码")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Cpu,
@@ -203,12 +226,12 @@ fun PlaybackSettingsContent(
             
             //  小窗播放
             item {
-                Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("小窗播放")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
                     val scope = rememberCoroutineScope()
                     var isExpanded by remember { mutableStateOf(false) }
 
@@ -362,12 +385,12 @@ fun PlaybackSettingsContent(
             
             //  手势设置
             item {
-                Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(4, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("手势控制")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(5, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(5, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -429,12 +452,12 @@ fun PlaybackSettingsContent(
             
             //  调试选项
             item {
-                Box(modifier = Modifier.staggeredEntrance(6, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(6, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("调试")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(7, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(7, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChartBar,
@@ -453,12 +476,12 @@ fun PlaybackSettingsContent(
             
             //  交互设置
             item {
-                Box(modifier = Modifier.staggeredEntrance(8, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(8, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("交互")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(9, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(9, isVisible, motionTier = effectiveMotionTier)) {
                     val scope = rememberCoroutineScope()
                     val swipeHidePlayerEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getSwipeHidePlayerEnabled(context).collectAsState(initial = false)
@@ -595,12 +618,12 @@ fun PlaybackSettingsContent(
             
             //  网络与画质
             item {
-                Box(modifier = Modifier.staggeredEntrance(10, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(10, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("网络与画质")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(11, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(11, isVisible, motionTier = effectiveMotionTier)) {
                     val scope = rememberCoroutineScope()
                     val wifiQuality by com.android.purebilibili.core.store.SettingsManager
                         .getWifiQuality(context).collectAsState(initial = 80)
@@ -786,12 +809,12 @@ fun PlaybackSettingsContent(
             
             // 📉 省流量模式
             item {
-                Box(modifier = Modifier.staggeredEntrance(12, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(12, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("省流量")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(13, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(13, isVisible, motionTier = effectiveMotionTier)) {
                     val scope = rememberCoroutineScope()
                     val dataSaverMode by com.android.purebilibili.core.store.SettingsManager
                         .getDataSaverMode(context).collectAsState(

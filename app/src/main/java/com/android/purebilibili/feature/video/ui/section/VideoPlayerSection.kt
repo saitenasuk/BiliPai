@@ -15,10 +15,12 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.media.AudioManager
 import android.provider.Settings
+import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,11 +42,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,6 +62,11 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.rememberIsTvDevice
+import com.android.purebilibili.core.util.shouldHandleTvBackKey
+import com.android.purebilibili.core.util.shouldHandleTvMenuKey
+import com.android.purebilibili.core.util.shouldHandleTvPlayPauseKey
+import com.android.purebilibili.core.util.shouldHandleTvSelectKey
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -139,8 +150,18 @@ fun VideoPlayerSection(
     onCoin: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
     onTriple: () -> Unit = {},  // [新增] 一键三连回调
+    tvFocusRequester: FocusRequester? = null,
+    onTvMoveFocusDown: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val uiLayoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveVideoPlayerUiLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
 
@@ -210,7 +231,8 @@ fun VideoPlayerSection(
     }
 
     // 控制器显示状态
-        var showControls by remember { mutableStateOf(true) }
+    var showControls by remember { mutableStateOf(true) }
+    val tvPlayerFocusRequester = tvFocusRequester ?: remember { FocusRequester() }
     
     // 🔒 [新增] 屏幕锁定状态（全屏时防误触）
     var isScreenLocked by remember { mutableStateOf(false) }
@@ -258,6 +280,12 @@ fun VideoPlayerSection(
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     //  共享弹幕管理器（用于所有 seek 路径的一致同步）
     val danmakuManager = rememberDanmakuManager()
+
+    LaunchedEffect(isTvDevice) {
+        if (isTvDevice) {
+            tvPlayerFocusRequester.requestFocus()
+        }
+    }
     
     var rootModifier = Modifier
         .fillMaxSize()
@@ -279,6 +307,54 @@ fun VideoPlayerSection(
 
     Box(
         modifier = rootModifier
+            .then(
+                if (isTvDevice) {
+                    Modifier
+                        .focusRequester(tvPlayerFocusRequester)
+                        .focusable()
+                        .onPreviewKeyEvent { event ->
+                            val keyCode = event.nativeKeyEvent.keyCode
+                            val action = event.nativeKeyEvent.action
+                            when {
+                                shouldHandleTvPlayPauseKey(keyCode, action) -> {
+                                    val player = playerState.player
+                                    player.playWhenReady = !player.playWhenReady
+                                    showControls = true
+                                    true
+                                }
+                                shouldHandleTvMenuKey(keyCode, action) -> {
+                                    if (!showControls) {
+                                        showControls = true
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                shouldHandleTvSelectKey(keyCode, action) -> {
+                                    if (!showControls) {
+                                        showControls = true
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                shouldHandleTvBackKey(keyCode, action) && isFullscreen && !isScreenLocked -> {
+                                    onToggleFullscreen()
+                                    true
+                                }
+                                keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
+                                    action == KeyEvent.ACTION_UP &&
+                                    onTvMoveFocusDown != null -> {
+                                    onTvMoveFocusDown.invoke()
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
+                } else {
+                    Modifier
+                }
+            )
             //  [新增] 处理双指缩放和平移
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
@@ -407,7 +483,7 @@ fun VideoPlayerSection(
                                     // 使用 onDragStart 锁定的起点 X，避免拖动中横向偏移导致误触
                                     val startX = if (dragStartX >= 0f) dragStartX else change.position.x
                                     // 分区边界增加缓冲，避免中间区域在边界附近被误判
-                                    val boundaryPadding = 24.dp.toPx()
+                                    val boundaryPadding = uiLayoutPolicy.gestureBoundaryPaddingDp.dp.toPx()
                                     val leftZoneEnd = (width / 3f - boundaryPadding).coerceAtLeast(0f)
                                     val rightZoneStart = (width * 2f / 3f + boundaryPadding).coerceAtMost(width)
                                     val isSwipeUp = totalDragDistanceY < -minDragThreshold
@@ -916,7 +992,7 @@ fun VideoPlayerSection(
                         // 无缩略图：使用原有样式
                         Box(
                             modifier = Modifier
-                                .size(120.dp)
+                                .size(uiLayoutPolicy.gestureOverlaySizeDp.dp)
                                 .background(Color.Black.copy(0.7f), RoundedCornerShape(16.dp)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -949,7 +1025,7 @@ fun VideoPlayerSection(
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .size(120.dp)
+                        .size(uiLayoutPolicy.gestureOverlaySizeDp.dp)
                         .background(Color.Black.copy(0.7f), RoundedCornerShape(16.dp)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -958,7 +1034,7 @@ fun VideoPlayerSection(
                             imageVector = gestureIcon ?: CupertinoIcons.Default.SunMax,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(uiLayoutPolicy.gestureIconSizeDp.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -990,7 +1066,7 @@ fun VideoPlayerSection(
         ) {
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(uiLayoutPolicy.seekFeedbackSizeDp.dp)
                     .background(Color.Black.copy(0.75f), RoundedCornerShape(20.dp)),
                 contentAlignment = Alignment.Center
             ) {
@@ -1009,7 +1085,7 @@ fun VideoPlayerSection(
             visible = scale > 1.05f && !isInPipMode,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 100.dp), // 避开底部进度条位置
+                .padding(bottom = uiLayoutPolicy.restoreButtonBottomOffsetDp.dp), // 避开底部进度条位置
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut()
         ) {
@@ -1024,13 +1100,16 @@ fun VideoPlayerSection(
                     containerColor = Color.Black.copy(alpha = 0.6f),
                     contentColor = Color.White
                 ),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(
+                    horizontal = uiLayoutPolicy.restoreButtonHorizontalPaddingDp.dp,
+                    vertical = uiLayoutPolicy.restoreButtonVerticalPaddingDp.dp
+                ),
                 shape = RoundedCornerShape(24.dp)
             ) {
                 Icon(
                     imageVector = Icons.Filled.Refresh,
                     contentDescription = "还原画面",
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(uiLayoutPolicy.restoreButtonIconSizeDp.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -1057,7 +1136,10 @@ fun VideoPlayerSection(
             Box(
                 modifier = Modifier
                     .background(Color.Black.copy(0.75f), RoundedCornerShape(16.dp))
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(
+                        horizontal = uiLayoutPolicy.longPressBadgeHorizontalPaddingDp.dp,
+                        vertical = uiLayoutPolicy.longPressBadgeVerticalPaddingDp.dp
+                    )
             ) {
                 Text(
                     text = "${longPressSpeed}x",

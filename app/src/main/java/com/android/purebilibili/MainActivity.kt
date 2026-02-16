@@ -64,6 +64,19 @@ private const val TAG = "MainActivity"
 private const val PREFS_NAME = "app_welcome"
 private const val KEY_FIRST_LAUNCH = "first_launch_shown"
 
+internal fun resolveShortcutRoute(host: String): String? {
+    return when (host) {
+        "search" -> com.android.purebilibili.navigation.ScreenRoutes.Search.route
+        "dynamic" -> com.android.purebilibili.navigation.ScreenRoutes.Dynamic.route
+        "favorite" -> com.android.purebilibili.navigation.ScreenRoutes.Favorite.route
+        "history" -> com.android.purebilibili.navigation.ScreenRoutes.History.route
+        "login" -> com.android.purebilibili.navigation.ScreenRoutes.Login.route
+        "playback" -> com.android.purebilibili.navigation.ScreenRoutes.PlaybackSettings.route
+        "plugins" -> com.android.purebilibili.navigation.ScreenRoutes.PluginsSettings.route
+        else -> null
+    }
+}
+
 @OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
 class MainActivity : ComponentActivity() {
     
@@ -155,13 +168,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(pendingRoute) {
                 pendingRoute?.let { route ->
                     Logger.d(TAG, "🚀 导航到快捷入口: $route")
-                    val targetRoute = when (route) {
-                        "search" -> com.android.purebilibili.navigation.ScreenRoutes.Search.route
-                        "dynamic" -> com.android.purebilibili.navigation.ScreenRoutes.Dynamic.route
-                        "favorite" -> com.android.purebilibili.navigation.ScreenRoutes.Favorite.route
-                        "history" -> com.android.purebilibili.navigation.ScreenRoutes.History.route
-                        else -> null
-                    }
+                    val targetRoute = resolveShortcutRoute(route)
                     targetRoute?.let { 
                         navController.navigate(it) { launchSingleTop = true }
                     }

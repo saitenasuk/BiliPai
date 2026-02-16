@@ -27,13 +27,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.store.SettingsManager
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.theme.*
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
@@ -134,6 +138,24 @@ fun AppearanceSettingsContent(
 
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600 // Material Design 3 中型屏幕断点
+    val isTvDevice = rememberIsTvDevice()
+    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
+    val windowSizeClass = LocalWindowSizeClass.current
+    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+        )
+    }
+    val effectiveMotionTier = remember(deviceUiProfile.motionTier, state.cardAnimationEnabled) {
+        resolveEffectiveMotionTier(
+            baseTier = deviceUiProfile.motionTier,
+            animationEnabled = state.cardAnimationEnabled
+        )
+    }
 
     LazyColumn(
         modifier = modifier
@@ -144,12 +166,12 @@ fun AppearanceSettingsContent(
         
         //  主题与颜色
         item { 
-            Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+            Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                 IOSSectionTitle("主题与颜色") 
             }
         }
         item {
-            Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+            Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                 IOSGroup {
                     // 主题模式选择 (横向卡片)
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -385,12 +407,12 @@ fun AppearanceSettingsContent(
         
         //  启动画面
         item { 
-            Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+            Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
                 IOSSectionTitle("启动画面") 
             }
         }
         item {
-            Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+            Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
                 IOSGroup {
                     val isSplashEnabled by com.android.purebilibili.core.store.SettingsManager.isSplashEnabled(context).collectAsState(initial = false)
                     val splashWallpaperUri by com.android.purebilibili.core.store.SettingsManager.getSplashWallpaperUri(context).collectAsState(initial = null)
@@ -493,12 +515,12 @@ fun AppearanceSettingsContent(
         
         //  个性化
         item { 
-            Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
+            Box(modifier = Modifier.staggeredEntrance(4, isVisible, motionTier = effectiveMotionTier)) {
                 IOSSectionTitle("个性化") 
             }
         }
         item {
-            Box(modifier = Modifier.staggeredEntrance(5, isVisible)) {
+            Box(modifier = Modifier.staggeredEntrance(5, isVisible, motionTier = effectiveMotionTier)) {
                 IOSGroup {
                     // 图标设置
                     IOSClickableItem(
@@ -553,12 +575,12 @@ fun AppearanceSettingsContent(
             //  [新增] 平板设置 (仅平板显示)
             if (isTablet) {
                 item {
-                    Box(modifier = Modifier.staggeredEntrance(8, isVisible)) {
+                    Box(modifier = Modifier.staggeredEntrance(8, isVisible, motionTier = effectiveMotionTier)) {
                         IOSSectionTitle("平板布局")
                     }
                 }
                 item {
-                    Box(modifier = Modifier.staggeredEntrance(9, isVisible)) {
+                    Box(modifier = Modifier.staggeredEntrance(9, isVisible, motionTier = effectiveMotionTier)) {
                         IOSGroup {
                             IOSSwitchItem(
                                 icon = CupertinoIcons.Outlined.SidebarLeft,
@@ -575,12 +597,12 @@ fun AppearanceSettingsContent(
         
             //  首页展示 - 抽屉式选择
             item { 
-                Box(modifier = Modifier.staggeredEntrance(6, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(6, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("首页展示") 
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(7, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(7, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
                         val displayMode = state.displayMode
                         var isExpanded by remember { mutableStateOf(false) }

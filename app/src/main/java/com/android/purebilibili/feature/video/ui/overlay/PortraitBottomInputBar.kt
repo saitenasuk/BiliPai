@@ -21,10 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.runtime.remember
+import com.android.purebilibili.core.util.rememberIsTvDevice
 
 /**
  * 竖屏模式底部的输入栏
@@ -36,40 +39,53 @@ fun PortraitBottomInputBar(
     onRotateClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolvePortraitBottomInputBarLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .background(Color.Transparent)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(
+                horizontal = layoutPolicy.horizontalPaddingDp.dp,
+                vertical = layoutPolicy.verticalPaddingDp.dp
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 输入框 (伪装)
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(36.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .height(layoutPolicy.inputHeightDp.dp)
+                .clip(RoundedCornerShape((layoutPolicy.inputHeightDp / 2).dp))
                 .background(Color.White.copy(alpha = 0.2f))
                 .clickable { onInputClick() }
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = layoutPolicy.inputHorizontalPaddingDp.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             Text(
                 text = "发弹幕...",
                 color = Color.White.copy(alpha = 0.7f),
-                fontSize = 14.sp
+                fontSize = layoutPolicy.inputFontSp.sp
             )
         }
         
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(layoutPolicy.afterInputSpacingDp.dp))
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(layoutPolicy.actionSpacingDp.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
                 icon = Icons.Rounded.ScreenRotation,
                 desc = "切换横屏",
+                layoutPolicy = layoutPolicy,
                 onClick = onRotateClick
             )
         }
@@ -80,11 +96,12 @@ fun PortraitBottomInputBar(
 private fun IconButton(
     icon: ImageVector,
     desc: String,
+    layoutPolicy: PortraitBottomInputBarLayoutPolicy,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(layoutPolicy.actionButtonSizeDp.dp)
             .clip(CircleShape)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
@@ -93,7 +110,7 @@ private fun IconButton(
             imageVector = icon,
             contentDescription = desc,
             tint = Color.White,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(layoutPolicy.actionIconSizeDp.dp)
         )
     }
 }

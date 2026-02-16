@@ -9,11 +9,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.InfoCircle
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronBackward
@@ -31,6 +37,26 @@ fun TipsSettingsScreen(
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         isVisible = true
+    }
+    val context = LocalContext.current
+    val isTvDevice = rememberIsTvDevice()
+    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
+    val windowSizeClass = LocalWindowSizeClass.current
+    val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = false)
+    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+        )
+    }
+    val effectiveMotionTier = remember(deviceUiProfile.motionTier, cardAnimationEnabled) {
+        resolveEffectiveMotionTier(
+            baseTier = deviceUiProfile.motionTier,
+            animationEnabled = cardAnimationEnabled
+        )
     }
 
     val basicTips = remember {
@@ -122,34 +148,34 @@ fun TipsSettingsScreen(
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
             item {
-                Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("基础技巧")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                     TipSection(items = basicTips)
                 }
             }
 
             item {
-                Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("隐藏技巧")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
                     TipSection(items = hiddenTips)
                 }
             }
 
             item {
-                Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(4, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("进阶玩法")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(5, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(5, isVisible, motionTier = effectiveMotionTier)) {
                     TipSection(items = advancedTips)
                 }
             }

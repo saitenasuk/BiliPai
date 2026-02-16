@@ -58,18 +58,25 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
     
     //  Coil 图片加载器 - 优化内存和磁盘缓存
     override fun newImageLoader(): ImageLoader {
+        val isTvPerformanceProfileActive = SettingsManager.getTvPerformanceProfileEnabledSync(this)
+        val memoryCachePercent = if (isTvPerformanceProfileActive) 0.18 else 0.30
+        val diskCacheBytes = if (isTvPerformanceProfileActive) {
+            96L * 1024 * 1024
+        } else {
+            150L * 1024 * 1024
+        }
         return ImageLoader.Builder(this)
-            //  内存缓存：使用 30% 可用内存（提升缓存命中率）
+            //  内存缓存：TV 性能档启用时降低预算，减少 TV 场景内存压力
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.30)  // 30% of available memory
+                    .maxSizePercent(memoryCachePercent)
                     .build()
             }
-            //  磁盘缓存：150MB（减少重复下载）
+            //  磁盘缓存：TV 性能档启用时降低预算，优先稳态内存
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(150L * 1024 * 1024)  // 150 MB
+                    .maxSizeBytes(diskCacheBytes)
                     .build()
             }
             .okHttpClient { NetworkModule.okHttpClient } // 🔥 [Fix] 共享 OkHttpClient 以获得 DNS 修复
@@ -78,8 +85,8 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
             .diskCachePolicy(CachePolicy.ENABLED)
             //  启用 Bitmap 复用减少内存分配
             .allowRgb565(true)
-            //  跨淡入效果
-            .crossfade(true)
+            // TV 性能档下禁用跨淡入，减少额外动画与重绘
+            .crossfade(!isTvPerformanceProfileActive)
             .build()
             .also { _imageLoader = it }  // 保存引用
     }

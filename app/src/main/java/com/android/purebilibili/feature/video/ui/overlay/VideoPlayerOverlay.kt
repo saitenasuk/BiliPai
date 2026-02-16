@@ -8,6 +8,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -23,8 +24,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +55,11 @@ import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.util.ShareUtils
+import com.android.purebilibili.core.util.WindowWidthSizeClass
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -59,12 +67,14 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import io.github.alexzhirkevich.cupertino.icons.filled.HandThumbsup
 import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
 import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
 import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.ui.animation.tvFocusableJiggle
 import com.android.purebilibili.feature.cast.DeviceListDialog
 import com.android.purebilibili.feature.cast.DlnaManager
 import com.android.purebilibili.feature.cast.LocalProxyServer
@@ -79,6 +89,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import android.view.KeyEvent
+import com.android.purebilibili.core.util.rememberIsTvDevice
+import com.android.purebilibili.core.util.shouldHandleTvMenuKey
+import com.android.purebilibili.core.util.shouldHandleTvSelectKey
 
 
 @Composable
@@ -215,6 +229,7 @@ fun VideoPlayerOverlay(
     
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val playbackCompletionBehavior by SettingsManager
         .getPlaybackCompletionBehavior(context)
         .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
@@ -223,6 +238,15 @@ fun VideoPlayerOverlay(
     //  双击检测状态
     var lastTapTime by remember { mutableLongStateOf(0L) }
     var showLikeAnimation by remember { mutableStateOf(false) }
+    val isTvDevice = rememberIsTvDevice()
+    val overlayVisualPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveVideoPlayerOverlayVisualPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+    val tvOverlayFocusRequester = remember { FocusRequester() }
+    var tvFocusZone by remember { mutableStateOf(VideoOverlayTvFocusZone.CENTER) }
 
     // 📺 [DLNA] 按需权限请求
     val dlnaPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -306,7 +330,104 @@ fun VideoPlayerOverlay(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    LaunchedEffect(isTvDevice, isVisible) {
+        if (isTvDevice && isVisible) {
+            tvOverlayFocusRequester.requestFocus()
+        }
+        tvFocusZone = resolveInitialVideoOverlayTvFocusZone(
+            isTv = isTvDevice,
+            overlayVisible = isVisible
+        ) ?: VideoOverlayTvFocusZone.CENTER
+    }
+
+    fun togglePlayPause() {
+        if (player.playbackState == Player.STATE_ENDED) {
+            onSeekTo?.invoke(0L) ?: player.seekTo(0L)
+            player.play()
+            isPlaying = true
+        } else if (isPlaying) {
+            player.pause()
+            isPlaying = false
+        } else {
+            player.play()
+            isPlaying = true
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (isTvDevice) {
+                    Modifier
+                        .focusRequester(tvOverlayFocusRequester)
+                        .focusable()
+                        .onPreviewKeyEvent { event ->
+                            val keyCode = event.nativeKeyEvent.keyCode
+                            val action = event.nativeKeyEvent.action
+
+                            if (shouldHandleTvSelectKey(keyCode, action)) {
+                                return@onPreviewKeyEvent when (
+                                    resolveVideoOverlayTvSelectAction(tvFocusZone)
+                                ) {
+                                    VideoOverlayTvSelectAction.BACK -> {
+                                        onBack()
+                                        true
+                                    }
+                                    VideoOverlayTvSelectAction.TOGGLE_PLAY_PAUSE -> {
+                                        togglePlayPause()
+                                        true
+                                    }
+                                    VideoOverlayTvSelectAction.TOGGLE_DRAWER -> {
+                                        showEndDrawer = !showEndDrawer
+                                        true
+                                    }
+                                    VideoOverlayTvSelectAction.NOOP -> false
+                                }
+                            }
+
+                            if (shouldHandleTvMenuKey(keyCode, action)) {
+                                showEndDrawer = !showEndDrawer
+                                return@onPreviewKeyEvent true
+                            }
+
+                            when (
+                                resolveVideoOverlayTvBackAction(
+                                    keyCode = keyCode,
+                                    action = action,
+                                    drawerVisible = showEndDrawer
+                                )
+                            ) {
+                                VideoOverlayTvBackAction.DISMISS_DRAWER -> {
+                                    showEndDrawer = false
+                                    return@onPreviewKeyEvent true
+                                }
+
+                                VideoOverlayTvBackAction.NAVIGATE_BACK -> {
+                                    onBack()
+                                    return@onPreviewKeyEvent true
+                                }
+
+                                VideoOverlayTvBackAction.NOOP -> Unit
+                            }
+
+                            val nextFocusZone = resolveVideoOverlayTvFocusZone(
+                                current = tvFocusZone,
+                                keyCode = keyCode,
+                                action = action
+                            )
+                            if (nextFocusZone != tvFocusZone) {
+                                tvFocusZone = nextFocusZone
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                } else {
+                    Modifier
+                }
+            )
+    ) {
         // --- 1. 顶部渐变遮罩 ---
         AnimatedVisibility(
             visible = isVisible,
@@ -318,7 +439,7 @@ fun VideoPlayerOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(overlayVisualPolicy.topScrimHeightDp.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -341,7 +462,7 @@ fun VideoPlayerOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(overlayVisualPolicy.bottomScrimHeightDp.dp)
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -417,19 +538,7 @@ fun VideoPlayerOverlay(
                     currentSpeed = currentSpeed,
                     currentRatio = currentAspectRatio,
                     onPlayPauseClick = {
-                        // 检查播放器是否处于完成状态
-                        if (player.playbackState == Player.STATE_ENDED) {
-                            // 如果播放完成，先重置到开头，再重新播放
-                            onSeekTo?.invoke(0L) ?: player.seekTo(0L)
-                            player.play()
-                            isPlaying = true
-                        } else if (isPlaying) {
-                            player.pause()
-                            isPlaying = false
-                        } else {
-                            player.play()
-                            isPlaying = true
-                        }
+                        togglePlayPause()
                     },
                     onSeek = { position -> onSeekTo?.invoke(position) ?: player.seekTo(position) },
                     onSeekStart = onSeekStart,  //  拖动进度条开始时清除弹幕
@@ -475,20 +584,20 @@ fun VideoPlayerOverlay(
                 exit = fadeOut(tween(200)),
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 24.dp)
+                    .padding(end = overlayVisualPolicy.lockButtonEndPaddingDp.dp)
             ) {
                 Surface(
                     onClick = onLockToggle,
                     color = Color.Black.copy(alpha = 0.6f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.size(48.dp)
+                    shape = RoundedCornerShape(overlayVisualPolicy.lockButtonCornerRadiusDp.dp),
+                    modifier = Modifier.size(overlayVisualPolicy.lockButtonSizeDp.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
                             if (isScreenLocked) CupertinoIcons.Default.LockOpen else CupertinoIcons.Default.Lock,
                             contentDescription = if (isScreenLocked) "解锁" else "锁定",
                             tint = if (isScreenLocked) MaterialTheme.colorScheme.primary else Color.White,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(overlayVisualPolicy.lockIconSizeDp.dp)
                         )
                     }
                 }
@@ -500,15 +609,24 @@ fun VideoPlayerOverlay(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 80.dp, end = 24.dp)
-                    .background(Color.Black.copy(0.6f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(
+                        top = overlayVisualPolicy.statsTopPaddingDp.dp,
+                        end = overlayVisualPolicy.statsEndPaddingDp.dp
+                    )
+                    .background(
+                        Color.Black.copy(0.6f),
+                        RoundedCornerShape(overlayVisualPolicy.statsCornerRadiusDp.dp)
+                    )
+                    .padding(
+                        horizontal = overlayVisualPolicy.statsHorizontalPaddingDp.dp,
+                        vertical = overlayVisualPolicy.statsVerticalPaddingDp.dp
+                    )
             ) {
                 Text(
                     text = "Resolution: $realResolution",
                     color = Color.Green,
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 12.sp,
+                    fontSize = overlayVisualPolicy.statsFontSp.sp,
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                 )
             }
@@ -525,14 +643,14 @@ fun VideoPlayerOverlay(
                 onClick = { player.play(); isPlaying = true },
                 color = Color.Black.copy(alpha = 0.5f),
                 shape = CircleShape,
-                modifier = Modifier.size(72.dp)
+                modifier = Modifier.size(overlayVisualPolicy.centerPlayButtonSizeDp.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         CupertinoIcons.Default.Play,
                         contentDescription = "播放",
                         tint = Color.White.copy(alpha = 0.95f),
-                        modifier = Modifier.size(42.dp)
+                        modifier = Modifier.size(overlayVisualPolicy.centerPlayIconSizeDp.dp)
                     )
                 }
             }
@@ -557,20 +675,23 @@ fun VideoPlayerOverlay(
         ) {
             Surface(
                 color = Color.Black.copy(alpha = 0.7f),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.padding(24.dp)
+                shape = RoundedCornerShape(overlayVisualPolicy.qualitySwitchCornerRadiusDp.dp),
+                modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                    modifier = Modifier.padding(
+                        horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
+                        vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
+                    )
                 ) {
                     //  iOS 风格加载器
                     CupertinoActivityIndicator()
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
                     Text(
                         text = "正在切换清晰度...",
                         color = Color.White,
-                        fontSize = 14.sp,
+                        fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -814,28 +935,40 @@ private fun PortraitTopBar(
     onDanmakuToggle: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolvePortraitTopBarLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(
+                horizontal = layoutPolicy.horizontalPaddingDp.dp,
+                vertical = layoutPolicy.verticalPaddingDp.dp
+            ),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 左侧：返回按钮 + 弹幕开关
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(layoutPolicy.leftSectionSpacingDp.dp)
         ) {
             // 返回按钮 - 简洁无背景
             IconButton(
                 onClick = onBack,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
                 Icon(
                     imageVector = CupertinoIcons.Default.ChevronBackward,
                     contentDescription = "返回",
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )
             }
             
@@ -847,9 +980,12 @@ private fun PortraitTopBar(
                 Text(
                     text = if (danmakuEnabled) "弹幕开" else "弹幕关",
                     color = Color.White,
-                    fontSize = 11.sp,
+                    fontSize = layoutPolicy.chipFontSp.sp,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(
+                        horizontal = layoutPolicy.chipHorizontalPaddingDp.dp,
+                        vertical = layoutPolicy.chipVerticalPaddingDp.dp
+                    )
                 )
             }
             
@@ -858,7 +994,7 @@ private fun PortraitTopBar(
                 Text(
                     text = onlineCount,
                     color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 11.sp,
+                    fontSize = layoutPolicy.onlineCountFontSp.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -866,13 +1002,13 @@ private fun PortraitTopBar(
         
         // 右侧按钮组
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(layoutPolicy.rightSectionSpacingDp.dp)
         ) {
             //  听视频模式按钮 - 激活时保留背景色
             IconButton(
                 onClick = onAudioMode,
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(layoutPolicy.buttonSizeDp.dp)
                     .then(
                         if (isAudioOnly) Modifier.background(MaterialTheme.colorScheme.primary, CircleShape)
                         else Modifier
@@ -882,46 +1018,46 @@ private fun PortraitTopBar(
                     imageVector = CupertinoIcons.Default.Headphones,
                     contentDescription = "听视频",
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )
             }
 
             // 📺 投屏按钮 - 无背景
             IconButton(
                 onClick = onCastClick,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
                 Icon(
                     imageVector = io.github.alexzhirkevich.cupertino.icons.CupertinoIcons.Default.Tv,
                     contentDescription = "投屏",
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )
             }
             
             //  设置按钮 - 无背景
             IconButton(
                 onClick = onSettings,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
                 Icon(
                     imageVector = CupertinoIcons.Default.Ellipsis,
                     contentDescription = "设置",
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )
             }
             
             // 分享按钮 - 无背景
             IconButton(
                 onClick = onShare,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
             ) {
                 Icon(
                     imageVector = CupertinoIcons.Default.SquareAndArrowUp,
                     contentDescription = "分享",
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )
             }
         }
@@ -954,6 +1090,46 @@ fun LandscapeEndDrawer(
     onVideoClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isTvDevice = rememberIsTvDevice()
+    val context = LocalContext.current
+    val tvPerformanceProfileEnabled by SettingsManager
+        .getTvPerformanceProfileEnabled(context)
+        .collectAsState(initial = isTvDevice)
+    val configuration = LocalConfiguration.current
+    val widthSizeClass = remember(configuration.screenWidthDp) {
+        when {
+            configuration.screenWidthDp < 600 -> WindowWidthSizeClass.Compact
+            configuration.screenWidthDp < 840 -> WindowWidthSizeClass.Medium
+            else -> WindowWidthSizeClass.Expanded
+        }
+    }
+    val deviceUiProfile = remember(isTvDevice, widthSizeClass, tvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = widthSizeClass,
+            tvPerformanceProfileEnabled = tvPerformanceProfileEnabled
+        )
+    }
+    val cardAnimationEnabled by SettingsManager
+        .getCardAnimationEnabled(context)
+        .collectAsState(initial = true)
+    val overlayMotionTier = resolveEffectiveMotionTier(
+        baseTier = deviceUiProfile.motionTier,
+        animationEnabled = cardAnimationEnabled
+    )
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveLandscapeEndDrawerLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+    val overlayVisualPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveVideoPlayerOverlayVisualPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+
     AnimatedVisibility(
         visible = visible,
         enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
@@ -976,7 +1152,7 @@ fun LandscapeEndDrawer(
             // 抽屉内容
             Surface(
                 modifier = Modifier
-                    .width(320.dp)
+                    .width(layoutPolicy.drawerWidthDp.dp)
                     .fillMaxHeight(),
                 color = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -988,7 +1164,7 @@ fun LandscapeEndDrawer(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(layoutPolicy.headerPaddingDp.dp)
                     ) {
                         // Row 1: UP主头像、名字、关注按钮
                         Row(
@@ -1000,26 +1176,26 @@ fun LandscapeEndDrawer(
                                 model = ownerFace,
                                 contentDescription = null,
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(layoutPolicy.avatarSizeDp.dp)
                                     .clip(CircleShape)
                                     .background(Color.Gray),
                                 contentScale = ContentScale.Crop
                             )
                             
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(layoutPolicy.headerSpacingDp.dp))
                             
                             // 名字
                             Text(
                                 text = ownerName,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 15.sp,
+                                fontSize = layoutPolicy.titleFontSp.sp,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
                             
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(layoutPolicy.headerSpacingDp.dp))
                             
                             // 关注按钮 (放在右上角)
                             Button(
@@ -1027,15 +1203,21 @@ fun LandscapeEndDrawer(
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (isFollowed) MaterialTheme.colorScheme.onSurface.copy(0.2f) else MaterialTheme.colorScheme.primary
                                 ),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                modifier = Modifier.height(32.dp),
+                                contentPadding = PaddingValues(
+                                    horizontal = layoutPolicy.followButtonHorizontalPaddingDp.dp,
+                                    vertical = 0.dp
+                                ),
+                                modifier = Modifier.height(layoutPolicy.followButtonHeightDp.dp),
                                 shape = RoundedCornerShape(16.dp)
                             ) {
-                                Text(if (isFollowed) "已关注" else "+ 关注", fontSize = 12.sp)
+                                Text(
+                                    if (isFollowed) "已关注" else "+ 关注",
+                                    fontSize = layoutPolicy.followButtonFontSp.sp
+                                )
                             }
                         }
                         
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(layoutPolicy.sectionSpacingDp.dp))
                         
                         // Row 2: 一键三连按钮 (SpaceAround)
                         Row(
@@ -1051,7 +1233,8 @@ fun LandscapeEndDrawer(
                                 onLikeClick = onToggleLike,
                                 onCoinClick = onCoin,
                                 onFavoriteClick = onToggleFavorite,
-                                onTripleComplete = onTripleLike
+                                onTripleComplete = onTripleLike,
+                                layoutPolicy = overlayVisualPolicy
                             )
                         }
                     }
@@ -1077,12 +1260,12 @@ fun LandscapeEndDrawer(
                             Tab(
                                 selected = selectedTab == 0,
                                 onClick = { selectedTab = 0 },
-                                text = { Text("推荐视频") }
+                                text = { Text("推荐视频", fontSize = layoutPolicy.followButtonFontSp.sp) }
                             )
                             Tab(
                                 selected = selectedTab == 1,
                                 onClick = { selectedTab = 1 },
-                                text = { Text("合集列表") }
+                                text = { Text("合集列表", fontSize = layoutPolicy.followButtonFontSp.sp) }
                             )
                         }
                     } else {
@@ -1091,7 +1274,7 @@ fun LandscapeEndDrawer(
                             text = "推荐视频",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(16.dp)
+                            modifier = Modifier.padding(layoutPolicy.listContentPaddingDp.dp)
                         )
                     }
                     
@@ -1101,12 +1284,16 @@ fun LandscapeEndDrawer(
                             // 推荐视频列表
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                contentPadding = PaddingValues(layoutPolicy.listContentPaddingDp.dp),
+                                verticalArrangement = Arrangement.spacedBy(layoutPolicy.listItemSpacingDp.dp)
                             ) {
                                 items(relatedVideos) { video ->
                                     LandscapeVideoItem(
                                         video = video,
+                                        layoutPolicy = layoutPolicy,
+                                        isTvDevice = isTvDevice,
+                                        screenWidthDp = configuration.screenWidthDp,
+                                        motionTier = overlayMotionTier,
                                         isCurrent = video.bvid == currentBvid,
                                         onClick = { onVideoClick(video.bvid) }
                                     )
@@ -1116,8 +1303,8 @@ fun LandscapeEndDrawer(
                             // 合集列表
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                contentPadding = PaddingValues(layoutPolicy.listContentPaddingDp.dp),
+                                verticalArrangement = Arrangement.spacedBy(layoutPolicy.listItemSpacingDp.dp)
                             ) {
                                 ugcSeason.sections.forEach { section ->
                                     item {
@@ -1131,6 +1318,10 @@ fun LandscapeEndDrawer(
                                     items(section.episodes) { episode ->
                                         LandscapeEpisodeItem(
                                             episode = episode,
+                                            layoutPolicy = layoutPolicy,
+                                            isTvDevice = isTvDevice,
+                                            screenWidthDp = configuration.screenWidthDp,
+                                            motionTier = overlayMotionTier,
                                             isCurrent = episode.bvid == currentBvid,
                                             onClick = { onVideoClick(episode.bvid) }
                                         )
@@ -1187,6 +1378,7 @@ private fun TripleLikeInteractionButton(
     onCoinClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onTripleComplete: () -> Unit,
+    layoutPolicy: VideoPlayerOverlayVisualPolicy,
     modifier: Modifier = Modifier
 ) {
     val haptic = rememberHapticFeedback()
@@ -1223,7 +1415,7 @@ private fun TripleLikeInteractionButton(
     }
     
     Row(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(layoutPolicy.tripleActionSpacingDp.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
     ) {
@@ -1239,7 +1431,8 @@ private fun TripleLikeInteractionButton(
             onRelease = { 
                 if (longPressProgress < 0.1f) onLikeClick()
                 isLongPressing = false 
-            }
+            },
+            layoutPolicy = layoutPolicy
         )
         
         // 投币 (显示时带进度)
@@ -1250,7 +1443,8 @@ private fun TripleLikeInteractionButton(
             progressColor = Color(0xFFFFB300),
             isActive = isCoined,
             onClick = onCoinClick,
-            showProgress = longPressProgress > 0.05f
+            showProgress = longPressProgress > 0.05f,
+            layoutPolicy = layoutPolicy
         )
         
         // 收藏 (显示时带进度)
@@ -1261,7 +1455,8 @@ private fun TripleLikeInteractionButton(
             progressColor = Color(0xFFFFC107),
             isActive = isFavorited,
             onClick = onFavoriteClick,
-            showProgress = longPressProgress > 0.05f
+            showProgress = longPressProgress > 0.05f,
+            layoutPolicy = layoutPolicy
         )
     }
 }
@@ -1280,10 +1475,11 @@ private fun LandscapeProgressIcon(
     onLongPress: (() -> Unit)? = null,
     onRelease: (() -> Unit)? = null,
     showProgress: Boolean = true,
+    layoutPolicy: VideoPlayerOverlayVisualPolicy,
     modifier: Modifier = Modifier
 ) {
-    val iconSize = 24.dp
-    val ringSize = iconSize + 12.dp
+    val iconSize = layoutPolicy.interactionIconSizeDp.dp
+    val ringSize = iconSize + layoutPolicy.tripleRingExtraSizeDp.dp
     val strokeWidth = 2.5.dp
     
     Column(
@@ -1349,11 +1545,11 @@ private fun LandscapeProgressIcon(
             )
         }
         
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(layoutPolicy.interactionLabelTopSpacingDp.dp))
         Text(
             text = label,
             color = if (isActive) progressColor else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 10.sp
+            fontSize = layoutPolicy.interactionLabelFontSp.sp
         )
     }
 }
@@ -1361,13 +1557,23 @@ private fun LandscapeProgressIcon(
 @Composable
 private fun LandscapeVideoItem(
     video: com.android.purebilibili.data.model.response.RelatedVideo,
+    layoutPolicy: LandscapeEndDrawerLayoutPolicy,
+    isTvDevice: Boolean,
+    screenWidthDp: Int,
+    motionTier: MotionTier,
     isCurrent: Boolean,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(70.dp)
+            .height(layoutPolicy.videoItemHeightDp.dp)
+            .tvFocusableJiggle(
+                isTv = isTvDevice,
+                screenWidthDp = screenWidthDp,
+                reducedMotion = false,
+                motionTier = motionTier
+            )
             .clickable(onClick = onClick)
             .background(if (isCurrent) MaterialTheme.colorScheme.onSurface.copy(0.1f) else Color.Transparent, RoundedCornerShape(4.dp))
             .padding(4.dp)
@@ -1389,7 +1595,7 @@ private fun LandscapeVideoItem(
             Text(
                 text = FormatUtils.formatDuration(video.duration),
                 color = Color.White,
-                fontSize = 10.sp,
+                fontSize = layoutPolicy.itemDurationFontSp.sp,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .background(Color.Black.copy(0.6f), RoundedCornerShape(2.dp))
@@ -1407,15 +1613,15 @@ private fun LandscapeVideoItem(
             Text(
                 text = video.title,
                 color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                fontSize = 13.sp,
+                fontSize = layoutPolicy.itemTitleFontSp.sp,
                 maxLines = 2,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                lineHeight = 16.sp
+                lineHeight = (layoutPolicy.itemTitleFontSp + 3).sp
             )
             Text(
                 text = video.owner.name,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp
+                fontSize = layoutPolicy.itemMetaFontSp.sp
             )
         }
     }
@@ -1424,13 +1630,23 @@ private fun LandscapeVideoItem(
 @Composable
 private fun LandscapeEpisodeItem(
     episode: com.android.purebilibili.data.model.response.UgcEpisode,
+    layoutPolicy: LandscapeEndDrawerLayoutPolicy,
+    isTvDevice: Boolean,
+    screenWidthDp: Int,
+    motionTier: MotionTier,
     isCurrent: Boolean,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp) // 增加高度以容纳封面
+            .height(layoutPolicy.episodeItemHeightDp.dp)
+            .tvFocusableJiggle(
+                isTv = isTvDevice,
+                screenWidthDp = screenWidthDp,
+                reducedMotion = false,
+                motionTier = motionTier
+            )
             .clickable(onClick = onClick)
             .background(if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent, RoundedCornerShape(4.dp))
             .padding(4.dp),
@@ -1455,7 +1671,7 @@ private fun LandscapeEpisodeItem(
                 Text(
                     text = FormatUtils.formatDuration(episode.arc.duration),
                     color = Color.White,
-                    fontSize = 10.sp,
+                    fontSize = layoutPolicy.itemDurationFontSp.sp,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .background(Color.Black.copy(0.6f), RoundedCornerShape(topStart = 4.dp))
@@ -1470,13 +1686,13 @@ private fun LandscapeEpisodeItem(
                     imageVector = CupertinoIcons.Default.Play,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(layoutPolicy.metaIconSizeDp.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             } else {
                  Box(
                     modifier = Modifier
-                        .size(6.dp)
+                        .size((layoutPolicy.metaIconSizeDp / 2).dp)
                         .background(MaterialTheme.colorScheme.onSurface.copy(0.3f), CircleShape)
                 )
                  Spacer(modifier = Modifier.width(18.dp))
@@ -1492,10 +1708,10 @@ private fun LandscapeEpisodeItem(
             Text(
                 text = episode.title,
                 color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                fontSize = 13.sp,
+                fontSize = layoutPolicy.itemTitleFontSp.sp,
                 maxLines = 2,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                lineHeight = 16.sp
+                lineHeight = (layoutPolicy.itemTitleFontSp + 3).sp
             )
             
             // 底部元数据 (弹幕/观看等，如果有)
@@ -1512,13 +1728,13 @@ private fun LandscapeEpisodeItem(
                         imageVector = CupertinoIcons.Default.PlayCircle,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(layoutPolicy.metaIconSizeDp.dp)
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(
                         text = FormatUtils.formatStat(episode.arc.stat.view.toLong()), 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp
+                        fontSize = layoutPolicy.itemMetaFontSp.sp
                     )
                     
                     Spacer(modifier = Modifier.width(8.dp))
@@ -1528,13 +1744,13 @@ private fun LandscapeEpisodeItem(
                         imageVector = Icons.Filled.ChatBubble, 
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(layoutPolicy.metaIconSizeDp.dp)
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(
                         text = FormatUtils.formatStat(episode.arc.stat.danmaku.toLong()), 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp
+                        fontSize = layoutPolicy.itemMetaFontSp.sp
                     )
                 }
             } else if (episode.arc != null) {

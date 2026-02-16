@@ -73,7 +73,11 @@ import com.android.purebilibili.core.ui.animation.DissolvableVideoCard  //  粒�
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve      // 📳 iOS 风格抖动效果
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.resolveScrollToTopPlan
+import com.android.purebilibili.core.util.resolveTvHomePerformanceConfig
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import coil.imageLoader
 import kotlinx.coroutines.launch
@@ -150,6 +154,8 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope() // 用于双击回顶动画
     // [Header] 首页重选/双击回顶时需要强制恢复顶部，避免自动收缩后残留空白区域
     var headerOffsetHeightPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var delayTopTabsUntilCardSettled by remember { mutableStateOf(false) }
+    var hideTopTabsForForwardDetailNav by remember { mutableStateOf(false) }
 
     // [新增] 监听全局回顶事件
     val scrollChannel = LocalHomeScrollChannel.current
@@ -396,22 +402,54 @@ fun HomeScreen(
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
         initial = com.android.purebilibili.core.store.HomeSettings()
     )
+    val isTvDevice = rememberIsTvDevice()
+    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
     
     // 解构设置值（避免每次访问都触发重组）
     val displayMode = homeSettings.displayMode
     val isBottomBarFloating = homeSettings.isBottomBarFloating
     val bottomBarLabelMode = homeSettings.bottomBarLabelMode
     // 顶部模糊开关直接读独立 Flow，避免聚合设置延迟/不同步导致首页状态错误。
-    val isHeaderBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
-    val isBottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled
+    val baseIsHeaderBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
+    val baseIsBottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled
     val crashTrackingConsentShown = homeSettings.crashTrackingConsentShown
-    val cardAnimationEnabled = homeSettings.cardAnimationEnabled      //  卡片进场动画开关
-    val cardTransitionEnabled = homeSettings.cardTransitionEnabled    //  卡片过渡动画开关
-    val isLiquidGlassEnabled = homeSettings.isLiquidGlassEnabled      //  流体玻璃特效开关
-    val isDataSaverActive = remember(context) {
+    val baseCardAnimationEnabled = homeSettings.cardAnimationEnabled      //  卡片进场动画开关
+    val baseCardTransitionEnabled = homeSettings.cardTransitionEnabled    //  卡片过渡动画开关
+    val baseIsLiquidGlassEnabled = homeSettings.isLiquidGlassEnabled      //  流体玻璃特效开关
+    val baseIsDataSaverActive = remember(context) {
         com.android.purebilibili.core.store.SettingsManager.isDataSaverActive(context)
     }
-    
+    val tvHomePerformanceConfig = remember(
+        isTvDevice,
+        isTvPerformanceProfileEnabled,
+        baseIsHeaderBlurEnabled,
+        baseIsBottomBarBlurEnabled,
+        baseIsLiquidGlassEnabled,
+        baseCardAnimationEnabled,
+        baseCardTransitionEnabled,
+        baseIsDataSaverActive
+    ) {
+        resolveTvHomePerformanceConfig(
+            isTvDevice = isTvDevice,
+            isTvPerformanceProfileEnabled = isTvPerformanceProfileEnabled,
+            headerBlurEnabled = baseIsHeaderBlurEnabled,
+            bottomBarBlurEnabled = baseIsBottomBarBlurEnabled,
+            liquidGlassEnabled = baseIsLiquidGlassEnabled,
+            cardAnimationEnabled = baseCardAnimationEnabled,
+            cardTransitionEnabled = baseCardTransitionEnabled,
+            isDataSaverActive = baseIsDataSaverActive
+        )
+    }
+    val isHeaderBlurEnabled = tvHomePerformanceConfig.headerBlurEnabled
+    val isBottomBarBlurEnabled = tvHomePerformanceConfig.bottomBarBlurEnabled
+    val cardAnimationEnabled = tvHomePerformanceConfig.cardAnimationEnabled
+    val cardTransitionEnabled = tvHomePerformanceConfig.cardTransitionEnabled
+    val isLiquidGlassEnabled = tvHomePerformanceConfig.liquidGlassEnabled
+    val isDataSaverActive = tvHomePerformanceConfig.isDataSaverActive
+    val preloadAheadCount = tvHomePerformanceConfig.preloadAheadCount
+
     //  [新增] 底栏可见项目配置
     val orderedVisibleTabIds by SettingsManager.getOrderedVisibleTabs(context).collectAsState(
         initial = listOf("HOME", "DYNAMIC", "HISTORY", "PROFILE")
@@ -430,6 +468,21 @@ fun HomeScreen(
     //  📐 [平板适配] 根据屏幕尺寸和展示模式动态设置网格列数
     // 故事卡片(1)和沉浸模式(2)需要单列全宽，网格(0)使用双列
     val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
+    val deviceUiProfile = remember(
+        isTvDevice,
+        windowSizeClass.widthSizeClass,
+        isTvPerformanceProfileEnabled
+    ) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+        )
+    }
+    val cardMotionTier = resolveEffectiveMotionTier(
+        baseTier = deviceUiProfile.motionTier,
+        animationEnabled = cardAnimationEnabled
+    )
     val contentWidth = if (windowSizeClass.isExpandedScreen) {
         minOf(windowSizeClass.widthDp, 1280.dp)
     } else {
@@ -745,12 +798,16 @@ fun HomeScreen(
         }
     }
     var bottomBarRestoreJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var topTabsRevealJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     
 
     //  包装 onVideoClick：点击视频时先隐藏底栏再导航
-    val wrappedOnVideoClick: (String, Long, String) -> Unit = remember(onVideoClick) {
+    val wrappedOnVideoClick: (String, Long, String) -> Unit = remember(onVideoClick, setBottomBarVisible) {
         { bvid, aid, pic ->
+             hideTopTabsForForwardDetailNav = true
+             delayTopTabsUntilCardSettled = false
              setBottomBarVisible(false)
+             isVideoNavigating = true
              onVideoClick(bvid, aid, pic)
         }
     }
@@ -955,6 +1012,7 @@ fun HomeScreen(
                                      longPressCallback = onLongPressCallback, // [Feature] Pass callback
                                      displayMode = displayMode,
                                      cardAnimationEnabled = cardAnimationEnabled,
+                                     cardMotionTier = cardMotionTier,
                                      cardTransitionEnabled = cardTransitionEnabled,
                                      isDataSaverActive = isDataSaverActive,
                                      oldContentAnchorBvid = if (category == HomeCategory.RECOMMEND &&
@@ -1039,7 +1097,11 @@ fun HomeScreen(
             pullProgress = 0f, // [Fix] Outer header doesn't track inner pull state
             pagerState = pagerState,
             backdrop = homeBackdrop,
-            homeSettings = homeSettings
+            homeSettings = homeSettings,
+            topTabsVisible = resolveHomeTopTabsVisible(
+                isDelayedForCardSettle = delayTopTabsUntilCardSettled,
+                isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav
+            )
         )
 
         AnimatedVisibility(
@@ -1166,6 +1228,24 @@ fun HomeScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    topTabsRevealJob?.cancel()
+                    val returningFromDetail = CardPositionManager.isReturningFromDetail
+                    if (hideTopTabsForForwardDetailNav || returningFromDetail) {
+                        hideTopTabsForForwardDetailNav = false
+                        val revealDelayMs = resolveHomeTopTabsRevealDelayMs(
+                            isReturningFromDetail = returningFromDetail,
+                            cardTransitionEnabled = cardTransitionEnabled
+                        )
+                        if (revealDelayMs > 0L) {
+                            delayTopTabsUntilCardSettled = true
+                            topTabsRevealJob = coroutineScope.launch {
+                                delay(revealDelayMs)
+                                delayTopTabsUntilCardSettled = false
+                            }
+                        } else {
+                            delayTopTabsUntilCardSettled = false
+                        }
+                    }
                     //  关键修复：只在底栏当前隐藏时才恢复可见
                     if (!bottomBarVisible && isVideoNavigating) {
                         //  [同步动画] 延迟后再显示底栏，让进入动画与卡片返回动画同步
@@ -1195,6 +1275,7 @@ fun HomeScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             bottomBarRestoreJob?.cancel()
+            topTabsRevealJob?.cancel()
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
@@ -1244,9 +1325,10 @@ fun HomeScreen(
 
     //  [性能优化] 图片预加载 - 提前加载即将显示的视频封面
     // 📉 [省流量] 省流量模式下禁用预加载
-    LaunchedEffect(state.currentCategory, isDataSaverActive) {
+    LaunchedEffect(state.currentCategory, isDataSaverActive, preloadAheadCount) {
         // 📉 省流量模式下跳过预加载
         if (isDataSaverActive) return@LaunchedEffect
+        if (preloadAheadCount <= 0) return@LaunchedEffect
         
         val currentGridState = gridStates[state.currentCategory] ?: return@LaunchedEffect
         
@@ -1257,7 +1339,7 @@ fun HomeScreen(
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     val videos = state.categoryStates[state.currentCategory]?.videos ?: state.videos
                     val preloadStart = (lastVisibleIndex + 1).coerceAtMost(videos.size)
-                    val preloadEnd = (lastVisibleIndex + 6).coerceAtMost(videos.size)  //  减少预加载数量
+                    val preloadEnd = (lastVisibleIndex + 1 + preloadAheadCount).coerceAtMost(videos.size)
                     
                     if (preloadStart < preloadEnd) {
                         for (i in preloadStart until preloadEnd) {

@@ -31,6 +31,7 @@ import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -42,6 +43,9 @@ import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.iOSCornerRadius
+import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.animation.TvFocusCardEmphasis
+import com.android.purebilibili.core.ui.animation.tvFocusableJiggle
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 
@@ -60,6 +64,7 @@ fun StoryVideoCard(
     video: VideoItem,
     index: Int = 0,  //  [新增] 索引用于动画延迟
     animationEnabled: Boolean = true,  //  卡片动画开关
+    motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
     onLongClick: ((VideoItem) -> Unit)? = null, // [修复] 长按预览回调
@@ -80,6 +85,7 @@ fun StoryVideoCard(
     }
     
     //  获取屏幕尺寸用于计算归一化坐标
+    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
@@ -116,12 +122,20 @@ fun StoryVideoCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusableJiggle(
+                isTv = isTvDevice,
+                screenWidthDp = configuration.screenWidthDp,
+                reducedMotion = !animationEnabled,
+                cardEmphasis = TvFocusCardEmphasis.Large,
+                motionTier = motionTier
+            )
             .padding(horizontal = 16.dp, vertical = 8.dp)
             //  [修复] 进场动画 - 使用 Unit 作为 key，避免分类切换时重新动画
             .animateEnter(
                 index = index, 
                 key = Unit, 
-                animationEnabled = animationEnabled && !CardPositionManager.isReturningFromDetail && !CardPositionManager.isSwitchingCategory
+                animationEnabled = animationEnabled && !CardPositionManager.isReturningFromDetail && !CardPositionManager.isSwitchingCategory,
+                motionTier = motionTier
             )
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->

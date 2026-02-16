@@ -33,8 +33,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.theme.iOSPink  // 存储权限图标色
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
@@ -85,6 +90,25 @@ fun PermissionSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isTvDevice = rememberIsTvDevice()
+    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
+    val windowSizeClass = LocalWindowSizeClass.current
+    val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = false)
+    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+        )
+    }
+    val effectiveMotionTier = remember(deviceUiProfile.motionTier, cardAnimationEnabled) {
+        resolveEffectiveMotionTier(
+            baseTier = deviceUiProfile.motionTier,
+            animationEnabled = cardAnimationEnabled
+        )
+    }
     
     //  [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
     val view = androidx.compose.ui.platform.LocalView.current
@@ -225,7 +249,7 @@ fun PermissionSettingsContent(
             
             // 说明文字
             item {
-                Box(modifier = Modifier.staggeredEntrance(0, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
                     Text(
                         text = "以下是应用所需的权限及其用途说明。普通权限在安装时自动授予，无需手动操作。",
                         style = MaterialTheme.typography.bodySmall,
@@ -237,12 +261,12 @@ fun PermissionSettingsContent(
             
             // 需要运行时请求的权限
             item {
-                Box(modifier = Modifier.staggeredEntrance(1, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("需要授权的权限")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(2, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
                         permissions.filter { !it.isNormal }.forEachIndexed { index, info ->
                             if (index > 0) HorizontalDivider()
@@ -274,12 +298,12 @@ fun PermissionSettingsContent(
             
             // 普通权限（自动授予）
             item {
-                Box(modifier = Modifier.staggeredEntrance(3, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("自动授予的权限")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(4, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(4, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
                         permissions.filter { it.isNormal }.forEachIndexed { index, info ->
                             if (index > 0) HorizontalDivider()
@@ -295,7 +319,7 @@ fun PermissionSettingsContent(
             
             // 隐私说明
             item {
-                Box(modifier = Modifier.staggeredEntrance(5, isVisible)) {
+                Box(modifier = Modifier.staggeredEntrance(5, isVisible, motionTier = effectiveMotionTier)) {
                     Column {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(

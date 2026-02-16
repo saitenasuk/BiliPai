@@ -23,7 +23,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
-import com.android.purebilibili.core.util.rememberSplitLayoutRatio
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.video.state.VideoPlayerState
@@ -89,7 +89,13 @@ fun TabletVideoLayout(
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {}
 ) {
-    val splitRatio = rememberSplitLayoutRatio()
+    val isTvDevice = rememberIsTvDevice()
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveTabletVideoLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
     
     // 🖥️ [修复] 使用 LocalContext 获取 Activity，而非 playerState.context
     val context = LocalContext.current
@@ -107,8 +113,6 @@ fun TabletVideoLayout(
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 // 视频播放器（固定高度，不参与滚动）
-                val screenWidthDp = configuration.screenWidthDp.dp
-                val videoHeight = (screenWidthDp * splitRatio) * 9f / 16f
                 
                 //  尝试获取共享元素作用域
                 val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -137,53 +141,58 @@ fun TabletVideoLayout(
                     Modifier
                 }
 
-                Box(
-                    modifier = playerContainerModifier
-                        .fillMaxWidth()
-                        .height(videoHeight)
-                        .background(Color.Black)
-                ) {
-                    VideoPlayerSection(
-                        playerState = playerState,
-                        uiState = uiState,
-                        isFullscreen = false,
-                        isInPipMode = isInPipMode,
-                        onToggleFullscreen = onToggleFullscreen,
-                        onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
-                        onBack = onBack,
-                        bvid = bvid,
-                        coverUrl = coverUrl,
-                        onDoubleTapLike = { viewModel.toggleLike() },
-                        onReloadVideo = { viewModel.reloadVideo() },
-                        cdnCount = (uiState as? PlayerUiState.Success)?.cdnCount ?: 1,
-                        onSwitchCdn = { viewModel.switchCdn() },
-                        onSwitchCdnTo = { viewModel.switchCdnTo(it) },
-                        isAudioOnly = false,
-                        onAudioOnlyToggle = { 
-                            viewModel.setAudioMode(true)
-                            onNavigateToAudioMode()
-                        },
-                        sleepTimerMinutes = sleepTimerMinutes,
-                        onSleepTimerChange = { viewModel.setSleepTimer(it) },
-                        videoshotData = (uiState as? PlayerUiState.Success)?.videoshotData,
-                        viewPoints = viewPoints,
-                        isVerticalVideo = isVerticalVideo,
-                        onPortraitFullscreen = { playerState.setPortraitFullscreen(true) },
-                        isPortraitFullscreen = isPortraitFullscreen,
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val playerWidth = minOf(maxWidth, layoutPolicy.playerMaxWidthDp.dp)
+                    val videoHeight = playerWidth * 9f / 16f
+                    Box(
+                        modifier = playerContainerModifier
+                            .width(playerWidth)
+                            .height(videoHeight)
+                            .align(Alignment.Center)
+                            .background(Color.Black)
+                    ) {
+                        VideoPlayerSection(
+                            playerState = playerState,
+                            uiState = uiState,
+                            isFullscreen = false,
+                            isInPipMode = isInPipMode,
+                            onToggleFullscreen = onToggleFullscreen,
+                            onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
+                            onBack = onBack,
+                            bvid = bvid,
+                            coverUrl = coverUrl,
+                            onDoubleTapLike = { viewModel.toggleLike() },
+                            onReloadVideo = { viewModel.reloadVideo() },
+                            cdnCount = (uiState as? PlayerUiState.Success)?.cdnCount ?: 1,
+                            onSwitchCdn = { viewModel.switchCdn() },
+                            onSwitchCdnTo = { viewModel.switchCdnTo(it) },
+                            isAudioOnly = false,
+                            onAudioOnlyToggle = {
+                                viewModel.setAudioMode(true)
+                                onNavigateToAudioMode()
+                            },
+                            sleepTimerMinutes = sleepTimerMinutes,
+                            onSleepTimerChange = { viewModel.setSleepTimer(it) },
+                            videoshotData = (uiState as? PlayerUiState.Success)?.videoshotData,
+                            viewPoints = viewPoints,
+                            isVerticalVideo = isVerticalVideo,
+                            onPortraitFullscreen = { playerState.setPortraitFullscreen(true) },
+                            isPortraitFullscreen = isPortraitFullscreen,
 
-                        onPipClick = onPipClick,
-                        // [New] Codec & Audio
-                        currentCodec = currentCodec,
-                        onCodecChange = onCodecChange,
-                        currentAudioQuality = currentAudioQuality,
-                        onAudioQualityChange = onAudioQualityChange,
-                        // [New Actions]
-                        onSaveCover = { viewModel.saveCover(context) },
-                        onDownloadAudio = { viewModel.downloadAudio(context) },
-                        // 🔁 [新增] 播放模式
-                        currentPlayMode = currentPlayMode,
-                        onPlayModeClick = onPlayModeClick
-                    )
+                            onPipClick = onPipClick,
+                            // [New] Codec & Audio
+                            currentCodec = currentCodec,
+                            onCodecChange = onCodecChange,
+                            currentAudioQuality = currentAudioQuality,
+                            onAudioQualityChange = onAudioQualityChange,
+                            // [New Actions]
+                            onSaveCover = { viewModel.saveCover(context) },
+                            onDownloadAudio = { viewModel.downloadAudio(context) },
+                            // 🔁 [新增] 播放模式
+                            currentPlayMode = currentPlayMode,
+                            onPlayModeClick = onPlayModeClick
+                        )
+                    }
                 }
                 
                 // 📜 视频信息区域（可滚动）
@@ -214,8 +223,10 @@ fun TabletVideoLayout(
                         onWatchLaterClick = { viewModel.toggleWatchLater() },
                         onRelatedVideoClick = onRelatedVideoClick,
                         modifier = Modifier
-                            .fillMaxSize()
                             .weight(1f)
+                            .fillMaxWidth()
+                            .widthIn(max = layoutPolicy.infoMaxWidthDp.dp)
+                            .align(Alignment.CenterHorizontally)
                     )
                 }
             }
@@ -236,7 +247,7 @@ fun TabletVideoLayout(
                 )
             }
         },
-        primaryRatio = splitRatio
+        primaryRatio = layoutPolicy.primaryRatio
     )
 }
 

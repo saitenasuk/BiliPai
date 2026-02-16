@@ -40,6 +40,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.Clock
 import io.github.alexzhirkevich.cupertino.icons.outlined.Envelope
 import io.github.alexzhirkevich.cupertino.icons.outlined.RectanglePortraitAndArrowForward
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.util.rememberIsTvDevice
 
 /**
  * 首页侧边栏 - 优化版 (带毛玻璃效果)
@@ -63,10 +64,20 @@ fun MineSideDrawer(
     isBlurEnabled: Boolean = true // [新增] 模糊开关状态
 ) {
     val scope = rememberCoroutineScope()
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    // 侧边栏宽度自适应：避免 0.5f 导致文本被截断
-    val drawerWidth = remember(screenWidth) {
-        (screenWidth * 0.72f).coerceIn(280.dp, 360.dp)
+    val configuration = LocalConfiguration.current
+    val isTvDevice = rememberIsTvDevice()
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveMineSideDrawerLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+    // 侧边栏宽度自适应：中屏/大屏不再沿用手机上限 360dp
+    val drawerWidth = remember(configuration.screenWidthDp, layoutPolicy) {
+        resolveMineSideDrawerWidthDp(
+            screenWidthDp = configuration.screenWidthDp,
+            policy = layoutPolicy
+        ).dp
     }
     
     // 辅助函数：关闭侧边栏并执行回调
@@ -102,7 +113,10 @@ fun MineSideDrawer(
     Surface(
         color = drawerBaseColor,
         contentColor = activeContentColor,
-        shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp), // 保持抽屉的右侧圆角
+        shape = RoundedCornerShape(
+            topEnd = layoutPolicy.drawerEdgeRadiusDp.dp,
+            bottomEnd = layoutPolicy.drawerEdgeRadiusDp.dp
+        ), // 保持抽屉的右侧圆角
         modifier = Modifier
             .fillMaxHeight()
             .width(drawerWidth)
@@ -111,7 +125,10 @@ fun MineSideDrawer(
                     Modifier.unifiedBlur(
                         hazeState = requireNotNull(hazeState),
                         enabled = true,
-                        shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
+                        shape = RoundedCornerShape(
+                            topEnd = layoutPolicy.drawerEdgeRadiusDp.dp,
+                            bottomEnd = layoutPolicy.drawerEdgeRadiusDp.dp
+                        )
                     )
                 } else Modifier
             )
@@ -143,24 +160,27 @@ fun MineSideDrawer(
                     .verticalScroll(rememberScrollState())
                     .statusBarsPadding()
                     .navigationBarsPadding()
-                    .padding(vertical = 12.dp)
+                    .padding(vertical = layoutPolicy.contentVerticalPaddingDp.dp)
             ) {
             // 1. 用户信息区域 - 可点击进入个人主页
             // 移除 Surface 背景，只保留点击区域和内容
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .padding(horizontal = layoutPolicy.sectionHorizontalPaddingDp.dp)
+                    .clip(RoundedCornerShape(layoutPolicy.profileCardCornerRadiusDp.dp))
                     .background(itemSurfaceColor)
-                    .border(BorderStroke(0.8.dp, itemBorderColor), RoundedCornerShape(12.dp))
+                    .border(
+                        BorderStroke(0.8.dp, itemBorderColor),
+                        RoundedCornerShape(layoutPolicy.profileCardCornerRadiusDp.dp)
+                    )
                     .clickable { closeAndRun(onProfileClick) }
                     // 背景完全透明，依靠下方毛玻璃效果
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp), 
+                        .padding(layoutPolicy.profileRowPaddingDp.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 头像 (尺寸再次微调，适应更窄的栏宽)
@@ -168,7 +188,7 @@ fun MineSideDrawer(
                         model = user.face,
                         contentDescription = "用户头像",
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(layoutPolicy.profileAvatarSizeDp.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     )
@@ -202,7 +222,7 @@ fun MineSideDrawer(
                                         Text(
                                             text = "LV${user.level}",
                                             color = Color.White,
-                                            fontSize = 9.sp, // 字体微调
+                                            fontSize = layoutPolicy.badgeFontSp.sp,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                         )
@@ -218,7 +238,7 @@ fun MineSideDrawer(
                                         Text(
                                             text = "大会员",
                                             color = Color.White,
-                                            fontSize = 9.sp, // 字体微调
+                                            fontSize = layoutPolicy.badgeFontSp.sp,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                         )
@@ -233,7 +253,7 @@ fun MineSideDrawer(
                         imageVector = CupertinoIcons.Outlined.ChevronForward,
                         contentDescription = null,
                         tint = secondaryContentColor,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(layoutPolicy.profileChevronSizeDp.dp)
                     )
                 }
             }
@@ -243,7 +263,10 @@ fun MineSideDrawer(
             
             // 组间分割线 (全宽带padding)
             HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(
+                    horizontal = layoutPolicy.dividerHorizontalPaddingDp.dp,
+                    vertical = layoutPolicy.dividerVerticalPaddingDp.dp
+                ),
                 thickness = dividerThickness,
                 color = dividerColor
             )
@@ -252,8 +275,8 @@ fun MineSideDrawer(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                shape = RoundedCornerShape(14.dp),
+                    .padding(horizontal = layoutPolicy.sectionHorizontalPaddingDp.dp),
+                shape = RoundedCornerShape(layoutPolicy.sectionCornerRadiusDp.dp),
                 color = itemSurfaceColor,
                 border = BorderStroke(0.8.dp, itemBorderColor)
             ) {
@@ -324,7 +347,10 @@ fun MineSideDrawer(
             
             // 组间分割线
             HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(
+                    horizontal = layoutPolicy.dividerHorizontalPaddingDp.dp,
+                    vertical = layoutPolicy.dividerVerticalPaddingDp.dp
+                ),
                 thickness = dividerThickness,
                 color = dividerColor
             )
@@ -334,8 +360,8 @@ fun MineSideDrawer(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
-                    shape = RoundedCornerShape(14.dp),
+                        .padding(horizontal = layoutPolicy.sectionHorizontalPaddingDp.dp),
+                    shape = RoundedCornerShape(layoutPolicy.sectionCornerRadiusDp.dp),
                     color = itemSurfaceColor,
                     border = BorderStroke(0.8.dp, itemBorderColor)
                 ) {
@@ -351,7 +377,7 @@ fun MineSideDrawer(
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(layoutPolicy.footerSpacerHeightDp.dp))
         }
         }
     }

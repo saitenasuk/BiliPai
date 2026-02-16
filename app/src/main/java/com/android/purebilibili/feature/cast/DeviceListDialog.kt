@@ -15,13 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import org.fourthline.cling.model.meta.Device
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceListDialog(
     onDismissRequest: () -> Unit,
-    onDeviceSelected: (Device<*, *, *>) -> Unit,
+    onDeviceSelected: (CastDeviceInfo) -> Unit,
     onSsdpDeviceSelected: (SsdpDiscovery.SsdpDevice) -> Unit = {}
 ) {
     val devices by DlnaManager.devices.collectAsState()
@@ -94,8 +93,8 @@ fun DeviceListDialog(
                     // Cling 发现的设备
                     items(devices) { device ->
                         ListItem(
-                            headlineContent = { Text(device.details?.friendlyName ?: "Unknown Device") },
-                            supportingContent = { Text(device.displayString.ifEmpty { device.type.type }) },
+                            headlineContent = { Text(device.name.ifEmpty { "Unknown Device" }) },
+                            supportingContent = { Text(device.description.ifEmpty { device.location ?: "Unknown" }) },
                             leadingContent = { Icon(Icons.Rounded.Tv, null) },
                             modifier = Modifier
                                 .clickable { onDeviceSelected(device) }
@@ -104,7 +103,7 @@ fun DeviceListDialog(
                     }
                     // 手动 SSDP 发现的设备（排除已被 Cling 发现的）
                     val clingLocations = devices.mapNotNull { 
-                        it.details?.presentationURI?.toString()
+                        it.location
                     }.toSet()
                     
                     val uniqueSsdpDevices = ssdpDevices.filter { ssdp ->

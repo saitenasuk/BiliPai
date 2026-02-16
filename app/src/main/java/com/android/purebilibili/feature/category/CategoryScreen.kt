@@ -21,11 +21,14 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
 import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.responsiveContentWidth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -109,9 +112,24 @@ fun CategoryScreen(
         initial = HomeSettings()
     )
     val displayMode = homeSettings.displayMode
+    val isTvDevice = rememberIsTvDevice()
+    val tvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
+        initial = isTvDevice
+    )
     
     // 📐 [Tablet Adaptation] Calculate adaptive columns
     val windowSizeClass = LocalWindowSizeClass.current
+    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, tvPerformanceProfileEnabled) {
+        resolveDeviceUiProfile(
+            isTv = isTvDevice,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            tvPerformanceProfileEnabled = tvPerformanceProfileEnabled
+        )
+    }
+    val cardMotionTier = resolveEffectiveMotionTier(
+        baseTier = deviceUiProfile.motionTier,
+        animationEnabled = homeSettings.cardAnimationEnabled
+    )
     val contentWidth = if (windowSizeClass.isExpandedScreen) {
         minOf(windowSizeClass.widthDp, 1000.dp)
     } else {
@@ -203,6 +221,9 @@ fun CategoryScreen(
                                 StoryVideoCard(
                                     video = video,
                                     index = index,  //  动画索引
+                                    animationEnabled = homeSettings.cardAnimationEnabled,
+                                    motionTier = cardMotionTier,
+                                    transitionEnabled = homeSettings.cardTransitionEnabled,
                                     onClick = { bvid, _ -> onVideoClick(bvid, video.id, video.pic) }
                                 )
                             }
@@ -211,6 +232,9 @@ fun CategoryScreen(
                                 ElegantVideoCard(
                                     video = video,
                                     index = index,
+                                    animationEnabled = homeSettings.cardAnimationEnabled,
+                                    motionTier = cardMotionTier,
+                                    transitionEnabled = homeSettings.cardTransitionEnabled,
                                     onClick = { bvid, _ -> onVideoClick(bvid, video.id, video.pic) }
                                 )
                             }

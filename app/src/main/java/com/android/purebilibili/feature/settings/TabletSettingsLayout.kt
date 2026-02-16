@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import android.view.KeyEvent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -8,6 +9,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,12 +18,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
@@ -97,6 +105,17 @@ fun TabletSettingsLayout(
     modifier: Modifier = Modifier
 ) {
     var selectedCategory by remember { mutableStateOf(SettingsCategory.GENERAL) }
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveSettingsTabletLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+    val tvCategoryFocusRequester = remember { FocusRequester() }
+    val tvDetailFocusRequester = remember { FocusRequester() }
+    var tvFocusZone by remember { mutableStateOf(SettingsTvFocusZone.CATEGORY_LIST) }
     
     // Internal navigation state for the right pane
     var activeDetail by remember { mutableStateOf<SettingsDetail?>(null) }
@@ -112,16 +131,24 @@ fun TabletSettingsLayout(
     val context = androidx.compose.ui.platform.LocalContext.current
     val state by viewModel.state.collectAsState()
 
+    LaunchedEffect(isTvDevice) {
+        if (isTvDevice) {
+            tvFocusZone = resolveInitialSettingsTvFocusZone(isTv = true)
+                ?: SettingsTvFocusZone.CATEGORY_LIST
+            tvCategoryFocusRequester.requestFocus()
+        }
+    }
+
     AdaptiveSplitLayout(
         modifier = modifier,
-        primaryRatio = 0.35f, // Left pane narrower
+        primaryRatio = layoutPolicy.primaryRatio,
         primaryContent = {
             // Master List
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.surface)
-                    .padding(16.dp)
+                    .padding(layoutPolicy.masterPanePaddingDp.dp)
             ) {
                 // Back Button Row
                 Row(
@@ -167,7 +194,31 @@ fun TabletSettingsLayout(
                                 tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else category.color
                             ) 
                         },
-                        modifier = Modifier.padding(vertical = 4.dp),
+                        modifier = Modifier
+                            .padding(vertical = 4.dp)
+                            .testTag("settings_category_${category.name}")
+                            .then(
+                                if (isTvDevice && category == SettingsCategory.entries.first()) {
+                                    Modifier.focusRequester(tvCategoryFocusRequester)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .focusable()
+                            .onPreviewKeyEvent { event ->
+                                if (!isTvDevice) return@onPreviewKeyEvent false
+                                val transition = resolveSettingsTvFocusTransition(
+                                    currentZone = tvFocusZone,
+                                    keyCode = event.nativeKeyEvent.keyCode,
+                                    action = event.nativeKeyEvent.action
+                                )
+                                if (!transition.consumeEvent) return@onPreviewKeyEvent false
+                                tvFocusZone = transition.nextZone
+                                if (transition.nextZone == SettingsTvFocusZone.DETAIL_PANEL) {
+                                    tvDetailFocusRequester.requestFocus()
+                                }
+                                true
+                            },
                         colors = NavigationDrawerItemDefaults.colors(
                             selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                             unselectedContainerColor = Color.Transparent,
@@ -184,14 +235,40 @@ fun TabletSettingsLayout(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
-                    .padding(24.dp),
+                    .padding(layoutPolicy.detailPanePaddingDp.dp),
                 contentAlignment = Alignment.TopCenter
             ) {
+                Box(
+                    modifier = Modifier
+                        .testTag("settings_detail_panel")
+                        .then(
+                            if (isTvDevice) {
+                                Modifier
+                                    .focusRequester(tvDetailFocusRequester)
+                                    .focusable()
+                                    .onPreviewKeyEvent { event ->
+                                        val transition = resolveSettingsTvFocusTransition(
+                                            currentZone = tvFocusZone,
+                                            keyCode = event.nativeKeyEvent.keyCode,
+                                            action = event.nativeKeyEvent.action
+                                        )
+                                        if (!transition.consumeEvent) return@onPreviewKeyEvent false
+                                        tvFocusZone = transition.nextZone
+                                        if (transition.nextZone == SettingsTvFocusZone.CATEGORY_LIST) {
+                                            tvCategoryFocusRequester.requestFocus()
+                                        }
+                                        true
+                                    }
+                            } else {
+                                Modifier
+                            }
+                        )
+                ) {
                 // If we have an active detail, show it. Otherwise show Category Root.
                 val detail = activeDetail
                 if (detail != null) {
                     // Sub-page Content
-                    Column(modifier = Modifier.widthIn(max = 800.dp)) { // Increased max width for sub-pages
+                    Column(modifier = Modifier.widthIn(max = layoutPolicy.detailMaxWidthDp.dp)) {
                         // Header with Back Button
                         Row(
                             verticalAlignment = Alignment.CenterVertically, 
@@ -345,7 +422,7 @@ fun TabletSettingsLayout(
                         },
                         label = "SettingsDetailTransition"
                     ) { category ->
-                        Column(modifier = Modifier.widthIn(max = 600.dp)) {
+                        Column(modifier = Modifier.widthIn(max = layoutPolicy.rootPanelMaxWidthDp.dp)) {
                             Text(
                                 text = category.title,
                                 style = MaterialTheme.typography.titleLarge,
@@ -428,6 +505,7 @@ fun TabletSettingsLayout(
                             }
                         }
                     }
+                }
                 }
             }
         }

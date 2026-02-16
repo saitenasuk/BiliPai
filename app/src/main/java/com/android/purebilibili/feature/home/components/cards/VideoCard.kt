@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.home.components.cards
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -34,6 +34,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
@@ -45,8 +46,11 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.spring
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.animation.tvFocusableJiggle
 //  [预览播放] 相关引用已移除
 
 // 显式导入 collectAsState 以避免 ambiguity 或 missing reference
@@ -74,6 +78,7 @@ fun ElegantVideoCard(
     refreshKey: Long = 0L,
     isFollowing: Boolean = false,  //  是否已关注该 UP 主
     animationEnabled: Boolean = true,   //  卡片进场动画开关
+    motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     showPublishTime: Boolean = false,   //  是否显示发布时间（搜索结果用）
     isDataSaverActive: Boolean = false, // 🚀 [性能优化] 从父级传入，避免每个卡片重复计算
@@ -86,6 +91,7 @@ fun ElegantVideoCard(
 ) {
     val haptic = rememberHapticFeedback()
     val scope = rememberCoroutineScope()
+    val isTvDevice = rememberIsTvDevice()
     
     //  [HIG] 动态圆角 - 12dp 标准
     val cornerRadiusScale = LocalCornerRadiusScale.current
@@ -121,7 +127,7 @@ fun ElegantVideoCard(
     
     //  [交互优化] 按压缩放动画状态
     var isPressed by remember { mutableStateOf(false) }
-    val scale by androidx.compose.animation.core.animateFloatAsState(
+    val interactionScale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f, // [UX优化] 更明显的缩放反馈 (0.96 -> 0.95)
         animationSpec = androidx.compose.animation.core.spring(
             dampingRatio = 0.8f,   // 🚀 [性能优化] 减少回弹次数
@@ -133,13 +139,23 @@ fun ElegantVideoCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)  //  应用全局缩放
+            .graphicsLayer {
+                scaleX = interactionScale
+                scaleY = interactionScale
+            }
+            .tvFocusableJiggle(
+                isTv = isTvDevice,
+                screenWidthDp = configuration.screenWidthDp,
+                reducedMotion = !animationEnabled,
+                motionTier = motionTier
+            )
             //  [修复] 进场动画 - 使用 Unit 作为 key，只在首次挂载时播放
             // 原问题：使用 video.bvid 作为 key，分类切换时所有卡片重新触发动画（缩放收缩效果）
             .animateEnter(
                 index = index, 
                 key = Unit, 
-                animationEnabled = animationEnabled && !CardPositionManager.isReturningFromDetail && !CardPositionManager.isSwitchingCategory
+                animationEnabled = animationEnabled && !CardPositionManager.isReturningFromDetail && !CardPositionManager.isSwitchingCategory,
+                motionTier = motionTier
             )
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->

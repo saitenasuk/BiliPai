@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.automirrored.rounded.Comment
 import androidx.compose.material3.Icon
-import androidx.compose.material.icons.rounded.Comment
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.ThumbUp
@@ -25,9 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
 
@@ -52,10 +54,22 @@ fun PortraitInteractionBar(
     onShareClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolvePortraitInteractionBarLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+
     Column(
         modifier = modifier
-            .padding(end = 8.dp, bottom = 180.dp), // [Fix] Increased padding to move buttons up
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+            .padding(
+                end = layoutPolicy.endPaddingDp.dp,
+                bottom = layoutPolicy.bottomPaddingDp.dp
+            ),
+        verticalArrangement = Arrangement.spacedBy(layoutPolicy.itemSpacingDp.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         
@@ -65,14 +79,16 @@ fun PortraitInteractionBar(
             countText = if (likeCount > 0) FormatUtils.formatStat(likeCount.toLong()) else "点赞",
             isActive = isLiked,
             activeColor = BiliPink,
+            layoutPolicy = layoutPolicy,
             onClick = onLikeClick
         )
         
         // 评论
         InteractionButton(
-            icon = Icons.Rounded.Comment,
+            icon = Icons.AutoMirrored.Rounded.Comment,
             countText = if (commentCount > 0) FormatUtils.formatStat(commentCount.toLong()) else "评论",
             isActive = false,
+            layoutPolicy = layoutPolicy,
             onClick = onCommentClick
         )
         
@@ -82,6 +98,7 @@ fun PortraitInteractionBar(
             countText = if (favoriteCount > 0) FormatUtils.formatStat(favoriteCount.toLong()) else "收藏",
             isActive = isFavorited,
             activeColor = BiliPink,
+            layoutPolicy = layoutPolicy,
             onClick = onFavoriteClick
         )
         
@@ -90,6 +107,7 @@ fun PortraitInteractionBar(
             icon = Icons.Rounded.Share,
             countText = if (shareCount > 0) FormatUtils.formatStat(shareCount.toLong()) else "分享",
             isActive = false,
+            layoutPolicy = layoutPolicy,
             onClick = onShareClick
         )
     }
@@ -104,6 +122,7 @@ private fun InteractionButton(
     countText: String,
     isActive: Boolean,
     activeColor: Color = BiliPink,
+    layoutPolicy: PortraitInteractionBarLayoutPolicy,
     onClick: () -> Unit
 ) {
     Column(
@@ -117,13 +136,13 @@ private fun InteractionButton(
             imageVector = icon,
             contentDescription = null,
             tint = if (isActive) activeColor else Color.White,
-            modifier = Modifier.size(34.dp)
+            modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
         )
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(layoutPolicy.labelTopSpacingDp.dp))
         Text(
             text = countText,
             color = Color.White,
-            fontSize = 12.sp,
+            fontSize = layoutPolicy.labelFontSp.sp,
             fontWeight = FontWeight.Medium,
             style = MaterialTheme.typography.labelSmall.copy(
                 shadow = Shadow(

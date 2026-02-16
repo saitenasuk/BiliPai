@@ -24,10 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.draw.clip
@@ -88,10 +90,25 @@ fun BottomControlBar(
     
     modifier: Modifier = Modifier
 ) {
+    val isTvDevice = rememberIsTvDevice()
+    val configuration = LocalConfiguration.current
+    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveBottomControlBarLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+    val progressLayoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+        resolveVideoProgressBarLayoutPolicy(
+            widthDp = configuration.screenWidthDp,
+            isTv = isTvDevice
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
+            .padding(bottom = layoutPolicy.bottomPaddingDp.dp)
             .let { if (isFullscreen) it.navigationBarsPadding() else it }
     ) {
         // 1. Progress Bar (Top of controls)
@@ -99,6 +116,7 @@ fun BottomControlBar(
             currentPosition = progress.current,
             duration = progress.duration,
             bufferedPosition = progress.buffered,
+            layoutPolicy = progressLayoutPolicy,
             onSeek = onSeek,
             onSeekStart = onSeekStart,
             videoshotData = videoshotData,
@@ -107,39 +125,39 @@ fun BottomControlBar(
             onChapterClick = onChapterClick
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(layoutPolicy.progressSpacingDp.dp))
 
         // 2. Control Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = layoutPolicy.horizontalPaddingDp.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left: Play/Pause
             IconButton(
                 onClick = onPlayPauseClick,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(layoutPolicy.playButtonSizeDp.dp)
             ) {
                 Icon(
                     imageVector = if (isPlaying) CupertinoIcons.Default.Pause else CupertinoIcons.Default.Play,
                     contentDescription = if (isPlaying) "Pause" else "Play",
                     tint = Color.White,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(layoutPolicy.playIconSizeDp.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(layoutPolicy.afterPlaySpacingDp.dp))
 
             // Time
             Text(
                 text = "${FormatUtils.formatDuration((progress.current / 1000).toInt())} / ${FormatUtils.formatDuration((progress.duration / 1000).toInt())}",
                 color = Color.White.copy(alpha = 0.9f),
-                fontSize = 12.sp,
+                fontSize = layoutPolicy.timeFontSp.sp,
                 fontWeight = FontWeight.Medium
             )
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(layoutPolicy.afterTimeSpacingDp.dp))
 
             // Center area: Danmaku Controls (Switch + Input) - Only visible in Fullscreen/Landscape
             if (isFullscreen) {
@@ -149,18 +167,18 @@ fun BottomControlBar(
                     contentDescription = "Danmaku Toggle",
                     tint = if (danmakuEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(layoutPolicy.danmakuIconSizeDp.dp)
                         .clickable(onClick = onDanmakuToggle)
                 )
                 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(layoutPolicy.danmakuSwitchToInputSpacingDp.dp))
                 
                 // Danmaku Input Box
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(18.dp))
+                        .height(layoutPolicy.danmakuInputHeightDp.dp)
+                        .clip(RoundedCornerShape((layoutPolicy.danmakuInputHeightDp / 2).dp))
                         .background(Color.White.copy(alpha = 0.2f))
                         .clickable { /* TODO: Open Input Dialog */ },
                     contentAlignment = Alignment.CenterStart
@@ -168,8 +186,8 @@ fun BottomControlBar(
                     Text(
                         text = "发个友善的弹幕见证当下...",
                         color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(start = 16.dp)
+                        fontSize = layoutPolicy.danmakuInputFontSp.sp,
+                        modifier = Modifier.padding(start = layoutPolicy.danmakuInputStartPaddingDp.dp)
                     )
                     
                     // Settings Icon inside input bar (right)
@@ -177,19 +195,19 @@ fun BottomControlBar(
                         onClick = onDanmakuSettingsClick,
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .padding(end = 4.dp)
-                            .size(32.dp)
+                            .padding(end = layoutPolicy.danmakuSettingEndPaddingDp.dp)
+                            .size(layoutPolicy.danmakuSettingButtonSizeDp.dp)
                     ) {
                         Icon(
                             imageVector = CupertinoIcons.Default.Gearshape,
                             contentDescription = "Settings",
                             tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(layoutPolicy.danmakuSettingIconSizeDp.dp)
                         )
                     }
                 }
                 
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(layoutPolicy.afterInputSpacingDp.dp))
             } else {
                 Spacer(modifier = Modifier.weight(1f))
             }
@@ -197,14 +215,14 @@ fun BottomControlBar(
             // Right: Function Buttons
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(layoutPolicy.rightActionSpacingDp.dp)
             ) {
                 // Quality
                 if (currentQualityLabel.isNotEmpty()) {
                     Text(
                         text = currentQualityLabel,
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = layoutPolicy.actionTextFontSp.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable(onClick = onQualityClick)
                     )
@@ -214,7 +232,7 @@ fun BottomControlBar(
                 Text(
                     text = if (currentSpeed == 1.0f) "倍速" else "${currentSpeed}x",
                     color = if (currentSpeed == 1.0f) Color.White else MaterialTheme.colorScheme.primary,
-                    fontSize = 13.sp,
+                    fontSize = layoutPolicy.actionTextFontSp.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable(onClick = onSpeedClick)
                 )
@@ -223,7 +241,7 @@ fun BottomControlBar(
                     Text(
                         text = playbackOrderLabel,
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = layoutPolicy.actionTextFontSp.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable(onClick = onPlaybackOrderClick)
                     )
@@ -234,7 +252,7 @@ fun BottomControlBar(
                     Text(
                         text = currentRatio.displayName,
                         color = if (currentRatio == VideoAspectRatio.FIT) Color.White else MaterialTheme.colorScheme.primary,
-                        fontSize = 13.sp,
+                        fontSize = layoutPolicy.actionTextFontSp.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable(onClick = onRatioClick)
                     )
@@ -245,7 +263,7 @@ fun BottomControlBar(
                     Text(
                         text = "竖屏",
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = layoutPolicy.actionTextFontSp.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable(onClick = onPortraitFullscreen)
                     )
@@ -255,7 +273,7 @@ fun BottomControlBar(
                     Text(
                         text = "竖屏",
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = layoutPolicy.actionTextFontSp.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable(onClick = onPortraitFullscreen)
                     )
@@ -267,7 +285,7 @@ fun BottomControlBar(
                     contentDescription = if (isFullscreen) "退出横屏" else "横屏",
                     tint = Color.White,
                     modifier = Modifier
-                        .size(20.dp)
+                        .size(layoutPolicy.fullscreenIconSizeDp.dp)
                         .clickable(onClick = onToggleFullscreen)
                 )
             }
@@ -283,6 +301,7 @@ fun VideoProgressBar(
     currentPosition: Long,
     duration: Long,
     bufferedPosition: Long,
+    layoutPolicy: VideoProgressBarLayoutPolicy,
     onSeek: (Long) -> Unit,
     onSeekStart: () -> Unit = {},
     videoshotData: com.android.purebilibili.data.model.response.VideoshotData? = null,
@@ -306,8 +325,16 @@ fun VideoProgressBar(
     val displayProgress = if (isDragging) tempProgress else progress
     val primaryColor = MaterialTheme.colorScheme.primary
     val targetPositionMs = (tempProgress * duration).toLong()
-    val baseHeight = if (currentChapter != null) 32.dp else 20.dp
-    val containerHeight = if (isDragging && videoshotData != null) 100.dp else baseHeight
+    val baseHeight = if (currentChapter != null) {
+        layoutPolicy.baseHeightWithChapterDp.dp
+    } else {
+        layoutPolicy.baseHeightWithoutChapterDp.dp
+    }
+    val containerHeight = if (isDragging && videoshotData != null) {
+        layoutPolicy.draggingContainerHeightDp.dp
+    } else {
+        baseHeight
+    }
 
     Box(
         modifier = Modifier
@@ -349,7 +376,7 @@ fun VideoProgressBar(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(bottom = 24.dp)
+                    .padding(bottom = layoutPolicy.previewBottomPaddingDp.dp)
             ) {
                 if (videoshotData != null && videoshotData.isValid) {
                     com.android.purebilibili.feature.video.ui.components.SeekPreviewBubble(
@@ -380,20 +407,23 @@ fun VideoProgressBar(
                 Row(
                     modifier = Modifier
                         .clickable(onClick = onChapterClick)
-                        .padding(bottom = 4.dp, start = 12.dp),
+                        .padding(
+                            bottom = layoutPolicy.chapterBottomPaddingDp.dp,
+                            start = layoutPolicy.chapterStartPaddingDp.dp
+                        ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         CupertinoIcons.Default.ListBullet,
                         contentDescription = "Chapter",
                         tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(layoutPolicy.chapterIconSizeDp.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(layoutPolicy.chapterSpacingDp.dp))
                     Text(
                         text = currentChapter,
                         color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 10.sp,
+                        fontSize = layoutPolicy.chapterFontSp.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -404,14 +434,15 @@ fun VideoProgressBar(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(20.dp),
+                    .height(layoutPolicy.touchContainerHeightDp.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
+                val trackCornerRadius = (layoutPolicy.trackHeightDp / 2f).dp
                  Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(3.dp)
-                        .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(1.5.dp))
+                        .height(layoutPolicy.trackHeightDp.dp)
+                        .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(trackCornerRadius))
                         .drawWithContent {
                             drawContent()
                             if (duration > 0 && viewPoints.isNotEmpty()) {
@@ -434,15 +465,15 @@ fun VideoProgressBar(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(bufferedProgress.coerceIn(0f, 1f))
-                        .height(3.dp)
-                        .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(1.5.dp))
+                        .height(layoutPolicy.trackHeightDp.dp)
+                        .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(trackCornerRadius))
                 )
                 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(displayProgress.coerceIn(0f, 1f))
-                        .height(3.dp)
-                        .background(primaryColor, RoundedCornerShape(1.5.dp))
+                        .height(layoutPolicy.trackHeightDp.dp)
+                        .background(primaryColor, RoundedCornerShape(trackCornerRadius))
                 )
                 
                 Box(
@@ -452,8 +483,14 @@ fun VideoProgressBar(
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .size(if (isDragging) 16.dp else 12.dp)
-                            .offset(x = if (isDragging) 8.dp else 6.dp)
+                            .size(
+                                if (isDragging) layoutPolicy.thumbDraggingSizeDp.dp
+                                else layoutPolicy.thumbIdleSizeDp.dp
+                            )
+                            .offset(
+                                x = if (isDragging) layoutPolicy.thumbDraggingOffsetDp.dp
+                                else layoutPolicy.thumbIdleOffsetDp.dp
+                            )
                             .background(primaryColor, CircleShape)
                     )
                 }
