@@ -9,19 +9,19 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-02-15 · 文档已同步至 v5.3.4（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-02-16 · 文档已同步至 v6.0.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-5.3.4-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.0.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android%2010+-brightgreen?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/APK-14MB-orange?style=flat-square" alt="Size">
+  <img src="https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026)-brightgreen?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/APK-Varies-orange?style=flat-square" alt="Size">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/Plugins-5%20Built--in-blueviolet?style=flat-square" alt="Plugins">
 </p>
@@ -392,10 +392,10 @@ JSON 规则插件是一种**无需编程**的轻量级插件格式，只需编�
 
 | 项目 | 要求 |
 |-----|-----|
-| **Android 版本** | Android 10+ (API 29) |
+| **Android 版本** | Android 8.0+ (API 26) |
 | **处理器架构** | 64 位 (arm64-v8a) |
 | **推荐版本** | Android 12+ 获得完整 Material You 体验 |
-| **安装包大小** | ~14 MB |
+| **安装包大小** | 因 ABI 与构建方式不同会有差异，请以 Releases 实际产物为准 |
 
 ### 安装步骤
 
@@ -514,15 +514,12 @@ app/src/main/java/com/android/purebilibili/
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v5.3.4 · 2026-02-15)
+### 最近更新 (v6.0.0 · 2026-02-16)
 
-- ✨ **今日推荐单交互升级**：支持收起/展开与“单独刷新”，不再强制和首页推荐同步刷新
-- ✨ **播放顺序可选**：新增播完暂停/顺序播放/单个循环/列表循环/自动连播，横竖屏均可快捷切换
-- 🛠 **竖屏链路修复**：修复竖屏滑新视频后进 UP 空间返回错回首条、以及合集续播偶发“有声音无画面”
-- 🛠 **播放器细节优化**：修复操作栏列对齐、去除重复画质入口并替换为弹幕开关、修复黄色乱码弹幕
-- 🎬 **图片预览重构**：改为非 Dialog 全局 Overlay，优化 iOS 风格开关动画并统一返回固定退场，避免中途卡住
-- ✨ **夜间护眼 2.0**：重写护眼插件，支持三套预设可 DIY、实时预览、定时时段、关怀提醒与稍后提醒
-- 🛠 **画质切换稳定性修复**：优化缓存切换逻辑与画质列表来源，避免“可切换但实际失败”，并改进失败提示语义
+- ✨ **平板 + TV 深度适配**：Home/Search/Settings/Video/Player 完成大屏分档布局与 UI 收口
+- ✨ **TV 遥控器链路增强**：焦点导航、Back 行为、播放器返回链路与端到端回归补齐
+- 🎬 **动画策略统一**：焦点抖动、回场过渡、共享元素后首页顶部标签显隐时序修复
+- 🧪 **自动化与基线**：新增 TV/平板 androidTest 与 benchmark 采样脚本，提升回归稳定性
 
 ### 历史版本
 
@@ -544,9 +541,9 @@ cd BiliPai
 
 ### 构建要求
 
-- JDK 17+
-- Android Studio Hedgehog (2023.1.1) 或更高版本
-- Android SDK 34
+- JDK 21+
+- Android Studio 2024.1+ 或更高版本
+- Android SDK 36（Compile SDK）
 - Gradle 8.2+
 - (可选) `google-services.json`: 放置于 `app/` 目录下以启用 Firebase 功能。如无此文件，构建脚本将自动跳过相关插件，不影响编译运行。
 
