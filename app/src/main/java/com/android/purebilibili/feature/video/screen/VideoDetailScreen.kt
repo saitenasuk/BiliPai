@@ -1192,7 +1192,7 @@ fun VideoDetailScreen(
                                     val nextTarget = resolveVideoDetailTvFocusTarget(
                                         current = tvDetailFocusTarget,
                                         keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
-                                        action = KeyEvent.ACTION_UP
+                                        action = KeyEvent.ACTION_DOWN
                                     )
                                     tvDetailFocusTarget = nextTarget
                                     if (nextTarget == VideoDetailTvFocusTarget.CONTENT) {

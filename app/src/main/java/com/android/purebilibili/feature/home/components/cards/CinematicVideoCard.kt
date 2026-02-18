@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
@@ -124,6 +125,17 @@ fun CinematicVideoCard(
     val densityValue = density.density
     // 记录卡片位置（非 Compose State，避免滚动时触发高频重组）
     val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val triggerCardClick = {
+        cardBoundsRef.value?.let { bounds ->
+            CardPositionManager.recordCardPosition(
+                bounds,
+                screenWidthPx,
+                screenHeightPx,
+                density = densityValue
+            )
+        }
+        onClick(video.bvid, 0)
+    }
     
     // 按压效果
     var isPressed by remember { mutableStateOf(false) }
@@ -158,6 +170,20 @@ fun CinematicVideoCard(
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
             }
+            .onPreviewKeyEvent { event ->
+                if (
+                    shouldTriggerHomeCardClickOnTvKey(
+                        isTv = isTvDevice,
+                        keyCode = event.nativeKeyEvent.keyCode,
+                        action = event.nativeKeyEvent.action
+                    )
+                ) {
+                    triggerCardClick()
+                    true
+                } else {
+                    false
+                }
+            }
     ) {
         // 卡片主体容器
         Box(
@@ -185,10 +211,7 @@ fun CinematicVideoCard(
                              }
                         },
                         onTap = {
-                            cardBoundsRef.value?.let { bounds ->
-                                CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
-                            }
-                            onClick(video.bvid, 0)
+                            triggerCardClick()
                         }
                     )
                 }

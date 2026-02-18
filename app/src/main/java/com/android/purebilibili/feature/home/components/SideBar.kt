@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,6 +27,7 @@ import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.theme.BottomBarColors
 import kotlinx.coroutines.launch
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -39,6 +42,7 @@ fun FrostedSideBar(
     currentItem: BottomNavItem = BottomNavItem.HOME,
     onItemClick: (BottomNavItem) -> Unit,
     modifier: Modifier = Modifier,
+    firstItemModifier: Modifier = Modifier,
     hazeState: HazeState? = null,
     onHomeDoubleTap: () -> Unit = {},
     visibleItems: List<BottomNavItem> = listOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY, BottomNavItem.PROFILE),
@@ -46,6 +50,7 @@ fun FrostedSideBar(
     onToggleSidebar: (() -> Unit)? = null  // 📱 [平板适配] 切换到底栏
 ) {
     val haptic = rememberHapticFeedback()
+    val isTvDevice = rememberIsTvDevice()
     
     // 读取模糊设置
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -103,7 +108,7 @@ fun FrostedSideBar(
             // Spacer(modifier = Modifier.height(20.dp))
 
             // 导航项列表
-            visibleItems.forEach { item ->
+            visibleItems.forEachIndexed { itemIndex, item ->
                 val isSelected = item == currentItem
                 
                 // 动画状态
@@ -140,25 +145,44 @@ fun FrostedSideBar(
                         wobbleAngle = 0f
                     }
                 }
+                val triggerItemClick = {
+                    isPending = true
+                    haptic(HapticType.LIGHT)
+                    kotlinx.coroutines.MainScope().launch {
+                        kotlinx.coroutines.delay(100)
+                        wobbleAngle = 15f
+                        kotlinx.coroutines.delay(150)
+                        onItemClick(item)
+                        isPending = false
+                    }
+                }
 
                 // 交互容器
                 Column(
                     modifier = Modifier
                         .size(64.dp) // 增大点击区域
+                        .then(if (itemIndex == 0) firstItemModifier else Modifier)
+                        .focusable(enabled = isTvDevice)
+                        .onPreviewKeyEvent { event ->
+                            if (
+                                shouldTriggerSideBarItemClickOnTvKey(
+                                    isTv = isTvDevice,
+                                    keyCode = event.nativeKeyEvent.keyCode,
+                                    action = event.nativeKeyEvent.action
+                                )
+                            ) {
+                                triggerItemClick()
+                                true
+                            } else {
+                                false
+                            }
+                        }
                         .then(
                             if (item == BottomNavItem.HOME) {
                                 Modifier.pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = {
-                                            isPending = true
-                                            haptic(HapticType.LIGHT)
-                                            kotlinx.coroutines.MainScope().launch {
-                                                kotlinx.coroutines.delay(100)
-                                                wobbleAngle = 15f
-                                                kotlinx.coroutines.delay(150)
-                                                onItemClick(item)
-                                                isPending = false
-                                            }
+                                            triggerItemClick()
                                         },
                                         onDoubleTap = {
                                             haptic(HapticType.MEDIUM)
@@ -171,15 +195,7 @@ fun FrostedSideBar(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
                                 ) {
-                                    isPending = true
-                                    haptic(HapticType.LIGHT)
-                                    kotlinx.coroutines.MainScope().launch {
-                                        kotlinx.coroutines.delay(100)
-                                        wobbleAngle = 15f
-                                        kotlinx.coroutines.delay(150)
-                                        onItemClick(item)
-                                        isPending = false
-                                    }
+                                    triggerItemClick()
                                 }
                             }
                         ),
@@ -221,6 +237,22 @@ fun FrostedSideBar(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(RoundedCornerShape(12.dp))
+                        .focusable(enabled = isTvDevice)
+                        .onPreviewKeyEvent { event ->
+                            if (
+                                shouldTriggerSideBarItemClickOnTvKey(
+                                    isTv = isTvDevice,
+                                    keyCode = event.nativeKeyEvent.keyCode,
+                                    action = event.nativeKeyEvent.action
+                                )
+                            ) {
+                                haptic(HapticType.LIGHT)
+                                onToggleSidebar()
+                                true
+                            } else {
+                                false
+                            }
+                        }
                         .clickable { 
                             haptic(HapticType.LIGHT)
                             onToggleSidebar() 

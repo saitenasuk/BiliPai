@@ -14,6 +14,21 @@ internal data class SearchTvFocusTransition(
     val consumeEvent: Boolean
 )
 
+private fun shouldHandleSearchTvFocusKey(
+    keyCode: Int,
+    action: Int
+): Boolean {
+    return when (keyCode) {
+        KeyEvent.KEYCODE_DPAD_UP,
+        KeyEvent.KEYCODE_DPAD_DOWN,
+        KeyEvent.KEYCODE_DPAD_LEFT,
+        KeyEvent.KEYCODE_DPAD_RIGHT -> action == KeyEvent.ACTION_DOWN
+
+        KeyEvent.KEYCODE_BACK -> action == KeyEvent.ACTION_UP
+        else -> false
+    }
+}
+
 internal fun resolveInitialSearchTvFocusZone(isTv: Boolean): SearchTvFocusZone? {
     return if (isTv) SearchTvFocusZone.TOP_BAR else null
 }
@@ -26,7 +41,7 @@ internal fun resolveSearchTvFocusTransition(
     hasSuggestions: Boolean,
     hasHistory: Boolean
 ): SearchTvFocusTransition {
-    if (action != KeyEvent.ACTION_UP) {
+    if (!shouldHandleSearchTvFocusKey(keyCode = keyCode, action = action)) {
         return SearchTvFocusTransition(nextZone = currentZone, consumeEvent = false)
     }
 
@@ -69,4 +84,13 @@ internal fun resolveSearchTvFocusTransition(
             }
         }
     }
+}
+
+internal fun resolveSearchTvResultEntryIndex(
+    isTv: Boolean,
+    showResults: Boolean,
+    resultCount: Int
+): Int? {
+    if (!isTv || !showResults || resultCount <= 0) return null
+    return 0
 }

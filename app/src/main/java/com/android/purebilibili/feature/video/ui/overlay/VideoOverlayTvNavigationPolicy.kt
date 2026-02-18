@@ -34,7 +34,7 @@ internal fun resolveVideoOverlayTvFocusZone(
     keyCode: Int,
     action: Int
 ): VideoOverlayTvFocusZone {
-    if (action != KeyEvent.ACTION_UP) return current
+    if (action != KeyEvent.ACTION_DOWN) return current
     return when (keyCode) {
         KeyEvent.KEYCODE_DPAD_UP -> when (current) {
             VideoOverlayTvFocusZone.CENTER -> VideoOverlayTvFocusZone.TOP_BAR

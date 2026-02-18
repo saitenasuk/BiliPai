@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
@@ -46,7 +47,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.yield
 
 @Composable
-fun HomeCategoryPageContent(
+internal fun HomeCategoryPageContent(
     category: HomeCategory,
     categoryState: CategoryContent,
     gridState: LazyGridState,
@@ -81,6 +82,10 @@ fun HomeCategoryPageContent(
     onTodayWatchVideoClick: (VideoItem) -> Unit = { video ->
         onVideoClick(video.bvid, video.cid, video.pic)
     },
+    firstGridItemModifier: Modifier = Modifier,
+    isTv: Boolean = false,
+    hasSidebar: Boolean = false,
+    onTvGridBoundaryTransition: (HomeTvFocusZone) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Check for load more
@@ -127,6 +132,7 @@ fun HomeCategoryPageContent(
                     LiveRoomCard(
                         room = room,
                         index = index,
+                        modifier = if (index == 0) firstGridItemModifier else Modifier,
                         onClick = { onLiveClick(room.roomid, room.title, room.uname) } 
                     )
                 }
@@ -152,6 +158,11 @@ fun HomeCategoryPageContent(
                     LiveRoomCard(
                         room = room,
                         index = index,
+                        modifier = if (categoryState.followedLiveRooms.isEmpty() && index == 0) {
+                            firstGridItemModifier
+                        } else {
+                            Modifier
+                        },
                         onClick = { onLiveClick(room.roomid, room.title, room.uname) } 
                     )
                 }
@@ -198,6 +209,21 @@ fun HomeCategoryPageContent(
                         }
                     }
 
+                    val tvGridBoundaryModifier = if (isTv) {
+                        Modifier.onPreviewKeyEvent { event ->
+                            val transition = resolveHomeTvGridCellTransition(
+                                index = index,
+                                gridColumns = gridColumns,
+                                keyCode = event.nativeKeyEvent.keyCode,
+                                action = event.nativeKeyEvent.action,
+                                hasSidebar = hasSidebar
+                            ) ?: return@onPreviewKeyEvent false
+                            onTvGridBoundaryTransition(transition.nextZone)
+                            true
+                        }
+                    } else {
+                        Modifier
+                    }
                     item(
                         key = if (video.bvid.isNotBlank()) video.bvid else "video_${video.id}_$index"
                     ) {
@@ -208,7 +234,10 @@ fun HomeCategoryPageContent(
                             onDissolveComplete = { onDissolveComplete(video.bvid) },
                             cardId = video.bvid,
                             preset = DissolveAnimationPreset.TELEGRAM_FAST,
-                            modifier = Modifier.jiggleOnDissolve(video.bvid)
+                            modifier = Modifier
+                                .then(tvGridBoundaryModifier)
+                                .jiggleOnDissolve(video.bvid)
+                                .then(if (index == 0) firstGridItemModifier else Modifier)
                         ) {
                             when (displayMode) {
                                 1 -> {

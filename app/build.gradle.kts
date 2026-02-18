@@ -28,8 +28,8 @@ android {
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：versionCode +1, versionName 递增
         // 更新日志：CHANGELOG.md
-        versionCode = 72
-        versionName = "6.0.1"
+        versionCode = 73
+        versionName = "6.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -124,10 +124,9 @@ android {
     // 🔥 自定义 APK 输出文件名
     applicationVariants.configureEach {
         val variant = this
-        val abiLabel = "64bit+32bit-arm64-v8a+armeabi-v7a"
         outputs.configureEach {
             val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
-            output.outputFileName = "BiliPai-${variant.versionName}-${abiLabel}.apk"
+            output.outputFileName = "BiliPai-${variant.versionName}-universal.apk"
         }
     }
 }

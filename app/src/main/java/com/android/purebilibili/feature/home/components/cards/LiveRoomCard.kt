@@ -34,8 +34,10 @@ import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.data.model.response.LiveRoom
 import com.android.purebilibili.core.util.iOSTapEffect
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.iOSCornerRadius
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 
 /**
  *  iOS 风格直播间卡片
@@ -45,9 +47,11 @@ import com.android.purebilibili.core.theme.iOSCornerRadius
 fun LiveRoomCard(
     room: LiveRoom,
     index: Int,
+    modifier: Modifier = Modifier,
     onClick: (Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
+    val isTvDevice = rememberIsTvDevice()
     
     // [新增] 获取圆角缩放比例
     val cornerRadiusScale = LocalCornerRadiusScale.current
@@ -62,16 +66,32 @@ fun LiveRoomCard(
     val coverUrl = remember(room.roomid) {
         FormatUtils.fixImageUrl(room.cover.ifEmpty { room.keyframe.ifEmpty { room.userCover } })
     }
+    val triggerCardClick = { onClick(room.roomid) }
 
     Column(
         modifier = Modifier
+            .then(modifier)
             .fillMaxWidth()
+            .onPreviewKeyEvent { event ->
+                if (
+                    shouldTriggerHomeCardClickOnTvKey(
+                        isTv = isTvDevice,
+                        keyCode = event.nativeKeyEvent.keyCode,
+                        action = event.nativeKeyEvent.action
+                    )
+                ) {
+                    triggerCardClick()
+                    true
+                } else {
+                    false
+                }
+            }
             //  iOS 点击动画
             .iOSTapEffect(
                 scale = 0.97f,
                 hapticEnabled = true
             ) {
-                onClick(room.roomid)
+                triggerCardClick()
             }
             .padding(bottom = 6.dp)  //  减少间距
     ) {

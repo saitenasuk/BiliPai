@@ -14,6 +14,11 @@ internal data class HomeTvFocusTransition(
     val pageDelta: Int = 0
 )
 
+internal data class HomeTvRootNavigationCommand(
+    val nextZone: HomeTvFocusZone,
+    val targetPage: Int?
+)
+
 internal fun resolveInitialHomeTvFocusZone(
     isTv: Boolean,
     hasSidebar: Boolean
@@ -30,7 +35,7 @@ internal fun resolveHomeTvFocusTransition(
     isGridFirstRow: Boolean,
     isGridFirstColumn: Boolean
 ): HomeTvFocusTransition {
-    if (action != KeyEvent.ACTION_UP) {
+    if (action != KeyEvent.ACTION_DOWN) {
         return HomeTvFocusTransition(nextZone = currentZone, consumeEvent = false)
     }
 
@@ -83,4 +88,55 @@ internal fun resolveHomeTvFocusTransition(
             else -> HomeTvFocusTransition(nextZone = currentZone, consumeEvent = false)
         }
     }
+}
+
+internal fun resolveHomeTvRootNavigationCommand(
+    currentZone: HomeTvFocusZone,
+    keyCode: Int,
+    action: Int,
+    hasSidebar: Boolean,
+    currentPage: Int,
+    pageCount: Int
+): HomeTvRootNavigationCommand? {
+    if (currentZone == HomeTvFocusZone.GRID) return null
+    val transition = resolveHomeTvFocusTransition(
+        currentZone = currentZone,
+        keyCode = keyCode,
+        action = action,
+        hasSidebar = hasSidebar,
+        isGridFirstRow = false,
+        isGridFirstColumn = false
+    )
+    if (!transition.consumeEvent) return null
+
+    val targetPage = if (transition.pageDelta != 0) {
+        val candidate = currentPage + transition.pageDelta
+        if (candidate in 0 until pageCount) candidate else return null
+    } else {
+        null
+    }
+
+    return HomeTvRootNavigationCommand(
+        nextZone = transition.nextZone,
+        targetPage = targetPage
+    )
+}
+
+internal fun resolveHomeTvGridCellTransition(
+    index: Int,
+    gridColumns: Int,
+    keyCode: Int,
+    action: Int,
+    hasSidebar: Boolean
+): HomeTvFocusTransition? {
+    if (gridColumns <= 0 || index < 0) return null
+    val transition = resolveHomeTvFocusTransition(
+        currentZone = HomeTvFocusZone.GRID,
+        keyCode = keyCode,
+        action = action,
+        hasSidebar = hasSidebar,
+        isGridFirstRow = index < gridColumns,
+        isGridFirstColumn = index % gridColumns == 0
+    )
+    return transition.takeIf { it.consumeEvent }
 }

@@ -4,12 +4,14 @@ package com.android.purebilibili.feature.home
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
+import android.view.KeyEvent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.foundation.ExperimentalFoundationApi //  Added
 import androidx.compose.foundation.LocalOverscrollFactory // [Fix] Import for disabling overscroll (New API)
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
@@ -29,6 +31,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.material3.DrawerValue
@@ -36,6 +41,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import com.android.purebilibili.feature.home.components.MineSideDrawer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -724,6 +730,84 @@ fun HomeScreen(
         state.displayedTabIndex.coerceIn(0, (topCategories.size - 1).coerceAtLeast(0))
     }
 
+    val tvSidebarFirstItemFocusRequester = remember { FocusRequester() }
+    val tvPagerFocusRequester = remember { FocusRequester() }
+    val tvGridEntryFocusRequester = remember { FocusRequester() }
+    var tvFocusZone by remember(isTvDevice, useSideNavigation) {
+        mutableStateOf(
+            resolveInitialHomeTvFocusZone(
+                isTv = isTvDevice,
+                hasSidebar = useSideNavigation
+            ) ?: HomeTvFocusZone.PAGER
+        )
+    }
+    val tvSidebarFirstItemModifier = if (isTvDevice) {
+        Modifier
+            .focusRequester(tvSidebarFirstItemFocusRequester)
+            .onFocusChanged { state ->
+                if (state.isFocused) {
+                    tvFocusZone = HomeTvFocusZone.SIDEBAR
+                }
+            }
+    } else {
+        Modifier
+    }
+    val tvPagerContainerModifier = if (isTvDevice) {
+        Modifier
+            .focusRequester(tvPagerFocusRequester)
+            .focusable(enabled = true)
+            .onFocusChanged { state ->
+                if (state.isFocused) {
+                    tvFocusZone = HomeTvFocusZone.PAGER
+                }
+            }
+    } else {
+        Modifier
+    }
+    val tvGridEntryModifier = if (isTvDevice) {
+        Modifier
+            .focusRequester(tvGridEntryFocusRequester)
+            .onFocusChanged { state ->
+                if (state.isFocused) {
+                    tvFocusZone = HomeTvFocusZone.GRID
+                }
+            }
+            .onPreviewKeyEvent { event ->
+                val transition = resolveHomeTvFocusTransition(
+                    currentZone = HomeTvFocusZone.GRID,
+                    keyCode = event.nativeKeyEvent.keyCode,
+                    action = event.nativeKeyEvent.action,
+                    hasSidebar = useSideNavigation,
+                    isGridFirstRow = true,
+                    isGridFirstColumn = true
+                )
+                if (!transition.consumeEvent) return@onPreviewKeyEvent false
+                tvFocusZone = transition.nextZone
+                when (transition.nextZone) {
+                    HomeTvFocusZone.SIDEBAR -> tvSidebarFirstItemFocusRequester.requestFocus()
+                    HomeTvFocusZone.PAGER -> tvPagerFocusRequester.requestFocus()
+                    HomeTvFocusZone.GRID -> Unit
+                }
+                true
+            }
+    } else {
+        Modifier
+    }
+    LaunchedEffect(isTvDevice, useSideNavigation) {
+        if (!isTvDevice) return@LaunchedEffect
+        val initialZone = resolveInitialHomeTvFocusZone(
+            isTv = true,
+            hasSidebar = useSideNavigation
+        ) ?: HomeTvFocusZone.PAGER
+        tvFocusZone = initialZone
+        kotlinx.coroutines.yield()
+        when (initialZone) {
+            HomeTvFocusZone.SIDEBAR -> tvSidebarFirstItemFocusRequester.requestFocus()
+            HomeTvFocusZone.PAGER -> tvPagerFocusRequester.requestFocus()
+            HomeTvFocusZone.GRID -> tvGridEntryFocusRequester.requestFocus()
+        }
+    }
+
     //  根据滚动距离动态调整 BottomBar 可见性
     //  逻辑优化：使用 nestedScrollConnection 监听滚动
     var isHeaderVisible by rememberSaveable { mutableStateOf(true) }
@@ -880,7 +964,8 @@ fun HomeScreen(
                             state = pagerState,
                             beyondViewportPageCount = 1, // [Optimization] Preload adjacent pages to prevent swipe lag
                             modifier = Modifier
-                                .fillMaxSize(),
+                                .fillMaxSize()
+                                .then(tvPagerContainerModifier),
                             key = { index -> resolveHomeTopCategoryKey(topCategories, index) }
                         ) { page ->
                         val category = resolveHomeTopCategoryOrNull(topCategories, page) ?: return@HorizontalPager
@@ -1041,7 +1126,18 @@ fun HomeScreen(
                                      onTodayWatchModeChange = onTodayWatchModeChange,
                                      onTodayWatchCollapsedChange = onTodayWatchCollapsedChange,
                                      onTodayWatchRefresh = onTodayWatchRefresh,
-                                     onTodayWatchVideoClick = onTodayWatchVideoClick
+                                     onTodayWatchVideoClick = onTodayWatchVideoClick,
+                                     firstGridItemModifier = tvGridEntryModifier,
+                                     isTv = isTvDevice,
+                                     hasSidebar = useSideNavigation,
+                                     onTvGridBoundaryTransition = { nextZone ->
+                                         tvFocusZone = nextZone
+                                         when (nextZone) {
+                                             HomeTvFocusZone.SIDEBAR -> tvSidebarFirstItemFocusRequester.requestFocus()
+                                             HomeTvFocusZone.PAGER -> tvPagerFocusRequester.requestFocus()
+                                             HomeTvFocusZone.GRID -> Unit
+                                         }
+                                     }
                                  )
                              }
                              } // Close Box wrapper
@@ -1387,7 +1483,36 @@ fun HomeScreen(
     
     // 📱 [平板适配] 导航模式切换动画
     // 始终使用 Row 布局，通过动画控制侧边栏的显示/隐藏
-    Row(modifier = Modifier.fillMaxSize()) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (!isTvDevice) return@onPreviewKeyEvent false
+                val command = resolveHomeTvRootNavigationCommand(
+                    currentZone = tvFocusZone,
+                    keyCode = event.nativeKeyEvent.keyCode,
+                    action = event.nativeKeyEvent.action,
+                    hasSidebar = useSideNavigation,
+                    currentPage = pagerState.currentPage,
+                    pageCount = topCategories.size
+                ) ?: return@onPreviewKeyEvent false
+
+                tvFocusZone = command.nextZone
+                command.targetPage?.let { targetPage ->
+                    if (targetPage != pagerState.currentPage) {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(targetPage)
+                        }
+                    }
+                }
+                when (command.nextZone) {
+                    HomeTvFocusZone.SIDEBAR -> tvSidebarFirstItemFocusRequester.requestFocus()
+                    HomeTvFocusZone.PAGER -> tvPagerFocusRequester.requestFocus()
+                    HomeTvFocusZone.GRID -> tvGridEntryFocusRequester.requestFocus()
+                }
+                true
+            }
+    ) {
         AnimatedVisibility(
             visible = useSideNavigation,
             enter = slideInHorizontally(
@@ -1402,6 +1527,7 @@ fun HomeScreen(
             FrostedSideBar(
                 currentItem = currentNavItem,
                 onItemClick = handleNavItemClick,
+                firstItemModifier = tvSidebarFirstItemModifier,
                 onHomeDoubleTap = {
                     coroutineScope.launch {
                         headerOffsetHeightPx = 0f

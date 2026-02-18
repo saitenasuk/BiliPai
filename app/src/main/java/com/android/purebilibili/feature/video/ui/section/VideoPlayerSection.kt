@@ -66,6 +66,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.shouldHandleTvBackKey
 import com.android.purebilibili.core.util.shouldHandleTvMenuKey
+import com.android.purebilibili.core.util.shouldHandleTvMoveFocusDownKey
 import com.android.purebilibili.core.util.shouldHandleTvPlayPauseKey
 import com.android.purebilibili.core.util.shouldHandleTvSelectKey
 import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
@@ -349,8 +350,7 @@ fun VideoPlayerSection(
                                     onToggleFullscreen()
                                     true
                                 }
-                                keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-                                    action == KeyEvent.ACTION_UP &&
+                                shouldHandleTvMoveFocusDownKey(keyCode, action) &&
                                     onTvMoveFocusDown != null -> {
                                     onTvMoveFocusDown.invoke()
                                     true

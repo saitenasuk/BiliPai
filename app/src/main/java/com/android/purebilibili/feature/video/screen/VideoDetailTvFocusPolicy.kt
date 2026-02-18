@@ -16,7 +16,7 @@ internal fun resolveVideoDetailTvFocusTarget(
     keyCode: Int,
     action: Int
 ): VideoDetailTvFocusTarget {
-    if (action != KeyEvent.ACTION_UP) return current
+    if (action != KeyEvent.ACTION_DOWN) return current
     return when {
         current == VideoDetailTvFocusTarget.PLAYER && keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> {
             VideoDetailTvFocusTarget.CONTENT

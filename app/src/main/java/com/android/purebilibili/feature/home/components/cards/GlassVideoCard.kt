@@ -42,6 +42,7 @@ import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -103,6 +104,12 @@ fun GlassVideoCard(
     
     //  记录卡片位置（非 Compose State，避免滚动时触发高频重组）
     val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val triggerCardClick = {
+        cardBoundsRef.value?.let { bounds ->
+            CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx)
+        }
+        onClick(video.bvid, 0)
+    }
     
     //  尝试获取共享元素作用域
     val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -166,6 +173,20 @@ fun GlassVideoCard(
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
             }
+            .onPreviewKeyEvent { event ->
+                if (
+                    shouldTriggerHomeCardClickOnTvKey(
+                        isTv = isTvDevice,
+                        keyCode = event.nativeKeyEvent.keyCode,
+                        action = event.nativeKeyEvent.action
+                    )
+                ) {
+                    triggerCardClick()
+                    true
+                } else {
+                    false
+                }
+            }
     ) {
         //  [性能优化] 移除 blur() 层，改用静态渐变色
         // 原：blur(radius = 20.dp) 成本很高
@@ -195,10 +216,7 @@ fun GlassVideoCard(
                                 showDismissMenu = true
                             },
                             onTap = {
-                                cardBoundsRef.value?.let { bounds ->
-                                    CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx)
-                                }
-                                onClick(video.bvid, 0)
+                                triggerCardClick()
                             }
                         )
                     }
@@ -210,10 +228,7 @@ fun GlassVideoCard(
                             pressTranslationY = 8f,
                             hapticEnabled = true
                         ) {
-                            cardBoundsRef.value?.let { bounds ->
-                                CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx)
-                            }
-                            onClick(video.bvid, 0)
+                            triggerCardClick()
                         }
                     } else Modifier
                 )

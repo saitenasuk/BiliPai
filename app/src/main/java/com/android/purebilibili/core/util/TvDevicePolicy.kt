@@ -78,7 +78,7 @@ internal fun resolveTvPagerTargetPage(
     currentPage: Int,
     pageCount: Int
 ): Int? {
-    if (action != KeyEvent.ACTION_UP || pageCount <= 0) return null
+    if (action != KeyEvent.ACTION_DOWN || pageCount <= 0) return null
     return when (keyCode) {
         KeyEvent.KEYCODE_DPAD_LEFT -> (currentPage - 1).takeIf { it >= 0 }
         KeyEvent.KEYCODE_DPAD_RIGHT -> (currentPage + 1).takeIf { it < pageCount }
@@ -108,6 +108,13 @@ internal fun shouldHandleTvMenuKey(
     action: Int
 ): Boolean {
     return action == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_MENU
+}
+
+internal fun shouldHandleTvMoveFocusDownKey(
+    keyCode: Int,
+    action: Int
+): Boolean {
+    return action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN
 }
 
 fun isTvDevice(context: Context): Boolean {

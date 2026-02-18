@@ -42,6 +42,7 @@ import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.spring
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
@@ -87,6 +88,7 @@ fun ElegantVideoCard(
     onUnfavorite: (() -> Unit)? = null,  //  [新增] 取消收藏回调
     dismissMenuText: String = "\uD83D\uDEAB 不感兴趣", //  [新增] 自定义长按菜单删除文案
     onLongClick: ((VideoItem) -> Unit)? = null, // [Feature] Long Press Preview
+    modifier: Modifier = Modifier,
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
@@ -135,9 +137,21 @@ fun ElegantVideoCard(
         ),
         label = "cardScale"
     )
+    val triggerCardClick = {
+        cardBoundsRef.value?.let { bounds ->
+            CardPositionManager.recordCardPosition(
+                bounds,
+                screenWidthPx,
+                screenHeightPx,
+                density = densityValue
+            )
+        }
+        onClick(video.bvid, video.cid)
+    }
 
     Column(
         modifier = Modifier
+            .then(modifier)
             .fillMaxWidth()
             .graphicsLayer {
                 scaleX = interactionScale
@@ -160,6 +174,20 @@ fun ElegantVideoCard(
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
+            }
+            .onPreviewKeyEvent { event ->
+                if (
+                    shouldTriggerHomeCardClickOnTvKey(
+                        isTv = isTvDevice,
+                        keyCode = event.nativeKeyEvent.keyCode,
+                        action = event.nativeKeyEvent.action
+                    )
+                ) {
+                    triggerCardClick()
+                    true
+                } else {
+                    false
+                }
             }
             //  [修改] 父级容器仅处理点击跳转 (或者点击由子 View 分别处理)
             //  为了避免冲突，我们将手势下放到子 View
@@ -225,10 +253,7 @@ fun ElegantVideoCard(
                             }
                         },
                         onTap = {
-                            cardBoundsRef.value?.let { bounds ->
-                                CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
-                            }
-                            onClick(video.bvid, video.cid)
+                            triggerCardClick()
                         }
                     )
                 }
@@ -361,10 +386,7 @@ fun ElegantVideoCard(
                                 }
                             },
                             onTap = {
-                                cardBoundsRef.value?.let { bounds ->
-                                    CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
-                                }
-                                onClick(video.bvid, video.cid)
+                                triggerCardClick()
                             }
                         )
                     }

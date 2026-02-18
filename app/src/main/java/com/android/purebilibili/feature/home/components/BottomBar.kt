@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.combinedClickable  // [新增] 组合点击支持
 import androidx.compose.foundation.ExperimentalFoundationApi // [新增]
@@ -26,6 +27,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer  //  晃动动画
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,6 +50,7 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.theme.BottomBarColors  // 统一底栏颜色配置
 import com.android.purebilibili.core.theme.BottomBarColorPalette  // 调色板
@@ -692,6 +695,7 @@ private fun BottomBarContent(
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC // [New]
 ) {
     val scope = rememberCoroutineScope()
+    val isTvDevice = rememberIsTvDevice()
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -756,18 +760,40 @@ private fun BottomBarContent(
                 modifier = Modifier.weight(1f).fillMaxHeight().offset(y = contentVerticalOffset)
                     .then(
                         if (isInteractive) {
-                            Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                isPending = true
-                                haptic(HapticType.LIGHT)
-                                scope.launch {
-                                    kotlinx.coroutines.delay(100)
-                                    onToggleSidebar()
-                                    isPending = false
+                            Modifier
+                                .focusable(enabled = isTvDevice)
+                                .onPreviewKeyEvent { event ->
+                                    if (
+                                        shouldTriggerBottomBarActionOnTvKey(
+                                            isTv = isTvDevice,
+                                            keyCode = event.nativeKeyEvent.keyCode,
+                                            action = event.nativeKeyEvent.action
+                                        )
+                                    ) {
+                                        isPending = true
+                                        haptic(HapticType.LIGHT)
+                                        scope.launch {
+                                            kotlinx.coroutines.delay(100)
+                                            onToggleSidebar()
+                                            isPending = false
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 }
-                            }
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    isPending = true
+                                    haptic(HapticType.LIGHT)
+                                    scope.launch {
+                                        kotlinx.coroutines.delay(100)
+                                        onToggleSidebar()
+                                        isPending = false
+                                    }
+                                }
                         } else {
                             Modifier
                         }
@@ -815,6 +841,7 @@ private fun BottomBarItem(
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC // [New]
 ) {
     val scope = rememberCoroutineScope()
+    val isTvDevice = rememberIsTvDevice()
     var isPending by remember { mutableStateOf(false) }
     
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -908,6 +935,30 @@ private fun BottomBarItem(
         modifier = modifier
             .fillMaxHeight()
             .offset(y = contentVerticalOffset)
+            .focusable(enabled = isTvDevice)
+            .onPreviewKeyEvent { event ->
+                if (
+                    shouldTriggerBottomBarActionOnTvKey(
+                        isTv = isTvDevice,
+                        keyCode = event.nativeKeyEvent.keyCode,
+                        action = event.nativeKeyEvent.action
+                    )
+                ) {
+                    debounceClick(item) {
+                        onClick()
+                        haptic(HapticType.LIGHT)
+                        isPending = true
+                        scope.launch {
+                            wobbleAngle = 15f
+                            kotlinx.coroutines.delay(200)
+                            isPending = false
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
             .then(
                 // 仅当“当前已在首页”时保留双击手势，避免从其他页切首页产生点击延迟
                 if (shouldUseBottomReselectCombinedClickable(item, isSelected)) {

@@ -232,11 +232,14 @@ fun SearchScreen(
                                                     val isBack = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK
                                                     val isUpAtTop = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP &&
                                                         resultGridState.firstVisibleItemIndex == 0
-                                                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP && (isBack || isUpAtTop)) {
+                                                    val action = event.nativeKeyEvent.action
+                                                    val shouldHandleExit = (isUpAtTop && action == KeyEvent.ACTION_DOWN) ||
+                                                        (isBack && action == KeyEvent.ACTION_UP)
+                                                    if (shouldHandleExit) {
                                                         val transition = resolveSearchTvFocusTransition(
                                                             currentZone = SearchTvFocusZone.RESULTS,
                                                             keyCode = event.nativeKeyEvent.keyCode,
-                                                            action = event.nativeKeyEvent.action,
+                                                            action = action,
                                                             showResults = state.showResults,
                                                             hasSuggestions = state.suggestions.isNotEmpty(),
                                                             hasHistory = state.historyList.isNotEmpty() || state.hotList.isNotEmpty()
@@ -280,6 +283,11 @@ fun SearchScreen(
                                     }
 
                                     itemsIndexed(state.searchResults) { index, video ->
+                                        val tvEntryIndex = resolveSearchTvResultEntryIndex(
+                                            isTv = isTvDevice,
+                                            showResults = state.showResults,
+                                            resultCount = state.searchResults.size
+                                        )
                                         ElegantVideoCard(
                                             video = video,
                                             index = index,
@@ -287,6 +295,11 @@ fun SearchScreen(
                                             motionTier = cardMotionTier,
                                             transitionEnabled = cardTransitionEnabled,
                                             showPublishTime = true,
+                                            modifier = if (tvEntryIndex == index) {
+                                                Modifier.focusRequester(tvResultFirstFocusRequester)
+                                            } else {
+                                                Modifier
+                                            },
                                             //  [交互优化] 传递 onWatchLater 用于显示菜单选项
                                             onWatchLater = { viewModel.addToWatchLater(video.bvid, video.id) },
                                             onClick = { bvid, _ -> onVideoClick(bvid, 0) }
@@ -654,11 +667,14 @@ fun SearchScreen(
                                         .onPreviewKeyEvent { event ->
                                             val isUp = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP
                                             val isBack = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK
-                                            if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP && (isUp || isBack)) {
+                                            val action = event.nativeKeyEvent.action
+                                            val shouldHandleExit = (isUp && action == KeyEvent.ACTION_DOWN) ||
+                                                (isBack && action == KeyEvent.ACTION_UP)
+                                            if (shouldHandleExit) {
                                                 val transition = resolveSearchTvFocusTransition(
                                                     currentZone = SearchTvFocusZone.HISTORY,
                                                     keyCode = event.nativeKeyEvent.keyCode,
-                                                    action = event.nativeKeyEvent.action,
+                                                    action = action,
                                                     showResults = state.showResults,
                                                     hasSuggestions = state.suggestions.isNotEmpty(),
                                                     hasHistory = state.historyList.isNotEmpty() || state.hotList.isNotEmpty()
@@ -731,7 +747,7 @@ fun SearchScreen(
                         val transition = resolveSearchTvFocusTransition(
                             currentZone = SearchTvFocusZone.TOP_BAR,
                             keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
-                            action = KeyEvent.ACTION_UP,
+                            action = KeyEvent.ACTION_DOWN,
                             showResults = state.showResults,
                             hasSuggestions = state.suggestions.isNotEmpty(),
                             hasHistory = state.historyList.isNotEmpty() || state.hotList.isNotEmpty()
@@ -788,11 +804,14 @@ fun SearchScreen(
                                         if (!isTvDevice) return@onPreviewKeyEvent false
                                         val isUp = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP
                                         val isBack = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK
-                                        if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP && (isUp || isBack)) {
+                                        val action = event.nativeKeyEvent.action
+                                        val shouldHandleExit = (isUp && action == KeyEvent.ACTION_DOWN) ||
+                                            (isBack && action == KeyEvent.ACTION_UP)
+                                        if (shouldHandleExit) {
                                             val transition = resolveSearchTvFocusTransition(
                                                 currentZone = SearchTvFocusZone.SUGGESTIONS,
                                                 keyCode = event.nativeKeyEvent.keyCode,
-                                                action = event.nativeKeyEvent.action,
+                                                action = action,
                                                 showResults = state.showResults,
                                                 hasSuggestions = state.suggestions.isNotEmpty(),
                                                 hasHistory = state.historyList.isNotEmpty() || state.hotList.isNotEmpty()
@@ -941,7 +960,7 @@ fun SearchTopBar(
                             .onFocusChanged { isFocused = it.isFocused }
                             .onPreviewKeyEvent { event ->
                                 if (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-                                    event.nativeKeyEvent.action == KeyEvent.ACTION_UP &&
+                                    event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
                                     onTvMoveFocusDown != null
                                 ) {
                                     onTvMoveFocusDown.invoke()

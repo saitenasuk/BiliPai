@@ -19,7 +19,7 @@ class SettingsTvFocusPolicyTest {
         val transition = resolveSettingsTvFocusTransition(
             currentZone = SettingsTvFocusZone.CATEGORY_LIST,
             keyCode = KeyEvent.KEYCODE_DPAD_RIGHT,
-            action = KeyEvent.ACTION_UP
+            action = KeyEvent.ACTION_DOWN
         )
 
         assertEquals(SettingsTvFocusZone.DETAIL_PANEL, transition.nextZone)
@@ -31,7 +31,7 @@ class SettingsTvFocusPolicyTest {
         val transition = resolveSettingsTvFocusTransition(
             currentZone = SettingsTvFocusZone.DETAIL_PANEL,
             keyCode = KeyEvent.KEYCODE_DPAD_LEFT,
-            action = KeyEvent.ACTION_UP
+            action = KeyEvent.ACTION_DOWN
         )
 
         assertEquals(SettingsTvFocusZone.CATEGORY_LIST, transition.nextZone)
@@ -48,5 +48,17 @@ class SettingsTvFocusPolicyTest {
 
         assertEquals(SettingsTvFocusZone.CATEGORY_LIST, transition.nextZone)
         assertEquals(true, transition.consumeEvent)
+    }
+
+    @Test
+    fun backFromDetailOnKeyDown_doesNotTriggerTransition() {
+        val transition = resolveSettingsTvFocusTransition(
+            currentZone = SettingsTvFocusZone.DETAIL_PANEL,
+            keyCode = KeyEvent.KEYCODE_BACK,
+            action = KeyEvent.ACTION_DOWN
+        )
+
+        assertEquals(SettingsTvFocusZone.DETAIL_PANEL, transition.nextZone)
+        assertEquals(false, transition.consumeEvent)
     }
 }

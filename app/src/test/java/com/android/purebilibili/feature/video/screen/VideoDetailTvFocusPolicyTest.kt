@@ -23,7 +23,7 @@ class VideoDetailTvFocusPolicyTest {
         val next = resolveVideoDetailTvFocusTarget(
             current = VideoDetailTvFocusTarget.PLAYER,
             keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
-            action = KeyEvent.ACTION_UP
+            action = KeyEvent.ACTION_DOWN
         )
 
         assertEquals(VideoDetailTvFocusTarget.CONTENT, next)
@@ -34,7 +34,7 @@ class VideoDetailTvFocusPolicyTest {
         val next = resolveVideoDetailTvFocusTarget(
             current = VideoDetailTvFocusTarget.CONTENT,
             keyCode = KeyEvent.KEYCODE_DPAD_UP,
-            action = KeyEvent.ACTION_UP
+            action = KeyEvent.ACTION_DOWN
         )
 
         assertEquals(VideoDetailTvFocusTarget.PLAYER, next)
@@ -49,5 +49,16 @@ class VideoDetailTvFocusPolicyTest {
         )
 
         assertEquals(VideoDetailTvFocusTarget.CONTENT, next)
+    }
+
+    @Test
+    fun directionalKeyUp_keepsCurrentTarget() {
+        val next = resolveVideoDetailTvFocusTarget(
+            current = VideoDetailTvFocusTarget.PLAYER,
+            keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
+            action = KeyEvent.ACTION_UP
+        )
+
+        assertEquals(VideoDetailTvFocusTarget.PLAYER, next)
     }
 }

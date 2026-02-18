@@ -12,6 +12,19 @@ internal data class SettingsTvFocusTransition(
     val consumeEvent: Boolean
 )
 
+private fun shouldHandleSettingsTvFocusKey(
+    keyCode: Int,
+    action: Int
+): Boolean {
+    return when (keyCode) {
+        KeyEvent.KEYCODE_DPAD_LEFT,
+        KeyEvent.KEYCODE_DPAD_RIGHT -> action == KeyEvent.ACTION_DOWN
+
+        KeyEvent.KEYCODE_BACK -> action == KeyEvent.ACTION_UP
+        else -> false
+    }
+}
+
 internal fun resolveInitialSettingsTvFocusZone(isTv: Boolean): SettingsTvFocusZone? {
     return if (isTv) SettingsTvFocusZone.CATEGORY_LIST else null
 }
@@ -21,7 +34,7 @@ internal fun resolveSettingsTvFocusTransition(
     keyCode: Int,
     action: Int
 ): SettingsTvFocusTransition {
-    if (action != KeyEvent.ACTION_UP) {
+    if (!shouldHandleSettingsTvFocusKey(keyCode = keyCode, action = action)) {
         return SettingsTvFocusTransition(nextZone = currentZone, consumeEvent = false)
     }
 

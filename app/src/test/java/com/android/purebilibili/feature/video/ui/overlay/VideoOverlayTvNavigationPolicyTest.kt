@@ -31,7 +31,7 @@ class VideoOverlayTvNavigationPolicyTest {
         val next = resolveVideoOverlayTvFocusZone(
             current = VideoOverlayTvFocusZone.CENTER,
             keyCode = KeyEvent.KEYCODE_DPAD_RIGHT,
-            action = KeyEvent.ACTION_UP
+            action = KeyEvent.ACTION_DOWN
         )
 
         assertEquals(VideoOverlayTvFocusZone.DRAWER_ENTRY, next)
@@ -42,7 +42,7 @@ class VideoOverlayTvNavigationPolicyTest {
         val next = resolveVideoOverlayTvFocusZone(
             current = VideoOverlayTvFocusZone.DRAWER_ENTRY,
             keyCode = KeyEvent.KEYCODE_DPAD_LEFT,
-            action = KeyEvent.ACTION_UP
+            action = KeyEvent.ACTION_DOWN
         )
 
         assertEquals(VideoOverlayTvFocusZone.CENTER, next)
@@ -53,7 +53,7 @@ class VideoOverlayTvNavigationPolicyTest {
         val next = resolveVideoOverlayTvFocusZone(
             current = VideoOverlayTvFocusZone.CENTER,
             keyCode = KeyEvent.KEYCODE_DPAD_UP,
-            action = KeyEvent.ACTION_UP
+            action = KeyEvent.ACTION_DOWN
         )
 
         assertEquals(VideoOverlayTvFocusZone.TOP_BAR, next)
@@ -64,7 +64,7 @@ class VideoOverlayTvNavigationPolicyTest {
         val next = resolveVideoOverlayTvFocusZone(
             current = VideoOverlayTvFocusZone.CENTER,
             keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
-            action = KeyEvent.ACTION_UP
+            action = KeyEvent.ACTION_DOWN
         )
 
         assertEquals(VideoOverlayTvFocusZone.BOTTOM_BAR, next)
@@ -119,5 +119,16 @@ class VideoOverlayTvNavigationPolicyTest {
         )
 
         assertEquals(VideoOverlayTvBackAction.NOOP, action)
+    }
+
+    @Test
+    fun directionalKeyUp_doesNotMoveFocusZone() {
+        val next = resolveVideoOverlayTvFocusZone(
+            current = VideoOverlayTvFocusZone.CENTER,
+            keyCode = KeyEvent.KEYCODE_DPAD_RIGHT,
+            action = KeyEvent.ACTION_UP
+        )
+
+        assertEquals(VideoOverlayTvFocusZone.CENTER, next)
     }
 }

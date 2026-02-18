@@ -59,7 +59,7 @@ class TvDevicePolicyTest {
     fun pagerRightMovesToNextPageWithinBounds() {
         val target = resolveTvPagerTargetPage(
             keyCode = KeyEvent.KEYCODE_DPAD_RIGHT,
-            action = KeyEvent.ACTION_UP,
+            action = KeyEvent.ACTION_DOWN,
             currentPage = 1,
             pageCount = 4
         )
@@ -70,7 +70,7 @@ class TvDevicePolicyTest {
     fun pagerLeftMovesToPreviousPageWithinBounds() {
         val target = resolveTvPagerTargetPage(
             keyCode = KeyEvent.KEYCODE_DPAD_LEFT,
-            action = KeyEvent.ACTION_UP,
+            action = KeyEvent.ACTION_DOWN,
             currentPage = 2,
             pageCount = 4
         )
@@ -81,18 +81,29 @@ class TvDevicePolicyTest {
     fun pagerNavigationIgnoredAtBounds() {
         val leftBound = resolveTvPagerTargetPage(
             keyCode = KeyEvent.KEYCODE_DPAD_LEFT,
-            action = KeyEvent.ACTION_UP,
+            action = KeyEvent.ACTION_DOWN,
             currentPage = 0,
             pageCount = 4
         )
         val rightBound = resolveTvPagerTargetPage(
             keyCode = KeyEvent.KEYCODE_DPAD_RIGHT,
-            action = KeyEvent.ACTION_UP,
+            action = KeyEvent.ACTION_DOWN,
             currentPage = 3,
             pageCount = 4
         )
         assertTrue(leftBound == null)
         assertTrue(rightBound == null)
+    }
+
+    @Test
+    fun pagerNavigationIgnoredOnKeyUp() {
+        val target = resolveTvPagerTargetPage(
+            keyCode = KeyEvent.KEYCODE_DPAD_RIGHT,
+            action = KeyEvent.ACTION_UP,
+            currentPage = 1,
+            pageCount = 4
+        )
+        assertTrue(target == null)
     }
 
     @Test
@@ -106,6 +117,16 @@ class TvDevicePolicyTest {
     fun backAndMenuKeysHandledOnKeyUp() {
         assertTrue(shouldHandleTvBackKey(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_UP))
         assertTrue(shouldHandleTvMenuKey(KeyEvent.KEYCODE_MENU, KeyEvent.ACTION_UP))
+    }
+
+    @Test
+    fun moveFocusDownKeyHandledOnKeyDown() {
+        assertTrue(shouldHandleTvMoveFocusDownKey(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_DOWN))
+    }
+
+    @Test
+    fun moveFocusDownKeyIgnoredOnKeyUp() {
+        assertFalse(shouldHandleTvMoveFocusDownKey(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.ACTION_UP))
     }
 
     @Test

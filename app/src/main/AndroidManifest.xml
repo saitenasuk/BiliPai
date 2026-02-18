@@ -27,6 +27,12 @@
         tools:targetApi="s" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
 
     <application
         android:name=".app.PureApplication"
@@ -34,6 +40,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
+        android:banner="@mipmap/ic_launcher_tv"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
@@ -64,6 +71,10 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
             android:supportsPictureInPicture="true">
             <!-- 仅通过 activity-alias 暴露桌面入口，避免安装后出现双图标 -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
             
             <!-- 🔗 Deep Link: Video (/video/) -->
             <intent-filter android:autoVerify="true">

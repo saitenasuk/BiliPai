@@ -34,6 +34,7 @@ import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -93,6 +94,17 @@ fun StoryVideoCard(
     
     //  记录卡片位置
     var cardBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    val triggerCardClick = {
+        cardBounds?.let { bounds ->
+            CardPositionManager.recordCardPosition(
+                bounds,
+                screenWidthPx,
+                screenHeightPx,
+                isSingleColumn = !transitionEnabled
+            )
+        }
+        onClick(video.bvid, 0)
+    }
     
     //  尝试获取共享元素作用域
     val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -141,6 +153,20 @@ fun StoryVideoCard(
             .onGloballyPositioned { coordinates ->
                 cardBounds = coordinates.boundsInRoot()
             }
+            .onPreviewKeyEvent { event ->
+                if (
+                    shouldTriggerHomeCardClickOnTvKey(
+                        isTv = isTvDevice,
+                        keyCode = event.nativeKeyEvent.keyCode,
+                        action = event.nativeKeyEvent.action
+                    )
+                ) {
+                    triggerCardClick()
+                    true
+                } else {
+                    false
+                }
+            }
             .pointerInput(onDismiss, onLongClick) {
                  val hasLongPressAction = onDismiss != null || onLongClick != null
                  if (hasLongPressAction) {
@@ -155,13 +181,7 @@ fun StoryVideoCard(
                              }
                          },
                          onTap = {
-                             cardBounds?.let { bounds ->
-                                 CardPositionManager.recordCardPosition(
-                                     bounds, screenWidthPx, screenHeightPx, 
-                                     isSingleColumn = !transitionEnabled
-                                 )
-                             }
-                             onClick(video.bvid, 0)
+                             triggerCardClick()
                          }
                      )
                  }
@@ -173,13 +193,7 @@ fun StoryVideoCard(
                          pressTranslationY = 10f,
                          hapticEnabled = true
                      ) {
-                         cardBounds?.let { bounds ->
-                             CardPositionManager.recordCardPosition(
-                                 bounds, screenWidthPx, screenHeightPx, 
-                                 isSingleColumn = !transitionEnabled
-                             )
-                         }
-                         onClick(video.bvid, 0)
+                         triggerCardClick()
                      }
                  } else Modifier
             )
