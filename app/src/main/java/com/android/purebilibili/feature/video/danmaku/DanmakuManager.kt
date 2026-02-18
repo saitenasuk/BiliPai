@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.danmaku
 
 import android.content.Context
 import android.graphics.Typeface
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -115,6 +116,8 @@ class DanmakuManager private constructor(
     private var currentVideoSpeed: Float = 1.0f
     private var pluginObserverJob: Job? = null
     private var lastDanmakuPluginUpdateToken: Long = 0L
+    private var currentFaceAwareBand: DanmakuDisplayBand? = null
+    private val faceBandStabilizer = FaceOcclusionBandStabilizer()
     
     // 配置
     val config = DanmakuConfig()
@@ -193,6 +196,25 @@ class DanmakuManager private constructor(
             config.allowSpecial = value
             applyConfigToController("filter_changed")
         }
+
+    internal fun updateFaceOcclusion(faceRegions: List<FaceOcclusionRegion>) {
+        if (!config.smartOcclusionEnabled) return
+
+        val targetBand = resolveFaceAwareDisplayBand(
+            faceRegions = faceRegions,
+            defaultBand = DanmakuDisplayBand(0f, config.displayAreaRatio)
+        )
+        val nextBand = faceBandStabilizer.step(
+            detectedBand = targetBand,
+            hasFace = faceRegions.isNotEmpty(),
+            nowRealtimeMs = SystemClock.elapsedRealtime()
+        ) ?: return
+
+        currentFaceAwareBand = nextBand
+        config.safeBandTopRatio = nextBand.topRatio
+        config.safeBandBottomRatio = nextBand.bottomRatio
+        applyConfigToController("face_occlusion")
+    }
 
     private fun updateScopeInternal(newScope: CoroutineScope) {
         if (scope === newScope) return
@@ -563,7 +585,8 @@ class DanmakuManager private constructor(
         allowTop: Boolean = config.allowTop,
         allowBottom: Boolean = config.allowBottom,
         allowColorful: Boolean = config.allowColorful,
-        allowSpecial: Boolean = config.allowSpecial
+        allowSpecial: Boolean = config.allowSpecial,
+        smartOcclusion: Boolean = config.smartOcclusionEnabled
     ) {
         val mergeChanged = config.mergeDuplicates != mergeDuplicates
         val filterChanged =
@@ -572,6 +595,7 @@ class DanmakuManager private constructor(
                 config.allowBottom != allowBottom ||
                 config.allowColorful != allowColorful ||
                 config.allowSpecial != allowSpecial
+        val occlusionChanged = config.smartOcclusionEnabled != smartOcclusion
         
         config.opacity = opacity
         config.fontScale = fontScale
@@ -583,10 +607,29 @@ class DanmakuManager private constructor(
         config.allowBottom = allowBottom
         config.allowColorful = allowColorful
         config.allowSpecial = allowSpecial
+        config.smartOcclusionEnabled = smartOcclusion
+
+        if (occlusionChanged) {
+            if (smartOcclusion) {
+                currentFaceAwareBand = DanmakuDisplayBand(0f, config.displayAreaRatio)
+                config.safeBandTopRatio = currentFaceAwareBand?.topRatio ?: 0f
+                config.safeBandBottomRatio = currentFaceAwareBand?.bottomRatio ?: config.displayAreaRatio
+                faceBandStabilizer.reset(
+                    defaultBand = currentFaceAwareBand,
+                    nowRealtimeMs = SystemClock.elapsedRealtime()
+                )
+            } else {
+                currentFaceAwareBand = null
+                config.safeBandTopRatio = 0f
+                config.safeBandBottomRatio = 1f
+                faceBandStabilizer.reset()
+            }
+        }
         
-        if (mergeChanged || filterChanged) {
+        if (mergeChanged || filterChanged || occlusionChanged) {
             val reason = if (mergeChanged) "merge_changed" else "filter_changed"
-            applyConfigToController(reason)
+            val resolvedReason = if (occlusionChanged) "smart_occlusion_toggle" else reason
+            applyConfigToController(resolvedReason)
         } else {
             applyConfigToController("batch")
         }
@@ -611,7 +654,7 @@ class DanmakuManager private constructor(
 
             //  [关键修复] fontScale/displayArea/viewHeight 改变时，需要重新设置弹幕数据
             // 因为引擎的 config.text.size 只对新弹幕生效，已显示的弹幕不会更新
-            if (reason == "fontScale" || reason == "displayArea" || reason == "batch" || reason == "resize" || reason == "merge_changed" || reason == "filter_changed") {
+            if (reason == "fontScale" || reason == "displayArea" || reason == "batch" || reason == "resize" || reason == "merge_changed" || reason == "filter_changed" || reason == "smart_occlusion_toggle") {
                 // 如果是合并状态改变，需要重新计算 cachedList
                 if (reason == "merge_changed" || reason == "filter_changed") {
                     rebuildDanmakuCacheFromSource(reason)
@@ -634,6 +677,7 @@ class DanmakuManager private constructor(
                 TAG,
                 " Config applied ($reason): opacity=${config.opacity}, fontScale=${config.fontScale}, " +
                     "speed=${config.speedFactor}, area=${config.displayAreaRatio}, " +
+                    "smartOcclusion=${config.smartOcclusionEnabled}, band=${config.safeBandTopRatio}-${config.safeBandBottomRatio}, " +
                     "allowScroll=${config.allowScroll}, allowTop=${config.allowTop}, allowBottom=${config.allowBottom}, " +
                     "allowColorful=${config.allowColorful}, allowSpecial=${config.allowSpecial}, " +
                     "baseMoveTime=$originalMoveTime, videoSpeed=$currentVideoSpeed, " +

@@ -63,6 +63,10 @@ import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.feature.video.player.PlaylistManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
+import com.android.purebilibili.feature.video.danmaku.FaceOcclusionDanmakuContainer
+import com.android.purebilibili.feature.video.danmaku.FaceOcclusionMaskStabilizer
+import com.android.purebilibili.feature.video.danmaku.FaceOcclusionVisualMask
+import com.android.purebilibili.feature.video.danmaku.detectFaceOcclusionRegions
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
@@ -71,6 +75,8 @@ import com.android.purebilibili.feature.video.viewmodel.PlaybackEndAction
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import com.android.purebilibili.feature.video.viewmodel.resolvePlaybackEndAction
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -142,6 +148,9 @@ fun PortraitVideoPager(
         .collectAsState(initial = true)
     val danmakuAllowSpecial by SettingsManager
         .getDanmakuAllowSpecial(context)
+        .collectAsState(initial = true)
+    val danmakuSmartOcclusion by SettingsManager
+        .getDanmakuSmartOcclusion(context)
         .collectAsState(initial = true)
     val autoPlayEnabled by SettingsManager
         .getAutoPlay(context)
@@ -542,7 +551,8 @@ fun PortraitVideoPager(
         danmakuAllowTop,
         danmakuAllowBottom,
         danmakuAllowColorful,
-        danmakuAllowSpecial
+        danmakuAllowSpecial,
+        danmakuSmartOcclusion
     ) {
         danmakuManager.updateSettings(
             opacity = danmakuOpacity,
@@ -554,7 +564,9 @@ fun PortraitVideoPager(
             allowTop = danmakuAllowTop,
             allowBottom = danmakuAllowBottom,
             allowColorful = danmakuAllowColorful,
-            allowSpecial = danmakuAllowSpecial
+            allowSpecial = danmakuAllowSpecial,
+            // Mask-only mode: keep lane layout fixed, do not move danmaku tracks.
+            smartOcclusion = false
         )
     }
 
@@ -578,6 +590,7 @@ fun PortraitVideoPager(
                 isLoading = if (page == pagerState.currentPage) isLoading else false, // 只有当前页显示 Loading
                 danmakuManager = danmakuManager,
                 danmakuEnabled = danmakuEnabled,
+                danmakuSmartOcclusion = danmakuSmartOcclusion,
                 onExitSnapshot = onExitSnapshot,
                 onSearchClick = onSearchClick,
                 onUserClick = onUserClick,
@@ -622,6 +635,7 @@ private fun VideoPageItem(
     isLoading: Boolean,
     danmakuManager: DanmakuManager,
     danmakuEnabled: Boolean,
+    danmakuSmartOcclusion: Boolean,
     onExitSnapshot: (String, Long) -> Unit,
     onSearchClick: () -> Unit,
     onUserClick: (Long) -> Unit,
@@ -635,9 +649,26 @@ private fun VideoPageItem(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    var faceVisualMasks by remember { mutableStateOf(emptyList<FaceOcclusionVisualMask>()) }
+    val faceMaskStabilizer = remember { FaceOcclusionMaskStabilizer() }
+    val faceDetector = remember {
+        FaceDetection.getClient(
+            FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+                .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
+                .setMinFaceSize(0.08f)
+                .enableTracking()
+                .build()
+        )
+    }
     val longPressSpeed by SettingsManager
         .getLongPressSpeed(context)
         .collectAsState(initial = 1.75f)
+    DisposableEffect(faceDetector) {
+        onDispose { faceDetector.close() }
+    }
     
     // [修复] 手动监听 ExoPlayer 播放状态，确保 UI 及时更新
     var isPlaying by remember { mutableStateOf(exoPlayer.isPlaying) }
@@ -743,6 +774,46 @@ private fun VideoPageItem(
     var longPressOriginSpeed by remember { mutableFloatStateOf(1f) }
     var showLongPressSpeedFeedback by remember { mutableStateOf(false) }
 
+    LaunchedEffect(
+        playerViewRef,
+        isCurrentPage,
+        isPlayerReadyForThisVideo,
+        danmakuEnabled,
+        danmakuSmartOcclusion
+    ) {
+        if (!isCurrentPage || !isPlayerReadyForThisVideo || !danmakuEnabled || !danmakuSmartOcclusion) {
+            faceMaskStabilizer.reset()
+            faceVisualMasks = emptyList()
+            return@LaunchedEffect
+        }
+        faceMaskStabilizer.reset()
+
+        while (true) {
+            val view = playerViewRef
+            if (view == null || view.width <= 0 || view.height <= 0 || !exoPlayer.isPlaying) {
+                delay(1200L)
+                continue
+            }
+
+            val videoWidth = exoPlayer.videoSize.width
+            val videoHeight = exoPlayer.videoSize.height
+            val sampleWidth = 480
+            val sampleHeight = when {
+                videoWidth > 0 && videoHeight > 0 -> (sampleWidth * videoHeight / videoWidth).coerceIn(270, 960)
+                else -> 270
+            }
+
+            val detection = detectFaceOcclusionRegions(
+                playerView = view,
+                sampleWidth = sampleWidth,
+                sampleHeight = sampleHeight,
+                detector = faceDetector
+            )
+            faceVisualMasks = faceMaskStabilizer.step(detection.visualMasks)
+            delay(if (detection.visualMasks.isEmpty()) 1300L else 900L)
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -835,6 +906,7 @@ private fun VideoPageItem(
                         AndroidView(
                             factory = { ctx ->
                                 PlayerView(ctx).apply {
+                                    playerViewRef = this
                                     player = exoPlayer
                                     useController = false
                                     keepScreenOn = true
@@ -844,6 +916,7 @@ private fun VideoPageItem(
                                 }
                             },
                             update = { view ->
+                                playerViewRef = view
                                 if (view.player != exoPlayer) {
                                     view.player = exoPlayer
                                 }
@@ -854,14 +927,30 @@ private fun VideoPageItem(
                         if (danmakuEnabled) {
                             AndroidView(
                                 factory = { ctx ->
-                                    com.bytedance.danmaku.render.engine.DanmakuView(ctx).apply {
-                                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                        danmakuManager.attachView(this)
+                                    FaceOcclusionDanmakuContainer(ctx).apply {
+                                        setMasks(faceVisualMasks)
+                                        setVideoViewport(
+                                            videoWidth = exoPlayer.videoSize.width,
+                                            videoHeight = exoPlayer.videoSize.height,
+                                            resizeMode = VideoAspectRatio.FIT.resizeMode
+                                        )
+                                        danmakuManager.attachView(danmakuView())
                                     }
                                 },
-                                update = { view ->
+                                update = { container ->
+                                    container.setMasks(faceVisualMasks)
+                                    container.setVideoViewport(
+                                        videoWidth = exoPlayer.videoSize.width,
+                                        videoHeight = exoPlayer.videoSize.height,
+                                        resizeMode = playerViewRef?.resizeMode ?: VideoAspectRatio.FIT.resizeMode
+                                    )
+                                    val view = container.danmakuView()
                                     if (view.width > 0 && view.height > 0) {
-                                        danmakuManager.attachView(view)
+                                        val sizeTag = "${view.width}x${view.height}"
+                                        if (view.tag != sizeTag) {
+                                            view.tag = sizeTag
+                                            danmakuManager.attachView(view)
+                                        }
                                     }
                                 },
                                 modifier = Modifier.fillMaxSize()

@@ -378,7 +378,11 @@ fun rememberVideoPlayerState(
                     
                     //  保存播放状态（用于本地恢复）
                     savedPosition = player.currentPosition
-                    wasPlaying = player.isPlaying
+                    wasPlaying = isPlaybackActiveForLifecycle(
+                        isPlaying = player.isPlaying,
+                        playWhenReady = player.playWhenReady,
+                        playbackState = player.playbackState
+                    )
                     
                     //  [新增] 判断是否应该继续播放
                     // 1. 应用内小窗模式 - 继续播放
@@ -406,8 +410,12 @@ fun rememberVideoPlayerState(
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     //  [修复] 恢复前台时，只在确实暂停了的情况下恢复播放
                     //  如果是在 PiP 或后台音频模式下，播放器一直在运行，不需要干预
-                    val isRunning = player.isPlaying
-                    val shouldResume = wasPlaying && !isRunning
+                    val shouldResume = shouldResumeAfterLifecyclePause(
+                        wasPlaybackActive = wasPlaying,
+                        isPlaying = player.isPlaying,
+                        playWhenReady = player.playWhenReady,
+                        playbackState = player.playbackState
+                    )
                     
                     if (shouldResume) {
                         // 只有当完全暂停时才检查是否需要恢复
@@ -445,49 +453,85 @@ fun rememberVideoPlayerState(
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                android.util.Log.e("VideoPlayerState", " Player error: ${error.message}, code=${error.errorCode}")
-                
-                //  判断是否为网络/IO 相关错误（可能是 CDN 问题）
-                val isNetworkError = error.errorCode in listOf(
-                    androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-                    androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-                    androidx.media3.common.PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
-                    androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,  // 📡 [新增] HTTP 错误也尝试切换
-                    androidx.media3.common.PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND   // 📡 [新增] 404 也可能是 CDN 问题
+                val causeName = error.cause?.javaClass?.name
+                val errorCodeName = androidx.media3.common.PlaybackException.getErrorCodeName(error.errorCode)
+                com.android.purebilibili.core.util.Logger.e(
+                    "VideoPlayerState",
+                    "❌ Player error: code=${error.errorCode}($errorCodeName), message=${error.message}, cause=$causeName",
+                    error
                 )
-                
-                // 📡 [新增] 检查是否有多个 CDN 可用
+
                 val currentState = viewModel.uiState.value
                 val hasCdnAlternatives = currentState is com.android.purebilibili.feature.video.viewmodel.PlayerUiState.Success 
                     && currentState.cdnCount > 1
-                    && retryCountRef.cdnSwitchCount < maxCdnSwitches
-                
-                if (isNetworkError && hasCdnAlternatives) {
-                    // 📡 [策略1] 网络错误 + 有备用 CDN → 先切换 CDN
-                    retryCountRef.cdnSwitchCount++
-                    com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "📡 Network error, switching CDN (${retryCountRef.cdnSwitchCount}/$maxCdnSwitches)")
-                    
-                    scope.launch {
-                        kotlinx.coroutines.delay(500) // 短暂延迟避免请求过快
-                        viewModel.switchCdn()
+
+                val action = decidePlayerErrorRecovery(
+                    errorCode = error.errorCode,
+                    hasCdnAlternatives = hasCdnAlternatives,
+                    retryCount = retryCountRef.count,
+                    maxRetries = maxRetries,
+                    cdnSwitchCount = retryCountRef.cdnSwitchCount,
+                    maxCdnSwitches = maxCdnSwitches,
+                    isDecoderLikeFailure = isDecoderLikeFailure(
+                        errorMessage = error.message,
+                        causeClassName = causeName
+                    )
+                )
+
+                when (action) {
+                    PlayerErrorRecoveryAction.SWITCH_CDN -> {
+                        retryCountRef.cdnSwitchCount++
+                        com.android.purebilibili.core.util.Logger.d(
+                            "VideoPlayerState",
+                            "📡 Network error, switching CDN (${retryCountRef.cdnSwitchCount}/$maxCdnSwitches)"
+                        )
+                        scope.launch {
+                            kotlinx.coroutines.delay(500)
+                            viewModel.switchCdn()
+                        }
                     }
-                } else if (isNetworkError && retryCountRef.count < maxRetries) {
-                    // 🔄 [策略2] 网络错误 + 无备用 CDN / 已切换完 → 重试
-                    retryCountRef.count++
-                    // 🔧 [优化] 指数退避：1s, 2s, 4s（更快首次重试）
-                    val delayMs = (1000L * (1 shl (retryCountRef.count - 1))).coerceAtMost(8000L)
-                    com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "🔄 Network error, retry ${retryCountRef.count}/$maxRetries in ${delayMs}ms")
-                    
-                    // 🚀 [修复] 使用受管理的 scope 避免内存泄漏
-                    scope.launch {
-                        kotlinx.coroutines.delay(delayMs)
-                        viewModel.retry()
+
+                    PlayerErrorRecoveryAction.RETRY_NETWORK -> {
+                        retryCountRef.count++
+                        val delayMs = (1000L * (1 shl (retryCountRef.count - 1))).coerceAtMost(8000L)
+                        com.android.purebilibili.core.util.Logger.d(
+                            "VideoPlayerState",
+                            "🔄 Network error, retry ${retryCountRef.count}/$maxRetries in ${delayMs}ms"
+                        )
+                        scope.launch {
+                            kotlinx.coroutines.delay(delayMs)
+                            viewModel.retry()
+                        }
                     }
-                } else if (retryCountRef.count < 1) {
-                    // 非网络错误，只重试一次
-                    retryCountRef.count++
-                    com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " Auto-retrying video load (non-network error)...")
-                    viewModel.retry()
+
+                    PlayerErrorRecoveryAction.RETRY_DECODER_FALLBACK -> {
+                        retryCountRef.count++
+                        com.android.purebilibili.core.util.Logger.w(
+                            "VideoPlayerState",
+                            "🛟 Decoder-like error, retrying with safe codec fallback (AVC)"
+                        )
+                        scope.launch {
+                            viewModel.retryWithCodecFallback()
+                        }
+                    }
+
+                    PlayerErrorRecoveryAction.RETRY_NON_NETWORK -> {
+                        retryCountRef.count++
+                        com.android.purebilibili.core.util.Logger.d(
+                            "VideoPlayerState",
+                            " Auto-retrying video load (non-network error)..."
+                        )
+                        scope.launch {
+                            viewModel.retry()
+                        }
+                    }
+
+                    PlayerErrorRecoveryAction.GIVE_UP -> {
+                        com.android.purebilibili.core.util.Logger.w(
+                            "VideoPlayerState",
+                            "⚠️ Retry budget exhausted, waiting for manual user action"
+                        )
+                    }
                 }
             }
             

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -96,6 +97,17 @@ fun TabletVideoLayout(
             isTv = isTvDevice
         )
     }
+    var secondaryPaneModeName by rememberSaveable(bvid) {
+        mutableStateOf(TabletSecondaryPaneMode.EXPANDED.name)
+    }
+    val secondaryPaneMode = remember(secondaryPaneModeName) {
+        runCatching { TabletSecondaryPaneMode.valueOf(secondaryPaneModeName) }
+            .getOrDefault(TabletSecondaryPaneMode.EXPANDED)
+    }
+    val primaryRatio = resolveTabletPrimaryRatio(
+        basePrimaryRatio = layoutPolicy.primaryRatio,
+        secondaryPaneMode = secondaryPaneMode
+    )
     
     // 🖥️ [修复] 使用 LocalContext 获取 Activity，而非 playerState.context
     val context = LocalContext.current
@@ -243,11 +255,16 @@ fun TabletVideoLayout(
                     viewModel = viewModel,
                     playerState = playerState,
                     onUpClick = onUpClick,
+                    paneMode = secondaryPaneMode,
+                    onPaneModeChange = { secondaryPaneModeName = it.name },
+                    onPaneModeCycle = {
+                        secondaryPaneModeName = nextTabletSecondaryPaneMode(secondaryPaneMode).name
+                    },
                     onRelatedVideoClick = onRelatedVideoClick
                 )
             }
         },
-        primaryRatio = layoutPolicy.primaryRatio
+        primaryRatio = primaryRatio
     )
 }
 
@@ -262,9 +279,13 @@ private fun TabletSecondaryContent(
     viewModel: PlayerViewModel,
     playerState: VideoPlayerState,
     onUpClick: (Long) -> Unit,
+    paneMode: TabletSecondaryPaneMode,
+    onPaneModeChange: (TabletSecondaryPaneMode) -> Unit,
+    onPaneModeCycle: () -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    val defaultTab = if (commentState.replyCount == 0 && success.related.isNotEmpty()) 1 else 0
+    var selectedTab by rememberSaveable(success.info.bvid) { mutableIntStateOf(defaultTab) }
     val tabs = listOf("评论 ${if (commentState.replyCount > 0) "(${commentState.replyCount})" else ""}", "相关推荐")
     
     // 评论图片预览状态
@@ -285,12 +306,60 @@ private fun TabletSecondaryContent(
             onDismiss = { showImagePreview = false }
         )
     }
+
+    if (paneMode == TabletSecondaryPaneMode.COLLAPSED) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            TextButton(onClick = { onPaneModeChange(TabletSecondaryPaneMode.COMPACT) }) {
+                Text("半开")
+            }
+            TextButton(onClick = { onPaneModeChange(TabletSecondaryPaneMode.EXPANDED) }) {
+                Text("展开")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = {
+                selectedTab = 0
+                onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
+            }) {
+                Text("评论")
+            }
+            TextButton(onClick = {
+                selectedTab = 1
+                onPaneModeChange(TabletSecondaryPaneMode.COMPACT)
+            }) {
+                Text("推荐")
+            }
+        }
+        return
+    }
     
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            TextButton(onClick = onPaneModeCycle) {
+                Text(
+                    when (paneMode) {
+                        TabletSecondaryPaneMode.EXPANDED -> "半开"
+                        TabletSecondaryPaneMode.COMPACT -> "收起"
+                        TabletSecondaryPaneMode.COLLAPSED -> "展开"
+                    }
+                )
+            }
+        }
+
         // Tab 栏
         TabRow(
             selectedTabIndex = selectedTab,
@@ -398,6 +467,31 @@ private fun TabletSecondaryContent(
                                 ) {
                                     CupertinoActivityIndicator()
                                 }
+                            }
+                        }
+                    }
+
+                    if (commentState.replies.isEmpty() && !commentState.isRepliesLoading) {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(horizontal = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "暂无评论",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "先看看相关推荐",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            TextButton(onClick = { selectedTab = 1 }) {
+                                Text("切换到相关推荐")
                             }
                         }
                     }

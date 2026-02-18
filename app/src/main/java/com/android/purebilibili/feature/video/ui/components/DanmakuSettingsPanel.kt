@@ -55,6 +55,7 @@ fun DanmakuSettingsPanel(
     allowBottom: Boolean = true,
     allowColorful: Boolean = true,
     allowSpecial: Boolean = true,
+    smartOcclusion: Boolean = true,
     onOpacityChange: (Float) -> Unit,
     onFontScaleChange: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
@@ -65,6 +66,7 @@ fun DanmakuSettingsPanel(
     onAllowBottomChange: (Boolean) -> Unit = {},
     onAllowColorfulChange: (Boolean) -> Unit = {},
     onAllowSpecialChange: (Boolean) -> Unit = {},
+    onSmartOcclusionChange: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     // 使用 Box + 手势检测来实现：点击面板外部关闭，面板内部正常交互
@@ -212,6 +214,49 @@ fun DanmakuSettingsPanel(
                         Switch(
                             checked = mergeDuplicates,
                             onCheckedChange = onMergeDuplicatesChange,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                uncheckedThumbColor = Color.White,
+                                uncheckedTrackColor = Color.White.copy(0.1f)
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = CardBackground,
+                    shape = RoundedCornerShape(16.dp),
+                    onClick = { onSmartOcclusionChange(!smartOcclusion) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "智能避脸遮挡",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "实时识别人脸并避让弹幕轨道",
+                                color = Color.White.copy(0.5f),
+                                fontSize = 11.sp
+                            )
+                        }
+
+                        Switch(
+                            checked = smartOcclusion,
+                            onCheckedChange = onSmartOcclusionChange,
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = MaterialTheme.colorScheme.primary,

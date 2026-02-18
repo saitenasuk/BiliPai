@@ -28,8 +28,8 @@ android {
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：versionCode +1, versionName 递增
         // 更新日志：CHANGELOG.md
-        versionCode = 73
-        versionName = "6.0.2"
+        versionCode = 74
+        versionName = "6.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -233,6 +233,8 @@ dependencies {
     
     // --- 8.1 WorkManager (后台下载任务) ---
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    // [新增] ML Kit 人脸检测（弹幕智能避脸）
+    implementation("com.google.mlkit:face-detection:16.1.7")
     
     // --- 8.2 DLNA & Local Proxy (投屏) ---
     // DLNA Casting (Cling)

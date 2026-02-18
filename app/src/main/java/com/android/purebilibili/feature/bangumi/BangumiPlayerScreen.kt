@@ -187,7 +187,9 @@ fun BangumiPlayerScreen(
             allowTop = danmakuAllowTop,
             allowBottom = danmakuAllowBottom,
             allowColorful = danmakuAllowColorful,
-            allowSpecial = danmakuAllowSpecial
+            allowSpecial = danmakuAllowSpecial,
+            // Mask-only mode: keep lane layout fixed, do not move danmaku tracks.
+            smartOcclusion = false
         )
     }
     

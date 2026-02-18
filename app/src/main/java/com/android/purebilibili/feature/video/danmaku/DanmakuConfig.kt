@@ -40,6 +40,11 @@ class DanmakuConfig {
     var allowBottom = true
     var allowColorful = true
     var allowSpecial = true
+
+    // [新增] 智能避脸：根据检测到的人脸动态调整弹幕可显示带
+    var smartOcclusionEnabled = false
+    var safeBandTopRatio = 0f
+    var safeBandBottomRatio = 1f
     
     // 顶部边距（像素）
     var topMarginPx = 0
@@ -74,13 +79,41 @@ class DanmakuConfig {
             // 基准值 5000ms，speedFactor=1 时 5000ms，speedFactor=2 时 10000ms
             val baseTime = 5000L
             scroll.moveTime = (baseTime * speedFactor).toLong().coerceIn(2000L, 10000L)
-            
-            //  [修复] 显示区域控制
-            // 通过 lineCount 限制最大行数来实现显示区域控制
-            val maxLines = getMaxLines(viewHeight, text.size, text.strokeWidth)
+
+            val activeBand = resolveActiveDisplayBand(displayAreaRatio)
+            val visibleHeightPx = if (viewHeight > 0) {
+                (viewHeight * activeBand.heightRatio).coerceAtLeast(0f)
+            } else {
+                0f
+            }
+
+            // [修复] 显示区域控制：通过 lineCount + marginTop 约束弹幕轨道
+            val maxLines = getMaxLines(
+                visibleHeightPx = visibleHeightPx,
+                areaRatioHint = activeBand.heightRatio,
+                fontSize = text.size,
+                strokeWidth = text.strokeWidth
+            )
             scroll.lineCount = maxLines
+
+            val topMargin = if (viewHeight > 0) (viewHeight * activeBand.topRatio) else 0f
+            val bottomInset = if (viewHeight > 0) (viewHeight * (1f - activeBand.bottomRatio)) else 0f
+            topMarginPx = topMargin.toInt()
+            scroll.marginTop = topMargin
+            top.marginTop = topMargin
+            bottom.marginBottom = bottomInset
+
+            // 顶部/底部弹幕的轨道数量跟随可见区高度，避免挤占人脸区
+            val pinnedLineCount = (maxLines / 2).coerceAtLeast(1)
+            top.lineCount = pinnedLineCount
+            bottom.lineCount = pinnedLineCount
             
-            android.util.Log.w("DanmakuConfig", " Applied: opacity=$opacity, fontSize=${text.size}, moveTime=${scroll.moveTime}ms, displayArea=$displayAreaRatio, maxLines=$maxLines (h=$viewHeight)")
+            android.util.Log.w(
+                "DanmakuConfig",
+                " Applied: opacity=$opacity, fontSize=${text.size}, moveTime=${scroll.moveTime}ms, " +
+                    "displayArea=$displayAreaRatio, band=${activeBand.topRatio}-${activeBand.bottomRatio}, " +
+                    "maxLines=$maxLines (h=$viewHeight, visiblePx=$visibleHeightPx, marginTop=$topMargin)"
+            )
         }
     }
     
@@ -92,10 +125,15 @@ class DanmakuConfig {
      * 根据显示区域比例计算最大行数
      * [修复] 动态计算：基于视图高度和行高
      */
-    private fun getMaxLines(viewHeight: Int, fontSize: Float, strokeWidth: Float): Int {
-        if (viewHeight <= 0) {
+    private fun getMaxLines(
+        visibleHeightPx: Float,
+        areaRatioHint: Float,
+        fontSize: Float,
+        strokeWidth: Float
+    ): Int {
+        if (visibleHeightPx <= 0f) {
              // 视图高度未知时使用兜底行数，避免仅显示一行
-             return resolveDanmakuFallbackMaxLines(displayAreaRatio)
+             return resolveDanmakuFallbackMaxLines(areaRatioHint)
         }
         
         // 估算行高：字体大小 + 描边(上下各半? 通常加上 padding) + 行间距
@@ -103,14 +141,26 @@ class DanmakuConfig {
         // 假设行高约为 字体大小 + 描边 + 4dp 间距
         val estimatedLineHeight = fontSize + (if (strokeEnabled) strokeWidth else 0f) + 12f // 12f 为估算的间距buffer
         
-        val totalLines = (viewHeight / estimatedLineHeight).toInt()
-        val visibleLines = (totalLines * displayAreaRatio).toInt()
-        val minLines = resolveDanmakuMinimumVisibleLines(displayAreaRatio)
+        val totalLines = (visibleHeightPx / estimatedLineHeight).toInt()
+        val visibleLines = totalLines
+        val minLines = resolveDanmakuMinimumVisibleLines(areaRatioHint)
 
         // 竖屏小播放器场景下避免退化成 1 行
         return visibleLines.coerceAtLeast(minLines).also {
-             android.util.Log.i("DanmakuConfig", "DisplayArea: height=$viewHeight, fontSize=$fontSize, ratio=$displayAreaRatio -> total=$totalLines, visible=$it")
+             android.util.Log.i("DanmakuConfig", "DisplayArea: visibleHeight=$visibleHeightPx, fontSize=$fontSize, ratio=$areaRatioHint -> total=$totalLines, visible=$it")
         }
+    }
+
+    private fun resolveActiveDisplayBand(defaultArea: Float): DanmakuDisplayBand {
+        val fallback = DanmakuDisplayBand(0f, defaultArea.coerceIn(0.25f, 1f))
+        if (!smartOcclusionEnabled) return fallback
+
+        val requested = DanmakuDisplayBand(
+            topRatio = safeBandTopRatio,
+            bottomRatio = safeBandBottomRatio
+        ).normalized()
+        if (requested.heightRatio < 0.12f) return fallback
+        return requested
     }
     
     companion object {

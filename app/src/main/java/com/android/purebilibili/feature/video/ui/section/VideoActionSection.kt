@@ -17,6 +17,13 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.animation.animateContentSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MonetizationOn
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.rounded.MonetizationOn
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -76,12 +83,6 @@ fun ActionButtonsRow(
     onWatchLaterClick: () -> Unit = {},  //  稍后再看点击
     onFavoriteLongClick: () -> Unit = {} // [New] 长按收藏
 ) {
-    var tripleProgress by remember { mutableFloatStateOf(0f) }
-    
-    val isTripleComboActive by remember {
-        derivedStateOf { tripleProgress > 0f }
-    }
-    
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -96,37 +97,28 @@ fun ActionButtonsRow(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.Center
         ) {
-            TripleLikeActionButton(
-                isLiked = isLiked,
-                likeCount = FormatUtils.formatStat(info.stat.like.toLong()),
-                coinCount = FormatUtils.formatStat(info.stat.coin.toLong()),
-                isFavorited = isFavorited,
-                favoriteCount = FormatUtils.formatStat(info.stat.favorite.toLong()),
-                hasCoin = coinCount > 0,
-                onLikeClick = onLikeClick,
-                onTripleComplete = onTripleClick,
-                onProgressChange = { tripleProgress = it }
+            BiliActionButton(
+                icon = if (isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
+                text = FormatUtils.formatStat(info.stat.like.toLong()),
+                isActive = isLiked,
+                activeColor = MaterialTheme.colorScheme.primary,
+                onClick = onLikeClick,
+                onLongClick = onTripleClick
             )
         }
 
-        // Coin - 使用更为柔和的缩放 + 淡入淡出，并由于 AnimatedVisibility 会动态移除占位，解决了间距问题
+        // Coin
         Box(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.Center
         ) {
-            androidx.compose.animation.AnimatedVisibility(
-                visible = !isTripleComboActive,
-                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.9f),
-                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.9f)
-            ) {
-                BiliActionButton(
-                    icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
-                    text = FormatUtils.formatStat(info.stat.coin.toLong()),
-                    isActive = coinCount > 0,
-                    activeColor = Color(0xFFFFB300),
-                    onClick = onCoinClick
-                )
-            }
+            BiliActionButton(
+                icon = if (coinCount > 0) Icons.Rounded.MonetizationOn else Icons.Outlined.MonetizationOn,
+                text = if (coinCount > 0) "已投币" else "投币",
+                isActive = coinCount > 0,
+                activeColor = Color(0xFFFFB300),
+                onClick = onCoinClick
+            )
         }
 
         // Favorite
@@ -134,20 +126,14 @@ fun ActionButtonsRow(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.Center
         ) {
-            androidx.compose.animation.AnimatedVisibility(
-                visible = !isTripleComboActive,
-                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.9f),
-                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.9f)
-            ) {
-                BiliActionButton(
-                    icon = if (isFavorited) CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark,
-                    text = FormatUtils.formatStat(info.stat.favorite.toLong()),
-                    isActive = isFavorited,
-                    activeColor = Color(0xFFFFC107),
-                    onClick = onFavoriteClick,
-                    onLongClick = onFavoriteLongClick
-                )
-            }
+            BiliActionButton(
+                icon = if (isFavorited) Icons.Rounded.Star else Icons.Outlined.StarBorder,
+                text = FormatUtils.formatStat(info.stat.favorite.toLong()),
+                isActive = isFavorited,
+                activeColor = Color(0xFFFFC107),
+                onClick = onFavoriteClick,
+                onLongClick = onFavoriteLongClick
+            )
         }
         
         //  稍后再看
@@ -385,7 +371,8 @@ private fun BiliActionButton(
     isActive: Boolean,
     activeColor: Color,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null // [New] Long click support
+    onLongClick: (() -> Unit)? = null, // [New] Long click support
+    enableActivePulse: Boolean = false
 ) {
     // Press animation
     val interactionSource = remember { MutableInteractionSource() }
@@ -403,7 +390,7 @@ private fun BiliActionButton(
     // Active state pulse animation
     var shouldPulse by remember { mutableStateOf(false) }
     val pulseScale by animateFloatAsState(
-        targetValue = if (shouldPulse) 1.2f else 1f,
+        targetValue = if (enableActivePulse && shouldPulse) 1.2f else 1f,
         animationSpec = spring(
             dampingRatio = 0.4f,
             stiffness = 400f
@@ -412,8 +399,8 @@ private fun BiliActionButton(
         finishedListener = { shouldPulse = false }
     )
     
-    LaunchedEffect(isActive) {
-        if (isActive) shouldPulse = true
+    LaunchedEffect(isActive, enableActivePulse) {
+        if (enableActivePulse && isActive) shouldPulse = true
     }
     
     val contentColor = if (isActive) activeColor else MaterialTheme.colorScheme.onSurfaceVariant

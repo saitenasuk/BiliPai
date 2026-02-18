@@ -661,7 +661,14 @@ class PlayerViewModel : ViewModel() {
     
     // [修复] 添加 aid 参数支持，用于移动端推荐流（可能只返回 aid）
     // [Added] autoPlay override: null = use settings, true/false = force
-    fun loadVideo(bvid: String, aid: Long = 0, force: Boolean = false, autoPlay: Boolean? = null, audioLang: String? = null) {
+    fun loadVideo(
+        bvid: String,
+        aid: Long = 0,
+        force: Boolean = false,
+        autoPlay: Boolean? = null,
+        audioLang: String? = null,
+        videoCodecOverride: String? = null
+    ) {
         if (bvid.isBlank()) return
         
         //  防止重复加载：只有在正在加载同一视频时才跳过 (且语言未改变)
@@ -728,9 +735,10 @@ class PlayerViewModel : ViewModel() {
                 val audioQualityPreference = appContext?.let { 
                     com.android.purebilibili.core.store.SettingsManager.getAudioQualitySync(it) 
                 } ?: -1
-                val videoCodecPreference = appContext?.let { 
-                    com.android.purebilibili.core.store.SettingsManager.getVideoCodecSync(it) 
+                val settingsCodecPreference = appContext?.let {
+                    com.android.purebilibili.core.store.SettingsManager.getVideoCodecSync(it)
                 } ?: "hev1"
+                val videoCodecPreference = videoCodecOverride ?: settingsCodecPreference
                 
                 // [Added] Determine auto-play behavior
                 // If autoPlay arg is present, use it. Otherwise reset to "Click to Play" setting
@@ -738,7 +746,10 @@ class PlayerViewModel : ViewModel() {
                     com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(it)
                 } ?: true
                 
-                Logger.d("PlayerViewModel", "⏯️ AutoPlay Decision: arg=$autoPlay, setting=${shouldAutoPlay}, Final=$shouldAutoPlay")
+                Logger.d(
+                    "PlayerViewModel",
+                    "⏯️ AutoPlay Decision: arg=$autoPlay, setting=${shouldAutoPlay}, Final=$shouldAutoPlay, codec=$videoCodecPreference"
+                )
             
             // 📉 [省流量] 省流量模式逻辑：
             // - ALWAYS: 任何网络都限制 480P
@@ -1078,6 +1089,30 @@ class PlayerViewModel : ViewModel() {
         PlayUrlCache.invalidate(bvid, currentCid)
         currentBvid = ""
         loadVideo(bvid, autoPlay = true) // Retry should auto-play
+    }
+
+    /**
+     * 解码类错误时的安全重试：强制使用 AVC，规避特定机型 HEVC/AV1 解码异常导致的卡死。
+     */
+    fun retryWithCodecFallback() {
+        val current = _uiState.value as? PlayerUiState.Success ?: run {
+            retry()
+            return
+        }
+
+        val bvid = current.info.bvid.takeIf { it.isNotBlank() } ?: return
+        PlaybackCooldownManager.clearForVideo(bvid)
+        PlayUrlCache.invalidate(bvid, current.info.cid)
+        currentBvid = ""
+        Logger.w("PlayerVM", "🛟 Retrying with safe codec fallback: AVC")
+        loadVideo(
+            bvid = bvid,
+            aid = current.info.aid,
+            force = true,
+            autoPlay = true,
+            audioLang = current.currentAudioLang,
+            videoCodecOverride = "avc"
+        )
     }
     
     /**

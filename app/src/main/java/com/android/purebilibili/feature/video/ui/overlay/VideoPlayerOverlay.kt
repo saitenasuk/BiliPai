@@ -140,6 +140,7 @@ fun VideoPlayerOverlay(
     danmakuAllowBottom: Boolean = true,
     danmakuAllowColorful: Boolean = true,
     danmakuAllowSpecial: Boolean = true,
+    danmakuSmartOcclusion: Boolean = true,
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
     onDanmakuSpeedChange: (Float) -> Unit = {},
@@ -150,6 +151,7 @@ fun VideoPlayerOverlay(
     onDanmakuAllowBottomChange: (Boolean) -> Unit = {},
     onDanmakuAllowColorfulChange: (Boolean) -> Unit = {},
     onDanmakuAllowSpecialChange: (Boolean) -> Unit = {},
+    onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
     //  [实验性功能] 双击点赞
     doubleTapLikeEnabled: Boolean = true,
     onDoubleTapLike: () -> Unit = {},
@@ -775,6 +777,7 @@ fun VideoPlayerOverlay(
                 allowBottom = danmakuAllowBottom,
                 allowColorful = danmakuAllowColorful,
                 allowSpecial = danmakuAllowSpecial,
+                smartOcclusion = danmakuSmartOcclusion,
                 onOpacityChange = onDanmakuOpacityChange,
                 onFontScaleChange = onDanmakuFontScaleChange,
                 onSpeedChange = onDanmakuSpeedChange,
@@ -785,6 +788,7 @@ fun VideoPlayerOverlay(
                 onAllowBottomChange = onDanmakuAllowBottomChange,
                 onAllowColorfulChange = onDanmakuAllowColorfulChange,
                 onAllowSpecialChange = onDanmakuAllowSpecialChange,
+                onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
                 onDismiss = { showDanmakuSettings = false }
             )
         }

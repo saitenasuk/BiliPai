@@ -28,7 +28,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -53,7 +52,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -198,12 +196,29 @@ fun VideoDetailScreen(
 
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val tvDetailPlayerFocusRequester = remember { FocusRequester() }
-    val tvDetailContentFocusRequester = remember { FocusRequester() }
+    val tvDetailInfoFocusRequester = remember { FocusRequester() }
+    val tvDetailRelatedFocusRequester = remember { FocusRequester() }
     var tvDetailFocusTarget by remember { mutableStateOf(VideoDetailTvFocusTarget.PLAYER) }
+    val requestTvDetailFocusTarget: (VideoDetailTvFocusTarget) -> Unit = remember(
+        tvDetailPlayerFocusRequester,
+        tvDetailInfoFocusRequester,
+        tvDetailRelatedFocusRequester
+    ) {
+        { target ->
+            when (target) {
+                VideoDetailTvFocusTarget.PLAYER -> tvDetailPlayerFocusRequester.requestFocus()
+                VideoDetailTvFocusTarget.INFO -> tvDetailInfoFocusRequester.requestFocus()
+                VideoDetailTvFocusTarget.RELATED -> tvDetailRelatedFocusRequester.requestFocus()
+            }
+        }
+    }
     
     // 📐 [大屏适配] 仅 Expanded 才启用平板分栏布局
     val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
-    val useTabletLayout = windowSizeClass.isExpandedScreen
+    val useTabletLayout = shouldUseTabletVideoLayout(
+        isExpandedScreen = windowSizeClass.isExpandedScreen,
+        isTvDevice = isTvDevice
+    )
     
     // 🔧 [修复] 追踪用户是否主动请求全屏（点击全屏按钮）
     // 使用 rememberSaveable 确保状态在横竖屏切换时保持
@@ -222,7 +237,7 @@ fun VideoDetailScreen(
         if (isTvDevice && !isFullscreenMode && !useTabletLayout) {
             tvDetailFocusTarget = resolveInitialVideoDetailTvFocusTarget(isTv = true)
                 ?: VideoDetailTvFocusTarget.PLAYER
-            tvDetailPlayerFocusRequester.requestFocus()
+            requestTvDetailFocusTarget(tvDetailFocusTarget)
         }
     }
 
@@ -934,7 +949,7 @@ fun VideoDetailScreen(
                 //  📐 [大屏适配] 根据设备类型选择布局
                 if (useTabletLayout) {
                     // 🖥️ 平板：左右分栏布局（视频+信息 | 评论/推荐）
-                    TabletVideoLayout(
+                    TabletCinemaLayout(
                         playerState = playerState,
                         uiState = uiState,
                         commentState = commentState,
@@ -1189,14 +1204,17 @@ fun VideoDetailScreen(
                                 onDownloadAudio = { viewModel.downloadAudio(context) },
                                 tvFocusRequester = tvDetailPlayerFocusRequester,
                                 onTvMoveFocusDown = {
+                                    val hasRelatedContent =
+                                        (uiState as? PlayerUiState.Success)?.related?.isNotEmpty() == true
                                     val nextTarget = resolveVideoDetailTvFocusTarget(
                                         current = tvDetailFocusTarget,
                                         keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
-                                        action = KeyEvent.ACTION_DOWN
+                                        action = KeyEvent.ACTION_DOWN,
+                                        hasRelatedContent = hasRelatedContent
                                     )
-                                    tvDetailFocusTarget = nextTarget
-                                    if (nextTarget == VideoDetailTvFocusTarget.CONTENT) {
-                                        tvDetailContentFocusRequester.requestFocus()
+                                    if (nextTarget != tvDetailFocusTarget) {
+                                        tvDetailFocusTarget = nextTarget
+                                        requestTvDetailFocusTarget(nextTarget)
                                     }
                                 }
                                 //  空降助手 - 已由插件系统自动处理
@@ -1208,38 +1226,32 @@ fun VideoDetailScreen(
                         }
                     }
                     
+                    val handleTvContentKeyEvent: (KeyEvent) -> Boolean = { nativeEvent ->
+                        val hasRelatedContent =
+                            (uiState as? PlayerUiState.Success)?.related?.isNotEmpty() == true
+                        val nextTarget = resolveVideoDetailTvFocusTarget(
+                            current = tvDetailFocusTarget,
+                            keyCode = nativeEvent.keyCode,
+                            action = nativeEvent.action,
+                            hasRelatedContent = hasRelatedContent
+                        )
+                        if (nextTarget != tvDetailFocusTarget) {
+                            tvDetailFocusTarget = nextTarget
+                            requestTvDetailFocusTarget(nextTarget)
+                            true
+                        } else {
+                            false
+                        }
+                    }
+
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
-                            .then(
-                                if (isTvDevice) {
-                                    Modifier
-                                        .focusRequester(tvDetailContentFocusRequester)
-                                        .focusable()
-                                        .onPreviewKeyEvent { event ->
-                                            val nativeEvent = event.nativeKeyEvent
-                                            val nextTarget = resolveVideoDetailTvFocusTarget(
-                                                current = tvDetailFocusTarget,
-                                                keyCode = nativeEvent.keyCode,
-                                                action = nativeEvent.action
-                                            )
-                                            if (nextTarget != tvDetailFocusTarget) {
-                                                tvDetailFocusTarget = nextTarget
-                                                if (nextTarget == VideoDetailTvFocusTarget.PLAYER) {
-                                                    tvDetailPlayerFocusRequester.requestFocus()
-                                                } else {
-                                                    tvDetailContentFocusRequester.requestFocus()
-                                                }
-                                                true
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                } else {
-                                    Modifier
-                                }
-                            )
+                            .onPreviewKeyEvent { event ->
+                                if (!isTvDevice) return@onPreviewKeyEvent false
+                                handleTvContentKeyEvent(event.nativeKeyEvent)
+                            }
                             // .nestedScroll(nestedScrollConnection) // [Remove] 移除嵌套滚动，确保 Tabs 正常滑动
                     ) {
                         when (uiState) {
@@ -1389,6 +1401,13 @@ fun VideoDetailScreen(
                                                         // [新增] 恢复播放器 (音频模式 -> 视频模式)
                                                         isPlayerCollapsed = isPlayerCollapsed,
                                                         onRestorePlayer = { playerHeightOffsetPx = 0f },
+                                                        tvInfoFocusRequester = if (isTvDevice) tvDetailInfoFocusRequester else null,
+                                                        tvRelatedFocusRequester = if (isTvDevice) tvDetailRelatedFocusRequester else null,
+                                                        isTvInfoFocused = isTvDevice && tvDetailFocusTarget == VideoDetailTvFocusTarget.INFO,
+                                                        isTvRelatedFocused = isTvDevice && tvDetailFocusTarget == VideoDetailTvFocusTarget.RELATED,
+                                                        onTvContentPreviewKeyEvent = { keyEvent ->
+                                                            handleTvContentKeyEvent(keyEvent)
+                                                        },
                                                         // [新增] AI Summary & BGM
                                                         aiSummary = success.aiSummary,
                                                         bgmInfo = success.bgmInfo,
@@ -2042,6 +2061,27 @@ fun VideoDetailScreen(
                 )
             }
         }
+
+        if (isTvDevice && !isFullscreenMode && !useTabletLayout) {
+            TvDetailFocusZoneOverlay(
+                focusTarget = tvDetailFocusTarget,
+                onTargetSelected = { target ->
+                    val hasRelatedContent =
+                        (uiState as? PlayerUiState.Success)?.related?.isNotEmpty() == true
+                    val normalizedTarget = normalizeVideoDetailTvFocusTarget(
+                        target = target,
+                        hasRelatedContent = hasRelatedContent
+                    )
+                    if (normalizedTarget != tvDetailFocusTarget) {
+                        tvDetailFocusTarget = normalizedTarget
+                        requestTvDetailFocusTarget(normalizedTarget)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 12.dp, end = 12.dp)
+            )
+        }
         
         // 💬 弹幕上下文菜单
         val danmakuMenuState by viewModel.danmakuMenuState.collectAsState()
@@ -2084,6 +2124,41 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
+@Composable
+private fun TvDetailFocusZoneOverlay(
+    focusTarget: VideoDetailTvFocusTarget,
+    onTargetSelected: (VideoDetailTvFocusTarget) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val focusTargets = remember {
+        listOf(
+            VideoDetailTvFocusTarget.PLAYER,
+            VideoDetailTvFocusTarget.INFO,
+            VideoDetailTvFocusTarget.RELATED
+        )
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        tonalElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            focusTargets.forEach { target ->
+                FilterChip(
+                    selected = target == focusTarget,
+                    onClick = { onTargetSelected(target) },
+                    label = { Text(resolveVideoDetailTvFocusLabel(target), fontSize = 11.sp) }
+                )
+            }
+        }
+    }
+}
+
 internal fun shouldRotateToPortraitOnSplitBack(
     useTabletLayout: Boolean,
     smallestScreenWidthDp: Int,
@@ -2094,6 +2169,13 @@ internal fun shouldRotateToPortraitOnSplitBack(
         !isTvDevice &&
         smallestScreenWidthDp < 600 &&
         orientation == Configuration.ORIENTATION_LANDSCAPE
+}
+
+internal fun shouldUseTabletVideoLayout(
+    isExpandedScreen: Boolean,
+    isTvDevice: Boolean
+): Boolean {
+    return isExpandedScreen && !isTvDevice
 }
 
 // VideoContentSection 已提取到 VideoContentSection.kt

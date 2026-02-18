@@ -658,7 +658,7 @@ object SettingsManager {
     
     // ==========  弹幕设置 ==========
     
-    private const val DANMAKU_DEFAULTS_VERSION = 3
+    private const val DANMAKU_DEFAULTS_VERSION = 4
     private const val HOME_VISUAL_DEFAULTS_VERSION = 1
     private const val DEFAULT_DANMAKU_OPACITY = DANMAKU_DEFAULT_OPACITY
     private const val DEFAULT_DANMAKU_FONT_SCALE = 1.0f
@@ -675,6 +675,7 @@ object SettingsManager {
     private val KEY_DANMAKU_ALLOW_BOTTOM = booleanPreferencesKey("danmaku_allow_bottom")
     private val KEY_DANMAKU_ALLOW_COLORFUL = booleanPreferencesKey("danmaku_allow_colorful")
     private val KEY_DANMAKU_ALLOW_SPECIAL = booleanPreferencesKey("danmaku_allow_special")
+    private val KEY_DANMAKU_SMART_OCCLUSION = booleanPreferencesKey("danmaku_smart_occlusion")
     private val KEY_DANMAKU_DEFAULTS_VERSION = intPreferencesKey("danmaku_defaults_version")
     private val KEY_HOME_VISUAL_DEFAULTS_VERSION = intPreferencesKey("home_visual_defaults_version")
     
@@ -773,6 +774,15 @@ object SettingsManager {
             preferences[KEY_DANMAKU_ALLOW_SPECIAL] = value
         }
     }
+
+    fun getDanmakuSmartOcclusion(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DANMAKU_SMART_OCCLUSION] ?: true }
+
+    suspend fun setDanmakuSmartOcclusion(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_SMART_OCCLUSION] = value
+        }
+    }
     
     // --- 弹幕合并重复 (默认开启) ---
     private val KEY_DANMAKU_MERGE_DUPLICATES = booleanPreferencesKey("danmaku_merge_duplicates")
@@ -800,6 +810,7 @@ object SettingsManager {
                 preferences[KEY_DANMAKU_ALLOW_BOTTOM] = true
                 preferences[KEY_DANMAKU_ALLOW_COLORFUL] = true
                 preferences[KEY_DANMAKU_ALLOW_SPECIAL] = true
+                preferences[KEY_DANMAKU_SMART_OCCLUSION] = true
                 preferences[KEY_DANMAKU_DEFAULTS_VERSION] = DANMAKU_DEFAULTS_VERSION
             }
         }
