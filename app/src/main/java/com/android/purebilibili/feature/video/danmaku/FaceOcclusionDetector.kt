@@ -9,6 +9,7 @@ import com.google.mlkit.vision.face.FaceContour
 import com.google.mlkit.vision.face.FaceDetector
 import com.google.mlkit.vision.face.FaceLandmark
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -36,7 +37,7 @@ internal suspend fun detectFaceOcclusionRegions(
 
     return try {
         val image = InputImage.fromBitmap(bitmap, 0)
-        val faces = detector.process(image).awaitResult()
+        val faces = detector.process(image).awaitResult(timeoutMs = 1_300L)
         val bitmapWidth = bitmap.width.toFloat().coerceAtLeast(1f)
         val bitmapHeight = bitmap.height.toFloat().coerceAtLeast(1f)
 
@@ -126,18 +127,22 @@ private fun isReliableFaceCandidate(
     return true
 }
 
-private suspend fun <T> Task<T>.awaitResult(): T = suspendCancellableCoroutine { continuation ->
-    addOnSuccessListener { result ->
-        if (continuation.isActive) {
-            continuation.resume(result)
+private suspend fun <T> Task<T>.awaitResult(timeoutMs: Long): T {
+    return withTimeout(timeoutMs) {
+        suspendCancellableCoroutine { continuation ->
+            addOnSuccessListener { result ->
+                if (continuation.isActive) {
+                    continuation.resume(result)
+                }
+            }
+            addOnFailureListener { throwable ->
+                if (continuation.isActive) {
+                    continuation.resumeWithException(throwable)
+                }
+            }
+            addOnCanceledListener {
+                continuation.cancel()
+            }
         }
-    }
-    addOnFailureListener { throwable ->
-        if (continuation.isActive) {
-            continuation.resumeWithException(throwable)
-        }
-    }
-    addOnCanceledListener {
-        continuation.cancel()
     }
 }

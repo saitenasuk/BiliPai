@@ -776,7 +776,7 @@ object SettingsManager {
     }
 
     fun getDanmakuSmartOcclusion(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_DANMAKU_SMART_OCCLUSION] ?: true }
+        .map { preferences -> preferences[KEY_DANMAKU_SMART_OCCLUSION] ?: false }
 
     suspend fun setDanmakuSmartOcclusion(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -810,7 +810,7 @@ object SettingsManager {
                 preferences[KEY_DANMAKU_ALLOW_BOTTOM] = true
                 preferences[KEY_DANMAKU_ALLOW_COLORFUL] = true
                 preferences[KEY_DANMAKU_ALLOW_SPECIAL] = true
-                preferences[KEY_DANMAKU_SMART_OCCLUSION] = true
+                preferences[KEY_DANMAKU_SMART_OCCLUSION] = false
                 preferences[KEY_DANMAKU_DEFAULTS_VERSION] = DANMAKU_DEFAULTS_VERSION
             }
         }

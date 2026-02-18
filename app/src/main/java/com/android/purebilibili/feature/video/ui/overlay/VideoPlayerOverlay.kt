@@ -93,6 +93,7 @@ import android.view.KeyEvent
 import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.shouldHandleTvMenuKey
 import com.android.purebilibili.core.util.shouldHandleTvSelectKey
+import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
 
 
 @Composable
@@ -152,6 +153,9 @@ fun VideoPlayerOverlay(
     onDanmakuAllowColorfulChange: (Boolean) -> Unit = {},
     onDanmakuAllowSpecialChange: (Boolean) -> Unit = {},
     onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
+    smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
+    smartOcclusionDownloadProgress: Int? = null,
+    onDanmakuSmartOcclusionDownloadClick: () -> Unit = {},
     //  [实验性功能] 双击点赞
     doubleTapLikeEnabled: Boolean = true,
     onDoubleTapLike: () -> Unit = {},
@@ -778,6 +782,8 @@ fun VideoPlayerOverlay(
                 allowColorful = danmakuAllowColorful,
                 allowSpecial = danmakuAllowSpecial,
                 smartOcclusion = danmakuSmartOcclusion,
+                smartOcclusionModuleState = smartOcclusionModuleState,
+                smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
                 onOpacityChange = onDanmakuOpacityChange,
                 onFontScaleChange = onDanmakuFontScaleChange,
                 onSpeedChange = onDanmakuSpeedChange,
@@ -789,6 +795,7 @@ fun VideoPlayerOverlay(
                 onAllowColorfulChange = onDanmakuAllowColorfulChange,
                 onAllowSpecialChange = onDanmakuAllowSpecialChange,
                 onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
+                onSmartOcclusionDownloadClick = onDanmakuSmartOcclusionDownloadClick,
                 onDismiss = { showDanmakuSettings = false }
             )
         }

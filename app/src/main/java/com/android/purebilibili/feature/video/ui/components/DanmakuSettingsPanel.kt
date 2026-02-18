@@ -1,6 +1,8 @@
 // File: feature/video/ui/components/DanmakuSettingsPanel.kt
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
+import com.android.purebilibili.feature.video.danmaku.resolveFaceOcclusionModuleUiState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -56,6 +58,8 @@ fun DanmakuSettingsPanel(
     allowColorful: Boolean = true,
     allowSpecial: Boolean = true,
     smartOcclusion: Boolean = true,
+    smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
+    smartOcclusionDownloadProgress: Int? = null,
     onOpacityChange: (Float) -> Unit,
     onFontScaleChange: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
@@ -67,8 +71,15 @@ fun DanmakuSettingsPanel(
     onAllowColorfulChange: (Boolean) -> Unit = {},
     onAllowSpecialChange: (Boolean) -> Unit = {},
     onSmartOcclusionChange: (Boolean) -> Unit = {},
+    onSmartOcclusionDownloadClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
+    val moduleUiState = remember(smartOcclusionModuleState, smartOcclusionDownloadProgress) {
+        resolveFaceOcclusionModuleUiState(
+            state = smartOcclusionModuleState,
+            progressPercent = smartOcclusionDownloadProgress
+        )
+    }
     // 使用 Box + 手势检测来实现：点击面板外部关闭，面板内部正常交互
     Box(
         modifier = Modifier
@@ -221,6 +232,54 @@ fun DanmakuSettingsPanel(
                                 uncheckedTrackColor = Color.White.copy(0.1f)
                             )
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = CardBackground,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "人脸模型",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = moduleUiState.statusText,
+                                color = Color.White.copy(0.65f),
+                                fontSize = 11.sp
+                            )
+                        }
+                        if (moduleUiState.showAction) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Button(
+                                onClick = onSmartOcclusionDownloadClick,
+                                enabled = moduleUiState.isActionEnabled,
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = moduleUiState.actionText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
 

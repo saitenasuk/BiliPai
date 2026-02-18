@@ -233,8 +233,9 @@ dependencies {
     
     // --- 8.1 WorkManager (后台下载任务) ---
     implementation("androidx.work:work-runtime-ktx:2.9.0")
-    // [新增] ML Kit 人脸检测（弹幕智能避脸）
-    implementation("com.google.mlkit:face-detection:16.1.7")
+    // [新增] ML Kit 人脸检测（远程模型，减少 APK 体积）
+    // 使用 Play Services 动态下发模型，不把人脸模型打进 APK。
+    implementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.0")
     
     // --- 8.2 DLNA & Local Proxy (投屏) ---
     // DLNA Casting (Cling)
