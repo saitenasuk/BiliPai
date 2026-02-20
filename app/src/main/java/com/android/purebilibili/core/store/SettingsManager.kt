@@ -9,7 +9,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.android.purebilibili.core.ui.blur.BlurIntensity
-import com.android.purebilibili.core.util.isTvDevice
 import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_OPACITY
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuOpacity
@@ -151,9 +150,6 @@ object SettingsManager {
     private val KEY_COMMENT_DEFAULT_SORT_MODE = intPreferencesKey("comment_default_sort_mode")
     //  [新增] 离开播放页后停止播放（优先于小窗/画中画模式）
     private val KEY_STOP_PLAYBACK_ON_EXIT = booleanPreferencesKey("stop_playback_on_exit")
-    //  [TV] TV 性能档（默认：TV 开启，非 TV 关闭）
-    private val KEY_TV_PERFORMANCE_PROFILE_ENABLED = booleanPreferencesKey("tv_performance_profile_enabled")
-
     /**
      *  合并首页相关设置为单一 Flow
      * 避免 HomeScreen 中多个 collectAsState 导致频繁重组
@@ -832,39 +828,6 @@ object SettingsManager {
         }
     }
 
-    /**
-     * TV 性能档：
-     * - 默认值：TV 设备 true，非 TV 设备 false
-     * - 支持用户在设置页手动覆盖
-     */
-    fun getTvPerformanceProfileEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences ->
-            if (preferences.contains(KEY_TV_PERFORMANCE_PROFILE_ENABLED)) {
-                preferences[KEY_TV_PERFORMANCE_PROFILE_ENABLED] ?: false
-            } else {
-                isTvDevice(context)
-            }
-        }
-
-    suspend fun setTvPerformanceProfileEnabled(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[KEY_TV_PERFORMANCE_PROFILE_ENABLED] = value
-        }
-        context.getSharedPreferences("tv_perf_cache", Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean("enabled", value)
-            .apply()
-    }
-
-    fun getTvPerformanceProfileEnabledSync(context: Context): Boolean {
-        val prefs = context.getSharedPreferences("tv_perf_cache", Context.MODE_PRIVATE)
-        return if (prefs.contains("enabled")) {
-            prefs.getBoolean("enabled", false)
-        } else {
-            isTvDevice(context)
-        }
-    }
-    
     // ==========  推荐流 API 类型 ==========
     
     private val KEY_FEED_API_TYPE = intPreferencesKey("feed_api_type")

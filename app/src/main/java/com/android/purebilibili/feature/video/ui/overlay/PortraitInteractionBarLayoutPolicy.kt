@@ -10,10 +10,9 @@ data class PortraitInteractionBarLayoutPolicy(
 )
 
 fun resolvePortraitInteractionBarLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): PortraitInteractionBarLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return PortraitInteractionBarLayoutPolicy(
             endPaddingDp = 18,
             bottomPaddingDp = 220,

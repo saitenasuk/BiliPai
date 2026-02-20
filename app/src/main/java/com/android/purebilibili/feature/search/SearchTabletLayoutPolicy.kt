@@ -12,27 +12,12 @@ data class SearchLayoutPolicy(
 )
 
 fun shouldUseSearchSplitLayout(
-    widthDp: Int,
-    isTv: Boolean
-): Boolean = isTv || widthDp >= 840
+    widthDp: Int
+): Boolean = widthDp >= 840
 
 fun resolveSearchLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): SearchLayoutPolicy {
-    if (isTv) {
-        return SearchLayoutPolicy(
-            resultGridMinItemWidthDp = 220,
-            resultGridSpacingDp = 12,
-            resultHorizontalPaddingDp = 20,
-            splitOuterPaddingDp = 24,
-            splitInnerGapDp = 12,
-            leftPaneWeight = 1f,
-            rightPaneWeight = 1f,
-            hotSearchColumns = 2
-        )
-    }
-
     return when {
         widthDp >= 1600 -> SearchLayoutPolicy(
             resultGridMinItemWidthDp = 260,

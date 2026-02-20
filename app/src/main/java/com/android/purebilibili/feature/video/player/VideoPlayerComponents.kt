@@ -202,6 +202,13 @@ fun UpInfoSection(
         // UP主名称行
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = CupertinoIcons.Default.PersonCropCircle,
+                    contentDescription = "UP主标识",
+                    tint = Color(0xFF00AEEC),
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(Modifier.width(4.dp))
                 Text(
                     text = info.owner.name,
                     fontSize = 14.sp,
@@ -211,14 +218,6 @@ fun UpInfoSection(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(Modifier.height(2.dp))
-            // 蓝色 UP主 文字（无背景）
-            Text(
-                text = "UP主",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFF00AEEC)
-            )
         }
         
         // 关注按钮

@@ -14,10 +14,9 @@ data class PortraitTopBarLayoutPolicy(
 )
 
 fun resolvePortraitTopBarLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): PortraitTopBarLayoutPolicy {
-    if (isTv || widthDp >= 1400) {
+    if (widthDp >= 1400) {
         return PortraitTopBarLayoutPolicy(
             horizontalPaddingDp = 24,
             verticalPaddingDp = 12,

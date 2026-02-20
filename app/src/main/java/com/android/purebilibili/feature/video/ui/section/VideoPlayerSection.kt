@@ -23,13 +23,11 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.media.AudioManager
 import android.provider.Settings
-import android.view.KeyEvent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,13 +49,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -71,12 +66,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.rememberIsTvDevice
-import com.android.purebilibili.core.util.shouldHandleTvBackKey
-import com.android.purebilibili.core.util.shouldHandleTvMenuKey
-import com.android.purebilibili.core.util.shouldHandleTvMoveFocusDownKey
-import com.android.purebilibili.core.util.shouldHandleTvPlayPauseKey
-import com.android.purebilibili.core.util.shouldHandleTvSelectKey
 import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -163,16 +152,12 @@ fun VideoPlayerSection(
     onCoin: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
     onTriple: () -> Unit = {},  // [新增] 一键三连回调
-    tvFocusRequester: FocusRequester? = null,
-    onTvMoveFocusDown: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
-    val uiLayoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val uiLayoutPolicy = remember(configuration.screenWidthDp) {
         resolveVideoPlayerUiLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
@@ -245,7 +230,6 @@ fun VideoPlayerSection(
 
     // 控制器显示状态
     var showControls by remember { mutableStateOf(true) }
-    val tvPlayerFocusRequester = tvFocusRequester ?: remember { FocusRequester() }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var faceVisualMasks by remember { mutableStateOf(emptyList<FaceOcclusionVisualMask>()) }
     val faceMaskStabilizer = remember { FaceOcclusionMaskStabilizer() }
@@ -303,12 +287,6 @@ fun VideoPlayerSection(
     //  共享弹幕管理器（用于所有 seek 路径的一致同步）
     val danmakuManager = rememberDanmakuManager()
 
-    LaunchedEffect(isTvDevice) {
-        if (isTvDevice) {
-            tvPlayerFocusRequester.requestFocus()
-        }
-    }
-    
     var rootModifier = Modifier
         .fillMaxSize()
         .clipToBounds()
@@ -329,59 +307,6 @@ fun VideoPlayerSection(
 
     Box(
         modifier = rootModifier
-            .then(
-                if (isTvDevice) {
-                    Modifier
-                        .focusRequester(tvPlayerFocusRequester)
-                        .focusable()
-                        .onPreviewKeyEvent { event ->
-                            val keyCode = event.nativeKeyEvent.keyCode
-                            val action = event.nativeKeyEvent.action
-                            when {
-                                shouldHandleTvPlayPauseKey(keyCode, action) -> {
-                                    val player = playerState.player
-                                    player.playWhenReady = !player.playWhenReady
-                                    showControls = true
-                                    true
-                                }
-                                shouldHandleTvMenuKey(keyCode, action) -> {
-                                    if (!showControls) {
-                                        showControls = true
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                }
-                                shouldHandleTvSelectKey(keyCode, action) -> {
-                                    if (!showControls) {
-                                        showControls = true
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                }
-                                shouldHandleTvBackKey(keyCode, action) && isFullscreen && !isScreenLocked -> {
-                                    onToggleFullscreen()
-                                    true
-                                }
-                                shouldHandleTvMoveFocusDownKey(keyCode, action) &&
-                                    onTvMoveFocusDown != null -> {
-                                    onTvMoveFocusDown.invoke()
-                                    true
-                                }
-                                keyCode == KeyEvent.KEYCODE_DPAD_RIGHT &&
-                                    action == KeyEvent.ACTION_DOWN &&
-                                    onTvMoveFocusDown != null -> {
-                                    onTvMoveFocusDown.invoke()
-                                    true
-                                }
-                                else -> false
-                            }
-                        }
-                } else {
-                    Modifier
-                }
-            )
             //  [新增] 处理双指缩放和平移
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->

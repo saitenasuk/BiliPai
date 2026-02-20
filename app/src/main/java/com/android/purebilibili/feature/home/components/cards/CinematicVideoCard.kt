@@ -39,7 +39,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
@@ -60,12 +59,12 @@ import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.rememberHapticFeedback
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.data.model.response.VideoItem
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import androidx.compose.ui.text.font.FontFamily
@@ -81,8 +80,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import com.android.purebilibili.core.ui.animation.TvFocusCardEmphasis
-import com.android.purebilibili.core.ui.animation.tvFocusableJiggle
 import io.github.alexzhirkevich.cupertino.icons.filled.PlayCircle
 import io.github.alexzhirkevich.cupertino.icons.filled.BubbleLeft
 
@@ -105,7 +102,6 @@ fun CinematicVideoCard(
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
-    val isTvDevice = rememberIsTvDevice()
     
     // 动态圆角 - 略大一点的圆角以适配大图卡片
     val cornerRadiusScale = LocalCornerRadiusScale.current
@@ -154,13 +150,6 @@ fun CinematicVideoCard(
             .fillMaxWidth()
             .padding(bottom = 24.dp, start = 16.dp, end = 16.dp) // 增加间距
             .scale(scale)
-            .tvFocusableJiggle(
-                isTv = isTvDevice,
-                screenWidthDp = configuration.screenWidthDp,
-                reducedMotion = !animationEnabled,
-                cardEmphasis = TvFocusCardEmphasis.Large,
-                motionTier = motionTier
-            )
             .animateEnter(
                 index = index,
                 key = Unit,
@@ -169,20 +158,6 @@ fun CinematicVideoCard(
             )
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
-            }
-            .onPreviewKeyEvent { event ->
-                if (
-                    shouldTriggerHomeCardClickOnTvKey(
-                        isTv = isTvDevice,
-                        keyCode = event.nativeKeyEvent.keyCode,
-                        action = event.nativeKeyEvent.action
-                    )
-                ) {
-                    triggerCardClick()
-                    true
-                } else {
-                    false
-                }
             }
     ) {
         // 卡片主体容器
@@ -305,36 +280,6 @@ fun CinematicVideoCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                   // UP主头像
-                    if (video.owner.face.isNotEmpty()) {
-                        var avatarModifier = Modifier
-                            .size(20.dp) // 更小巧
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f))
-
-                        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                            with(sharedTransitionScope) {
-                                avatarModifier = avatarModifier.sharedBounds(
-                                    sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    boundsTransform = { _, _ -> spring(dampingRatio = 0.8f, stiffness = 200f) },
-                                    clipInOverlayDuringTransition = OverlayClip(CircleShape)
-                                )
-                            }
-                        }
-
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(FormatUtils.fixImageUrl(video.owner.face))
-                                .size(64)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            modifier = avatarModifier,
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                     
                      var upNameModifier = Modifier.wrapContentSize()
                      if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
                          with(sharedTransitionScope) {
@@ -345,16 +290,48 @@ fun CinematicVideoCard(
                              )
                          }
                      }
-                     Text(
-                         text = video.owner.name,
-                         style = MaterialTheme.typography.bodySmall.copy(
-                             color = Color.White.copy(alpha = 0.9f),
+                     UpBadgeName(
+                         name = video.owner.name,
+                         leadingContent = if (video.owner.face.isNotEmpty()) {
+                             {
+                                 var avatarModifier = Modifier
+                                     .size(20.dp)
+                                     .clip(CircleShape)
+                                     .background(Color.White.copy(alpha = 0.2f))
+
+                                 if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                     with(sharedTransitionScope) {
+                                         avatarModifier = avatarModifier.sharedBounds(
+                                             sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
+                                             animatedVisibilityScope = animatedVisibilityScope,
+                                             boundsTransform = { _, _ -> spring(dampingRatio = 0.8f, stiffness = 200f) },
+                                             clipInOverlayDuringTransition = OverlayClip(CircleShape)
+                                         )
+                                     }
+                                 }
+
+                                 AsyncImage(
+                                     model = ImageRequest.Builder(LocalContext.current)
+                                         .data(FormatUtils.fixImageUrl(video.owner.face))
+                                         .size(64)
+                                         .crossfade(true)
+                                         .build(),
+                                     contentDescription = null,
+                                     modifier = avatarModifier,
+                                     contentScale = ContentScale.Crop
+                                 )
+                             }
+                         } else null,
+                         nameStyle = MaterialTheme.typography.bodySmall.copy(
                              fontWeight = FontWeight.Medium,
                              shadow = androidx.compose.ui.graphics.Shadow(
                                  color = Color.Black.copy(alpha = 0.5f),
                                  blurRadius = 4f
                              )
                          ),
+                         nameColor = Color.White.copy(alpha = 0.9f),
+                         badgeTextColor = Color.White.copy(alpha = 0.92f),
+                         badgeBorderColor = Color.White.copy(alpha = 0.45f),
                          modifier = upNameModifier
                      )
                      

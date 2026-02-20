@@ -34,7 +34,6 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.CardPositionManager
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
@@ -42,7 +41,6 @@ import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.spring
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
@@ -51,7 +49,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import com.android.purebilibili.core.ui.adaptive.MotionTier
-import com.android.purebilibili.core.ui.animation.tvFocusableJiggle
+import com.android.purebilibili.core.ui.components.UpBadgeName
 //  [预览播放] 相关引用已移除
 
 // 显式导入 collectAsState 以避免 ambiguity 或 missing reference
@@ -93,7 +91,6 @@ fun ElegantVideoCard(
 ) {
     val haptic = rememberHapticFeedback()
     val scope = rememberCoroutineScope()
-    val isTvDevice = rememberIsTvDevice()
     
     //  [HIG] 动态圆角 - 12dp 标准
     val cornerRadiusScale = LocalCornerRadiusScale.current
@@ -157,12 +154,6 @@ fun ElegantVideoCard(
                 scaleX = interactionScale
                 scaleY = interactionScale
             }
-            .tvFocusableJiggle(
-                isTv = isTvDevice,
-                screenWidthDp = configuration.screenWidthDp,
-                reducedMotion = !animationEnabled,
-                motionTier = motionTier
-            )
             //  [修复] 进场动画 - 使用 Unit 作为 key，只在首次挂载时播放
             // 原问题：使用 video.bvid 作为 key，分类切换时所有卡片重新触发动画（缩放收缩效果）
             .animateEnter(
@@ -174,20 +165,6 @@ fun ElegantVideoCard(
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
-            }
-            .onPreviewKeyEvent { event ->
-                if (
-                    shouldTriggerHomeCardClickOnTvKey(
-                        isTv = isTvDevice,
-                        keyCode = event.nativeKeyEvent.keyCode,
-                        action = event.nativeKeyEvent.action
-                    )
-                ) {
-                    triggerCardClick()
-                    true
-                } else {
-                    false
-                }
             }
             //  [修改] 父级容器仅处理点击跳转 (或者点击由子 View 分别处理)
             //  为了避免冲突，我们将手势下放到子 View
@@ -458,41 +435,6 @@ fun ElegantVideoCard(
                 )
             }
             
-            //  UP主头像（小圆形，官方风格）
-            if (video.owner.face.isNotEmpty()) {
-                var avatarModifier = Modifier
-                    .size(14.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                
-                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        avatarModifier = avatarModifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ ->
-                                com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
-                            },
-                            clipInOverlayDuringTransition = OverlayClip(CircleShape)
-                        )
-                    }
-                }
-
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(FormatUtils.fixImageUrl(video.owner.face))
-                        .crossfade(100)
-                        .size(32, 32)
-                        //  [修复] 使用 face URL hashCode 作为缓存 key
-                        // 原因: 历史记录的 owner.mid 可能为空，导致所有头像共享同一缓存
-                        .memoryCacheKey("avatar_${video.owner.face.hashCode()}")
-                        .build(),
-                    contentDescription = null,
-                    modifier = avatarModifier,
-                    contentScale = ContentScale.Crop
-                )
-            }
-            
             //  [HIG] UP主名称 - 13sp footnote 标准
             //  共享元素过渡 - UP主名称
             var upNameModifier = Modifier.weight(1f, fill = false)
@@ -509,13 +451,48 @@ fun ElegantVideoCard(
                 }
             }
 
-            Text(
-                text = video.owner.name,
-                fontSize = 13.sp,  // HIG footnote 标准
-                fontWeight = FontWeight.Normal,
-                color = iOSSystemGray,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            UpBadgeName(
+                name = video.owner.name,
+                leadingContent = if (video.owner.face.isNotEmpty()) {
+                    {
+                        var avatarModifier = Modifier
+                            .size(14.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+
+                        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                avatarModifier = avatarModifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ ->
+                                        com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
+                                    },
+                                    clipInOverlayDuringTransition = OverlayClip(CircleShape)
+                                )
+                            }
+                        }
+
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(FormatUtils.fixImageUrl(video.owner.face))
+                                .crossfade(100)
+                                .size(32, 32)
+                                .memoryCacheKey("avatar_${video.owner.face.hashCode()}")
+                                .build(),
+                            contentDescription = null,
+                            modifier = avatarModifier,
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                } else null,
+                nameStyle = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Normal
+                ),
+                nameColor = iOSSystemGray,
+                badgeTextColor = iOSSystemGray.copy(alpha = 0.85f),
+                badgeBorderColor = iOSSystemGray.copy(alpha = 0.4f),
                 modifier = upNameModifier
             )
             

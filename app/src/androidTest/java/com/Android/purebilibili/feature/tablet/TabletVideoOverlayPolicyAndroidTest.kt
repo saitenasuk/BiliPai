@@ -15,10 +15,10 @@ class TabletVideoOverlayPolicyAndroidTest {
 
     @Test
     fun mediumTablet_usesDedicatedOverlayTier() {
-        val visual = resolveVideoPlayerOverlayVisualPolicy(widthDp = 720, isTv = false)
-        val bottom = resolveBottomControlBarLayoutPolicy(widthDp = 720, isTv = false)
-        val fullscreen = resolvePortraitFullscreenOverlayLayoutPolicy(widthDp = 720, isTv = false)
-        val progress = resolvePortraitProgressBarLayoutPolicy(widthDp = 720, isTv = false)
+        val visual = resolveVideoPlayerOverlayVisualPolicy(widthDp = 720)
+        val bottom = resolveBottomControlBarLayoutPolicy(widthDp = 720)
+        val fullscreen = resolvePortraitFullscreenOverlayLayoutPolicy(widthDp = 720)
+        val progress = resolvePortraitProgressBarLayoutPolicy(widthDp = 720)
 
         assertEquals(152, visual.topScrimHeightDp)
         assertEquals(36, bottom.playButtonSizeDp)
@@ -28,9 +28,9 @@ class TabletVideoOverlayPolicyAndroidTest {
 
     @Test
     fun mediumTablet_staysBetweenPhoneAndExpandedDensity() {
-        val phone = resolveBottomControlBarLayoutPolicy(widthDp = 393, isTv = false)
-        val medium = resolveBottomControlBarLayoutPolicy(widthDp = 720, isTv = false)
-        val expanded = resolveBottomControlBarLayoutPolicy(widthDp = 1024, isTv = false)
+        val phone = resolveBottomControlBarLayoutPolicy(widthDp = 393)
+        val medium = resolveBottomControlBarLayoutPolicy(widthDp = 720)
+        val expanded = resolveBottomControlBarLayoutPolicy(widthDp = 1024)
 
         assertTrue(medium.playButtonSizeDp > phone.playButtonSizeDp)
         assertTrue(medium.playButtonSizeDp < expanded.playButtonSizeDp)

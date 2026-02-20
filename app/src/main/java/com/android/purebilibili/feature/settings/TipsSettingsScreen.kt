@@ -19,7 +19,6 @@ import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.InfoCircle
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronBackward
@@ -39,17 +38,11 @@ fun TipsSettingsScreen(
         isVisible = true
     }
     val context = LocalContext.current
-    val isTvDevice = rememberIsTvDevice()
-    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
     val windowSizeClass = LocalWindowSizeClass.current
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = false)
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val effectiveMotionTier = remember(deviceUiProfile.motionTier, cardAnimationEnabled) {

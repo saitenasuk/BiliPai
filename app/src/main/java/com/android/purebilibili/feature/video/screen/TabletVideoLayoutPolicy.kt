@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.screen
 
+import androidx.compose.ui.graphics.Color
+
 data class TabletVideoLayoutPolicy(
     val primaryRatio: Float,
     val playerMaxWidthDp: Int,
@@ -12,6 +14,12 @@ data class TabletCinemaLayoutPolicy(
     val horizontalPaddingDp: Int,
     val playerMaxWidthDp: Int
 )
+
+internal enum class CinemaMetaPanelBlock {
+    ACTIONS,
+    UP_INFO,
+    INTRO
+}
 
 internal enum class TabletSideCurtainState {
     HIDDEN,
@@ -61,17 +69,8 @@ internal fun resolveTabletPrimaryRatio(
 }
 
 fun resolveTabletVideoLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): TabletVideoLayoutPolicy {
-    if (isTv) {
-        return TabletVideoLayoutPolicy(
-            primaryRatio = 0.66f,
-            playerMaxWidthDp = 1260,
-            infoMaxWidthDp = 1180
-        )
-    }
-
     return when {
         widthDp >= 1600 -> TabletVideoLayoutPolicy(
             primaryRatio = 0.66f,
@@ -87,18 +86,8 @@ fun resolveTabletVideoLayoutPolicy(
 }
 
 fun resolveTabletCinemaLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): TabletCinemaLayoutPolicy {
-    if (isTv) {
-        return TabletCinemaLayoutPolicy(
-            curtainPeekWidthDp = 72,
-            curtainOpenWidthDp = 460,
-            horizontalPaddingDp = 24,
-            playerMaxWidthDp = 1320
-        )
-    }
-
     val normalizedWidth = widthDp.coerceIn(960, 1800)
     val curtainOpenWidthDp = interpolateByWidth(
         widthDp = normalizedWidth,
@@ -149,7 +138,7 @@ internal fun resolveCurtainWidthDp(
 }
 
 internal fun resolveInitialCurtainState(widthDp: Int): TabletSideCurtainState {
-    return if (widthDp >= 1360) {
+    return if (widthDp >= 960) {
         TabletSideCurtainState.OPEN
     } else {
         TabletSideCurtainState.PEEK
@@ -168,6 +157,40 @@ internal fun resolveCurtainStateAfterAutoBehavior(
             TabletSideCurtainState.PEEK
         }
         else -> currentState
+    }
+}
+
+internal fun resolveCinemaMetaPanelContainerColor(
+    isDarkTheme: Boolean,
+    surfaceColor: Color
+): Color {
+    return if (isDarkTheme) {
+        surfaceColor.copy(alpha = 0.92f)
+    } else {
+        Color.White
+    }
+}
+
+internal fun resolveCinemaIntroCardContainerColor(
+    isDarkTheme: Boolean,
+    surfaceContainerLowColor: Color
+): Color {
+    return if (isDarkTheme) {
+        surfaceContainerLowColor.copy(alpha = 0.96f)
+    } else {
+        Color.White
+    }
+}
+
+internal fun resolveCinemaMetaPanelBlocks(
+    hasOwner: Boolean
+): List<CinemaMetaPanelBlock> {
+    return buildList {
+        add(CinemaMetaPanelBlock.ACTIONS)
+        if (hasOwner) {
+            add(CinemaMetaPanelBlock.UP_INFO)
+        }
+        add(CinemaMetaPanelBlock.INTRO)
     }
 }
 

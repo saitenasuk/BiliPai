@@ -8,8 +8,7 @@ class MiniPlayerOverlayLayoutPolicyTest {
     @Test
     fun compactPhone_usesCurrentMiniPlayerSize() {
         val policy = resolveMiniPlayerOverlayLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(220, policy.miniPlayerWidthDp)
@@ -23,8 +22,7 @@ class MiniPlayerOverlayLayoutPolicyTest {
     @Test
     fun mediumTablet_keepsReadableMiniPlayerWithoutOverflow() {
         val policy = resolveMiniPlayerOverlayLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(280, policy.miniPlayerWidthDp)
@@ -38,8 +36,7 @@ class MiniPlayerOverlayLayoutPolicyTest {
     @Test
     fun expandedTablet_scalesMiniPlayerAndControls() {
         val policy = resolveMiniPlayerOverlayLayoutPolicy(
-            widthDp = 1280,
-            isTv = false
+            widthDp = 1280
         )
 
         assertEquals(300, policy.miniPlayerWidthDp)
@@ -51,10 +48,9 @@ class MiniPlayerOverlayLayoutPolicyTest {
     }
 
     @Test
-    fun tv_usesLargestTenFootMiniPlayerTier() {
+    fun ultraWide_usesLargestTenFootMiniPlayerTier() {
         val policy = resolveMiniPlayerOverlayLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(320, policy.miniPlayerWidthDp)

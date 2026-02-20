@@ -8,8 +8,7 @@ class PortraitInteractionBarLayoutPolicyTest {
     @Test
     fun compactPhone_usesDenseInteractionRail() {
         val policy = resolvePortraitInteractionBarLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(8, policy.endPaddingDp)
@@ -22,8 +21,7 @@ class PortraitInteractionBarLayoutPolicyTest {
     @Test
     fun mediumTablet_improvesRailSpacingWithoutOverstretch() {
         val policy = resolvePortraitInteractionBarLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(10, policy.endPaddingDp)
@@ -36,8 +34,7 @@ class PortraitInteractionBarLayoutPolicyTest {
     @Test
     fun tablet_expandsIconAndSpacing() {
         val policy = resolvePortraitInteractionBarLayoutPolicy(
-            widthDp = 1024,
-            isTv = false
+            widthDp = 1024
         )
 
         assertEquals(12, policy.endPaddingDp)
@@ -48,10 +45,9 @@ class PortraitInteractionBarLayoutPolicyTest {
     }
 
     @Test
-    fun tv_forcesLargestInteractionRailScale() {
+    fun ultraWide_forcesLargestInteractionRailScale() {
         val policy = resolvePortraitInteractionBarLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(18, policy.endPaddingDp)

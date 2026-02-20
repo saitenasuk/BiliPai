@@ -48,7 +48,6 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.Owner
@@ -271,17 +270,11 @@ fun WatchLaterScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val context = LocalContext.current
     val windowSizeClass = LocalWindowSizeClass.current
-    val isTvDevice = rememberIsTvDevice()
-    val tvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
     val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = true)
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, tvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = tvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val cardMotionTier = resolveEffectiveMotionTier(

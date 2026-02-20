@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.view.KeyEvent
+import android.os.Build
 import android.view.Window
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
@@ -51,10 +51,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -112,8 +110,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
+import com.android.purebilibili.feature.video.player.PlaybackService
 // 📱 [新增] 竖屏全屏
 import com.android.purebilibili.feature.video.ui.overlay.PortraitFullscreenOverlay
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
@@ -148,7 +146,6 @@ fun VideoDetailScreen(
     onBgmClick: (BgmInfo) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val isTvDevice = rememberIsTvDevice()
     val view = LocalView.current
     val configuration = LocalConfiguration.current
     val uiState by viewModel.uiState.collectAsState()
@@ -195,29 +192,11 @@ fun VideoDetailScreen(
     //     .collectAsState(initial = false)
 
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val tvDetailPlayerFocusRequester = remember { FocusRequester() }
-    val tvDetailInfoFocusRequester = remember { FocusRequester() }
-    val tvDetailRelatedFocusRequester = remember { FocusRequester() }
-    var tvDetailFocusTarget by remember { mutableStateOf(VideoDetailTvFocusTarget.PLAYER) }
-    val requestTvDetailFocusTarget: (VideoDetailTvFocusTarget) -> Unit = remember(
-        tvDetailPlayerFocusRequester,
-        tvDetailInfoFocusRequester,
-        tvDetailRelatedFocusRequester
-    ) {
-        { target ->
-            when (target) {
-                VideoDetailTvFocusTarget.PLAYER -> tvDetailPlayerFocusRequester.requestFocus()
-                VideoDetailTvFocusTarget.INFO -> tvDetailInfoFocusRequester.requestFocus()
-                VideoDetailTvFocusTarget.RELATED -> tvDetailRelatedFocusRequester.requestFocus()
-            }
-        }
-    }
     
     // 📐 [大屏适配] 仅 Expanded 才启用平板分栏布局
     val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
     val useTabletLayout = shouldUseTabletVideoLayout(
-        isExpandedScreen = windowSizeClass.isExpandedScreen,
-        isTvDevice = isTvDevice
+        isExpandedScreen = windowSizeClass.isExpandedScreen
     )
     
     // 🔧 [修复] 追踪用户是否主动请求全屏（点击全屏按钮）
@@ -226,20 +205,11 @@ fun VideoDetailScreen(
     
     // 📐 全屏模式逻辑：
     // - 手机：横屏时自动进入全屏
-    // - 大屏（Expanded）：只有用户主动点击全屏按钮后才进入全屏
-    val isFullscreenMode = if (useTabletLayout) {
-        userRequestedFullscreen
-    } else {
-        isLandscape
-    }
-
-    LaunchedEffect(isTvDevice, isFullscreenMode, useTabletLayout) {
-        if (isTvDevice && !isFullscreenMode && !useTabletLayout) {
-            tvDetailFocusTarget = resolveInitialVideoDetailTvFocusTarget(isTv = true)
-                ?: VideoDetailTvFocusTarget.PLAYER
-            requestTvDetailFocusTarget(tvDetailFocusTarget)
-        }
-    }
+    // - 平板：仅用户主动切换全屏
+    val isOrientationDrivenFullscreen = shouldUseOrientationDrivenFullscreen(
+        useTabletLayout = useTabletLayout
+    )
+    val isFullscreenMode = if (isOrientationDrivenFullscreen) isLandscape else userRequestedFullscreen
 
     var isPipMode by remember { mutableStateOf(isInPipMode) }
     LaunchedEffect(isInPipMode) { isPipMode = isInPipMode }
@@ -266,7 +236,7 @@ fun VideoDetailScreen(
     //  从小窗展开时自动进入全屏
     LaunchedEffect(startInFullscreen) {
         if (startInFullscreen) {
-            if (useTabletLayout) {
+            if (!isOrientationDrivenFullscreen) {
                 userRequestedFullscreen = true
             } else if (!isLandscape) {
                 context.findActivity()?.let { activity ->
@@ -319,8 +289,8 @@ fun VideoDetailScreen(
     val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAutoRotateEnabled(context).collectAsState(initial = false)
     
-    LaunchedEffect(autoRotateEnabled) {
-        if (!useTabletLayout) {  // 只对手机生效
+    LaunchedEffect(autoRotateEnabled, useTabletLayout) {
+        if (shouldApplyPhoneAutoRotatePolicy(useTabletLayout)) {  // 只对手机生效
             activity?.requestedOrientation = if (autoRotateEnabled) {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR  // 传感器控制，跟随手机方向
             } else {
@@ -332,10 +302,56 @@ fun VideoDetailScreen(
             )
         }
     }
+
+    DisposableEffect(activity, isScreenActive) {
+        if (!isScreenActive || activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            onDispose { }
+        } else {
+            val hostWindow = activity.window
+            val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                activity.display
+            } else {
+                @Suppress("DEPRECATION")
+                activity.windowManager.defaultDisplay
+            }
+
+            if (hostWindow == null || display == null) {
+                onDispose { }
+            } else {
+                val originalModeId = hostWindow.attributes.preferredDisplayModeId
+                val currentModeId = display.mode.modeId
+                val preferredModeId = resolvePreferredHighRefreshModeId(
+                    currentModeId = currentModeId,
+                    supportedModes = display.supportedModes.map { mode ->
+                        RefreshModeCandidate(
+                            modeId = mode.modeId,
+                            refreshRate = mode.refreshRate,
+                            width = mode.physicalWidth,
+                            height = mode.physicalHeight
+                        )
+                    }
+                )
+                if (preferredModeId != null && preferredModeId != originalModeId) {
+                    hostWindow.attributes = hostWindow.attributes.apply {
+                        preferredDisplayModeId = preferredModeId
+                    }
+                }
+
+                onDispose {
+                    if (hostWindow.attributes.preferredDisplayModeId != originalModeId) {
+                        hostWindow.attributes = hostWindow.attributes.apply {
+                            preferredDisplayModeId = originalModeId
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     // 退出重置亮度 +  屏幕常亮管理 + 状态栏恢复（作为安全网）
-    // 追踪是否正在导航到音频模式（防止取消通知）
+    // 追踪是否正在导航到音频模式/小窗模式（防止误清理通知）
     var isNavigatingToAudioMode by remember { mutableStateOf(false) }
+    var isNavigatingToMiniMode by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         //  [沉浸式] 启用边到边显示，让内容延伸到状态栏下方
@@ -390,11 +406,20 @@ fun VideoDetailScreen(
             }
             
             // 🔕 [修复] 退出视频页时取消媒体通知（防止状态不同步）
-            //  [关键修复] 如果是导航到音频模式，则保留通知！
-            if (!isNavigatingToAudioMode) {
+            // 音频模式/小窗模式属于保活场景，保留通知
+            if (!isNavigatingToAudioMode && !isNavigatingToMiniMode) {
                 val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) 
                     as android.app.NotificationManager
                 notificationManager.cancel(1001)  // NOTIFICATION_ID from VideoPlayerState
+                notificationManager.cancel(PlaybackService.NOTIFICATION_ID)
+                try {
+                    context.startService(
+                        android.content.Intent(context, PlaybackService::class.java).apply {
+                            action = PlaybackService.ACTION_STOP_FOREGROUND
+                        }
+                    )
+                } catch (_: Exception) {
+                }
             }
             
             // 恢复屏幕方向
@@ -540,11 +565,9 @@ fun VideoDetailScreen(
     DisposableEffect(playerState) {
         onDispose {
             // 标记页面正在退出
-            // [修复] 仅在明确用户离开时标记导航退出。
-            // 系统返回手势的兜底由 AppNavigation 处理，避免“视频A->视频B”切换时误标记离开。
-            // 配置切换时不标记离开，避免旋转屏幕误暂停。
+            // 配置切换不标记离开；音频模式/小窗模式为主动保活场景，也不标记离开。
             val isChangingConfigurations = activity?.isChangingConfigurations == true
-            if (isActuallyLeaving && !isNavigatingToAudioMode && !isChangingConfigurations) {
+            if (!isNavigatingToAudioMode && !isNavigatingToMiniMode && !isChangingConfigurations) {
                 com.android.purebilibili.core.util.Logger.d(
                     "VideoDetailScreen",
                     "🛑 Disposing screen as navigation exit, notifying MiniPlayerManager"
@@ -553,7 +576,7 @@ fun VideoDetailScreen(
             } else {
                 com.android.purebilibili.core.util.Logger.d(
                     "VideoDetailScreen",
-                    "💤 Screen disposed without navigation-exit mark (isActuallyLeaving=$isActuallyLeaving, audioMode=$isNavigatingToAudioMode, changingConfig=$isChangingConfigurations)"
+                    "💤 Screen disposed without navigation-exit mark (audioMode=$isNavigatingToAudioMode, miniMode=$isNavigatingToMiniMode, changingConfig=$isChangingConfigurations)"
                 )
             }
         }
@@ -566,11 +589,14 @@ fun VideoDetailScreen(
     
     // 📱 [优化] 竖屏视频检测已移至 VideoPlayerState 集中管理
     val isVerticalVideo by playerState.isVerticalVideo.collectAsState()
+    val portraitExperienceEnabled = shouldEnablePortraitExperience()
     val enterPortraitFullscreen = {
-        portraitSyncSnapshotBvid = (uiState as? PlayerUiState.Success)?.info?.bvid
-        portraitSyncSnapshotPositionMs = playerState.player.currentPosition.coerceAtLeast(0L)
-        hasPendingPortraitSync = false
-        isPortraitFullscreen = true
+        if (portraitExperienceEnabled) {
+            portraitSyncSnapshotBvid = (uiState as? PlayerUiState.Success)?.info?.bvid
+            portraitSyncSnapshotPositionMs = playerState.player.currentPosition.coerceAtLeast(0L)
+            hasPendingPortraitSync = false
+            isPortraitFullscreen = true
+        }
     }
     val shouldMirrorPortraitProgressToMainPlayer = com.android.purebilibili.feature.video.ui.pager
         .shouldMirrorPortraitProgressToMainPlayer(useSharedPlayer = useSharedPortraitPlayer)
@@ -685,6 +711,7 @@ fun VideoDetailScreen(
             manager.enterMiniMode(forced = true)
 
             // 3. 返回上一页（首页）
+            isNavigatingToMiniMode = true
             onBack()
         } ?: run {
             // 如果 miniPlayerManager 不存在，直接返回
@@ -768,7 +795,7 @@ fun VideoDetailScreen(
     val toggleFullscreen = {
         val activity = context.findActivity()
         if (activity != null) {
-            if (useTabletLayout) {
+            if (!isOrientationDrivenFullscreen) {
                 // 🖥️ 平板：仅切换 UI 状态，不改变屏幕方向
                 // [修复] 如果退出全屏且是手机（sw < 600），强制转回竖屏
                 val wasFullscreen = userRequestedFullscreen
@@ -776,7 +803,7 @@ fun VideoDetailScreen(
                 
                 if (wasFullscreen && !userRequestedFullscreen) {
                     // check if it is a phone
-                    if (configuration.smallestScreenWidthDp < 600 && !isTvDevice) {
+                    if (configuration.smallestScreenWidthDp < 600) {
                         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     }
                 }
@@ -807,8 +834,7 @@ fun VideoDetailScreen(
     val isPhoneInLandscapeSplitView = shouldRotateToPortraitOnSplitBack(
         useTabletLayout = useTabletLayout,
         smallestScreenWidthDp = configuration.smallestScreenWidthDp,
-        orientation = configuration.orientation,
-        isTvDevice = isTvDevice
+        orientation = configuration.orientation
     )
     
     BackHandler(enabled = isPhoneInLandscapeSplitView && !isFullscreenMode && !isPortraitFullscreen) {
@@ -845,11 +871,18 @@ fun VideoDetailScreen(
                 window.statusBarColor = Color.Black.toArgb()
                 window.navigationBarColor = Color.Black.toArgb()
             } else {
-                //  [沉浸式] 非全屏模式：状态栏透明，让视频延伸到状态栏下方
+                //  [沉浸式] 非全屏模式：手机保持透明沉浸，平板使用实体状态栏提升可读性
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
-                insetsController.isAppearanceLightStatusBars = false  // 白色图标（视频区域是深色的）
-                window.statusBarColor = Color.Transparent.toArgb()  // 透明状态栏
-                window.navigationBarColor = Color.Transparent.toArgb()
+                if (useTabletLayout) {
+                    insetsController.isAppearanceLightStatusBars = isLightBackground
+                    insetsController.isAppearanceLightNavigationBars = isLightBackground
+                    window.statusBarColor = backgroundColor.toArgb()
+                    window.navigationBarColor = backgroundColor.toArgb()
+                } else {
+                    insetsController.isAppearanceLightStatusBars = false  // 白色图标（视频区域是深色的）
+                    window.statusBarColor = Color.Transparent.toArgb()  // 透明状态栏
+                    window.navigationBarColor = Color.Transparent.toArgb()
+                }
             }
         }
     }
@@ -907,16 +940,18 @@ fun VideoDetailScreen(
                     // 📖 [新增] 视频章节数据
                     viewPoints = viewPoints,
                 // 📱 [新增] 竖屏全屏模式
-                isVerticalVideo = isVerticalVideo,
+                isVerticalVideo = isVerticalVideo && portraitExperienceEnabled,
                 isPortraitFullscreen = isPortraitFullscreen,
                 onPortraitFullscreen = {
-                    if (!isPortraitFullscreen) {
-                        if (isFullscreenMode) {
-                            toggleFullscreen()
+                    if (portraitExperienceEnabled) {
+                        if (!isPortraitFullscreen) {
+                            if (isFullscreenMode) {
+                                toggleFullscreen()
+                            }
+                            enterPortraitFullscreen()
+                        } else {
+                            isPortraitFullscreen = false
                         }
-                        enterPortraitFullscreen()
-                    } else {
-                        isPortraitFullscreen = false
                     }
                 },
                 // 🔁 [新增] 播放模式
@@ -939,8 +974,7 @@ fun VideoDetailScreen(
                 onCoin = { viewModel.showCoinDialog() },
                 onToggleFavorite = { viewModel.showFavoriteFolderDialog() },
                 onTriple = { viewModel.doTripleAction() },
-                onRelatedVideoClick = onVideoClick,
-                tvFocusRequester = tvDetailPlayerFocusRequester
+                onRelatedVideoClick = onVideoClick
             )
         } else {
                 //  沉浸式布局：视频延伸到状态栏 + 内容区域
@@ -970,8 +1004,7 @@ fun VideoDetailScreen(
                             val shouldRotatePortrait = shouldRotateToPortraitOnSplitBack(
                                 useTabletLayout = true,
                                 smallestScreenWidthDp = smallestWidth,
-                                orientation = currentOrientation,
-                                isTvDevice = isTvDevice
+                                orientation = currentOrientation
                             )
                             
                             com.android.purebilibili.core.util.Logger.d(
@@ -1094,12 +1127,18 @@ fun VideoDetailScreen(
                     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
                     
                     //  为播放器容器添加共享元素标记（受开关控制）
-                    val playerContainerModifier = if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                        with(sharedTransitionScope) {
+                    val playerContainerModifier = if (
+                        shouldEnableVideoCoverSharedTransition(
+                            transitionEnabled = transitionEnabled,
+                            hasSharedTransitionScope = sharedTransitionScope != null,
+                            hasAnimatedVisibilityScope = animatedVisibilityScope != null
+                        )
+                    ) {
+                        with(requireNotNull(sharedTransitionScope)) {
                             Modifier
                                 .sharedBounds(
                                     sharedContentState = rememberSharedContentState(key = "video_cover_$bvid"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                     //  添加回弹效果的 spring 动画
                                     boundsTransform = { _, _ ->
                                         spring(
@@ -1186,7 +1225,7 @@ fun VideoDetailScreen(
                         viewPoints = viewPoints,
                         
                         // 📱 [新增] 竖屏全屏模式
-                        isVerticalVideo = isVerticalVideo,
+                        isVerticalVideo = isVerticalVideo && portraitExperienceEnabled,
                         onPortraitFullscreen = enterPortraitFullscreen,
                         isPortraitFullscreen = isPortraitFullscreen,
 
@@ -1201,22 +1240,7 @@ fun VideoDetailScreen(
                                 onAudioLangChange = { viewModel.changeAudioLanguage(it) },
                                 // [New Actions]
                                 onSaveCover = { viewModel.saveCover(context) },
-                                onDownloadAudio = { viewModel.downloadAudio(context) },
-                                tvFocusRequester = tvDetailPlayerFocusRequester,
-                                onTvMoveFocusDown = {
-                                    val hasRelatedContent =
-                                        (uiState as? PlayerUiState.Success)?.related?.isNotEmpty() == true
-                                    val nextTarget = resolveVideoDetailTvFocusTarget(
-                                        current = tvDetailFocusTarget,
-                                        keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
-                                        action = KeyEvent.ACTION_DOWN,
-                                        hasRelatedContent = hasRelatedContent
-                                    )
-                                    if (nextTarget != tvDetailFocusTarget) {
-                                        tvDetailFocusTarget = nextTarget
-                                        requestTvDetailFocusTarget(nextTarget)
-                                    }
-                                }
+                                onDownloadAudio = { viewModel.downloadAudio(context) }
                                 //  空降助手 - 已由插件系统自动处理
                                 // sponsorSegment = sponsorSegment,
                                 // showSponsorSkipButton = showSponsorSkipButton,
@@ -1226,32 +1250,10 @@ fun VideoDetailScreen(
                         }
                     }
                     
-                    val handleTvContentKeyEvent: (KeyEvent) -> Boolean = { nativeEvent ->
-                        val hasRelatedContent =
-                            (uiState as? PlayerUiState.Success)?.related?.isNotEmpty() == true
-                        val nextTarget = resolveVideoDetailTvFocusTarget(
-                            current = tvDetailFocusTarget,
-                            keyCode = nativeEvent.keyCode,
-                            action = nativeEvent.action,
-                            hasRelatedContent = hasRelatedContent
-                        )
-                        if (nextTarget != tvDetailFocusTarget) {
-                            tvDetailFocusTarget = nextTarget
-                            requestTvDetailFocusTarget(nextTarget)
-                            true
-                        } else {
-                            false
-                        }
-                    }
-
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
-                            .onPreviewKeyEvent { event ->
-                                if (!isTvDevice) return@onPreviewKeyEvent false
-                                handleTvContentKeyEvent(event.nativeKeyEvent)
-                            }
                             // .nestedScroll(nestedScrollConnection) // [Remove] 移除嵌套滚动，确保 Tabs 正常滑动
                     ) {
                         when (uiState) {
@@ -1401,44 +1403,41 @@ fun VideoDetailScreen(
                                                         // [新增] 恢复播放器 (音频模式 -> 视频模式)
                                                         isPlayerCollapsed = isPlayerCollapsed,
                                                         onRestorePlayer = { playerHeightOffsetPx = 0f },
-                                                        tvInfoFocusRequester = if (isTvDevice) tvDetailInfoFocusRequester else null,
-                                                        tvRelatedFocusRequester = if (isTvDevice) tvDetailRelatedFocusRequester else null,
-                                                        isTvInfoFocused = isTvDevice && tvDetailFocusTarget == VideoDetailTvFocusTarget.INFO,
-                                                        isTvRelatedFocused = isTvDevice && tvDetailFocusTarget == VideoDetailTvFocusTarget.RELATED,
-                                                        onTvContentPreviewKeyEvent = { keyEvent ->
-                                                            handleTvContentKeyEvent(keyEvent)
-                                                        },
                                                         // [新增] AI Summary & BGM
                                                         aiSummary = success.aiSummary,
                                                         bgmInfo = success.bgmInfo,
-                                                        onBgmClick = onBgmClick
+                                                        onBgmClick = onBgmClick,
+                                                        showInteractionActions = shouldShowVideoDetailActionButtons()
                                                     )
 
                                                     // 底部输入栏 (覆盖在内容之上)
-                                                    BottomInputBar(
-                                                        modifier = Modifier.align(Alignment.BottomCenter),
-                                                        isLiked = success.isLiked,
-                                                        isFavorited = success.isFavorited,
-                                                        isCoined = success.coinCount > 0,
-                                                        onLikeClick = { viewModel.toggleLike() },
-                                                        onFavoriteClick = { viewModel.toggleFavorite() },
-                                                        onCoinClick = { viewModel.openCoinDialog() },
-                                                        onShareClick = {
-                                                            val shareText = "【${success.info.title}】\nhttps://www.bilibili.com/video/${success.info.bvid}"
-                                                            val sendIntent = android.content.Intent().apply {
-                                                                action = android.content.Intent.ACTION_SEND
-                                                                putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                                                                type = "text/plain"
-                                                            }
-                                                            val shareIntent = android.content.Intent.createChooser(sendIntent, "分享视频到")
-                                                            context.startActivity(shareIntent)
-                                                        },
-                                                        onCommentClick = { 
-                                                            android.util.Log.d("VideoDetailScreen", "📝 Comment input clicked!")
-                                                            viewModel.showCommentInputDialog()
-                                                        },
-                                                        hazeState = hazeState
-                                                    )
+                                                    if (shouldShowVideoDetailBottomInteractionBar()) {
+                                                        BottomInputBar(
+                                                            modifier = Modifier.align(Alignment.BottomCenter),
+                                                            isLiked = success.isLiked,
+                                                            isFavorited = success.isFavorited,
+                                                            isCoined = success.coinCount > 0,
+                                                            onLikeClick = { viewModel.toggleLike() },
+                                                            onFavoriteClick = { viewModel.toggleFavorite() },
+                                                            onCoinClick = { viewModel.openCoinDialog() },
+                                                            onShareClick = {
+                                                                val shareText = "【${success.info.title}】\nhttps://www.bilibili.com/video/${success.info.bvid}"
+                                                                val sendIntent = android.content.Intent().apply {
+                                                                    action = android.content.Intent.ACTION_SEND
+                                                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                                                    type = "text/plain"
+                                                                }
+                                                                val shareIntent = android.content.Intent.createChooser(sendIntent, "分享视频到")
+                                                                context.startActivity(shareIntent)
+                                                            },
+                                                            onCommentClick = {
+                                                                android.util.Log.d("VideoDetailScreen", "📝 Comment input clicked!")
+                                                                viewModel.clearReplyingTo()
+                                                                viewModel.showCommentInputDialog()
+                                                            },
+                                                            hazeState = hazeState
+                                                        )
+                                                    }
                                                 }
                                             }
                                     }
@@ -1534,7 +1533,8 @@ fun VideoDetailScreen(
         // 📱 [新增] 竖屏全屏覆盖层
         // [修复] 在 Loading 状态时也保持竖屏全屏，使用上一个成功状态的数据
         // [修复] 移除 !isLandscape 限制，允许用户强制进入（例如在平板或特殊设备上）
-        val showPortraitFullscreen = isPortraitFullscreen && 
+        val showPortraitFullscreen = portraitExperienceEnabled &&
+            isPortraitFullscreen &&
             (uiState is PlayerUiState.Success || uiState is PlayerUiState.Loading)
         
         // 缓存上一个成功状态以在 Loading 时使用
@@ -2062,27 +2062,6 @@ fun VideoDetailScreen(
             }
         }
 
-        if (isTvDevice && !isFullscreenMode && !useTabletLayout) {
-            TvDetailFocusZoneOverlay(
-                focusTarget = tvDetailFocusTarget,
-                onTargetSelected = { target ->
-                    val hasRelatedContent =
-                        (uiState as? PlayerUiState.Success)?.related?.isNotEmpty() == true
-                    val normalizedTarget = normalizeVideoDetailTvFocusTarget(
-                        target = target,
-                        hasRelatedContent = hasRelatedContent
-                    )
-                    if (normalizedTarget != tvDetailFocusTarget) {
-                        tvDetailFocusTarget = normalizedTarget
-                        requestTvDetailFocusTarget(normalizedTarget)
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 12.dp, end = 12.dp)
-            )
-        }
-        
         // 💬 弹幕上下文菜单
         val danmakuMenuState by viewModel.danmakuMenuState.collectAsState()
         
@@ -2124,58 +2103,77 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
-@Composable
-private fun TvDetailFocusZoneOverlay(
-    focusTarget: VideoDetailTvFocusTarget,
-    onTargetSelected: (VideoDetailTvFocusTarget) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val focusTargets = remember {
-        listOf(
-            VideoDetailTvFocusTarget.PLAYER,
-            VideoDetailTvFocusTarget.INFO,
-            VideoDetailTvFocusTarget.RELATED
-        )
-    }
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-        tonalElevation = 8.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            focusTargets.forEach { target ->
-                FilterChip(
-                    selected = target == focusTarget,
-                    onClick = { onTargetSelected(target) },
-                    label = { Text(resolveVideoDetailTvFocusLabel(target), fontSize = 11.sp) }
-                )
-            }
-        }
-    }
-}
-
 internal fun shouldRotateToPortraitOnSplitBack(
     useTabletLayout: Boolean,
     smallestScreenWidthDp: Int,
-    orientation: Int,
-    isTvDevice: Boolean
+    orientation: Int
 ): Boolean {
     return useTabletLayout &&
-        !isTvDevice &&
         smallestScreenWidthDp < 600 &&
         orientation == Configuration.ORIENTATION_LANDSCAPE
 }
 
 internal fun shouldUseTabletVideoLayout(
-    isExpandedScreen: Boolean,
-    isTvDevice: Boolean
+    isExpandedScreen: Boolean
 ): Boolean {
-    return isExpandedScreen && !isTvDevice
+    return isExpandedScreen 
+}
+
+internal fun shouldUseOrientationDrivenFullscreen(
+    useTabletLayout: Boolean
+): Boolean {
+    return !useTabletLayout 
+}
+
+internal fun shouldApplyPhoneAutoRotatePolicy(
+    useTabletLayout: Boolean
+): Boolean {
+    return !useTabletLayout 
+}
+
+internal fun shouldEnableVideoCoverSharedTransition(
+    transitionEnabled: Boolean,
+    hasSharedTransitionScope: Boolean,
+    hasAnimatedVisibilityScope: Boolean
+): Boolean {
+    return transitionEnabled &&
+        hasSharedTransitionScope &&
+        hasAnimatedVisibilityScope
+}
+
+internal fun shouldEnablePortraitExperience(): Boolean {
+    return true
+}
+
+internal fun shouldShowVideoDetailBottomInteractionBar(): Boolean {
+    return false
+}
+
+internal fun shouldShowVideoDetailActionButtons(): Boolean {
+    return false
+}
+
+internal data class RefreshModeCandidate(
+    val modeId: Int,
+    val refreshRate: Float,
+    val width: Int,
+    val height: Int
+)
+
+internal fun resolvePreferredHighRefreshModeId(
+    currentModeId: Int,
+    supportedModes: List<RefreshModeCandidate>,
+    minRefreshRate: Float = 90f
+): Int? {
+    if (supportedModes.isEmpty()) return null
+    val candidates = supportedModes.filter { it.refreshRate >= minRefreshRate }
+    if (candidates.isEmpty()) return null
+
+    return candidates.maxWithOrNull(
+        compareBy<RefreshModeCandidate> { it.refreshRate }
+            .thenBy { it.width * it.height }
+            .thenBy { if (it.modeId == currentModeId) 1 else 0 }
+    )?.modeId
 }
 
 // VideoContentSection 已提取到 VideoContentSection.kt

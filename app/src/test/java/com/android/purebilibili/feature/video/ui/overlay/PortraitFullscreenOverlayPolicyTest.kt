@@ -10,14 +10,12 @@ class PortraitFullscreenOverlayPolicyTest {
     fun useCompactTopBarOnNarrowScreen() {
         assertTrue(
             resolvePortraitFullscreenOverlayLayoutPolicy(
-                widthDp = 360,
-                isTv = false
+                widthDp = 360
             ).compactMode
         )
         assertTrue(
             resolvePortraitFullscreenOverlayLayoutPolicy(
-                widthDp = 320,
-                isTv = false
+                widthDp = 320
             ).compactMode
         )
     }
@@ -26,8 +24,7 @@ class PortraitFullscreenOverlayPolicyTest {
     fun keepNormalTopBarOnWideScreen() {
         assertFalse(
             resolvePortraitFullscreenOverlayLayoutPolicy(
-                widthDp = 411,
-                isTv = false
+                widthDp = 411
             ).compactMode
         )
     }

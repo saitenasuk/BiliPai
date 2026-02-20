@@ -8,7 +8,7 @@ class VideoPlayerUiLayoutPolicyTest {
 
     @Test
     fun phoneProfile_usesCompactControlTargets() {
-        val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 393, isTv = false)
+        val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 393)
 
         assertEquals(120, policy.gestureOverlaySizeDp)
         assertEquals(48, policy.gestureIconSizeDp)
@@ -18,7 +18,7 @@ class VideoPlayerUiLayoutPolicyTest {
 
     @Test
     fun expandedTablet_enlargesControlTargetsAndSpacing() {
-        val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 1280, isTv = false)
+        val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 1280)
 
         assertEquals(132, policy.gestureOverlaySizeDp)
         assertEquals(52, policy.gestureIconSizeDp)
@@ -28,7 +28,7 @@ class VideoPlayerUiLayoutPolicyTest {
 
     @Test
     fun ultraWideTablet_furtherImprovesReadability() {
-        val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 1920, isTv = false)
+        val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 1920)
 
         assertEquals(140, policy.gestureOverlaySizeDp)
         assertEquals(56, policy.gestureIconSizeDp)
@@ -37,8 +37,8 @@ class VideoPlayerUiLayoutPolicyTest {
     }
 
     @Test
-    fun tv_prefersStableLargeTouchTargets() {
-        val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 1920, isTv = true)
+    fun ultraWide_prefersStableLargeTouchTargets() {
+        val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 1920)
 
         assertEquals(140, policy.gestureOverlaySizeDp)
         assertEquals(56, policy.gestureIconSizeDp)

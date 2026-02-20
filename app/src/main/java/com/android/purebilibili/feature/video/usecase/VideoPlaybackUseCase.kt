@@ -153,17 +153,20 @@ class VideoPlaybackUseCase(
             
             onProgress("Loading video info...")
             
-            //  [性能优化] 并行请求视频详情、相关推荐和其它数据
+            //  [性能优化] 并行请求视频详情、相关推荐。
+            // 表情映射在首帧链路中跳过，避免自动播放起播被非关键请求阻塞。
             val (detailResult, relatedVideos, emoteMap) = kotlinx.coroutines.coroutineScope {
                 val detailDeferred = async { VideoRepository.getVideoDetails(bvid, aid, defaultQuality, audioLang) }
                 val relatedDeferred = async { 
                     if (bvid.isNotEmpty()) VideoRepository.getRelatedVideos(bvid) else emptyList() 
                 }
-                val emoteDeferred = async { 
-                    com.android.purebilibili.data.repository.CommentRepository.getEmoteMap() 
+                val emoteMap = if (com.android.purebilibili.data.repository.shouldFetchCommentEmoteMapOnVideoLoad()) {
+                    com.android.purebilibili.data.repository.CommentRepository.getEmoteMap()
+                } else {
+                    emptyMap()
                 }
                 
-                Triple(detailDeferred.await(), relatedDeferred.await(), emoteDeferred.await())
+                Triple(detailDeferred.await(), relatedDeferred.await(), emoteMap)
             }
             
             return detailResult.fold(
@@ -259,7 +262,7 @@ class VideoPlaybackUseCase(
                     val isLogin = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
                     
                     var isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
-                    if (isLogin && !isVip) {
+                    if (isLogin && !isVip && com.android.purebilibili.data.repository.shouldRefreshVipStatusOnVideoLoad()) {
                         try {
                             val navResult = VideoRepository.getNavInfo()
                             navResult.onSuccess { navData ->
@@ -308,11 +311,25 @@ class VideoPlaybackUseCase(
                         " Quality merge: api=$apiQualities, dash=$dashVideoIds, switchable=${qualityMergeResult.switchableQualities}, apiOnlyHigh=${qualityMergeResult.apiOnlyHighQualities}, merged=$mergedQualityIds"
                     )
                     
-                    // Check user interaction status
-                    val isFollowing = if (isLogin) ActionRepository.checkFollowStatus(info.owner.mid) else false
-                    val isFavorited = if (isLogin) ActionRepository.checkFavoriteStatus(info.aid) else false
-                    val isLiked = if (isLogin) ActionRepository.checkLikeStatus(info.aid) else false
-                    val coinCount = if (isLogin) ActionRepository.checkCoinStatus(info.aid) else 0
+                    // 首帧优先：交互状态默认值先返回，延后到 ViewModel 后台刷新。
+                    val (isFollowing, isFavorited, isLiked, coinCount) = if (
+                        isLogin && com.android.purebilibili.data.repository.shouldFetchInteractionStatusOnVideoLoad()
+                    ) {
+                        coroutineScope {
+                            val followingDeferred = async { ActionRepository.checkFollowStatus(info.owner.mid) }
+                            val favoritedDeferred = async { ActionRepository.checkFavoriteStatus(info.aid) }
+                            val likedDeferred = async { ActionRepository.checkLikeStatus(info.aid) }
+                            val coinDeferred = async { ActionRepository.checkCoinStatus(info.aid) }
+                            Quadruple(
+                                followingDeferred.await(),
+                                favoritedDeferred.await(),
+                                likedDeferred.await(),
+                                coinDeferred.await()
+                            )
+                        }
+                    } else {
+                        Quadruple(false, false, false, 0)
+                    }
                     
                     VideoLoadResult.Success(
                         info = info,
@@ -596,3 +613,10 @@ class VideoPlaybackUseCase(
         )
     }
 }
+
+private data class Quadruple<A, B, C, D>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D
+)

@@ -29,10 +29,9 @@ data class PortraitFullscreenOverlayLayoutPolicy(
 )
 
 fun resolvePortraitFullscreenOverlayLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): PortraitFullscreenOverlayLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return PortraitFullscreenOverlayLayoutPolicy(
             compactMode = false,
             topHorizontalPaddingDp = 24,

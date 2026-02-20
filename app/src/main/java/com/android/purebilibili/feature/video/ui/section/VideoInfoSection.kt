@@ -387,6 +387,15 @@ fun UpInfoSection(
                 //  添加交互修饰符 (放在 sharedBounds 之后，使其包含在 sharedBounds 内部)
                 upNameModifier = upNameModifier.copyOnLongPress(info.owner.name, "UP主名称")
 
+                Icon(
+                    imageVector = CupertinoIcons.Default.PersonCropCircle,
+                    contentDescription = "UP主标识",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(horizontal = 2.dp)
+                        .size(13.dp)
+                )
+                Spacer(Modifier.width(4.dp))
                 Text(
                     text = info.owner.name,
                     fontSize = 14.sp,
@@ -397,15 +406,6 @@ fun UpInfoSection(
                     modifier = upNameModifier
                 )
             }
-            Spacer(Modifier.height(2.dp))
-            // Blue UP tag (Now plain text)
-            Text(
-                text = "UP\u4e3b",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 2.dp) // Slight horizontal padding for alignment
-            )
         }
         
         // Follow button

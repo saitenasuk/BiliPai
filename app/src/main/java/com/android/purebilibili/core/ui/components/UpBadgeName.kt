@@ -1,0 +1,77 @@
+package com.android.purebilibili.core.ui.components
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalLayoutDirection
+
+@Composable
+fun UpBadgeName(
+    name: String,
+    modifier: Modifier = Modifier,
+    leadingContent: (@Composable () -> Unit)? = null,
+    nameStyle: TextStyle = MaterialTheme.typography.labelMedium,
+    nameColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    badgeTextColor: Color = nameColor.copy(alpha = 0.85f),
+    badgeBorderColor: Color = nameColor.copy(alpha = 0.35f),
+    badgeBackgroundColor: Color = Color.Transparent,
+    badgeCornerRadius: Dp = 8.dp,
+    badgeHorizontalPadding: Dp = 6.dp,
+    badgeVerticalPadding: Dp = 1.dp,
+    spacing: Dp = 6.dp,
+    maxLines: Int = 1,
+    overflow: TextOverflow = TextOverflow.Ellipsis
+) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = badgeBackgroundColor,
+                shape = RoundedCornerShape(badgeCornerRadius),
+                border = BorderStroke(1.dp, badgeBorderColor),
+                shadowElevation = 0.dp,
+                tonalElevation = 0.dp
+            ) {
+                Text(
+                    text = "UP",
+                    color = badgeTextColor,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier
+                        .padding(horizontal = badgeHorizontalPadding, vertical = badgeVerticalPadding)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(spacing))
+
+            leadingContent?.let {
+                it()
+                Spacer(modifier = Modifier.width(spacing))
+            }
+
+            Text(
+                text = name.ifBlank { "未知UP主" },
+                style = nameStyle,
+                color = nameColor,
+                maxLines = maxLines,
+                overflow = overflow,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+        }
+    }
+}

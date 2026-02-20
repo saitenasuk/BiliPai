@@ -14,24 +14,8 @@ data class VideoPlayerUiLayoutPolicy(
 )
 
 fun resolveVideoPlayerUiLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): VideoPlayerUiLayoutPolicy {
-    if (isTv) {
-        return VideoPlayerUiLayoutPolicy(
-            gestureOverlaySizeDp = 140,
-            gestureIconSizeDp = 56,
-            seekFeedbackSizeDp = 112,
-            gestureBoundaryPaddingDp = 28,
-            restoreButtonBottomOffsetDp = 112,
-            restoreButtonHorizontalPaddingDp = 20,
-            restoreButtonVerticalPaddingDp = 10,
-            restoreButtonIconSizeDp = 18,
-            longPressBadgeHorizontalPaddingDp = 24,
-            longPressBadgeVerticalPaddingDp = 14
-        )
-    }
-
     return when {
         widthDp >= 1600 -> VideoPlayerUiLayoutPolicy(
             gestureOverlaySizeDp = 140,

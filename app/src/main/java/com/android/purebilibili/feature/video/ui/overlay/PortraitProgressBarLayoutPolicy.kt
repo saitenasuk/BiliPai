@@ -16,10 +16,9 @@ data class PortraitProgressBarLayoutPolicy(
 )
 
 fun resolvePortraitProgressBarLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): PortraitProgressBarLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return PortraitProgressBarLayoutPolicy(
             horizontalPaddingDp = 16,
             bottomPaddingDp = 16,

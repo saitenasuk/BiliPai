@@ -8,8 +8,7 @@ class VideoPlayerOverlayVisualPolicyTest {
     @Test
     fun compactPhone_usesDefaultOverlayVisualDensity() {
         val policy = resolveVideoPlayerOverlayVisualPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(140, policy.topScrimHeightDp)
@@ -24,8 +23,7 @@ class VideoPlayerOverlayVisualPolicyTest {
     @Test
     fun mediumTablet_balancesScrimAndCenterControls() {
         val policy = resolveVideoPlayerOverlayVisualPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(152, policy.topScrimHeightDp)
@@ -40,8 +38,7 @@ class VideoPlayerOverlayVisualPolicyTest {
     @Test
     fun tablet_expandsScrimAndControlTargets() {
         val policy = resolveVideoPlayerOverlayVisualPolicy(
-            widthDp = 1024,
-            isTv = false
+            widthDp = 1024
         )
 
         assertEquals(168, policy.topScrimHeightDp)
@@ -54,10 +51,9 @@ class VideoPlayerOverlayVisualPolicyTest {
     }
 
     @Test
-    fun tv_forcesLargestOverlayVisualScale() {
+    fun ultraWide_forcesLargestOverlayVisualScale() {
         val policy = resolveVideoPlayerOverlayVisualPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(200, policy.topScrimHeightDp)

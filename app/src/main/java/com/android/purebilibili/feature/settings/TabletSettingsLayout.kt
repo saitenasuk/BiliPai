@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.settings
 
-import android.view.KeyEvent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,9 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
@@ -29,7 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
@@ -105,17 +100,12 @@ fun TabletSettingsLayout(
     modifier: Modifier = Modifier
 ) {
     var selectedCategory by remember { mutableStateOf(SettingsCategory.GENERAL) }
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveSettingsTabletLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
-    val tvCategoryFocusRequester = remember { FocusRequester() }
-    val tvDetailFocusRequester = remember { FocusRequester() }
-    var tvFocusZone by remember { mutableStateOf(SettingsTvFocusZone.CATEGORY_LIST) }
     
     // Internal navigation state for the right pane
     var activeDetail by remember { mutableStateOf<SettingsDetail?>(null) }
@@ -130,14 +120,6 @@ fun TabletSettingsLayout(
     val viewModel: SettingsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val context = androidx.compose.ui.platform.LocalContext.current
     val state by viewModel.state.collectAsState()
-
-    LaunchedEffect(isTvDevice) {
-        if (isTvDevice) {
-            tvFocusZone = resolveInitialSettingsTvFocusZone(isTv = true)
-                ?: SettingsTvFocusZone.CATEGORY_LIST
-            tvCategoryFocusRequester.requestFocus()
-        }
-    }
 
     AdaptiveSplitLayout(
         modifier = modifier,
@@ -197,28 +179,7 @@ fun TabletSettingsLayout(
                         modifier = Modifier
                             .padding(vertical = 4.dp)
                             .testTag("settings_category_${category.name}")
-                            .then(
-                                if (isTvDevice && category == SettingsCategory.entries.first()) {
-                                    Modifier.focusRequester(tvCategoryFocusRequester)
-                                } else {
-                                    Modifier
-                                }
-                            )
-                            .focusable()
-                            .onPreviewKeyEvent { event ->
-                                if (!isTvDevice) return@onPreviewKeyEvent false
-                                val transition = resolveSettingsTvFocusTransition(
-                                    currentZone = tvFocusZone,
-                                    keyCode = event.nativeKeyEvent.keyCode,
-                                    action = event.nativeKeyEvent.action
-                                )
-                                if (!transition.consumeEvent) return@onPreviewKeyEvent false
-                                tvFocusZone = transition.nextZone
-                                if (transition.nextZone == SettingsTvFocusZone.DETAIL_PANEL) {
-                                    tvDetailFocusRequester.requestFocus()
-                                }
-                                true
-                            },
+                            .focusable(),
                         colors = NavigationDrawerItemDefaults.colors(
                             selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                             unselectedContainerColor = Color.Transparent,
@@ -241,28 +202,6 @@ fun TabletSettingsLayout(
                 Box(
                     modifier = Modifier
                         .testTag("settings_detail_panel")
-                        .then(
-                            if (isTvDevice) {
-                                Modifier
-                                    .focusRequester(tvDetailFocusRequester)
-                                    .focusable()
-                                    .onPreviewKeyEvent { event ->
-                                        val transition = resolveSettingsTvFocusTransition(
-                                            currentZone = tvFocusZone,
-                                            keyCode = event.nativeKeyEvent.keyCode,
-                                            action = event.nativeKeyEvent.action
-                                        )
-                                        if (!transition.consumeEvent) return@onPreviewKeyEvent false
-                                        tvFocusZone = transition.nextZone
-                                        if (transition.nextZone == SettingsTvFocusZone.CATEGORY_LIST) {
-                                            tvCategoryFocusRequester.requestFocus()
-                                        }
-                                        true
-                                    }
-                            } else {
-                                Modifier
-                            }
-                        )
                 ) {
                 // If we have an active detail, show it. Otherwise show Category Root.
                 val detail = activeDetail

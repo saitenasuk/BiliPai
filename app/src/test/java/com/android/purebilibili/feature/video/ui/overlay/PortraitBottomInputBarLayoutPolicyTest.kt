@@ -8,8 +8,7 @@ class PortraitBottomInputBarLayoutPolicyTest {
     @Test
     fun compactPhone_usesCurrentInputBarDensity() {
         val policy = resolvePortraitBottomInputBarLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(12, policy.horizontalPaddingDp)
@@ -23,8 +22,7 @@ class PortraitBottomInputBarLayoutPolicyTest {
     @Test
     fun mediumTablet_balancesInputReadabilityAndActionReachability() {
         val policy = resolvePortraitBottomInputBarLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(14, policy.horizontalPaddingDp)
@@ -38,8 +36,7 @@ class PortraitBottomInputBarLayoutPolicyTest {
     @Test
     fun tablet_expandsInputAndActionTargets() {
         val policy = resolvePortraitBottomInputBarLayoutPolicy(
-            widthDp = 1024,
-            isTv = false
+            widthDp = 1024
         )
 
         assertEquals(16, policy.horizontalPaddingDp)
@@ -51,10 +48,9 @@ class PortraitBottomInputBarLayoutPolicyTest {
     }
 
     @Test
-    fun tv_forcesLargestBottomInputScale() {
+    fun ultraWide_forcesLargestBottomInputScale() {
         val policy = resolvePortraitBottomInputBarLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(20, policy.horizontalPaddingDp)

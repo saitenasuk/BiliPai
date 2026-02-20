@@ -40,7 +40,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.media3.ui.PlayerView
 //  已改用 MaterialTheme.colorScheme.primary
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -77,12 +76,10 @@ fun MiniPlayerOverlay(
 
     
     val configuration = LocalConfiguration.current
-    val isTvDevice = rememberIsTvDevice()
     val density = LocalDensity.current
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveMiniPlayerOverlayLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
 

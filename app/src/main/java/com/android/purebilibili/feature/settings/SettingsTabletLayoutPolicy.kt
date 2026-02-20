@@ -9,24 +9,12 @@ data class SettingsTabletLayoutPolicy(
 )
 
 fun shouldUseSettingsSplitLayout(
-    widthDp: Int,
-    isTv: Boolean
-): Boolean = isTv || widthDp >= 840
+    widthDp: Int
+): Boolean = widthDp >= 840
 
 fun resolveSettingsTabletLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): SettingsTabletLayoutPolicy {
-    if (isTv) {
-        return SettingsTabletLayoutPolicy(
-            primaryRatio = 0.34f,
-            masterPanePaddingDp = 20,
-            detailPanePaddingDp = 28,
-            detailMaxWidthDp = 880,
-            rootPanelMaxWidthDp = 680
-        )
-    }
-
     return when {
         widthDp >= 1600 -> SettingsTabletLayoutPolicy(
             primaryRatio = 0.30f,

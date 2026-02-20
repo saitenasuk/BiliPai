@@ -31,10 +31,8 @@ import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.util.rememberHapticFeedback
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -45,13 +43,12 @@ import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.ui.adaptive.MotionTier
-import com.android.purebilibili.core.ui.animation.TvFocusCardEmphasis
-import com.android.purebilibili.core.ui.animation.tvFocusableJiggle
+import com.android.purebilibili.core.ui.components.UpBadgeName
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 
 /**
- *  故事卡片 - Apple TV+ 风格
+ *  故事卡片 - 影院海报风格
  * 
  * 特点：
  * - 2:1 电影宽屏比例
@@ -86,7 +83,6 @@ fun StoryVideoCard(
     }
     
     //  获取屏幕尺寸用于计算归一化坐标
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
@@ -134,13 +130,6 @@ fun StoryVideoCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .tvFocusableJiggle(
-                isTv = isTvDevice,
-                screenWidthDp = configuration.screenWidthDp,
-                reducedMotion = !animationEnabled,
-                cardEmphasis = TvFocusCardEmphasis.Large,
-                motionTier = motionTier
-            )
             .padding(horizontal = 16.dp, vertical = 8.dp)
             //  [修复] 进场动画 - 使用 Unit 作为 key，避免分类切换时重新动画
             .animateEnter(
@@ -152,20 +141,6 @@ fun StoryVideoCard(
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->
                 cardBounds = coordinates.boundsInRoot()
-            }
-            .onPreviewKeyEvent { event ->
-                if (
-                    shouldTriggerHomeCardClickOnTvKey(
-                        isTv = isTvDevice,
-                        keyCode = event.nativeKeyEvent.keyCode,
-                        action = event.nativeKeyEvent.action
-                    )
-                ) {
-                    triggerCardClick()
-                    true
-                } else {
-                    false
-                }
             }
             .pointerInput(onDismiss, onLongClick) {
                  val hasLongPressAction = onDismiss != null || onLongClick != null
@@ -280,37 +255,6 @@ fun StoryVideoCard(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // UP主头像
-            // 🔗 [共享元素] 头像
-            var avatarModifier = Modifier
-                .size(24.dp)
-                .clip(CircleShape)
-            
-            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    avatarModifier = avatarModifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = { _, _ ->
-                            spring(dampingRatio = 0.8f, stiffness = 200f)
-                        },
-                         clipInOverlayDuringTransition = OverlayClip(CircleShape)
-                    )
-                }
-            }
-
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(video.owner.face))
-                    .crossfade(100)
-                    .build(),
-                contentDescription = null,
-                modifier = avatarModifier,
-                contentScale = ContentScale.Crop
-            )
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
             // UP主名称
             // 🔗 [共享元素] UP主名称
             var upNameModifier = Modifier.wrapContentSize()
@@ -326,11 +270,45 @@ fun StoryVideoCard(
                 }
             }
             
-            Text(
-                text = video.owner.name,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
+            UpBadgeName(
+                name = video.owner.name,
+                leadingContent = if (video.owner.face.isNotEmpty()) {
+                    {
+                        var avatarModifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+
+                        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                avatarModifier = avatarModifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ ->
+                                        spring(dampingRatio = 0.8f, stiffness = 200f)
+                                    },
+                                    clipInOverlayDuringTransition = OverlayClip(CircleShape)
+                                )
+                            }
+                        }
+
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(FormatUtils.fixImageUrl(video.owner.face))
+                                .crossfade(100)
+                                .build(),
+                            contentDescription = null,
+                            modifier = avatarModifier,
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                } else null,
+                nameStyle = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                ),
+                nameColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                 modifier = upNameModifier
             )
             

@@ -110,6 +110,7 @@ data class ReplyPage(
 @Serializable
 data class ReplyItem(
     val rpid: Long = 0,
+    val root: Long = 0,
     val oid: Long = 0,
     val mid: Long = 0,
     val count: Int = 0,

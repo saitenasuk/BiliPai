@@ -8,8 +8,7 @@ class PortraitProgressBarLayoutPolicyTest {
     @Test
     fun compactPhone_usesDensePortraitSeekLayout() {
         val policy = resolvePortraitProgressBarLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(48, policy.touchAreaHeightDp)
@@ -23,8 +22,7 @@ class PortraitProgressBarLayoutPolicyTest {
     @Test
     fun mediumTablet_expandsSeekAreaForRemoteAndTouch() {
         val policy = resolvePortraitProgressBarLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(52, policy.touchAreaHeightDp)
@@ -38,8 +36,7 @@ class PortraitProgressBarLayoutPolicyTest {
     @Test
     fun tablet_expandsSeekHitAreaAndBubbleReadability() {
         val policy = resolvePortraitProgressBarLayoutPolicy(
-            widthDp = 1024,
-            isTv = false
+            widthDp = 1024
         )
 
         assertEquals(56, policy.touchAreaHeightDp)
@@ -51,10 +48,9 @@ class PortraitProgressBarLayoutPolicyTest {
     }
 
     @Test
-    fun tv_forcesLargestPortraitSeekScale() {
+    fun ultraWide_forcesLargestPortraitSeekScale() {
         val policy = resolvePortraitProgressBarLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(64, policy.touchAreaHeightDp)

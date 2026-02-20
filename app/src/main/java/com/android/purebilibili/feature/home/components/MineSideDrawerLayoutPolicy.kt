@@ -21,10 +21,9 @@ data class MineSideDrawerLayoutPolicy(
 )
 
 fun resolveMineSideDrawerLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): MineSideDrawerLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return MineSideDrawerLayoutPolicy(
             drawerWidthFraction = 0.42f,
             drawerMinWidthDp = 320,

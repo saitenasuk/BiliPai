@@ -8,8 +8,7 @@ class LandscapeEndDrawerLayoutPolicyTest {
     @Test
     fun compactPhone_usesDefaultDrawerDensity() {
         val policy = resolveLandscapeEndDrawerLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(320, policy.drawerWidthDp)
@@ -26,8 +25,7 @@ class LandscapeEndDrawerLayoutPolicyTest {
     @Test
     fun mediumTablet_balancesDrawerReadabilityAndDensity() {
         val policy = resolveLandscapeEndDrawerLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(348, policy.drawerWidthDp)
@@ -44,8 +42,7 @@ class LandscapeEndDrawerLayoutPolicyTest {
     @Test
     fun largeTablet_expandsDrawerAndHitTargets() {
         val policy = resolveLandscapeEndDrawerLayoutPolicy(
-            widthDp = 1280,
-            isTv = false
+            widthDp = 1280
         )
 
         assertEquals(380, policy.drawerWidthDp)
@@ -60,10 +57,9 @@ class LandscapeEndDrawerLayoutPolicyTest {
     }
 
     @Test
-    fun tv_usesTenFootLayoutScale() {
+    fun ultraWide_usesTenFootLayoutScale() {
         val policy = resolveLandscapeEndDrawerLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(420, policy.drawerWidthDp)

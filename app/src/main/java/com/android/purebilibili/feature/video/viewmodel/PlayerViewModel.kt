@@ -27,6 +27,7 @@ import com.android.purebilibili.feature.video.controller.QualityPermissionResult
 import com.android.purebilibili.feature.video.usecase.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,6 +105,13 @@ sealed class PlayerUiState {
     ) : PlayerUiState() {
         val msg: String get() = error.toUserMessage()
     }
+}
+
+internal fun resolveCommentReplyTargets(replyRpid: Long?, replyRoot: Long?): Pair<Long, Long> {
+    val parent = replyRpid?.takeIf { it > 0L } ?: 0L
+    if (parent == 0L) return 0L to 0L
+    val root = replyRoot?.takeIf { it > 0L } ?: parent
+    return root to parent
 }
 
 // ========== ViewModel ==========
@@ -873,14 +881,19 @@ class PlayerViewModel : ViewModel() {
                         val loadedBvid = result.info.bvid
                         val loadedCid = result.info.cid
                         val loadedOwnerMid = result.info.owner.mid
+                        val loadedAid = result.info.aid
                         viewModelScope.launch {
                             delay(350L)
                             val currentSuccess = _uiState.value as? PlayerUiState.Success
                             if (currentSuccess?.info?.bvid != loadedBvid) return@launch
 
                             if (result.isLoggedIn) {
+                                refreshDeferredPlaybackSignals(
+                                    bvid = loadedBvid,
+                                    aid = loadedAid,
+                                    ownerMid = loadedOwnerMid
+                                )
                                 loadFollowingMids()
-                                ensureFollowStatus(loadedOwnerMid, force = true)
                             }
                             loadVideoTags(loadedBvid)
                             loadVideoshot(loadedBvid, loadedCid)
@@ -1328,6 +1341,7 @@ class PlayerViewModel : ViewModel() {
     
     fun hideCommentInputDialog() {
         _showCommentDialog.value = false
+        clearReplyingTo()
     }
 
     // ========== 弹幕发送 ==========
@@ -1617,8 +1631,10 @@ class PlayerViewModel : ViewModel() {
             _isSendingComment.value = true
             
             val replyTo = _replyingToComment.value
-            val root = replyTo?.rpid ?: 0L
-            val parent = replyTo?.rpid ?: 0L
+            val (root, parent) = resolveCommentReplyTargets(
+                replyRpid = replyTo?.rpid,
+                replyRoot = replyTo?.root
+            )
             val picturesResult = uploadCommentPictures(imageUris)
             val pictures = picturesResult.getOrElse { uploadError ->
                 Logger.e(
@@ -1764,6 +1780,67 @@ class PlayerViewModel : ViewModel() {
                     toast(if (inWatchLater) "已添加到稍后再看" else "已从稍后再看移除")
                 }
                 .onFailure { toast(it.message ?: "操作失败") }
+        }
+    }
+
+    /**
+     * 首帧优先：播放启动后异步补齐交互态与 VIP 状态，避免阻塞自动播放。
+     */
+    private fun refreshDeferredPlaybackSignals(
+        bvid: String,
+        aid: Long,
+        ownerMid: Long
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val followDeferred = async {
+                if (ownerMid > 0L) com.android.purebilibili.data.repository.ActionRepository.checkFollowStatus(ownerMid)
+                else false
+            }
+            val favoriteDeferred = async { com.android.purebilibili.data.repository.ActionRepository.checkFavoriteStatus(aid) }
+            val likeDeferred = async { com.android.purebilibili.data.repository.ActionRepository.checkLikeStatus(aid) }
+            val coinDeferred = async { com.android.purebilibili.data.repository.ActionRepository.checkCoinStatus(aid) }
+            val vipDeferred = async {
+                if (com.android.purebilibili.core.store.TokenManager.isVipCache) {
+                    true
+                } else {
+                    com.android.purebilibili.data.repository.VideoRepository.getNavInfo()
+                        .getOrNull()
+                        ?.vip
+                        ?.status == 1
+                }
+            }
+
+            val fetchedFollow = followDeferred.await()
+            val fetchedFavorite = favoriteDeferred.await()
+            val fetchedLike = likeDeferred.await()
+            val fetchedCoinCount = coinDeferred.await()
+            val fetchedVip = vipDeferred.await()
+
+            if (fetchedVip) {
+                com.android.purebilibili.core.store.TokenManager.isVipCache = true
+            }
+
+            withContext(Dispatchers.Main) {
+                _uiState.update { state ->
+                    val success = state as? PlayerUiState.Success ?: return@update state
+                    if (success.info.bvid != bvid) return@update state
+
+                    val mergedFollowingMids = success.followingMids.toMutableSet()
+                    val resolvedFollow = success.isFollowing || fetchedFollow
+                    if (ownerMid > 0L) {
+                        if (resolvedFollow) mergedFollowingMids.add(ownerMid) else mergedFollowingMids.remove(ownerMid)
+                    }
+
+                    success.copy(
+                        isVip = success.isVip || fetchedVip,
+                        isFollowing = resolvedFollow,
+                        isFavorited = success.isFavorited || fetchedFavorite,
+                        isLiked = success.isLiked || fetchedLike,
+                        coinCount = maxOf(success.coinCount, fetchedCoinCount),
+                        followingMids = mergedFollowingMids
+                    )
+                }
+            }
         }
     }
     

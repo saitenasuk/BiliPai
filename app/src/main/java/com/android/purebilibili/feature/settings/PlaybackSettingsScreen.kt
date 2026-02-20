@@ -37,7 +37,6 @@ import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
@@ -87,19 +86,13 @@ fun PlaybackSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isTvDevice = rememberIsTvDevice()
-    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
     val windowSizeClass = LocalWindowSizeClass.current
     // val state by viewModel.state.collectAsState() // Moved to parameter
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     var isVisible by remember { mutableStateOf(false) }
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val effectiveMotionTier = remember(deviceUiProfile.motionTier, state.cardAnimationEnabled) {

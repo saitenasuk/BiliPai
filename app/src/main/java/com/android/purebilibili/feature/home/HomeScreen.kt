@@ -4,14 +4,12 @@ package com.android.purebilibili.feature.home
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
-import android.view.KeyEvent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.foundation.ExperimentalFoundationApi //  Added
 import androidx.compose.foundation.LocalOverscrollFactory // [Fix] Import for disabling overscroll (New API)
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
@@ -31,9 +29,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.material3.DrawerValue
@@ -41,7 +36,6 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import com.android.purebilibili.feature.home.components.MineSideDrawer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -81,9 +75,7 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.resolveScrollToTopPlan
-import com.android.purebilibili.core.util.resolveTvHomePerformanceConfig
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import coil.imageLoader
 import kotlinx.coroutines.launch
@@ -111,7 +103,7 @@ val LocalHomeScrollOffset = compositionLocalOf { androidx.compose.runtime.mutabl
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
-    onVideoClick: (String, Long, String) -> Unit,
+    onVideoClick: (HomeVideoClickRequest) -> Unit,
     onAvatarClick: () -> Unit,
     onProfileClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -252,18 +244,6 @@ fun HomeScreen(
         }
     }
 
-    // 从详情页返回时仅清理一次全局卡片状态，避免每个分页重复触发
-    LaunchedEffect(Unit) {
-        if (CardPositionManager.isReturningFromDetail) {
-            delay(100)
-            CardPositionManager.clearReturning()
-        }
-        if (CardPositionManager.isSwitchingCategory) {
-            delay(300)
-            CardPositionManager.isSwitchingCategory = false
-        }
-    }
-    
     //  [新增] JSON 插件过滤提示
     val snackbarHostState = remember { SnackbarHostState() }
     val lastFilteredCount by com.android.purebilibili.core.plugin.json.JsonPluginManager.lastFilteredCount.collectAsState()
@@ -408,10 +388,6 @@ fun HomeScreen(
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
         initial = com.android.purebilibili.core.store.HomeSettings()
     )
-    val isTvDevice = rememberIsTvDevice()
-    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
     
     // 解构设置值（避免每次访问都触发重组）
     val displayMode = homeSettings.displayMode
@@ -427,9 +403,7 @@ fun HomeScreen(
     val baseIsDataSaverActive = remember(context) {
         com.android.purebilibili.core.store.SettingsManager.isDataSaverActive(context)
     }
-    val tvHomePerformanceConfig = remember(
-        isTvDevice,
-        isTvPerformanceProfileEnabled,
+    val homePerformanceConfig = remember(
         baseIsHeaderBlurEnabled,
         baseIsBottomBarBlurEnabled,
         baseIsLiquidGlassEnabled,
@@ -437,9 +411,7 @@ fun HomeScreen(
         baseCardTransitionEnabled,
         baseIsDataSaverActive
     ) {
-        resolveTvHomePerformanceConfig(
-            isTvDevice = isTvDevice,
-            isTvPerformanceProfileEnabled = isTvPerformanceProfileEnabled,
+        resolveHomePerformanceConfig(
             headerBlurEnabled = baseIsHeaderBlurEnabled,
             bottomBarBlurEnabled = baseIsBottomBarBlurEnabled,
             liquidGlassEnabled = baseIsLiquidGlassEnabled,
@@ -448,13 +420,13 @@ fun HomeScreen(
             isDataSaverActive = baseIsDataSaverActive
         )
     }
-    val isHeaderBlurEnabled = tvHomePerformanceConfig.headerBlurEnabled
-    val isBottomBarBlurEnabled = tvHomePerformanceConfig.bottomBarBlurEnabled
-    val cardAnimationEnabled = tvHomePerformanceConfig.cardAnimationEnabled
-    val cardTransitionEnabled = tvHomePerformanceConfig.cardTransitionEnabled
-    val isLiquidGlassEnabled = tvHomePerformanceConfig.liquidGlassEnabled
-    val isDataSaverActive = tvHomePerformanceConfig.isDataSaverActive
-    val preloadAheadCount = tvHomePerformanceConfig.preloadAheadCount
+    val isHeaderBlurEnabled = homePerformanceConfig.headerBlurEnabled
+    val isBottomBarBlurEnabled = homePerformanceConfig.bottomBarBlurEnabled
+    val cardAnimationEnabled = homePerformanceConfig.cardAnimationEnabled
+    val cardTransitionEnabled = homePerformanceConfig.cardTransitionEnabled
+    val isLiquidGlassEnabled = homePerformanceConfig.liquidGlassEnabled
+    val isDataSaverActive = homePerformanceConfig.isDataSaverActive
+    val preloadAheadCount = homePerformanceConfig.preloadAheadCount
 
     //  [新增] 底栏可见项目配置
     val orderedVisibleTabIds by SettingsManager.getOrderedVisibleTabs(context).collectAsState(
@@ -474,21 +446,31 @@ fun HomeScreen(
     //  📐 [平板适配] 根据屏幕尺寸和展示模式动态设置网格列数
     // 故事卡片(1)和沉浸模式(2)需要单列全宽，网格(0)使用双列
     val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
-    val deviceUiProfile = remember(
-        isTvDevice,
-        windowSizeClass.widthSizeClass,
-        isTvPerformanceProfileEnabled
-    ) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val cardMotionTier = resolveEffectiveMotionTier(
         baseTier = deviceUiProfile.motionTier,
         animationEnabled = cardAnimationEnabled
     )
+    val returnAnimationSuppressionDurationMs = resolveReturnAnimationSuppressionDurationMs(
+        isTabletLayout = windowSizeClass.isTablet,
+        cardAnimationEnabled = cardAnimationEnabled
+    )
+    // 从详情页返回时延后清理“返回中”状态，避免卡片进场动画在共享转场期间抢跑造成闪屏。
+    LaunchedEffect(returnAnimationSuppressionDurationMs) {
+        if (CardPositionManager.isReturningFromDetail) {
+            delay(returnAnimationSuppressionDurationMs)
+            CardPositionManager.clearReturning()
+        }
+        if (CardPositionManager.isSwitchingCategory) {
+            delay(300)
+            CardPositionManager.isSwitchingCategory = false
+        }
+    }
+
     val contentWidth = if (windowSizeClass.isExpandedScreen) {
         minOf(windowSizeClass.widthDp, 1280.dp)
     } else {
@@ -730,84 +712,6 @@ fun HomeScreen(
         state.displayedTabIndex.coerceIn(0, (topCategories.size - 1).coerceAtLeast(0))
     }
 
-    val tvSidebarFirstItemFocusRequester = remember { FocusRequester() }
-    val tvPagerFocusRequester = remember { FocusRequester() }
-    val tvGridEntryFocusRequester = remember { FocusRequester() }
-    var tvFocusZone by remember(isTvDevice, useSideNavigation) {
-        mutableStateOf(
-            resolveInitialHomeTvFocusZone(
-                isTv = isTvDevice,
-                hasSidebar = useSideNavigation
-            ) ?: HomeTvFocusZone.PAGER
-        )
-    }
-    val tvSidebarFirstItemModifier = if (isTvDevice) {
-        Modifier
-            .focusRequester(tvSidebarFirstItemFocusRequester)
-            .onFocusChanged { state ->
-                if (state.isFocused) {
-                    tvFocusZone = HomeTvFocusZone.SIDEBAR
-                }
-            }
-    } else {
-        Modifier
-    }
-    val tvPagerContainerModifier = if (isTvDevice) {
-        Modifier
-            .focusRequester(tvPagerFocusRequester)
-            .focusable(enabled = true)
-            .onFocusChanged { state ->
-                if (state.isFocused) {
-                    tvFocusZone = HomeTvFocusZone.PAGER
-                }
-            }
-    } else {
-        Modifier
-    }
-    val tvGridEntryModifier = if (isTvDevice) {
-        Modifier
-            .focusRequester(tvGridEntryFocusRequester)
-            .onFocusChanged { state ->
-                if (state.isFocused) {
-                    tvFocusZone = HomeTvFocusZone.GRID
-                }
-            }
-            .onPreviewKeyEvent { event ->
-                val transition = resolveHomeTvFocusTransition(
-                    currentZone = HomeTvFocusZone.GRID,
-                    keyCode = event.nativeKeyEvent.keyCode,
-                    action = event.nativeKeyEvent.action,
-                    hasSidebar = useSideNavigation,
-                    isGridFirstRow = true,
-                    isGridFirstColumn = true
-                )
-                if (!transition.consumeEvent) return@onPreviewKeyEvent false
-                tvFocusZone = transition.nextZone
-                when (transition.nextZone) {
-                    HomeTvFocusZone.SIDEBAR -> tvSidebarFirstItemFocusRequester.requestFocus()
-                    HomeTvFocusZone.PAGER -> tvPagerFocusRequester.requestFocus()
-                    HomeTvFocusZone.GRID -> Unit
-                }
-                true
-            }
-    } else {
-        Modifier
-    }
-    LaunchedEffect(isTvDevice, useSideNavigation) {
-        if (!isTvDevice) return@LaunchedEffect
-        val initialZone = resolveInitialHomeTvFocusZone(
-            isTv = true,
-            hasSidebar = useSideNavigation
-        ) ?: HomeTvFocusZone.PAGER
-        tvFocusZone = initialZone
-        kotlinx.coroutines.yield()
-        when (initialZone) {
-            HomeTvFocusZone.SIDEBAR -> tvSidebarFirstItemFocusRequester.requestFocus()
-            HomeTvFocusZone.PAGER -> tvPagerFocusRequester.requestFocus()
-            HomeTvFocusZone.GRID -> tvGridEntryFocusRequester.requestFocus()
-        }
-    }
-
     //  根据滚动距离动态调整 BottomBar 可见性
     //  逻辑优化：使用 nestedScrollConnection 监听滚动
     var isHeaderVisible by rememberSaveable { mutableStateOf(true) }
@@ -886,19 +790,26 @@ fun HomeScreen(
     
 
     //  包装 onVideoClick：点击视频时先隐藏底栏再导航
-    val wrappedOnVideoClick: (String, Long, String) -> Unit = remember(onVideoClick, setBottomBarVisible) {
-        { bvid, aid, pic ->
+    val wrappedOnVideoClick: (HomeVideoClickRequest) -> Unit = remember(onVideoClick, setBottomBarVisible) {
+        { request ->
              hideTopTabsForForwardDetailNav = true
              delayTopTabsUntilCardSettled = false
              setBottomBarVisible(false)
              isVideoNavigating = true
-             onVideoClick(bvid, aid, pic)
+             onVideoClick(request)
         }
     }
     val onTodayWatchVideoClick: (VideoItem) -> Unit = remember(viewModel, wrappedOnVideoClick) {
         { video ->
             viewModel.markTodayWatchVideoOpened(video)
-            wrappedOnVideoClick(video.bvid, video.cid, video.pic)
+            wrappedOnVideoClick(
+                HomeVideoClickRequest(
+                    bvid = video.bvid,
+                    cid = video.cid,
+                    coverUrl = video.pic,
+                    source = HomeVideoClickSource.TODAY_WATCH
+                )
+            )
         }
     }
 
@@ -963,9 +874,7 @@ fun HomeScreen(
                         HorizontalPager(
                             state = pagerState,
                             beyondViewportPageCount = 1, // [Optimization] Preload adjacent pages to prevent swipe lag
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .then(tvPagerContainerModifier),
+                            modifier = Modifier.fillMaxSize(),
                             key = { index -> resolveHomeTopCategoryKey(topCategories, index) }
                         ) { page ->
                         val category = resolveHomeTopCategoryOrNull(topCategories, page) ?: return@HorizontalPager
@@ -1127,17 +1036,7 @@ fun HomeScreen(
                                      onTodayWatchCollapsedChange = onTodayWatchCollapsedChange,
                                      onTodayWatchRefresh = onTodayWatchRefresh,
                                      onTodayWatchVideoClick = onTodayWatchVideoClick,
-                                     firstGridItemModifier = tvGridEntryModifier,
-                                     isTv = isTvDevice,
-                                     hasSidebar = useSideNavigation,
-                                     onTvGridBoundaryTransition = { nextZone ->
-                                         tvFocusZone = nextZone
-                                         when (nextZone) {
-                                             HomeTvFocusZone.SIDEBAR -> tvSidebarFirstItemFocusRequester.requestFocus()
-                                             HomeTvFocusZone.PAGER -> tvPagerFocusRequester.requestFocus()
-                                             HomeTvFocusZone.GRID -> Unit
-                                         }
-                                     }
+                                     firstGridItemModifier = Modifier
                                  )
                              }
                              } // Close Box wrapper
@@ -1248,7 +1147,14 @@ fun HomeScreen(
                     onDismiss = { targetVideoItemState.value = null },
                     onPlay = {
                      // 1. Log click
-                     wrappedOnVideoClick(item.bvid, item.id, item.pic)
+                     wrappedOnVideoClick(
+                         HomeVideoClickRequest(
+                             bvid = item.bvid,
+                             cid = item.id,
+                             coverUrl = item.pic,
+                             source = HomeVideoClickSource.PREVIEW
+                         )
+                     )
                      // 2. Clear preview state
                      targetVideoItemState.value = null
                 },
@@ -1486,32 +1392,6 @@ fun HomeScreen(
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .onPreviewKeyEvent { event ->
-                if (!isTvDevice) return@onPreviewKeyEvent false
-                val command = resolveHomeTvRootNavigationCommand(
-                    currentZone = tvFocusZone,
-                    keyCode = event.nativeKeyEvent.keyCode,
-                    action = event.nativeKeyEvent.action,
-                    hasSidebar = useSideNavigation,
-                    currentPage = pagerState.currentPage,
-                    pageCount = topCategories.size
-                ) ?: return@onPreviewKeyEvent false
-
-                tvFocusZone = command.nextZone
-                command.targetPage?.let { targetPage ->
-                    if (targetPage != pagerState.currentPage) {
-                        coroutineScope.launch {
-                            pagerState.animateScrollToPage(targetPage)
-                        }
-                    }
-                }
-                when (command.nextZone) {
-                    HomeTvFocusZone.SIDEBAR -> tvSidebarFirstItemFocusRequester.requestFocus()
-                    HomeTvFocusZone.PAGER -> tvPagerFocusRequester.requestFocus()
-                    HomeTvFocusZone.GRID -> tvGridEntryFocusRequester.requestFocus()
-                }
-                true
-            }
     ) {
         AnimatedVisibility(
             visible = useSideNavigation,
@@ -1527,7 +1407,7 @@ fun HomeScreen(
             FrostedSideBar(
                 currentItem = currentNavItem,
                 onItemClick = handleNavItemClick,
-                firstItemModifier = tvSidebarFirstItemModifier,
+                firstItemModifier = Modifier,
                 onHomeDoubleTap = {
                     coroutineScope.launch {
                         headerOffsetHeightPx = 0f
@@ -1550,4 +1430,12 @@ fun HomeScreen(
             scaffoldContent()
         }
     }
+}
+
+internal fun resolveReturnAnimationSuppressionDurationMs(
+    isTabletLayout: Boolean,
+    cardAnimationEnabled: Boolean
+): Long {
+    if (!cardAnimationEnabled) return 120L
+    return if (isTabletLayout) 420L else 260L
 }

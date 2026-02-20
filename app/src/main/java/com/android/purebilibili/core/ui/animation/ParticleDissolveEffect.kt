@@ -56,6 +56,10 @@ enum class DissolveAnimationPreset {
     TELEGRAM_FAST
 }
 
+internal fun shouldWrapWithDissolveAnimation(isDissolving: Boolean): Boolean {
+    return isDissolving
+}
+
 private data class DissolveAnimationParams(
     val durationSec: Float,
     val particleStep: Int,
@@ -306,6 +310,31 @@ fun DissolvableVideoCard(
                 },
                 modifier = Modifier.matchParentSize()
             )
+        }
+    }
+}
+
+@Composable
+fun MaybeDissolvableVideoCard(
+    isDissolving: Boolean,
+    onDissolveComplete: () -> Unit,
+    modifier: Modifier = Modifier,
+    cardId: String = "",
+    preset: DissolveAnimationPreset = DissolveAnimationPreset.CLASSIC,
+    content: @Composable () -> Unit
+) {
+    if (shouldWrapWithDissolveAnimation(isDissolving)) {
+        DissolvableVideoCard(
+            isDissolving = true,
+            onDissolveComplete = onDissolveComplete,
+            modifier = modifier,
+            cardId = cardId,
+            preset = preset,
+            content = content
+        )
+    } else {
+        Box(modifier = modifier) {
+            content()
         }
     }
 }

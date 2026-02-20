@@ -8,7 +8,7 @@ class SearchTabletLayoutPolicyTest {
 
     @Test
     fun compactWidth_usesPhoneDefaults() {
-        val policy = resolveSearchLayoutPolicy(widthDp = 393, isTv = false)
+        val policy = resolveSearchLayoutPolicy(widthDp = 393)
 
         assertEquals(160, policy.resultGridMinItemWidthDp)
         assertEquals(8, policy.resultGridSpacingDp)
@@ -18,7 +18,7 @@ class SearchTabletLayoutPolicyTest {
 
     @Test
     fun mediumTablet_keepsReadableDensity() {
-        val policy = resolveSearchLayoutPolicy(widthDp = 720, isTv = false)
+        val policy = resolveSearchLayoutPolicy(widthDp = 720)
 
         assertEquals(200, policy.resultGridMinItemWidthDp)
         assertEquals(12, policy.resultGridSpacingDp)
@@ -30,7 +30,7 @@ class SearchTabletLayoutPolicyTest {
 
     @Test
     fun expandedTablet_increasesColumnsForDiscovery() {
-        val policy = resolveSearchLayoutPolicy(widthDp = 1280, isTv = false)
+        val policy = resolveSearchLayoutPolicy(widthDp = 1280)
 
         assertEquals(220, policy.resultGridMinItemWidthDp)
         assertEquals(20, policy.resultHorizontalPaddingDp)
@@ -41,7 +41,7 @@ class SearchTabletLayoutPolicyTest {
 
     @Test
     fun ultraWideTablet_expandsColumnsAndCardWidth() {
-        val policy = resolveSearchLayoutPolicy(widthDp = 1920, isTv = false)
+        val policy = resolveSearchLayoutPolicy(widthDp = 1920)
 
         assertEquals(260, policy.resultGridMinItemWidthDp)
         assertEquals(24, policy.resultHorizontalPaddingDp)
@@ -51,17 +51,16 @@ class SearchTabletLayoutPolicyTest {
     }
 
     @Test
-    fun tv_prefersLowerColumnCount() {
-        val policy = resolveSearchLayoutPolicy(widthDp = 1920, isTv = true)
+    fun ultraWide_prefersHigherColumnCount() {
+        val policy = resolveSearchLayoutPolicy(widthDp = 1920)
 
         assertTrue(policy.resultGridMinItemWidthDp >= 220)
-        assertEquals(2, policy.hotSearchColumns)
+        assertEquals(4, policy.hotSearchColumns)
     }
 
     @Test
-    fun splitLayout_threshold_isExpandedOrTv_only() {
-        assertEquals(false, shouldUseSearchSplitLayout(widthDp = 720, isTv = false))
-        assertEquals(true, shouldUseSearchSplitLayout(widthDp = 1024, isTv = false))
-        assertEquals(true, shouldUseSearchSplitLayout(widthDp = 720, isTv = true))
+    fun splitLayout_threshold_isExpanded_only() {
+        assertEquals(false, shouldUseSearchSplitLayout(widthDp = 720))
+        assertEquals(true, shouldUseSearchSplitLayout(widthDp = 1024))
     }
 }

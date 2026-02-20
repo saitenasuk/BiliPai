@@ -44,7 +44,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
@@ -54,7 +53,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.feature.home.HomeCategory
 import com.android.purebilibili.feature.home.resolveHomeTopCategories
@@ -146,27 +144,12 @@ internal fun resolveTopTabCategoryIcon(category: String): ImageVector {
 fun Modifier.premiumClickable(onClick: () -> Unit): Modifier = composed {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val isTvDevice = rememberIsTvDevice()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
         label = "scale"
     )
     this
         .scale(scale)
-        .onPreviewKeyEvent { event ->
-            if (
-                shouldTriggerTopBarActionOnTvKey(
-                    isTv = isTvDevice,
-                    keyCode = event.nativeKeyEvent.keyCode,
-                    action = event.nativeKeyEvent.action
-                )
-            ) {
-                onClick()
-                true
-            } else {
-                false
-            }
-        }
         .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
 }
 
@@ -313,7 +296,6 @@ fun CategoryTabRow(
     isFloatingStyle: Boolean = false
 ) {
     val visualTuning = remember { resolveTopTabVisualTuning() }
-    val isTvDevice = rememberIsTvDevice()
     val primaryColor = MaterialTheme.colorScheme.primary
     val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
 
@@ -601,21 +583,6 @@ fun CategoryTabRow(
             modifier = Modifier
                 .size(actionButtonSize)
                 .clip(RoundedCornerShape(actionButtonCorner))
-                .focusable(enabled = isTvDevice)
-                .onPreviewKeyEvent { event ->
-                    if (
-                        shouldTriggerTopBarActionOnTvKey(
-                            isTv = isTvDevice,
-                            keyCode = event.nativeKeyEvent.keyCode,
-                            action = event.nativeKeyEvent.action
-                        )
-                    ) {
-                        onPartitionClick()
-                        true
-                    } else {
-                        false
-                    }
-                }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null

@@ -8,8 +8,7 @@ class VideoProgressBarLayoutPolicyTest {
     @Test
     fun compactPhone_usesDenseProgressBarLayout() {
         val policy = resolveVideoProgressBarLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(20, policy.baseHeightWithoutChapterDp)
@@ -23,8 +22,7 @@ class VideoProgressBarLayoutPolicyTest {
     @Test
     fun mediumTablet_improvesSeekPrecisionAndHitArea() {
         val policy = resolveVideoProgressBarLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(23, policy.baseHeightWithoutChapterDp)
@@ -38,8 +36,7 @@ class VideoProgressBarLayoutPolicyTest {
     @Test
     fun tablet_expandsPreviewAndChapterReadability() {
         val policy = resolveVideoProgressBarLayoutPolicy(
-            widthDp = 1024,
-            isTv = false
+            widthDp = 1024
         )
 
         assertEquals(26, policy.baseHeightWithoutChapterDp)
@@ -51,10 +48,9 @@ class VideoProgressBarLayoutPolicyTest {
     }
 
     @Test
-    fun tv_usesLargestSeekTrackAndThumbs() {
+    fun ultraWide_usesLargestSeekTrackAndThumbs() {
         val policy = resolveVideoProgressBarLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(32, policy.baseHeightWithoutChapterDp)

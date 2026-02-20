@@ -24,7 +24,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.video.state.VideoPlayerState
@@ -90,11 +89,9 @@ fun TabletVideoLayout(
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {}
 ) {
-    val isTvDevice = rememberIsTvDevice()
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveTabletVideoLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
     var secondaryPaneModeName by rememberSaveable(bvid) {
@@ -421,7 +418,7 @@ private fun TabletSecondaryContent(
                             key = { "reply_${it.rpid}" }
                         ) { reply ->
                             // [新增] 使用 DissolvableVideoCard 包裹 (平板端也需要)
-                            com.android.purebilibili.core.ui.animation.DissolvableVideoCard(
+                            com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
                                 isDissolving = reply.rpid in commentState.dissolvingIds,
                                 onDissolveComplete = { commentViewModel.deleteComment(reply.rpid) },
                                 cardId = "comment_${reply.rpid}",

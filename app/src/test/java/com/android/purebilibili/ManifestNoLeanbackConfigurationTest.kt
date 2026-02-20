@@ -2,36 +2,37 @@ package com.android.purebilibili
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class ManifestTvConfigurationTest {
+class ManifestNoLeanbackConfigurationTest {
 
     @Test
-    fun manifest_declares_leanback_features_for_tv() {
+    fun manifest_does_not_declare_leanback_feature() {
         val manifest = loadManifestText()
 
-        assertTrue(
+        assertFalse(
             manifest.contains("""android.software.leanback"""),
-            "AndroidManifest must declare android.software.leanback feature"
+            "AndroidManifest should not declare android.software.leanback in mobile/tablet repo"
         )
         assertTrue(
             manifest.contains("""android.hardware.touchscreen""") &&
                 manifest.contains("""android:required="false""""),
-            "AndroidManifest should mark touchscreen as not required for TV devices"
+            "AndroidManifest should keep touchscreen optional for broad device compatibility"
         )
     }
 
     @Test
-    fun manifest_exposes_leanback_launcher_and_banner() {
+    fun manifest_does_not_expose_leanback_launcher_or_banner() {
         val manifest = loadManifestText()
 
-        assertTrue(
+        assertFalse(
             manifest.contains("""android.intent.category.LEANBACK_LAUNCHER"""),
-            "AndroidManifest must expose LEANBACK_LAUNCHER entry for TV home"
+            "AndroidManifest should not expose LEANBACK_LAUNCHER entry in mobile/tablet repo"
         )
-        assertTrue(
+        assertFalse(
             manifest.contains("""android:banner="""),
-            "AndroidManifest application should define banner for TV launcher"
+            "AndroidManifest application should not define TV banner in mobile/tablet repo"
         )
     }
 

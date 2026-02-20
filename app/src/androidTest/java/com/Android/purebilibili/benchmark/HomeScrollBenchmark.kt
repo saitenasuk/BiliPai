@@ -28,31 +28,29 @@ class HomeScrollBenchmark {
             .commit()
     }
 
+    private fun resolveDisplaySize(): Pair<Int, Int> {
+        val output = runShell("wm size")
+        val match = Regex("(\\d+)x(\\d+)").find(output)
+        val width = match?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1080
+        val height = match?.groupValues?.getOrNull(2)?.toIntOrNull() ?: 2400
+        return width to height
+    }
+
     @Test
-    fun homeDpadScenario_recordsFrameAndPss() {
+    fun homeSwipeScenario_recordsFrameAndPss() {
         prepareHomeEntry()
         runShell("input keyevent 3")
         runShell("am start -W -n $packageName/.MainActivity")
         Thread.sleep(10_000)
 
         runShell("dumpsys gfxinfo $packageName reset")
+        val (width, height) = resolveDisplaySize()
+        val x = width / 2
+        val yStart = height * 7 / 10
+        val yEnd = height * 3 / 10
 
         repeat(20) {
-            runShell("input keyevent 20")
-            Thread.sleep(100)
-            runShell("input keyevent 22")
-            Thread.sleep(100)
-            runShell("input keyevent 22")
-            Thread.sleep(100)
-            runShell("input keyevent 23")
-            Thread.sleep(100)
-            runShell("input keyevent 21")
-            Thread.sleep(100)
-            runShell("input keyevent 21")
-            Thread.sleep(100)
-            runShell("input keyevent 19")
-            Thread.sleep(100)
-            runShell("input keyevent 23")
+            runShell("input swipe $x $yStart $x $yEnd 220")
             Thread.sleep(100)
         }
 

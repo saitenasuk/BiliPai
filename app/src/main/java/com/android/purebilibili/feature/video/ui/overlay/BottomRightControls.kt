@@ -20,7 +20,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.feature.video.ui.components.*
-import com.android.purebilibili.core.util.rememberIsTvDevice
 
 /**
  *  横屏播放器底部右侧控制按钮组
@@ -43,12 +42,10 @@ fun BottomRightControls(
 ) {
     var showSpeedMenu by remember { mutableStateOf(false) }
     var showRatioMenu by remember { mutableStateOf(false) }
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveBottomRightControlsLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
     

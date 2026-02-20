@@ -17,10 +17,9 @@ data class TopControlBarLayoutPolicy(
 )
 
 fun resolveTopControlBarLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): TopControlBarLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return TopControlBarLayoutPolicy(
             horizontalPaddingDp = 32,
             verticalPaddingDp = 12,

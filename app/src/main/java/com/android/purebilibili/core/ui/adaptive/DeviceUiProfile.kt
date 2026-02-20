@@ -11,29 +11,22 @@ enum class MotionTier {
 data class DeviceUiProfile(
     val widthSizeClass: WindowWidthSizeClass,
     val isTablet: Boolean,
-    val isTv: Boolean,
-    val isTenFootUi: Boolean,
     val motionTier: MotionTier
 )
 
 fun resolveDeviceUiProfile(
-    isTv: Boolean,
-    widthSizeClass: WindowWidthSizeClass,
-    tvPerformanceProfileEnabled: Boolean
+    widthSizeClass: WindowWidthSizeClass
 ): DeviceUiProfile {
     val isTablet = widthSizeClass != WindowWidthSizeClass.Compact
-    val motionTier = when {
-        isTv && tvPerformanceProfileEnabled -> MotionTier.Reduced
-        isTv -> MotionTier.Normal
-        widthSizeClass == WindowWidthSizeClass.Expanded -> MotionTier.Enhanced
-        else -> MotionTier.Normal
+    val motionTier = if (widthSizeClass == WindowWidthSizeClass.Expanded) {
+        MotionTier.Enhanced
+    } else {
+        MotionTier.Normal
     }
 
     return DeviceUiProfile(
         widthSizeClass = widthSizeClass,
         isTablet = isTablet,
-        isTv = isTv,
-        isTenFootUi = isTv,
         motionTier = motionTier
     )
 }

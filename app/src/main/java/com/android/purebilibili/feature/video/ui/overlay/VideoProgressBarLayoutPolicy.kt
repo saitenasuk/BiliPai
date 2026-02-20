@@ -19,10 +19,9 @@ data class VideoProgressBarLayoutPolicy(
 )
 
 fun resolveVideoProgressBarLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): VideoProgressBarLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return VideoProgressBarLayoutPolicy(
             baseHeightWithoutChapterDp = 32,
             baseHeightWithChapterDp = 48,

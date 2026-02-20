@@ -53,7 +53,6 @@ import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.rememberAdaptiveGridColumns
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.rememberResponsiveSpacing
 import com.android.purebilibili.core.util.rememberResponsiveValue
 import com.android.purebilibili.core.util.PinyinUtils
@@ -92,16 +91,10 @@ fun CommonListScreen(
     // 平板端(Expanded)使用较大的最小宽度以避免卡片过小
     val context = LocalContext.current
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(initial = com.android.purebilibili.core.store.HomeSettings())
-    val isTvDevice = rememberIsTvDevice()
     val windowSizeClass = LocalWindowSizeClass.current
-    val tvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, tvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = tvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val cardMotionTier = resolveEffectiveMotionTier(

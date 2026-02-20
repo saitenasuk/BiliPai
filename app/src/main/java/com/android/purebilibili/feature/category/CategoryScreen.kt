@@ -28,7 +28,6 @@ import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.util.responsiveContentWidth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -112,18 +111,12 @@ fun CategoryScreen(
         initial = HomeSettings()
     )
     val displayMode = homeSettings.displayMode
-    val isTvDevice = rememberIsTvDevice()
-    val tvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
     
     // 📐 [Tablet Adaptation] Calculate adaptive columns
     val windowSizeClass = LocalWindowSizeClass.current
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, tvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = tvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val cardMotionTier = resolveEffectiveMotionTier(
@@ -217,7 +210,7 @@ fun CategoryScreen(
                         //  [修复] 根据首页设置选择卡片样式（与 HomeScreen 一致）
                         when (displayMode) {
                             1 -> {
-                                //  故事卡片 (Apple TV+ 风格)
+                                //  故事卡片（影院海报风格）
                                 StoryVideoCard(
                                     video = video,
                                     index = index,  //  动画索引

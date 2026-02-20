@@ -8,8 +8,7 @@ class PortraitTopBarLayoutPolicyTest {
     @Test
     fun compactPhone_usesDenseControlSizing() {
         val policy = resolvePortraitTopBarLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(8, policy.horizontalPaddingDp)
@@ -21,8 +20,7 @@ class PortraitTopBarLayoutPolicyTest {
     @Test
     fun mediumTablet_improvesSpacingWithoutTabletOverstretch() {
         val policy = resolvePortraitTopBarLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(12, policy.horizontalPaddingDp)
@@ -34,8 +32,7 @@ class PortraitTopBarLayoutPolicyTest {
     @Test
     fun tabletWidth_expandsPaddingAndButtonSize() {
         val policy = resolvePortraitTopBarLayoutPolicy(
-            widthDp = 900,
-            isTv = false
+            widthDp = 900
         )
 
         assertEquals(16, policy.horizontalPaddingDp)
@@ -45,10 +42,9 @@ class PortraitTopBarLayoutPolicyTest {
     }
 
     @Test
-    fun tv_forcesLargestTargetAndSpacing() {
+    fun ultraWide_forcesLargestTargetAndSpacing() {
         val policy = resolvePortraitTopBarLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(24, policy.horizontalPaddingDp)

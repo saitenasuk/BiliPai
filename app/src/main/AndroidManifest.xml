@@ -28,9 +28,6 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-feature
-        android:name="android.software.leanback"
-        android:required="false" />
-    <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
@@ -40,7 +37,6 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:banner="@mipmap/ic_launcher_tv"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
@@ -70,12 +66,6 @@
             android:theme="@style/Theme.PureBiliBili"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
             android:supportsPictureInPicture="true">
-            <!-- 仅通过 activity-alias 暴露桌面入口，避免安装后出现双图标 -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-            
             <!-- 🔗 Deep Link: Video (/video/) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
@@ -137,6 +127,15 @@
                 <data android:scheme="https" android:host="b23.tv" />
                 <data android:scheme="http" android:host="b23.tv" />
             </intent-filter>
+
+            <!-- 🔗 Deep Link: bilibili:// 与 bili://（用于“打开方式”选择） -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="bilibili" />
+                <data android:scheme="bili" />
+            </intent-filter>
             
             <!-- 📤 分享文本意图 (用户分享链接文本到 BiliPai) -->
             <intent-filter>
@@ -169,29 +168,13 @@
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity-alias>
 
-        <!-- Anime TV Girl (蓝发少女小电视) -->
+        <!-- Anime Girl (蓝发少女) -->
         <activity-alias
             android:name=".MainActivityAliasAnime"
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_anime"
             android:roundIcon="@mipmap/ic_launcher_anime"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter android:priority="1">
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
-        </activity-alias>
-
-        <!-- TV Girl (双马尾坐电视) -->
-        <activity-alias
-            android:name=".MainActivityAliasTv"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_tv"
-            android:roundIcon="@mipmap/ic_launcher_tv"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
             <intent-filter android:priority="1">

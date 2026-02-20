@@ -22,10 +22,8 @@ import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
-import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
 import kotlinx.coroutines.delay
@@ -90,17 +88,10 @@ fun AnimationSettingsContent(
     viewModel: SettingsViewModel
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val isTvDevice = rememberIsTvDevice()
-    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
     val windowSizeClass = LocalWindowSizeClass.current
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val effectiveMotionTier = resolveEffectiveMotionTier(
@@ -194,22 +185,6 @@ fun AnimationSettingsContent(
             item {
                 Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
-                        if (isTvDevice) {
-                            IOSSwitchItem(
-                                icon = CupertinoIcons.Default.Tv,
-                                title = "TV 性能档",
-                                subtitle = "TV 默认开启，降低高开销特效与动画",
-                                checked = isTvPerformanceProfileEnabled,
-                                onCheckedChange = { enabled ->
-                                    scope.launch {
-                                        SettingsManager.setTvPerformanceProfileEnabled(context, enabled)
-                                    }
-                                },
-                                iconTint = iOSTeal
-                            )
-                            Divider()
-                        }
-
                         // Android 13+ 显示液态玻璃
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                              IOSSwitchItem(

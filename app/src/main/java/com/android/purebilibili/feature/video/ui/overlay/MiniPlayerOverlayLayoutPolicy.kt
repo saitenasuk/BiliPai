@@ -37,10 +37,9 @@ data class MiniPlayerOverlayLayoutPolicy(
 )
 
 fun resolveMiniPlayerOverlayLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): MiniPlayerOverlayLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return MiniPlayerOverlayLayoutPolicy(
             miniPlayerWidthDp = 320,
             miniPlayerHeightDp = 180,

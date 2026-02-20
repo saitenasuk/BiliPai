@@ -36,21 +36,18 @@ import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.util.rememberHapticFeedback
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 //  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.spring
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
-import com.android.purebilibili.core.ui.animation.TvFocusCardEmphasis
-import com.android.purebilibili.core.ui.animation.tvFocusableJiggle
 
 /**
  *  玻璃拟态卡片 - Vision Pro 风格 (性能优化版)
@@ -96,7 +93,6 @@ fun GlassVideoCard(
     val glassBackground = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
     
     //  获取屏幕尺寸用于计算归一化坐标
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
@@ -154,13 +150,6 @@ fun GlassVideoCard(
     Box(
         modifier = cardModifier
             .fillMaxWidth()
-            .tvFocusableJiggle(
-                isTv = isTvDevice,
-                screenWidthDp = configuration.screenWidthDp,
-                reducedMotion = !animationEnabled,
-                cardEmphasis = TvFocusCardEmphasis.Large,
-                motionTier = motionTier
-            )
             .padding(6.dp)
             //  [修复] 进场动画 - 使用 Unit 作为 key，避免分类切换时重新动画
             .animateEnter(
@@ -172,20 +161,6 @@ fun GlassVideoCard(
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
-            }
-            .onPreviewKeyEvent { event ->
-                if (
-                    shouldTriggerHomeCardClickOnTvKey(
-                        isTv = isTvDevice,
-                        keyCode = event.nativeKeyEvent.keyCode,
-                        action = event.nativeKeyEvent.action
-                    )
-                ) {
-                    triggerCardClick()
-                    true
-                } else {
-                    false
-                }
             }
     ) {
         //  [性能优化] 移除 blur() 层，改用静态渐变色
@@ -347,21 +322,32 @@ fun GlassVideoCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // UP主名称 - 使用主题色 + 渐变背景
-                        Surface(
-                            color = primaryColor.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(smallTagRadius)
-                        ) {
-                            Text(
-                                text = video.owner.name,
-                                color = primaryColor,
+                        UpBadgeName(
+                            name = video.owner.name,
+                            leadingContent = if (video.owner.face.isNotBlank()) {
+                                {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(FormatUtils.fixImageUrl(video.owner.face))
+                                            .crossfade(100)
+                                            .build(),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                            } else null,
+                            nameStyle = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
+                                fontWeight = FontWeight.Medium
+                            ),
+                            nameColor = onSurfaceVariant,
+                            badgeTextColor = onSurfaceVariant.copy(alpha = 0.85f),
+                            badgeBorderColor = onSurfaceVariant.copy(alpha = 0.35f),
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
                         
                         Spacer(modifier = Modifier.width(8.dp))
                         

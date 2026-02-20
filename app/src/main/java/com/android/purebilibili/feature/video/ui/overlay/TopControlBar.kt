@@ -32,7 +32,6 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Cast
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -63,12 +62,10 @@ fun TopControlBar(
     onMoreClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveTopControlBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
     val currentTimeText by produceState(initialValue = formatCurrentTime()) {

@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.screen
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TabletCinemaLayoutPolicyTest {
@@ -9,8 +10,7 @@ class TabletCinemaLayoutPolicyTest {
     @Test
     fun largeTabletGetsWiderCurtainAndPlayerCap() {
         val policy = resolveTabletCinemaLayoutPolicy(
-            widthDp = 1800,
-            isTv = false
+            widthDp = 1800
         )
 
         assertTrue(policy.curtainOpenWidthDp >= 470)
@@ -20,16 +20,13 @@ class TabletCinemaLayoutPolicyTest {
     @Test
     fun cinemaPolicyScalesSmoothlyAcrossTabletWidths() {
         val compact = resolveTabletCinemaLayoutPolicy(
-            widthDp = 960,
-            isTv = false
+            widthDp = 960
         )
         val medium = resolveTabletCinemaLayoutPolicy(
-            widthDp = 1280,
-            isTv = false
+            widthDp = 1280
         )
         val large = resolveTabletCinemaLayoutPolicy(
-            widthDp = 1600,
-            isTv = false
+            widthDp = 1600
         )
 
         assertTrue(medium.curtainOpenWidthDp > compact.curtainOpenWidthDp)
@@ -45,8 +42,7 @@ class TabletCinemaLayoutPolicyTest {
     @Test
     fun mediumTabletUsesBalancedCinemaPolicy() {
         val policy = resolveTabletCinemaLayoutPolicy(
-            widthDp = 1280,
-            isTv = false
+            widthDp = 1280
         )
 
         assertTrue(policy.curtainPeekWidthDp in 61..64)
@@ -56,14 +52,13 @@ class TabletCinemaLayoutPolicyTest {
     }
 
     @Test
-    fun tvUsesDedicatedCinemaPolicy() {
+    fun ultraWideUsesLargestCinemaPolicy() {
         val policy = resolveTabletCinemaLayoutPolicy(
-            widthDp = 1920,
-            isTv = true
+            widthDp = 1920
         )
 
-        assertEquals(72, policy.curtainPeekWidthDp)
-        assertEquals(460, policy.curtainOpenWidthDp)
+        assertEquals(74, policy.curtainPeekWidthDp)
+        assertEquals(480, policy.curtainOpenWidthDp)
         assertEquals(24, policy.horizontalPaddingDp)
     }
 
@@ -84,7 +79,11 @@ class TabletCinemaLayoutPolicyTest {
     @Test
     fun initialCurtainStateUsesScreenWidthBuckets() {
         assertEquals(
-            TabletSideCurtainState.PEEK,
+            TabletSideCurtainState.OPEN,
+            resolveInitialCurtainState(widthDp = 1080)
+        )
+        assertEquals(
+            TabletSideCurtainState.OPEN,
             resolveInitialCurtainState(widthDp = 1280)
         )
         assertEquals(
@@ -112,6 +111,34 @@ class TabletCinemaLayoutPolicyTest {
                 currentState = TabletSideCurtainState.HIDDEN,
                 isActivelyPlaying = false
             )
+        )
+    }
+
+    @Test
+    fun cinemaMetaBlocksIncludeUpInfoWhenOwnerIsAvailable() {
+        val blocks = resolveCinemaMetaPanelBlocks(hasOwner = true)
+
+        assertEquals(
+            listOf(
+                CinemaMetaPanelBlock.ACTIONS,
+                CinemaMetaPanelBlock.UP_INFO,
+                CinemaMetaPanelBlock.INTRO
+            ),
+            blocks
+        )
+    }
+
+    @Test
+    fun cinemaMetaBlocksSkipUpInfoWhenOwnerIsMissing() {
+        val blocks = resolveCinemaMetaPanelBlocks(hasOwner = false)
+
+        assertFalse(blocks.contains(CinemaMetaPanelBlock.UP_INFO))
+        assertEquals(
+            listOf(
+                CinemaMetaPanelBlock.ACTIONS,
+                CinemaMetaPanelBlock.INTRO
+            ),
+            blocks
         )
     }
 }

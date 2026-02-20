@@ -60,7 +60,7 @@ class VideoLoadPolicyTest {
     @Test
     fun `resolveDashRetryDelays avoids retry for high quality attempts`() {
         assertEquals(listOf(0L), resolveDashRetryDelays(120))
-        assertEquals(listOf(0L, 350L), resolveDashRetryDelays(80))
+        assertEquals(listOf(0L), resolveDashRetryDelays(80))
     }
 
     @Test
@@ -69,5 +69,32 @@ class VideoLoadPolicyTest {
         assertFalse(shouldCallAccessTokenApi(nowMs = now, cooldownUntilMs = 2_000L, hasAccessToken = true))
         assertTrue(shouldCallAccessTokenApi(nowMs = now, cooldownUntilMs = 500L, hasAccessToken = true))
         assertFalse(shouldCallAccessTokenApi(nowMs = now, cooldownUntilMs = 500L, hasAccessToken = false))
+    }
+
+    @Test
+    fun `buildGuestFallbackQualities prefers 80 before 64`() {
+        assertEquals(listOf(80, 64, 32), buildGuestFallbackQualities())
+    }
+
+    @Test
+    fun `shouldCachePlayUrlResult skips guest source`() {
+        assertFalse(shouldCachePlayUrlResult(PlayUrlSource.GUEST, audioLang = null))
+        assertTrue(shouldCachePlayUrlResult(PlayUrlSource.DASH, audioLang = null))
+        assertFalse(shouldCachePlayUrlResult(PlayUrlSource.DASH, audioLang = "en"))
+    }
+
+    @Test
+    fun `shouldFetchCommentEmoteMapOnVideoLoad keeps first frame path lean`() {
+        assertFalse(shouldFetchCommentEmoteMapOnVideoLoad())
+    }
+
+    @Test
+    fun `shouldRefreshVipStatusOnVideoLoad keeps first frame path lean`() {
+        assertFalse(shouldRefreshVipStatusOnVideoLoad())
+    }
+
+    @Test
+    fun `shouldFetchInteractionStatusOnVideoLoad keeps first frame path lean`() {
+        assertFalse(shouldFetchInteractionStatusOnVideoLoad())
     }
 }

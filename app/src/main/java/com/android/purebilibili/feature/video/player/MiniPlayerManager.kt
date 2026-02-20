@@ -85,6 +85,35 @@ internal fun shouldContinueBackgroundAudioByPolicy(
     }
 }
 
+internal fun shouldClearPlaybackNotificationOnNavigationExit(
+    mode: SettingsManager.MiniPlayerMode,
+    stopPlaybackOnExit: Boolean
+): Boolean {
+    if (stopPlaybackOnExit) return true
+    return mode == SettingsManager.MiniPlayerMode.OFF ||
+        mode == SettingsManager.MiniPlayerMode.SYSTEM_PIP
+}
+
+internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
+    val normalizedKey = iconKey.trim()
+    return when (normalizedKey) {
+        "icon_blue", "Blue" -> R.mipmap.ic_launcher_blue_round
+        "icon_neon", "Neon" -> R.mipmap.ic_launcher_neon_round
+        "icon_retro", "Retro" -> R.mipmap.ic_launcher_retro_round
+        "icon_flat", "Flat" -> R.mipmap.ic_launcher_flat_round
+        "icon_anime", "Anime" -> R.mipmap.ic_launcher_anime
+        "icon_telegram_blue", "Telegram Blue" -> R.mipmap.ic_launcher_telegram_blue_round
+        "icon_telegram_green", "Green", "Telegram Green" -> R.mipmap.ic_launcher_telegram_green_round
+        "icon_telegram_pink", "Pink", "Telegram Pink" -> R.mipmap.ic_launcher_telegram_pink_round
+        "icon_telegram_purple", "Purple", "Telegram Purple" -> R.mipmap.ic_launcher_telegram_purple_round
+        "icon_telegram_dark", "Dark", "Telegram Dark" -> R.mipmap.ic_launcher_telegram_dark_round
+        "Headphone", "icon_headphone" -> R.mipmap.ic_launcher_headphone
+        "Yuki" -> R.mipmap.ic_launcher_round
+        "default", "icon_3d", "3D" -> R.mipmap.ic_launcher_3d_round
+        else -> R.mipmap.ic_launcher_3d_round
+    }
+}
+
 /**
  *  全局小窗管理器
  * 
@@ -456,9 +485,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         // 画中画模式说明："切到桌面进入系统画中画"，返回主页时应停止
         val mode = getCurrentMode()
         val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
-        if (stopPlaybackOnExit ||
-            mode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF ||
-            mode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP) {
+        if (shouldClearPlaybackNotificationOnNavigationExit(mode, stopPlaybackOnExit)) {
             Logger.d(TAG, "🔇 ${mode.label}：通过导航离开，立即停止播放")
             // 停止所有播放器（外部和内部）
             _externalPlayer?.pause()
@@ -469,6 +496,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             isActive = false
             playbackServiceRequested = false
             _externalPlayer = null
+            clearPlaybackNotificationArtifacts()
             Logger.d(TAG, "🔧 标记 isActive=false，清除外部播放器引用")
         }
     }
@@ -662,11 +690,14 @@ class MiniPlayerManager private constructor(private val context: Context) :
         currentBvid = null
         cachedUiState = null  //  [修复] 清除缓存的 UI 状态
         
-        // 清除通知
+        clearPlaybackNotificationArtifacts()
+    }
+
+    private fun clearPlaybackNotificationArtifacts() {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(NOTIFICATION_ID)
+        currentNotification = null
 
-        // 停止前台服务
         try {
             val serviceIntent = Intent(context, PlaybackService::class.java).apply {
                 action = PlaybackService.ACTION_STOP_FOREGROUND
@@ -945,7 +976,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             .setShowActionsInCompactView(0, 1, 2)  //  显示前三个按钮
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(resolveNotificationSmallIconRes(SettingsManager.getAppIconSync(context)))
             .setContentTitle(title)
             .setContentText(artist)
             .setLargeIcon(bitmap)

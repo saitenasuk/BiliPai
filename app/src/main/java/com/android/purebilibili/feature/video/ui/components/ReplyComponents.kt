@@ -45,6 +45,26 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import java.text.SimpleDateFormat
 import java.util.*
 
+private val EMOTE_TOKEN_PATTERN = """\[(.*?)\]""".toRegex()
+
+internal fun collectRenderableEmoteKeys(
+    text: String,
+    emoteMap: Map<String, String>
+): Set<String> {
+    if (text.isEmpty() || emoteMap.isEmpty()) return emptySet()
+    return EMOTE_TOKEN_PATTERN.findAll(text)
+        .map { it.value }
+        .filter { emoteMap.containsKey(it) }
+        .toSet()
+}
+
+internal fun shouldEnableRichCommentSelection(
+    hasRenderableEmotes: Boolean,
+    hasInteractiveAnnotations: Boolean
+): Boolean {
+    return !hasRenderableEmotes && !hasInteractiveAnnotations
+}
+
 //  优化后的颜色常量 (使用 MaterialTheme 替代硬编码)
 // private val SubReplyBgColor = Color(0xFFF7F8FA)  // OLD
 // private val TextSecondaryColor = Color(0xFF9499A0)  // OLD
@@ -361,129 +381,149 @@ fun RichCommentText(
     onUrlClick: ((String) -> Unit)? = null,
     prefix: AnnotatedString? = null
 ) {
+    val context = LocalContext.current
     val timestampColor = MaterialTheme.colorScheme.primary
+    val urlColor = MaterialTheme.colorScheme.primary
     
     //  时间戳正则: 支持 "1:23", "12:34", "1:23:45" 格式
     val timestampPattern = """(?<!\d)(\d{1,2}):(\d{2})(?::(\d{2}))?(?!\d)""".toRegex()
+    val renderableEmoteKeys = remember(text, emoteMap) {
+        collectRenderableEmoteKeys(text, emoteMap)
+    }
     
-    val annotatedString = buildAnnotatedString {
-        // [新增] 添加前缀 (如用户名)
-        if (prefix != null) {
-            append(prefix)
-        }
-
-        // 高亮 "回复 @某人 :"
-        val replyPattern = "^回复 @(.*?) :".toRegex()
-        val replyMatch = replyPattern.find(text)
-        var startIndex = 0
-        if (replyMatch != null) {
-            withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)) {
-                append(replyMatch.value)
+    val annotatedString = remember(
+        text,
+        prefix,
+        renderableEmoteKeys,
+        timestampColor,
+        color,
+        urlColor
+    ) {
+        buildAnnotatedString {
+            // [新增] 添加前缀 (如用户名)
+            if (prefix != null) {
+                append(prefix)
             }
-            startIndex = replyMatch.range.last + 1
-        }
 
-        val remainingText = text.substring(startIndex)
-        val emotePattern = """\[(.*?)\]""".toRegex()
-        
-        //  收集所有匹配（表情 + 时间戳）并按位置排序
-        data class MatchInfo(val range: IntRange, val type: String, val value: String, val seconds: Long = 0)
-        val allMatches = mutableListOf<MatchInfo>()
-        
-        // 收集表情匹配
-        emotePattern.findAll(remainingText).forEach { match ->
-            allMatches.add(MatchInfo(match.range, "emote", match.value))
-        }
-        
-        // 收集时间戳匹配
-        timestampPattern.findAll(remainingText).forEach { match ->
-            val hours = match.groupValues[3].takeIf { it.isNotEmpty() }?.toIntOrNull() ?: 0
-            val minutes = match.groupValues[1].toIntOrNull() ?: 0
-            val seconds = match.groupValues[2].toIntOrNull() ?: 0
-            val totalSeconds = if (match.groupValues[3].isNotEmpty()) {
-                // 格式: H:MM:SS
-                match.groupValues[1].toInt() * 3600 + match.groupValues[2].toInt() * 60 + match.groupValues[3].toInt()
-            } else {
-                // 格式: MM:SS
-                minutes * 60 + seconds
-            }
-            allMatches.add(MatchInfo(match.range, "timestamp", match.value, totalSeconds.toLong()))
-        }
-        
-        // 收集 URL 匹配
-        // 简单 URL 正则，匹配 http/https/ftp/file 开头
-        val urlPattern = """((https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])""".toRegex()
-        urlPattern.findAll(remainingText).forEach { match ->
-            allMatches.add(MatchInfo(match.range, "url", match.value))
-        }
-
-        // 按位置排序
-        allMatches.sortBy { it.range.first }
-        
-        var lastIndex = 0
-        allMatches.forEach { matchInfo ->
-            // 添加匹配之前的普通文本
-            if (lastIndex < matchInfo.range.first) {
-                append(remainingText.substring(lastIndex, matchInfo.range.first))
-            }
-            // 避免重叠匹配（例如 URL 中的数字被识别为时间戳）
-            if (matchInfo.range.first >= lastIndex) {
-            
-                when (matchInfo.type) {
-                    "emote" -> {
-                        if (emoteMap.containsKey(matchInfo.value)) {
-                            appendInlineContent(id = matchInfo.value, alternateText = matchInfo.value)
-                        } else {
-                            append(matchInfo.value)
-                        }
-                    }
-                    "timestamp" -> {
-                        //  时间戳使用特殊样式并添加点击注解
-                        pushStringAnnotation(tag = "TIMESTAMP", annotation = matchInfo.seconds.toString())
-                        withStyle(SpanStyle(color = timestampColor, fontWeight = FontWeight.Medium)) {
-                            append(matchInfo.value)
-                        }
-                        pop()
-                    }
-                    "url" -> {
-                        // URL 高亮
-                        pushStringAnnotation(tag = "URL", annotation = matchInfo.value)
-                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)) {
-                            append(matchInfo.value)
-                        }
-                        pop()
-                    }
+            // 高亮 "回复 @某人 :"
+            val replyPattern = "^回复 @(.*?) :".toRegex()
+            val replyMatch = replyPattern.find(text)
+            var startIndex = 0
+            if (replyMatch != null) {
+                withStyle(SpanStyle(color = color, fontWeight = FontWeight.Medium)) {
+                    append(replyMatch.value)
                 }
-                lastIndex = matchInfo.range.last + 1
+                startIndex = replyMatch.range.last + 1
+            }
+
+            val remainingText = text.substring(startIndex)
+            
+            //  收集所有匹配（表情 + 时间戳）并按位置排序
+            data class MatchInfo(val range: IntRange, val type: String, val value: String, val seconds: Long = 0)
+            val allMatches = mutableListOf<MatchInfo>()
+            
+            // 收集表情匹配
+            EMOTE_TOKEN_PATTERN.findAll(remainingText).forEach { match ->
+                allMatches.add(MatchInfo(match.range, "emote", match.value))
+            }
+            
+            // 收集时间戳匹配
+            timestampPattern.findAll(remainingText).forEach { match ->
+                val minutes = match.groupValues[1].toIntOrNull() ?: 0
+                val seconds = match.groupValues[2].toIntOrNull() ?: 0
+                val totalSeconds = if (match.groupValues[3].isNotEmpty()) {
+                    // 格式: H:MM:SS
+                    match.groupValues[1].toInt() * 3600 + match.groupValues[2].toInt() * 60 + match.groupValues[3].toInt()
+                } else {
+                    // 格式: MM:SS
+                    minutes * 60 + seconds
+                }
+                allMatches.add(MatchInfo(match.range, "timestamp", match.value, totalSeconds.toLong()))
+            }
+            
+            // 收集 URL 匹配
+            val urlPattern = """((https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])""".toRegex()
+            urlPattern.findAll(remainingText).forEach { match ->
+                allMatches.add(MatchInfo(match.range, "url", match.value))
+            }
+
+            // 按位置排序
+            allMatches.sortBy { it.range.first }
+            
+            var lastIndex = 0
+            allMatches.forEach { matchInfo ->
+                // 添加匹配之前的普通文本
+                if (lastIndex < matchInfo.range.first) {
+                    append(remainingText.substring(lastIndex, matchInfo.range.first))
+                }
+                // 避免重叠匹配（例如 URL 中的数字被识别为时间戳）
+                if (matchInfo.range.first >= lastIndex) {
+                    when (matchInfo.type) {
+                        "emote" -> {
+                            if (matchInfo.value in renderableEmoteKeys) {
+                                appendInlineContent(id = matchInfo.value, alternateText = matchInfo.value)
+                            } else {
+                                append(matchInfo.value)
+                            }
+                        }
+                        "timestamp" -> {
+                            //  时间戳使用特殊样式并添加点击注解
+                            pushStringAnnotation(tag = "TIMESTAMP", annotation = matchInfo.seconds.toString())
+                            withStyle(SpanStyle(color = timestampColor, fontWeight = FontWeight.Medium)) {
+                                append(matchInfo.value)
+                            }
+                            pop()
+                        }
+                        "url" -> {
+                            // URL 高亮
+                            pushStringAnnotation(tag = "URL", annotation = matchInfo.value)
+                            withStyle(SpanStyle(color = urlColor, textDecoration = TextDecoration.Underline)) {
+                                append(matchInfo.value)
+                            }
+                            pop()
+                        }
+                    }
+                    lastIndex = matchInfo.range.last + 1
+                }
+            }
+            
+            // 添加剩余文本
+            if (lastIndex < remainingText.length) {
+                append(remainingText.substring(lastIndex))
             }
         }
-        
-        // 添加剩余文本
-        if (lastIndex < remainingText.length) {
-            append(remainingText.substring(lastIndex))
-        }
     }
 
-    val inlineContent = emoteMap.mapValues { (_, url) ->
-        InlineTextContent(
-            Placeholder(width = 1.4.em, height = 1.4.em, placeholderVerticalAlign = PlaceholderVerticalAlign.Center)
-        ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(url)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize()
-            )
+    val inlineContent = remember(renderableEmoteKeys, emoteMap, context) {
+        renderableEmoteKeys.associateWith { key ->
+            val url = emoteMap[key].orEmpty()
+            InlineTextContent(
+                Placeholder(width = 1.4.em, height = 1.4.em, placeholderVerticalAlign = PlaceholderVerticalAlign.Center)
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(url)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
+    
+    val hasInteractiveAnnotations = onTimestampClick != null || onUrlClick != null
+    val selectionEnabled = remember(renderableEmoteKeys, hasInteractiveAnnotations) {
+        shouldEnableRichCommentSelection(
+            hasRenderableEmotes = renderableEmoteKeys.isNotEmpty(),
+            hasInteractiveAnnotations = hasInteractiveAnnotations
+        )
+    }
 
-    // [新增] 使用 SelectionContainer 包裹文本以支持滑动选择复制
-    SelectionContainer {
+    val content: @Composable () -> Unit = {
         //  使用 Text + pointerInput 实现带表情的可点击文本
         var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
-        
+
         Text(
             text = annotatedString,
             inlineContent = inlineContent,
@@ -492,18 +532,15 @@ fun RichCommentText(
             lineHeight = (fontSize.value * 1.5).sp,
             maxLines = maxLines,
             onTextLayout = { textLayoutResult = it },
-            //  [修复] 添加 padding 确保点击区域足够大
             modifier = Modifier.then(
-                if (onTimestampClick != null || onUrlClick != null) {
+                if (hasInteractiveAnnotations) {
                     Modifier.pointerInput(annotatedString) {
                         detectTapGestures { offset ->
                             textLayoutResult?.let { layoutResult ->
                                 val position = layoutResult.getOffsetForPosition(offset)
-                                //  [修复] 扩大搜索范围，允许一定的点击容差
                                 val searchStart = maxOf(0, position - 1)
                                 val searchEnd = minOf(annotatedString.length, position + 1)
-                                
-                                // 优先检测 URL 点击
+
                                 annotatedString.getStringAnnotations(
                                     tag = "URL",
                                     start = searchStart,
@@ -513,23 +550,29 @@ fun RichCommentText(
                                     return@detectTapGestures
                                 }
 
-                                // 检测时间戳点击
                                 annotatedString.getStringAnnotations(
-                                    tag = "TIMESTAMP", 
-                                    start = searchStart, 
+                                    tag = "TIMESTAMP",
+                                    start = searchStart,
                                     end = searchEnd
                                 )
                                     .firstOrNull()?.let { annotation ->
-                                        val seconds = annotation.item.toLongOrNull() ?: 0L
-                                        onTimestampClick?.invoke(seconds * 1000)  // 转换为毫秒
+                                        val secondsValue = annotation.item.toLongOrNull() ?: 0L
+                                        onTimestampClick?.invoke(secondsValue * 1000)
                                     }
                             }
                         }
                     }
                 } else Modifier
             )
-            // .copyOnLongPress(text, "评论内容") // 移除自定义长按复制，使用系统原生的选择复制
         )
+    }
+
+    if (selectionEnabled) {
+        SelectionContainer {
+            content()
+        }
+    } else {
+        content()
     }
 }
 

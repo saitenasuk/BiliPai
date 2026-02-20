@@ -44,7 +44,6 @@ import com.android.purebilibili.core.util.LocalWindowSizeClass
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
-import com.android.purebilibili.core.util.rememberIsTvDevice
 
 /**
  *  底栏项目配置
@@ -129,19 +128,13 @@ fun BottomBarSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isTvDevice = rememberIsTvDevice()
-    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
     val windowSizeClass = LocalWindowSizeClass.current
     val scope = rememberCoroutineScope()
     var isVisible by remember { mutableStateOf(false) }
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = false)
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val effectiveMotionTier = remember(deviceUiProfile.motionTier, cardAnimationEnabled) {

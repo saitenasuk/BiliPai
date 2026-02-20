@@ -36,6 +36,7 @@ import com.android.purebilibili.R
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.core.store.SettingsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,31 @@ import kotlinx.coroutines.launch
 private const val NOTIFICATION_ID = 1001
 private const val CHANNEL_ID = "media_playback_channel"
 private const val THEME_COLOR = 0xFFFB7299.toInt()
+
+internal data class PlayerBufferPolicy(
+    val minBufferMs: Int,
+    val maxBufferMs: Int,
+    val bufferForPlaybackMs: Int,
+    val bufferForPlaybackAfterRebufferMs: Int
+)
+
+internal fun resolvePlayerBufferPolicy(isOnWifi: Boolean): PlayerBufferPolicy {
+    return if (isOnWifi) {
+        PlayerBufferPolicy(
+            minBufferMs = 10000,
+            maxBufferMs = 40000,
+            bufferForPlaybackMs = 900,
+            bufferForPlaybackAfterRebufferMs = 1800
+        )
+    } else {
+        PlayerBufferPolicy(
+            minBufferMs = 15000,
+            maxBufferMs = 50000,
+            bufferForPlaybackMs = 1600,
+            bufferForPlaybackAfterRebufferMs = 3000
+        )
+    }
+}
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class VideoPlayerState(
@@ -251,6 +277,14 @@ fun rememberVideoPlayerState(
             //  [性能优化] 使用 PlayerSettingsCache 直接从内存读取，避免 I/O
             val hwDecodeEnabled = com.android.purebilibili.core.store.PlayerSettingsCache.isHwDecodeEnabled(context)
             val seekFastEnabled = com.android.purebilibili.core.store.PlayerSettingsCache.isSeekFastEnabled(context)
+            val bufferPolicy = resolvePlayerBufferPolicy(
+                isOnWifi = NetworkUtils.isWifi(context)
+            )
+            Logger.d(
+                "VideoPlayerState",
+                "🎬 BufferPolicy: min=${bufferPolicy.minBufferMs}, max=${bufferPolicy.maxBufferMs}, " +
+                    "start=${bufferPolicy.bufferForPlaybackMs}, rebuffer=${bufferPolicy.bufferForPlaybackAfterRebufferMs}"
+            )
 
             //  根据设置选择 RenderersFactory
             val renderersFactory = if (hwDecodeEnabled) {
@@ -271,10 +305,10 @@ fun rememberVideoPlayerState(
                 .setLoadControl(
                     androidx.media3.exoplayer.DefaultLoadControl.Builder()
                         .setBufferDurationsMs(
-                            15000,  // 最小缓冲 15s
-                            50000,  // 最大缓冲 50s
-                            2500,   // 播放开始前缓冲 2.5s
-                            5000    // 重新缓冲后缓冲 5s
+                            bufferPolicy.minBufferMs,
+                            bufferPolicy.maxBufferMs,
+                            bufferPolicy.bufferForPlaybackMs,
+                            bufferPolicy.bufferForPlaybackAfterRebufferMs
                         )
                         .setPrioritizeTimeOverSizeThresholds(true)  // 优先保证播放时长
                         .build()

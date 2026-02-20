@@ -1,13 +1,10 @@
 // 文件路径: feature/video/screen/VideoContentSection.kt
 package com.android.purebilibili.feature.video.screen
 
-import android.view.KeyEvent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.animation.*
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -30,16 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -69,7 +62,6 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import com.android.purebilibili.data.model.response.AiSummaryData
 import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
-import com.android.purebilibili.core.util.shouldHandleTvSelectKey
 import kotlin.math.abs
 
 /**
@@ -135,15 +127,11 @@ fun VideoContentSection(
     // [新增] 恢复播放器 (音频模式 -> 视频模式)
     isPlayerCollapsed: Boolean = false,
     onRestorePlayer: () -> Unit = {},
-    tvInfoFocusRequester: FocusRequester? = null,
-    tvRelatedFocusRequester: FocusRequester? = null,
-    isTvInfoFocused: Boolean = false,
-    isTvRelatedFocused: Boolean = false,
-    onTvContentPreviewKeyEvent: (KeyEvent) -> Boolean = { false },
     // [新增] AI Summary & BGM
     aiSummary: AiSummaryData? = null,
     bgmInfo: BgmInfo? = null,
-    onBgmClick: (BgmInfo) -> Unit = {}
+    onBgmClick: (BgmInfo) -> Unit = {},
+    showInteractionActions: Boolean = true
 ) {
     val tabs = listOf("简介", "评论 $replyCount")
     val pagerState = rememberPagerState(pageCount = { tabs.size })
@@ -199,6 +187,7 @@ fun VideoContentSection(
     val onTabSelected: (Int) -> Unit = { index ->
         scope.launch { pagerState.animateScrollToPage(index) }
     }
+    val bottomContentPadding = if (showInteractionActions) 84.dp else 12.dp
 
     // 💡 [重构] 使用简单的 Column 布局代替复杂的嵌套滚动
     // 头部和 TabBar 固定在顶部，HorizontalPager 占据剩余空间
@@ -215,10 +204,7 @@ fun VideoContentSection(
             onDanmakuSendClick = onDanmakuSendClick,
             modifier = Modifier,
             isPlayerCollapsed = isPlayerCollapsed,
-            onRestorePlayer = onRestorePlayer,
-            tvFocusRequester = tvInfoFocusRequester,
-            isTvFocused = isTvInfoFocused,
-            onTvPreviewKeyEvent = onTvContentPreviewKeyEvent
+            onRestorePlayer = onRestorePlayer
         )
 
         // 内容区域
@@ -255,16 +241,14 @@ fun VideoContentSection(
                     onOpenCollectionSheet = { showCollectionSheet = true },
                     onDownloadClick = onDownloadClick,
                     onWatchLaterClick = onWatchLaterClick,
-                    contentPadding = PaddingValues(bottom = 84.dp), // 适配底部输入栏
+                    contentPadding = PaddingValues(bottom = bottomContentPadding),
                     transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
                     onFavoriteLongClick = onFavoriteLongClick,
-                    tvRelatedFocusRequester = tvRelatedFocusRequester,
-                    isTvRelatedFocused = isTvRelatedFocused,
-                    onTvPreviewKeyEvent = onTvContentPreviewKeyEvent,
                     aiSummary = aiSummary,
                     bgmInfo = bgmInfo,
                     onTimestampClick = onTimestampClick,
-                    onBgmClick = onBgmClick
+                    onBgmClick = onBgmClick,
+                    showInteractionActions = showInteractionActions
                 )
                 1 -> VideoCommentTab(
                     listState = commentListState,
@@ -300,7 +284,7 @@ fun VideoContentSection(
                         showImagePreview = true
                     },
                     onTimestampClick = onTimestampClick,
-                    contentPadding = PaddingValues(bottom = 84.dp) // 适配底部输入栏
+                    contentPadding = PaddingValues(bottom = bottomContentPadding)
                 )
             }
         }
@@ -337,25 +321,14 @@ private fun VideoIntroTab(
     contentPadding: PaddingValues,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
     onFavoriteLongClick: () -> Unit = {},
-    tvRelatedFocusRequester: FocusRequester? = null,
-    isTvRelatedFocused: Boolean = false,
-    onTvPreviewKeyEvent: (KeyEvent) -> Boolean = { false },
     aiSummary: AiSummaryData? = null,
     bgmInfo: BgmInfo? = null,
     onTimestampClick: ((Long) -> Unit)? = null,
-    onBgmClick: (BgmInfo) -> Unit = {}
+    onBgmClick: (BgmInfo) -> Unit = {},
+    showInteractionActions: Boolean = true
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val hasPages = info.pages.size > 1
-    LaunchedEffect(isTvRelatedFocused, relatedVideos.size, hasPages) {
-        if (isTvRelatedFocused && relatedVideos.isNotEmpty()) {
-            val firstRelatedItemIndex = resolveFirstRelatedItemIndex(hasPages = hasPages)
-            val isAlreadyVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == firstRelatedItemIndex }
-            if (!isAlreadyVisible) {
-                listState.animateScrollToItem(firstRelatedItemIndex)
-            }
-        }
-    }
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
@@ -388,7 +361,8 @@ private fun VideoIntroTab(
                 aiSummary = aiSummary,
                 bgmInfo = bgmInfo,
                 onTimestampClick = onTimestampClick,
-                onBgmClick = onBgmClick
+                onBgmClick = onBgmClick,
+                showInteractionActions = showInteractionActions
             )
         }
         if (hasPages) {
@@ -402,21 +376,10 @@ private fun VideoIntroTab(
         }
 
         item {
-            VideoRecommendationHeader(
-                isTvFocused = isTvRelatedFocused && relatedVideos.isEmpty()
-            )
+            VideoRecommendationHeader()
         }
 
         itemsIndexed(items = relatedVideos, key = { _, item -> item.bvid }) { index, video ->
-            val isFirstTvFocused = isTvRelatedFocused && index == 0
-            val tvFocusScale by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = if (isFirstTvFocused) 1.03f else 1f,
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
-                ),
-                label = "tv_related_focus_scale"
-            )
             val openRelatedVideo = {
                 val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
                 val options = activity?.let {
@@ -424,45 +387,9 @@ private fun VideoIntroTab(
                 }
                 onRelatedVideoClick(video.bvid, options)
             }
-            val firstCardTvFocusModifier = if (index == 0 && tvRelatedFocusRequester != null) {
-                Modifier
-                    .focusRequester(tvRelatedFocusRequester)
-                    .focusable()
-                    .onPreviewKeyEvent { event ->
-                        val nativeEvent = event.nativeKeyEvent
-                        when {
-                            shouldHandleTvSelectKey(nativeEvent.keyCode, nativeEvent.action) -> {
-                                openRelatedVideo()
-                                true
-                            }
-                            else -> onTvPreviewKeyEvent(nativeEvent)
-                        }
-                    }
-            } else {
-                Modifier
-            }
 
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer {
-                        scaleX = tvFocusScale
-                        scaleY = tvFocusScale
-                    }
-                    .then(firstCardTvFocusModifier)
-                    .then(
-                        if (isFirstTvFocused) {
-                            Modifier
-                                .border(
-                                    width = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .padding(vertical = 2.dp)
-                        } else {
-                            Modifier
-                        }
-                    )
+                modifier = Modifier.fillMaxWidth()
             ) {
                 RelatedVideoItem(
                     video = video,
@@ -544,7 +471,7 @@ private fun VideoCommentTab(
             } else {
                 items(items = replies, key = { it.rpid }) { reply ->
                     // [新增] 使用 DissolvableVideoCard 包裹
-                    com.android.purebilibili.core.ui.animation.DissolvableVideoCard(
+                    com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
                         isDissolving = reply.rpid in dissolvingIds,
                         onDissolveComplete = { onDeleteComment(reply.rpid) },
                         cardId = "comment_${reply.rpid}",
@@ -643,7 +570,8 @@ private fun VideoHeaderContent(
     aiSummary: AiSummaryData? = null,
     bgmInfo: BgmInfo? = null,
     onTimestampClick: ((Long) -> Unit)? = null,
-    onBgmClick: (BgmInfo) -> Unit = {}
+    onBgmClick: (BgmInfo) -> Unit = {},
+    showInteractionActions: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -678,22 +606,24 @@ private fun VideoHeaderContent(
             )
         }
 
-        ActionButtonsRow(
-            info = info,
-            isFavorited = isFavorited,
-            isLiked = isLiked,
-            coinCount = coinCount,
-            downloadProgress = downloadProgress,
-            isInWatchLater = isInWatchLater,
-            onFavoriteClick = onFavoriteClick,
-            onLikeClick = onLikeClick,
-            onCoinClick = onCoinClick,
-            onTripleClick = onTripleClick,
-            onCommentClick = {},
-            onDownloadClick = onDownloadClick,
-            onWatchLaterClick = onWatchLaterClick,
-            onFavoriteLongClick = onFavoriteLongClick
-        )
+        if (showInteractionActions) {
+            ActionButtonsRow(
+                info = info,
+                isFavorited = isFavorited,
+                isLiked = isLiked,
+                coinCount = coinCount,
+                downloadProgress = downloadProgress,
+                isInWatchLater = isInWatchLater,
+                onFavoriteClick = onFavoriteClick,
+                onLikeClick = onLikeClick,
+                onCoinClick = onCoinClick,
+                onTripleClick = onTripleClick,
+                onCommentClick = {},
+                onDownloadClick = onDownloadClick,
+                onWatchLaterClick = onWatchLaterClick,
+                onFavoriteLongClick = onFavoriteLongClick
+            )
+        }
 
         info.ugc_season?.let { season ->
             CollectionRow(
@@ -716,35 +646,10 @@ private fun VideoContentTabBar(
     onDanmakuSendClick: () -> Unit,
     modifier: Modifier = Modifier,
     isPlayerCollapsed: Boolean = false,
-    onRestorePlayer: () -> Unit = {},
-    tvFocusRequester: FocusRequester? = null,
-    isTvFocused: Boolean = false,
-    onTvPreviewKeyEvent: (KeyEvent) -> Boolean = { false }
+    onRestorePlayer: () -> Unit = {}
 ) {
-    val tvFocusModifier = if (tvFocusRequester != null) {
-        Modifier
-            .focusRequester(tvFocusRequester)
-            .focusable()
-            .onPreviewKeyEvent { event ->
-                onTvPreviewKeyEvent(event.nativeKeyEvent)
-            }
-    } else {
-        Modifier
-    }
     Column(
         modifier = modifier
-            .then(tvFocusModifier)
-            .then(
-                if (isTvFocused) {
-                    Modifier.border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                } else {
-                    Modifier
-                }
-            )
     ) {
         Row(
             modifier = Modifier
@@ -859,23 +764,10 @@ private fun VideoContentTabBar(
  * 推荐视频标题
  */
 @Composable
-private fun VideoRecommendationHeader(
-    isTvFocused: Boolean = false
-) {
+private fun VideoRecommendationHeader() {
     Row(
         modifier = Modifier
             .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp) // 优化：减少底部间距，使视频卡片更紧凑
-            .then(
-                if (isTvFocused) {
-                    Modifier.border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                } else {
-                    Modifier
-                }
-            )
             .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

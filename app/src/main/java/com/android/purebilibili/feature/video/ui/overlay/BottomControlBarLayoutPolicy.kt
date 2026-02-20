@@ -24,10 +24,9 @@ data class BottomControlBarLayoutPolicy(
 )
 
 fun resolveBottomControlBarLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): BottomControlBarLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return BottomControlBarLayoutPolicy(
             bottomPaddingDp = 18,
             progressSpacingDp = 12,

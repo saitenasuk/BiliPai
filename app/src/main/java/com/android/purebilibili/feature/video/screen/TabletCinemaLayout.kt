@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -60,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,9 +69,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.video.state.VideoPlayerState
@@ -77,6 +80,7 @@ import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.RelatedVideoItem
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
+import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
@@ -117,11 +121,9 @@ fun TabletCinemaLayout(
     onPlayModeClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val isTvDevice = rememberIsTvDevice()
-    val policy = remember(configuration.screenWidthDp, isTvDevice) {
+    val policy = remember(configuration.screenWidthDp) {
         resolveTabletCinemaLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
     val success = uiState as? PlayerUiState.Success
@@ -202,6 +204,8 @@ fun TabletCinemaLayout(
                         success = success,
                         downloadProgress = downloadProgress,
                         modifier = Modifier.weight(1f),
+                        onFollowClick = { viewModel.toggleFollow() },
+                        onUpClick = onUpClick,
                         onFavoriteClick = { viewModel.toggleFavorite() },
                         onLikeClick = { viewModel.toggleLike() },
                         onCoinClick = { viewModel.openCoinDialog() },
@@ -287,6 +291,33 @@ private fun CinemaStagePlayer(
 ) {
     val context = LocalContext.current
     val success = uiState as? PlayerUiState.Success
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val playerContainerModifier = if (
+        shouldEnableVideoCoverSharedTransition(
+            transitionEnabled = transitionEnabled,
+            hasSharedTransitionScope = sharedTransitionScope != null,
+            hasAnimatedVisibilityScope = animatedVisibilityScope != null
+        )
+    ) {
+        with(requireNotNull(sharedTransitionScope)) {
+            Modifier.sharedBounds(
+                sharedContentState = rememberSharedContentState(key = "video_cover_$bvid"),
+                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
+                boundsTransform = { _, _ ->
+                    spring(
+                        dampingRatio = 0.8f,
+                        stiffness = 200f
+                    )
+                },
+                clipInOverlayDuringTransition = OverlayClip(
+                    RoundedCornerShape(18.dp)
+                )
+            )
+        }
+    } else {
+        Modifier
+    }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -301,7 +332,7 @@ private fun CinemaStagePlayer(
             val playerWidth = minOf(maxWidth, playerMaxWidth)
             val videoHeight = playerWidth * 9f / 16f
             Box(
-                modifier = Modifier
+                modifier = playerContainerModifier
                     .width(playerWidth)
                     .height(videoHeight)
                     .align(Alignment.Center)
@@ -368,6 +399,8 @@ private fun CinemaMetaPanel(
     success: PlayerUiState.Success,
     downloadProgress: Float,
     modifier: Modifier = Modifier,
+    onFollowClick: () -> Unit,
+    onUpClick: (Long) -> Unit,
     onFavoriteClick: () -> Unit,
     onLikeClick: () -> Unit,
     onCoinClick: () -> Unit,
@@ -376,13 +409,22 @@ private fun CinemaMetaPanel(
     onWatchLaterClick: () -> Unit,
     onOpenComments: () -> Unit
 ) {
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 0.dp),
         shape = RoundedCornerShape(24.dp),
-        color = Color.White
+        color = resolveCinemaMetaPanelContainerColor(
+            isDarkTheme = isDarkTheme,
+            surfaceColor = MaterialTheme.colorScheme.surface
+        )
     ) {
+        val metaBlocks = remember(success.info.owner.mid, success.info.owner.name) {
+            resolveCinemaMetaPanelBlocks(
+                hasOwner = success.info.owner.mid > 0L || success.info.owner.name.isNotBlank()
+            )
+        }
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -390,25 +432,40 @@ private fun CinemaMetaPanel(
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item {
-                ActionButtonsRow(
-                    info = success.info,
-                    isFavorited = success.isFavorited,
-                    isLiked = success.isLiked,
-                    coinCount = success.coinCount,
-                    downloadProgress = downloadProgress,
-                    isInWatchLater = success.isInWatchLater,
-                    onFavoriteClick = onFavoriteClick,
-                    onLikeClick = onLikeClick,
-                    onCoinClick = onCoinClick,
-                    onTripleClick = onTripleClick,
-                    onDownloadClick = onDownloadClick,
-                    onWatchLaterClick = onWatchLaterClick,
-                    onCommentClick = onOpenComments
-                )
-            }
-            item {
-                CinemaVideoIntroSection(success = success)
+            items(
+                items = metaBlocks,
+                key = { it.name }
+            ) { block ->
+                when (block) {
+                    CinemaMetaPanelBlock.ACTIONS -> {
+                        ActionButtonsRow(
+                            info = success.info,
+                            isFavorited = success.isFavorited,
+                            isLiked = success.isLiked,
+                            coinCount = success.coinCount,
+                            downloadProgress = downloadProgress,
+                            isInWatchLater = success.isInWatchLater,
+                            onFavoriteClick = onFavoriteClick,
+                            onLikeClick = onLikeClick,
+                            onCoinClick = onCoinClick,
+                            onTripleClick = onTripleClick,
+                            onDownloadClick = onDownloadClick,
+                            onWatchLaterClick = onWatchLaterClick,
+                            onCommentClick = onOpenComments
+                        )
+                    }
+                    CinemaMetaPanelBlock.UP_INFO -> {
+                        UpInfoSection(
+                            info = success.info,
+                            isFollowing = success.isFollowing,
+                            onFollowClick = onFollowClick,
+                            onUpClick = onUpClick
+                        )
+                    }
+                    CinemaMetaPanelBlock.INTRO -> {
+                        CinemaVideoIntroSection(success = success)
+                    }
+                }
             }
         }
     }
@@ -420,13 +477,17 @@ private fun CinemaVideoIntroSection(
 ) {
     var expanded by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
     val descriptionText = success.info.desc.takeIf { it.isNotBlank() } ?: "暂无简介"
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        color = Color.White
+        color = resolveCinemaIntroCardContainerColor(
+            isDarkTheme = isDarkTheme,
+            surfaceContainerLowColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),

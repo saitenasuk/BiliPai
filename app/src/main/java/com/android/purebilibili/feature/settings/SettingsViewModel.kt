@@ -389,7 +389,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 // 兼容旧键名 (向后兼容)
                 "Yuki" to "${packageName}.MainActivityAliasYuki",
                 "Anime" to "${packageName}.MainActivityAliasAnime",
-                "Tv" to "${packageName}.MainActivityAliasTv",
                 "Headphone" to "${packageName}.MainActivityAliasHeadphone",
                 "3D" to "${packageName}.MainActivityAlias3DLauncher",
                 "Blue" to "${packageName}.MainActivityAliasBlue",
@@ -460,11 +459,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleHeaderCollapse(value: Boolean) { viewModelScope.launch { SettingsManager.setHeaderCollapseEnabled(context, value) } }
     fun toggleBottomBarBlur(value: Boolean) { 
         viewModelScope.launch { 
-            SettingsManager.setBottomBarBlurEnabled(context, value)
-            if (value) {
-                // 开启磨砂效果时，自动关闭液态玻璃，仅保留一个效果
-                SettingsManager.setLiquidGlassEnabled(context, false)
-            }
+            val resolved = resolveBottomBarBlurToggleState(
+                enableBottomBarBlur = value
+            )
+            SettingsManager.setBottomBarBlurEnabled(context, resolved.bottomBarBlurEnabled)
+            SettingsManager.setLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
         } 
     }
     fun setBlurIntensity(intensity: BlurIntensity) { viewModelScope.launch { SettingsManager.setBlurIntensity(context, intensity) } }  //  模糊强度设置
@@ -513,15 +512,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // [New] Liquid Glass
     fun toggleLiquidGlass(enabled: Boolean) {
         viewModelScope.launch {
-            SettingsManager.setLiquidGlassEnabled(context, enabled)
-            if (enabled) {
-                // 开启液态玻璃时，自动关闭磨砂效果，仅保留一个效果
-                SettingsManager.setBottomBarBlurEnabled(context, false)
-            } else {
-                // [Fix] 关闭液态玻璃时，自动重新开启磨砂效果
-                // 否则底栏会变得完全不透明，体验不佳
-                SettingsManager.setBottomBarBlurEnabled(context, true)
-            }
+            val resolved = resolveLiquidGlassToggleState(enabled)
+            SettingsManager.setLiquidGlassEnabled(context, resolved.liquidGlassEnabled)
+            SettingsManager.setBottomBarBlurEnabled(context, resolved.bottomBarBlurEnabled)
         }
     }
     

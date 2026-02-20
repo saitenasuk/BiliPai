@@ -37,7 +37,6 @@ import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
@@ -138,16 +137,10 @@ fun AppearanceSettingsContent(
 
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600 // Material Design 3 中型屏幕断点
-    val isTvDevice = rememberIsTvDevice()
-    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
     val windowSizeClass = LocalWindowSizeClass.current
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val effectiveMotionTier = remember(deviceUiProfile.motionTier, state.cardAnimationEnabled) {
@@ -530,7 +523,6 @@ fun AppearanceSettingsContent(
                             // 🎀 二次元少女系列
                             "Yuki" -> "比心少女"
                             "Anime", "icon_anime" -> "蓝发电视"
-                            "Tv" -> "双马尾"
                             "Headphone" -> "耳机少女"
                             // 经典系列
                             "3D", "icon_3d" -> "3D立体"

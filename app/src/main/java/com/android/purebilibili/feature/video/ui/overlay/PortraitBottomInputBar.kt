@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.runtime.remember
-import com.android.purebilibili.core.util.rememberIsTvDevice
 
 /**
  * 竖屏模式底部的输入栏
@@ -39,12 +38,10 @@ fun PortraitBottomInputBar(
     onRotateClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolvePortraitBottomInputBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
 

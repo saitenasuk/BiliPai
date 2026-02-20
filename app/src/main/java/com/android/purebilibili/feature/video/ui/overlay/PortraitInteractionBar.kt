@@ -29,7 +29,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
 
@@ -54,12 +53,10 @@ fun PortraitInteractionBar(
     onShareClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolvePortraitInteractionBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
 

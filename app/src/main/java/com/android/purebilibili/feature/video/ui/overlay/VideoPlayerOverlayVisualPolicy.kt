@@ -29,10 +29,9 @@ data class VideoPlayerOverlayVisualPolicy(
 )
 
 fun resolveVideoPlayerOverlayVisualPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): VideoPlayerOverlayVisualPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return VideoPlayerOverlayVisualPolicy(
             topScrimHeightDp = 200,
             bottomScrimHeightDp = 280,

@@ -150,7 +150,7 @@ fun SubReplyList(
             }
             items(subReplies, key = { it.rpid }) { item ->
                 // [新增] 使用 DissolvableVideoCard 添加消散动画
-                com.android.purebilibili.core.ui.animation.DissolvableVideoCard(
+                com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
                     isDissolving = item.rpid in dissolvingIds,
                     onDissolveComplete = { onDeleteComment?.invoke(item.rpid) },
                     cardId = "subreply_${item.rpid}",

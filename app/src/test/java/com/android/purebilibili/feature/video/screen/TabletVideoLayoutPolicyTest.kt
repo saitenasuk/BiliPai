@@ -8,7 +8,7 @@ class TabletVideoLayoutPolicyTest {
 
     @Test
     fun expandedTablet_prioritizesPrimaryPaneWidth() {
-        val policy = resolveTabletVideoLayoutPolicy(widthDp = 1280, isTv = false)
+        val policy = resolveTabletVideoLayoutPolicy(widthDp = 1280)
 
         assertEquals(0.72f, policy.primaryRatio)
         assertEquals(1080, policy.playerMaxWidthDp)
@@ -17,7 +17,7 @@ class TabletVideoLayoutPolicyTest {
 
     @Test
     fun ultraWideTablet_balancesPaneRatioAndPlayerCap() {
-        val policy = resolveTabletVideoLayoutPolicy(widthDp = 1920, isTv = false)
+        val policy = resolveTabletVideoLayoutPolicy(widthDp = 1920)
 
         assertEquals(0.66f, policy.primaryRatio)
         assertTrue(policy.playerMaxWidthDp >= 1240)
@@ -25,11 +25,11 @@ class TabletVideoLayoutPolicyTest {
     }
 
     @Test
-    fun tvFallbackPolicy_keepsLargePrimaryPane() {
-        val policy = resolveTabletVideoLayoutPolicy(widthDp = 1920, isTv = true)
+    fun ultraWidePolicy_keepsLargePrimaryPane() {
+        val policy = resolveTabletVideoLayoutPolicy(widthDp = 1920)
 
         assertEquals(0.66f, policy.primaryRatio)
-        assertEquals(1260, policy.playerMaxWidthDp)
-        assertEquals(1180, policy.infoMaxWidthDp)
+        assertEquals(1240, policy.playerMaxWidthDp)
+        assertEquals(1160, policy.infoMaxWidthDp)
     }
 }

@@ -13,10 +13,9 @@ data class PortraitBottomInputBarLayoutPolicy(
 )
 
 fun resolvePortraitBottomInputBarLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): PortraitBottomInputBarLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return PortraitBottomInputBarLayoutPolicy(
             horizontalPaddingDp = 20,
             verticalPaddingDp = 12,

@@ -38,7 +38,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.MoreVert
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.FormatUtils
@@ -115,12 +114,10 @@ fun PortraitFullscreenOverlay(
     
     modifier: Modifier = Modifier
 ) {
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolvePortraitFullscreenOverlayLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
 

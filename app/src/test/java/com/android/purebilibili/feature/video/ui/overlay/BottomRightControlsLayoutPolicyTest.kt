@@ -8,8 +8,7 @@ class BottomRightControlsLayoutPolicyTest {
     @Test
     fun compactPhone_usesDenseControlChipStyle() {
         val policy = resolveBottomRightControlsLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(8, policy.rowSpacingDp)
@@ -21,8 +20,7 @@ class BottomRightControlsLayoutPolicyTest {
     @Test
     fun mediumTablet_balancesSpacingAndReadability() {
         val policy = resolveBottomRightControlsLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(9, policy.rowSpacingDp)
@@ -34,8 +32,7 @@ class BottomRightControlsLayoutPolicyTest {
     @Test
     fun expandedTablet_increasesChipDensity() {
         val policy = resolveBottomRightControlsLayoutPolicy(
-            widthDp = 1024,
-            isTv = false
+            widthDp = 1024
         )
 
         assertEquals(10, policy.rowSpacingDp)
@@ -45,10 +42,9 @@ class BottomRightControlsLayoutPolicyTest {
     }
 
     @Test
-    fun tv_usesLargestTenFootControlDensity() {
+    fun ultraWide_usesLargestTenFootControlDensity() {
         val policy = resolveBottomRightControlsLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(12, policy.rowSpacingDp)

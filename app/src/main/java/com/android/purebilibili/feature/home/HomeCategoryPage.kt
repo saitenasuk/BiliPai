@@ -28,13 +28,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
@@ -55,7 +55,7 @@ internal fun HomeCategoryPageContent(
     contentPadding: PaddingValues,
     dissolvingVideos: Set<String>,
     followingMids: Set<Long>,
-    onVideoClick: (String, Long, String) -> Unit,
+    onVideoClick: (HomeVideoClickRequest) -> Unit,
     onLiveClick: (Long, String, String) -> Unit,
     onLoadMore: () -> Unit,
     onDismissVideo: (String) -> Unit,
@@ -80,12 +80,16 @@ internal fun HomeCategoryPageContent(
     onTodayWatchCollapsedChange: (Boolean) -> Unit = {},
     onTodayWatchRefresh: () -> Unit = {},
     onTodayWatchVideoClick: (VideoItem) -> Unit = { video ->
-        onVideoClick(video.bvid, video.cid, video.pic)
+        onVideoClick(
+            HomeVideoClickRequest(
+                bvid = video.bvid,
+                cid = video.cid,
+                coverUrl = video.pic,
+                source = HomeVideoClickSource.TODAY_WATCH
+            )
+        )
     },
     firstGridItemModifier: Modifier = Modifier,
-    isTv: Boolean = false,
-    hasSidebar: Boolean = false,
-    onTvGridBoundaryTransition: (HomeTvFocusZone) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Check for load more
@@ -209,21 +213,6 @@ internal fun HomeCategoryPageContent(
                         }
                     }
 
-                    val tvGridBoundaryModifier = if (isTv) {
-                        Modifier.onPreviewKeyEvent { event ->
-                            val transition = resolveHomeTvGridCellTransition(
-                                index = index,
-                                gridColumns = gridColumns,
-                                keyCode = event.nativeKeyEvent.keyCode,
-                                action = event.nativeKeyEvent.action,
-                                hasSidebar = hasSidebar
-                            ) ?: return@onPreviewKeyEvent false
-                            onTvGridBoundaryTransition(transition.nextZone)
-                            true
-                        }
-                    } else {
-                        Modifier
-                    }
                     item(
                         key = if (video.bvid.isNotBlank()) video.bvid else "video_${video.id}_$index"
                     ) {
@@ -235,7 +224,6 @@ internal fun HomeCategoryPageContent(
                             cardId = video.bvid,
                             preset = DissolveAnimationPreset.TELEGRAM_FAST,
                             modifier = Modifier
-                                .then(tvGridBoundaryModifier)
                                 .jiggleOnDissolve(video.bvid)
                                 .then(if (index == 0) firstGridItemModifier else Modifier)
                         ) {
@@ -249,7 +237,16 @@ internal fun HomeCategoryPageContent(
                                         transitionEnabled = cardTransitionEnabled,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onLongClick = { longPressCallback(video) },
-                                        onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                        onClick = { bvid, cid ->
+                                            onVideoClick(
+                                                HomeVideoClickRequest(
+                                                    bvid = bvid,
+                                                    cid = cid,
+                                                    coverUrl = video.pic,
+                                                    source = HomeVideoClickSource.GRID
+                                                )
+                                            )
+                                        }
                                     )
                                 }
 
@@ -265,7 +262,16 @@ internal fun HomeCategoryPageContent(
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onWatchLater = { onWatchLater(video.bvid, video.id) },
                                         onLongClick = { longPressCallback(video) },
-                                        onClick = { bvid, cid -> onVideoClick(bvid, cid, video.pic) }
+                                        onClick = { bvid, cid ->
+                                            onVideoClick(
+                                                HomeVideoClickRequest(
+                                                    bvid = bvid,
+                                                    cid = cid,
+                                                    coverUrl = video.pic,
+                                                    source = HomeVideoClickSource.GRID
+                                                )
+                                            )
+                                        }
                                     )
                                 }
                             }
@@ -556,12 +562,13 @@ private fun TodayWatchPlanCard(
                                         overflow = TextOverflow.Ellipsis,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    Text(
-                                        text = video.owner.name.ifBlank { "未知UP主" },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    UpBadgeName(
+                                        name = video.owner.name,
+                                        nameStyle = MaterialTheme.typography.labelSmall,
+                                        nameColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                        badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                     val explanation = activePlan.explanationByBvid[video.bvid].orEmpty()
                                     if (explanation.isNotBlank()) {

@@ -24,6 +24,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.android.purebilibili.feature.home.HomeVideoClickRequest
 import com.android.purebilibili.feature.home.HomeScreen
 import com.android.purebilibili.feature.home.HomeViewModel
 import com.android.purebilibili.feature.login.LoginScreen
@@ -129,17 +130,26 @@ fun AppNavigation(
         canNav
     }
 
-    // 统一跳转逻辑
-    fun navigateToVideo(bvid: String, cid: Long = 0L, coverUrl: String = "") {
+    fun navigateToVideoRoute(route: String) {
         // 🔒 防抖检查
         if (!canNavigate()) return
-        
+
         //  [修复] 设置导航标志，抑制小窗显示
         miniPlayerManager?.isNavigatingToVideo = true
         //  如果有小窗在播放，先退出小窗模式
         //  [修复] 点击新视频时，立即关闭小窗不播放退出动画，避免闪烁
         miniPlayerManager?.exitMiniMode(animate = false)
-        navController.navigate(VideoRoute.createRoute(bvid, cid, coverUrl))
+        navController.navigate(route)
+    }
+
+    // 统一跳转逻辑
+    fun navigateToVideo(bvid: String, cid: Long = 0L, coverUrl: String = "") {
+        navigateToVideoRoute(VideoRoute.createRoute(bvid, cid, coverUrl))
+    }
+
+    fun navigateToVideoFromHome(request: HomeVideoClickRequest) {
+        val route = resolveHomeVideoRoute(request) ?: return
+        navigateToVideoRoute(route)
     }
 
     //  [修复] 通用单例跳转（防止重复打开相同页面）
@@ -312,9 +322,21 @@ fun AppNavigation(
             exitTransition = { fadeOut(animationSpec = tween(200)) },
             //  [修复] 从设置页返回时使用右滑动画
             popEnterTransition = { 
-                val fromSettings = initialState.destination.route == ScreenRoutes.Settings.route
+                val fromRoute = initialState.destination.route
+                val fromSettings = fromRoute == ScreenRoutes.Settings.route
+                val useSeamlessBackTransition = shouldUseTabletSeamlessBackTransition(
+                    isTabletLayout = isTabletLayout,
+                    cardTransitionEnabled = cardTransitionEnabled,
+                    fromRoute = fromRoute,
+                    toRoute = ScreenRoutes.Home.route
+                )
                 if (fromSettings) {
                     slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration))
+                } else if (useSeamlessBackTransition) {
+                    fadeIn(
+                        animationSpec = tween(220),
+                        initialAlpha = 0.96f
+                    )
                 } else {
                     fadeIn(animationSpec = tween(250))
                 }
@@ -324,7 +346,7 @@ fun AppNavigation(
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 HomeScreen(
                     viewModel = homeViewModel,
-                    onVideoClick = { bvid, cid, cover -> navigateToVideo(bvid, cid, cover) },
+                    onVideoClick = { request -> navigateToVideoFromHome(request) },
                     onSearchClick = { navigateTo(ScreenRoutes.Search.route) },
                     onAvatarClick = { navigateTo(ScreenRoutes.Login.route) },
                     onProfileClick = { navigateTo(ScreenRoutes.Profile.route) },
@@ -382,7 +404,18 @@ fun AppNavigation(
             },
             //  返回动画：当卡片过渡开启时用淡出（配合共享元素），关闭时用滑出
             popExitTransition = { 
-                if (cardTransitionEnabled) {
+                val useSeamlessBackTransition = shouldUseTabletSeamlessBackTransition(
+                    isTabletLayout = isTabletLayout,
+                    cardTransitionEnabled = cardTransitionEnabled,
+                    fromRoute = initialState.destination.route,
+                    toRoute = targetState.destination.route
+                )
+                if (useSeamlessBackTransition) {
+                    fadeOut(
+                        animationSpec = tween(180),
+                        targetAlpha = 0f
+                    )
+                } else if (cardTransitionEnabled) {
                     // 🔧 [修复] 使用简单淡出，避免与 sharedBounds 共享元素动画冲突
                     fadeOut(animationSpec = tween(250))
                 } else {

@@ -116,7 +116,7 @@ object TokenManager {
         com.android.purebilibili.core.util.Logger.d("TokenManager", " saveMid: $mid")
     }
     
-    //  [新增] 保存 APP access_token 和 refresh_token - TV 端登录后调用
+    //  [新增] 保存 APP access_token 和 refresh_token - 高画质鉴权登录后调用
     fun saveAccessToken(context: Context, accessToken: String, refreshToken: String) {
         accessTokenCache = accessToken
         refreshTokenCache = refreshToken

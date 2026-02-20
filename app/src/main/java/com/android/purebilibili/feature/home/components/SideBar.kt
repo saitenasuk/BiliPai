@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,7 +26,6 @@ import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.theme.BottomBarColors
 import kotlinx.coroutines.launch
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -50,7 +48,6 @@ fun FrostedSideBar(
     onToggleSidebar: (() -> Unit)? = null  // 📱 [平板适配] 切换到底栏
 ) {
     val haptic = rememberHapticFeedback()
-    val isTvDevice = rememberIsTvDevice()
     
     // 读取模糊设置
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -158,28 +155,13 @@ fun FrostedSideBar(
                 }
 
                 // 交互容器
-                Column(
-                    modifier = Modifier
-                        .size(64.dp) // 增大点击区域
-                        .then(if (itemIndex == 0) firstItemModifier else Modifier)
-                        .focusable(enabled = isTvDevice)
-                        .onPreviewKeyEvent { event ->
-                            if (
-                                shouldTriggerSideBarItemClickOnTvKey(
-                                    isTv = isTvDevice,
-                                    keyCode = event.nativeKeyEvent.keyCode,
-                                    action = event.nativeKeyEvent.action
-                                )
-                            ) {
-                                triggerItemClick()
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                        .then(
-                            if (item == BottomNavItem.HOME) {
-                                Modifier.pointerInput(Unit) {
+                    Column(
+                        modifier = Modifier
+                            .size(64.dp) // 增大点击区域
+                            .then(if (itemIndex == 0) firstItemModifier else Modifier)
+                            .then(
+                                if (item == BottomNavItem.HOME) {
+                                    Modifier.pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = {
                                             triggerItemClick()
@@ -237,22 +219,6 @@ fun FrostedSideBar(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .focusable(enabled = isTvDevice)
-                        .onPreviewKeyEvent { event ->
-                            if (
-                                shouldTriggerSideBarItemClickOnTvKey(
-                                    isTv = isTvDevice,
-                                    keyCode = event.nativeKeyEvent.keyCode,
-                                    action = event.nativeKeyEvent.action
-                                )
-                            ) {
-                                haptic(HapticType.LIGHT)
-                                onToggleSidebar()
-                                true
-                            } else {
-                                false
-                            }
-                        }
                         .clickable { 
                             haptic(HapticType.LIGHT)
                             onToggleSidebar() 

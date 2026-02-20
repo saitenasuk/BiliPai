@@ -8,8 +8,7 @@ class BottomControlBarLayoutPolicyTest {
     @Test
     fun compactPhone_usesDenseBottomControls() {
         val policy = resolveBottomControlBarLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(32, policy.playButtonSizeDp)
@@ -22,8 +21,7 @@ class BottomControlBarLayoutPolicyTest {
     @Test
     fun mediumTablet_increasesTapTargetsWithoutOverexpansion() {
         val policy = resolveBottomControlBarLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(36, policy.playButtonSizeDp)
@@ -36,8 +34,7 @@ class BottomControlBarLayoutPolicyTest {
     @Test
     fun tabletWidth_expandsTouchTargetsAndSpacing() {
         val policy = resolveBottomControlBarLayoutPolicy(
-            widthDp = 1024,
-            isTv = false
+            widthDp = 1024
         )
 
         assertEquals(40, policy.playButtonSizeDp)
@@ -48,10 +45,9 @@ class BottomControlBarLayoutPolicyTest {
     }
 
     @Test
-    fun tv_forcesLargestBottomControlScale() {
+    fun ultraWide_forcesLargestBottomControlScale() {
         val policy = resolveBottomControlBarLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(48, policy.playButtonSizeDp)

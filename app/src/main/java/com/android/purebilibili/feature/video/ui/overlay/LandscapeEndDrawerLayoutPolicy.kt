@@ -21,10 +21,9 @@ data class LandscapeEndDrawerLayoutPolicy(
 )
 
 fun resolveLandscapeEndDrawerLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): LandscapeEndDrawerLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return LandscapeEndDrawerLayoutPolicy(
             drawerWidthDp = 420,
             headerPaddingDp = 24,

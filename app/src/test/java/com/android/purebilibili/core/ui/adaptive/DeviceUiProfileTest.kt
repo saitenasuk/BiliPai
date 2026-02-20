@@ -4,53 +4,33 @@ import com.android.purebilibili.core.util.WindowWidthSizeClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class DeviceUiProfileTest {
 
     @Test
-    fun tv_withPerformanceProfile_mapsToReducedMotionAndTenFootUi() {
-        val profile = resolveDeviceUiProfile(
-            isTv = true,
-            widthSizeClass = WindowWidthSizeClass.Expanded,
-            tvPerformanceProfileEnabled = true
-        )
-
-        assertEquals(MotionTier.Reduced, profile.motionTier)
-        assertTrue(profile.isTenFootUi)
-        assertTrue(profile.isTv)
-    }
-
-    @Test
-    fun tv_withoutPerformanceProfile_keepsNormalMotion() {
-        val profile = resolveDeviceUiProfile(
-            isTv = true,
-            widthSizeClass = WindowWidthSizeClass.Expanded,
-            tvPerformanceProfileEnabled = false
-        )
-
-        assertEquals(MotionTier.Normal, profile.motionTier)
-    }
-
-    @Test
     fun expandedTablet_prefersEnhancedMotionTier() {
         val profile = resolveDeviceUiProfile(
-            isTv = false,
-            widthSizeClass = WindowWidthSizeClass.Expanded,
-            tvPerformanceProfileEnabled = false
+            widthSizeClass = WindowWidthSizeClass.Expanded
         )
 
         assertEquals(MotionTier.Enhanced, profile.motionTier)
-        assertTrue(profile.isTablet)
-        assertFalse(profile.isTv)
+        assertEquals(true, profile.isTablet)
+    }
+
+    @Test
+    fun mediumTablet_usesNormalMotionTier() {
+        val profile = resolveDeviceUiProfile(
+            widthSizeClass = WindowWidthSizeClass.Medium
+        )
+
+        assertEquals(MotionTier.Normal, profile.motionTier)
+        assertEquals(true, profile.isTablet)
     }
 
     @Test
     fun compactPhone_usesNormalMotionAndNotTablet() {
         val profile = resolveDeviceUiProfile(
-            isTv = false,
-            widthSizeClass = WindowWidthSizeClass.Compact,
-            tvPerformanceProfileEnabled = false
+            widthSizeClass = WindowWidthSizeClass.Compact
         )
 
         assertEquals(MotionTier.Normal, profile.motionTier)

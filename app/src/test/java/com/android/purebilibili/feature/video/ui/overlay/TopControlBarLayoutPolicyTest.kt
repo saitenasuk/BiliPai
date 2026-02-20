@@ -8,8 +8,7 @@ class TopControlBarLayoutPolicyTest {
     @Test
     fun compactWidth_usesDefaultCompactControlSizing() {
         val policy = resolveTopControlBarLayoutPolicy(
-            widthDp = 393,
-            isTv = false
+            widthDp = 393
         )
 
         assertEquals(32, policy.buttonSizeDp)
@@ -23,8 +22,7 @@ class TopControlBarLayoutPolicyTest {
     @Test
     fun mediumTablet_balancesControlTargets() {
         val policy = resolveTopControlBarLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertEquals(36, policy.buttonSizeDp)
@@ -38,8 +36,7 @@ class TopControlBarLayoutPolicyTest {
     @Test
     fun largeTablet_enlargesControlsAndSpacing() {
         val policy = resolveTopControlBarLayoutPolicy(
-            widthDp = 1280,
-            isTv = false
+            widthDp = 1280
         )
 
         assertEquals(40, policy.buttonSizeDp)
@@ -51,10 +48,9 @@ class TopControlBarLayoutPolicyTest {
     }
 
     @Test
-    fun tv_forcesLargestControlSizing() {
+    fun ultraWide_forcesLargestControlSizing() {
         val policy = resolveTopControlBarLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertEquals(44, policy.buttonSizeDp)

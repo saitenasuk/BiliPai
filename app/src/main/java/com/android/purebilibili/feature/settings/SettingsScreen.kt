@@ -46,7 +46,6 @@ import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.EasterEggs
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LogCollector
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.plugin.PluginManager
@@ -82,7 +81,6 @@ fun SettingsScreen(
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val isTvDevice = rememberIsTvDevice()
     val versionClickThreshold = EasterEggs.VERSION_EASTER_EGG_THRESHOLD
     
     // State Collection
@@ -407,7 +405,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .hazeSource(state = activeHazeState)
         ) {
-            if (shouldUseSettingsSplitLayout(widthDp = configuration.screenWidthDp, isTv = isTvDevice)) {
+            if (shouldUseSettingsSplitLayout(widthDp = configuration.screenWidthDp)) {
                 TabletSettingsLayout(
                     onBack = onBack,
                     onAppearanceClick = onAppearanceClick,
@@ -591,16 +589,10 @@ private fun MobileSettingsLayout(
     var activeSubpage by rememberSaveable { mutableStateOf<MobileSettingsSubpage?>(null) }
     var isVisible by remember(activeSubpage) { mutableStateOf(false) }
     val context = LocalContext.current
-    val isTvDevice = rememberIsTvDevice()
-    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
     val windowSizeClass = LocalWindowSizeClass.current
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val effectiveMotionTier = remember(deviceUiProfile.motionTier, cardAnimationEnabled) {

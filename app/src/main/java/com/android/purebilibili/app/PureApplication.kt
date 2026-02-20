@@ -58,21 +58,16 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
     
     //  Coil 图片加载器 - 优化内存和磁盘缓存
     override fun newImageLoader(): ImageLoader {
-        val isTvPerformanceProfileActive = SettingsManager.getTvPerformanceProfileEnabledSync(this)
-        val memoryCachePercent = if (isTvPerformanceProfileActive) 0.18 else 0.30
-        val diskCacheBytes = if (isTvPerformanceProfileActive) {
-            96L * 1024 * 1024
-        } else {
-            150L * 1024 * 1024
-        }
+        val memoryCachePercent = 0.30
+        val diskCacheBytes = 150L * 1024 * 1024
         return ImageLoader.Builder(this)
-            //  内存缓存：TV 性能档启用时降低预算，减少 TV 场景内存压力
+            //  内存缓存预算（移动/平板主仓）
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizePercent(memoryCachePercent)
                     .build()
             }
-            //  磁盘缓存：TV 性能档启用时降低预算，优先稳态内存
+            //  磁盘缓存预算（移动/平板主仓）
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
@@ -85,8 +80,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
             .diskCachePolicy(CachePolicy.ENABLED)
             //  启用 Bitmap 复用减少内存分配
             .allowRgb565(true)
-            // TV 性能档下禁用跨淡入，减少额外动画与重绘
-            .crossfade(!isTvPerformanceProfileActive)
+            .crossfade(true)
             .build()
             .also { _imageLoader = it }  // 保存引用
     }
@@ -342,7 +336,6 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                     // 兼容旧键名 (向后兼容)
                     "Yuki" to "${packageName}.MainActivityAliasYuki",
                     "Anime" to "${packageName}.MainActivityAliasAnime",
-                    "Tv" to "${packageName}.MainActivityAliasTv",
                     "Headphone" to "${packageName}.MainActivityAliasHeadphone",
                     "3D" to "${packageName}.MainActivityAlias3DLauncher",
                     "Blue" to "${packageName}.MainActivityAliasBlue",

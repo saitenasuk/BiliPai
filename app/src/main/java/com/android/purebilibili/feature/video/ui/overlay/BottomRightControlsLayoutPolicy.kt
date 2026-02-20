@@ -10,10 +10,9 @@ data class BottomRightControlsLayoutPolicy(
 )
 
 fun resolveBottomRightControlsLayoutPolicy(
-    widthDp: Int,
-    isTv: Boolean
+    widthDp: Int
 ): BottomRightControlsLayoutPolicy {
-    if (isTv || widthDp >= 1600) {
+    if (widthDp >= 1600) {
         return BottomRightControlsLayoutPolicy(
             rowSpacingDp = 12,
             menuOffsetYDp = -12,

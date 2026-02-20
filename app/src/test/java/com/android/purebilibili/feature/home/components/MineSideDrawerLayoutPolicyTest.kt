@@ -8,7 +8,7 @@ class MineSideDrawerLayoutPolicyTest {
 
     @Test
     fun compactPhone_keepsNarrowDrawerRange() {
-        val policy = resolveMineSideDrawerLayoutPolicy(widthDp = 393, isTv = false)
+        val policy = resolveMineSideDrawerLayoutPolicy(widthDp = 393)
         val width = resolveMineSideDrawerWidthDp(screenWidthDp = 393, policy = policy)
 
         assertEquals(0.72f, policy.drawerWidthFraction)
@@ -18,7 +18,7 @@ class MineSideDrawerLayoutPolicyTest {
 
     @Test
     fun mediumTablet_expandsDrawerBeyondPhoneCap() {
-        val policy = resolveMineSideDrawerLayoutPolicy(widthDp = 720, isTv = false)
+        val policy = resolveMineSideDrawerLayoutPolicy(widthDp = 720)
         val width = resolveMineSideDrawerWidthDp(screenWidthDp = 720, policy = policy)
 
         assertEquals(0.56f, policy.drawerWidthFraction)
@@ -29,7 +29,7 @@ class MineSideDrawerLayoutPolicyTest {
 
     @Test
     fun largeTablet_capsDrawerAtReadableMaxWidth() {
-        val policy = resolveMineSideDrawerLayoutPolicy(widthDp = 1280, isTv = false)
+        val policy = resolveMineSideDrawerLayoutPolicy(widthDp = 1280)
         val width = resolveMineSideDrawerWidthDp(screenWidthDp = 1280, policy = policy)
 
         assertEquals(0.48f, policy.drawerWidthFraction)
@@ -39,12 +39,12 @@ class MineSideDrawerLayoutPolicyTest {
     }
 
     @Test
-    fun tv_usesTenFootScale() {
-        val policy = resolveMineSideDrawerLayoutPolicy(widthDp = 1080, isTv = true)
-        val width = resolveMineSideDrawerWidthDp(screenWidthDp = 1080, policy = policy)
+    fun ultraWide_usesLargestDrawerScale() {
+        val policy = resolveMineSideDrawerLayoutPolicy(widthDp = 1920)
+        val width = resolveMineSideDrawerWidthDp(screenWidthDp = 1920, policy = policy)
 
         assertEquals(0.42f, policy.drawerWidthFraction)
-        assertEquals(454, width)
+        assertEquals(520, width)
         assertEquals(52, policy.profileAvatarSizeDp)
         assertEquals(20, policy.profileChevronSizeDp)
     }

@@ -8,7 +8,7 @@ class SettingsTabletLayoutPolicyTest {
 
     @Test
     fun expandedTablet_usesBalancedMasterDetailRatio() {
-        val policy = resolveSettingsTabletLayoutPolicy(widthDp = 1024, isTv = false)
+        val policy = resolveSettingsTabletLayoutPolicy(widthDp = 1024)
 
         assertEquals(0.35f, policy.primaryRatio)
         assertEquals(16, policy.masterPanePaddingDp)
@@ -18,7 +18,7 @@ class SettingsTabletLayoutPolicyTest {
 
     @Test
     fun ultraWideTablet_reducesMasterRatio_andExpandsDetailWidth() {
-        val policy = resolveSettingsTabletLayoutPolicy(widthDp = 1700, isTv = false)
+        val policy = resolveSettingsTabletLayoutPolicy(widthDp = 1700)
 
         assertEquals(0.30f, policy.primaryRatio)
         assertEquals(20, policy.masterPanePaddingDp)
@@ -28,19 +28,18 @@ class SettingsTabletLayoutPolicyTest {
     }
 
     @Test
-    fun tv_keepsComfortableReadingWidth() {
-        val policy = resolveSettingsTabletLayoutPolicy(widthDp = 1920, isTv = true)
+    fun ultraWide_keepsComfortableReadingWidth() {
+        val policy = resolveSettingsTabletLayoutPolicy(widthDp = 1920)
 
-        assertEquals(0.34f, policy.primaryRatio)
+        assertEquals(0.30f, policy.primaryRatio)
         assertEquals(20, policy.masterPanePaddingDp)
         assertEquals(28, policy.detailPanePaddingDp)
-        assertEquals(880, policy.detailMaxWidthDp)
+        assertEquals(920, policy.detailMaxWidthDp)
     }
 
     @Test
-    fun splitLayout_threshold_isExpandedOrTv_only() {
-        assertEquals(false, shouldUseSettingsSplitLayout(widthDp = 720, isTv = false))
-        assertEquals(true, shouldUseSettingsSplitLayout(widthDp = 1024, isTv = false))
-        assertEquals(true, shouldUseSettingsSplitLayout(widthDp = 720, isTv = true))
+    fun splitLayout_threshold_isExpanded_only() {
+        assertEquals(false, shouldUseSettingsSplitLayout(widthDp = 720))
+        assertEquals(true, shouldUseSettingsSplitLayout(widthDp = 1024))
     }
 }

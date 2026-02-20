@@ -36,6 +36,7 @@ import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.ui.components.UpBadgeName
 
 /**
  * Related Video Components
@@ -237,38 +238,6 @@ fun RelatedVideoItem(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // UP Avatar
-                        if (video.owner.face.isNotEmpty()) {
-                            var avatarModifier = Modifier
-                                .size(16.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                
-                            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                                with(sharedTransitionScope) {
-                                    avatarModifier = avatarModifier.sharedBounds(
-                                        sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                        boundsTransform = { _, _ ->
-                                            spring(dampingRatio = 0.8f, stiffness = 200f)
-                                        },
-                                        clipInOverlayDuringTransition = OverlayClip(androidx.compose.foundation.shape.CircleShape)
-                                    )
-                                }
-                            }
-
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(FormatUtils.fixImageUrl(video.owner.face))
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = avatarModifier
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                        }
-
                         // UP Name
                         var upNameBoxModifier = Modifier.weight(1f, fill = false)
 
@@ -284,15 +253,45 @@ fun RelatedVideoItem(
                             }
                         }
 
-                        Box(modifier = upNameBoxModifier) {
-                            Text(
-                                text = video.owner.name,
-                                style = MaterialTheme.typography.labelMedium, // 12sp
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, // System Gray
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                        UpBadgeName(
+                            name = video.owner.name,
+                            leadingContent = if (video.owner.face.isNotEmpty()) {
+                                {
+                                    var avatarModifier = Modifier
+                                        .size(16.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+
+                                    if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                        with(sharedTransitionScope) {
+                                            avatarModifier = avatarModifier.sharedBounds(
+                                                sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
+                                                animatedVisibilityScope = animatedVisibilityScope,
+                                                boundsTransform = { _, _ ->
+                                                    spring(dampingRatio = 0.8f, stiffness = 200f)
+                                                },
+                                                clipInOverlayDuringTransition = OverlayClip(androidx.compose.foundation.shape.CircleShape)
+                                            )
+                                        }
+                                    }
+
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(FormatUtils.fixImageUrl(video.owner.face))
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = avatarModifier
+                                    )
+                                }
+                            } else null,
+                            nameStyle = MaterialTheme.typography.labelMedium,
+                            nameColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                            badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                            modifier = upNameBoxModifier
+                        )
                         
                         //  已关注标签
                         if (isFollowed) {

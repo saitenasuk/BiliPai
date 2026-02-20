@@ -10,8 +10,7 @@ class PortraitFullscreenOverlayLayoutPolicyTest {
     @Test
     fun compactPhone_usesDenseTopAndInfoLayout() {
         val policy = resolvePortraitFullscreenOverlayLayoutPolicy(
-            widthDp = 320,
-            isTv = false
+            widthDp = 320
         )
 
         assertTrue(policy.compactMode)
@@ -24,8 +23,7 @@ class PortraitFullscreenOverlayLayoutPolicyTest {
     @Test
     fun mediumTablet_improvesInfoPanelSpacing() {
         val policy = resolvePortraitFullscreenOverlayLayoutPolicy(
-            widthDp = 720,
-            isTv = false
+            widthDp = 720
         )
 
         assertFalse(policy.compactMode)
@@ -38,8 +36,7 @@ class PortraitFullscreenOverlayLayoutPolicyTest {
     @Test
     fun tablet_expandsHeaderAndVideoInfoReadability() {
         val policy = resolvePortraitFullscreenOverlayLayoutPolicy(
-            widthDp = 1024,
-            isTv = false
+            widthDp = 1024
         )
 
         assertFalse(policy.compactMode)
@@ -50,10 +47,9 @@ class PortraitFullscreenOverlayLayoutPolicyTest {
     }
 
     @Test
-    fun tv_forcesLargestPortraitFullscreenScale() {
+    fun ultraWide_forcesLargestPortraitFullscreenScale() {
         val policy = resolvePortraitFullscreenOverlayLayoutPolicy(
-            widthDp = 1080,
-            isTv = true
+            widthDp = 1920
         )
 
         assertFalse(policy.compactMode)

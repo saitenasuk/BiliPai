@@ -8,17 +8,13 @@ WARMUP_SECONDS=8
 LOOPS=20
 SWIPE_DELAY_SECONDS="0.20"
 
-TEST_PKG="com.android.purebilibili.test"
-TEST_RUNNER="androidx.test.runner.AndroidJUnitRunner"
-SETUP_TEST_CLASS="com.android.purebilibili.feature.tv.TvPerformanceProfileToggleTest"
-
 usage() {
   cat <<'EOF'
 Usage:
   ./scripts/mobile_perf_collect.sh [--device SERIAL] [--warmup-seconds N] [--loops N] [--swipe-delay SEC]
 
 Notes:
-  1) Script prepares first-launch prefs via androidTest, then opens Home and swipes feed.
+  1) Script returns to launcher, opens Home, then swipes feed with fixed gestures.
   2) Output raw files are written to docs/perf/raw.
 EOF
 }
@@ -71,25 +67,13 @@ adb_cmd() {
   adb -s "$DEVICE" "$@"
 }
 
-run_setup_test() {
-  local instr_target="${TEST_PKG}/${TEST_RUNNER}"
-  if ! adb_cmd shell pm list packages | tr -d '\r' | grep -q "^package:${TEST_PKG}$"; then
-    echo "[mobile-perf] WARN: test APK not installed (${TEST_PKG})."
-    echo "[mobile-perf]       run: ./gradlew :app:installDebugAndroidTest"
-    return 1
-  fi
-  adb_cmd shell am instrument -w -e class "${SETUP_TEST_CLASS}#prepareTvPerfScenario" "${instr_target}" >/dev/null
-}
-
 TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
 SAFE_TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
 RAW_DIR="docs/perf/raw"
 mkdir -p "$RAW_DIR"
 
 echo "[mobile-perf] device=$DEVICE warmup=${WARMUP_SECONDS}s loops=$LOOPS"
-echo "[mobile-perf] preparing scenario and launching app..."
-
-run_setup_test || true
+echo "[mobile-perf] launching app and collecting feed swipe metrics..."
 adb_cmd shell input keyevent 3 >/dev/null
 adb_cmd shell am start -W -n "$PKG/$ACTIVITY" >/dev/null
 sleep "$WARMUP_SECONDS"

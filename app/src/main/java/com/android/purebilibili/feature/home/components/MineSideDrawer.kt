@@ -40,7 +40,6 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.Clock
 import io.github.alexzhirkevich.cupertino.icons.outlined.Envelope
 import io.github.alexzhirkevich.cupertino.icons.outlined.RectanglePortraitAndArrowForward
 import kotlinx.coroutines.launch
-import com.android.purebilibili.core.util.rememberIsTvDevice
 
 /**
  * 首页侧边栏 - 优化版 (带毛玻璃效果)
@@ -65,11 +64,9 @@ fun MineSideDrawer(
 ) {
     val scope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
-    val isTvDevice = rememberIsTvDevice()
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveMineSideDrawerLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
     // 侧边栏宽度自适应：中屏/大屏不再沿用手机上限 360dp

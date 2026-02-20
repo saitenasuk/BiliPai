@@ -1,7 +1,6 @@
 // 文件路径: feature/search/SearchScreen.kt
 package com.android.purebilibili.feature.search
 
-import android.view.KeyEvent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
@@ -39,13 +38,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -56,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.ui.LoadingAnimation
+import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard  //  使用首页卡片
 import com.android.purebilibili.core.store.SettingsManager  //  读取动画设置
 import com.android.purebilibili.data.repository.SearchOrder
@@ -66,8 +64,6 @@ import com.android.purebilibili.data.repository.SearchUpOrder
 import com.android.purebilibili.data.repository.SearchUserType
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.rememberIsTvDevice
-import com.android.purebilibili.core.util.shouldHandleTvSelectKey
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import coil.compose.AsyncImage
@@ -98,24 +94,16 @@ fun SearchScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
     val windowSizeClass = LocalWindowSizeClass.current
-    val searchLayoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val searchLayoutPolicy = remember(configuration.screenWidthDp) {
         resolveSearchLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
     
     //  自动聚焦搜索框
     val searchFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-    val tvResultFirstFocusRequester = remember { FocusRequester() }
-    val tvSuggestionFirstFocusRequester = remember { FocusRequester() }
-    val tvHistoryFocusRequester = remember { FocusRequester() }
-    var tvFocusZone by remember {
-        mutableStateOf(resolveInitialSearchTvFocusZone(isTv = isTvDevice) ?: SearchTvFocusZone.TOP_BAR)
-    }
 
     // 1. 滚动状态监听 (用于列表)
     val historyListState = rememberLazyListState()
@@ -132,14 +120,9 @@ fun SearchScreen(
     
     //  读取动画设置开关
     val context = LocalContext.current
-    val isTvPerformanceProfileEnabled by SettingsManager.getTvPerformanceProfileEnabled(context).collectAsState(
-        initial = isTvDevice
-    )
-    val deviceUiProfile = remember(isTvDevice, windowSizeClass.widthSizeClass, isTvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-            tvPerformanceProfileEnabled = isTvPerformanceProfileEnabled
+            widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
@@ -223,43 +206,10 @@ fun SearchScreen(
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(searchLayoutPolicy.resultGridSpacingDp.dp),
                                     verticalArrangement = Arrangement.spacedBy(searchLayoutPolicy.resultGridSpacingDp.dp),
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .hazeSource(state = hazeState)
-                                        .then(
-                                            if (isTvDevice) {
-                                                Modifier.onPreviewKeyEvent { event ->
-                                                    val isBack = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK
-                                                    val isUpAtTop = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP &&
-                                                        resultGridState.firstVisibleItemIndex == 0
-                                                    val action = event.nativeKeyEvent.action
-                                                    val shouldHandleExit = (isUpAtTop && action == KeyEvent.ACTION_DOWN) ||
-                                                        (isBack && action == KeyEvent.ACTION_UP)
-                                                    if (shouldHandleExit) {
-                                                        val transition = resolveSearchTvFocusTransition(
-                                                            currentZone = SearchTvFocusZone.RESULTS,
-                                                            keyCode = event.nativeKeyEvent.keyCode,
-                                                            action = action,
-                                                            showResults = state.showResults,
-                                                            hasSuggestions = state.suggestions.isNotEmpty(),
-                                                            hasHistory = state.historyList.isNotEmpty() || state.hotList.isNotEmpty()
-                                                        )
-                                                        if (transition.consumeEvent) {
-                                                            tvFocusZone = transition.nextZone
-                                                            searchFocusRequester.requestFocus()
-                                                            true
-                                                        } else {
-                                                            false
-                                                        }
-                                                    } else {
-                                                        false
-                                                    }
-                                                }
-                                            } else {
-                                                Modifier
-                                            }
-                                        )
-                                ) {
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .hazeSource(state = hazeState)
+                        ) {
                                     // ✨ Filter Bar inside Grid
                                     item(span = { GridItemSpan(maxLineSpan) }) {
                                          SearchFilterBar(
@@ -281,13 +231,8 @@ fun SearchScreen(
                                             onLiveOrderChange = { viewModel.setLiveOrder(it) }
                                         )
                                     }
-
-                                    itemsIndexed(state.searchResults) { index, video ->
-                                        val tvEntryIndex = resolveSearchTvResultEntryIndex(
-                                            isTv = isTvDevice,
-                                            showResults = state.showResults,
-                                            resultCount = state.searchResults.size
-                                        )
+                                
+                                itemsIndexed(state.searchResults) { index, video ->
                                         ElegantVideoCard(
                                             video = video,
                                             index = index,
@@ -295,11 +240,7 @@ fun SearchScreen(
                                             motionTier = cardMotionTier,
                                             transitionEnabled = cardTransitionEnabled,
                                             showPublishTime = true,
-                                            modifier = if (tvEntryIndex == index) {
-                                                Modifier.focusRequester(tvResultFirstFocusRequester)
-                                            } else {
-                                                Modifier
-                                            },
+                                            modifier = Modifier,
                                             //  [交互优化] 传递 onWatchLater 用于显示菜单选项
                                             onWatchLater = { viewModel.addToWatchLater(video.bvid, video.id) },
                                             onClick = { bvid, _ -> onVideoClick(bvid, 0) }
@@ -589,8 +530,7 @@ fun SearchScreen(
             } else {
                 // 判断是否使用分栏布局 (平板横屏)
                 val useSplitLayout = shouldUseSearchSplitLayout(
-                    widthDp = configuration.screenWidthDp,
-                    isTv = isTvDevice
+                    widthDp = configuration.screenWidthDp
                 )
 
                 if (useSplitLayout) {
@@ -658,42 +598,7 @@ fun SearchScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .responsiveContentWidth()
-                            .hazeSource(state = hazeState)
-                            .then(
-                                if (isTvDevice) {
-                                    Modifier
-                                        .focusRequester(tvHistoryFocusRequester)
-                                        .focusable()
-                                        .onPreviewKeyEvent { event ->
-                                            val isUp = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP
-                                            val isBack = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK
-                                            val action = event.nativeKeyEvent.action
-                                            val shouldHandleExit = (isUp && action == KeyEvent.ACTION_DOWN) ||
-                                                (isBack && action == KeyEvent.ACTION_UP)
-                                            if (shouldHandleExit) {
-                                                val transition = resolveSearchTvFocusTransition(
-                                                    currentZone = SearchTvFocusZone.HISTORY,
-                                                    keyCode = event.nativeKeyEvent.keyCode,
-                                                    action = action,
-                                                    showResults = state.showResults,
-                                                    hasSuggestions = state.suggestions.isNotEmpty(),
-                                                    hasHistory = state.historyList.isNotEmpty() || state.hotList.isNotEmpty()
-                                                )
-                                                if (transition.consumeEvent) {
-                                                    tvFocusZone = transition.nextZone
-                                                    searchFocusRequester.requestFocus()
-                                                    true
-                                                } else {
-                                                    false
-                                                }
-                                            } else {
-                                                false
-                                            }
-                                        }
-                                } else {
-                                    Modifier
-                                }
-                            ),
+                            .hazeSource(state = hazeState),
                         state = historyListState,
                         contentPadding = PaddingValues(
                             top = contentTopPadding + 16.dp,
@@ -742,29 +647,6 @@ fun SearchScreen(
                 onClearQuery = { viewModel.onQueryChange("") },
                 focusRequester = searchFocusRequester,  //  传递 focusRequester
                 placeholder = state.defaultSearchHint.ifBlank { "搜索视频、UP主..." },
-                onTvMoveFocusDown = if (isTvDevice) {
-                    {
-                        val transition = resolveSearchTvFocusTransition(
-                            currentZone = SearchTvFocusZone.TOP_BAR,
-                            keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
-                            action = KeyEvent.ACTION_DOWN,
-                            showResults = state.showResults,
-                            hasSuggestions = state.suggestions.isNotEmpty(),
-                            hasHistory = state.historyList.isNotEmpty() || state.hotList.isNotEmpty()
-                        )
-                        if (transition.consumeEvent) {
-                            tvFocusZone = transition.nextZone
-                            when (transition.nextZone) {
-                                SearchTvFocusZone.SUGGESTIONS -> tvSuggestionFirstFocusRequester.requestFocus()
-                                SearchTvFocusZone.RESULTS -> tvResultFirstFocusRequester.requestFocus()
-                                SearchTvFocusZone.HISTORY -> tvHistoryFocusRequester.requestFocus()
-                                SearchTvFocusZone.TOP_BAR -> Unit
-                            }
-                        }
-                    }
-                } else {
-                    null
-                },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .unifiedBlur(
@@ -792,49 +674,7 @@ fun SearchScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .then(
-                                        if (isTvDevice && index == 0) {
-                                            Modifier.focusRequester(tvSuggestionFirstFocusRequester)
-                                        } else {
-                                            Modifier
-                                        }
-                                    )
                                     .focusable()
-                                    .onPreviewKeyEvent { event ->
-                                        if (!isTvDevice) return@onPreviewKeyEvent false
-                                        val isUp = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP
-                                        val isBack = event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_BACK
-                                        val action = event.nativeKeyEvent.action
-                                        val shouldHandleExit = (isUp && action == KeyEvent.ACTION_DOWN) ||
-                                            (isBack && action == KeyEvent.ACTION_UP)
-                                        if (shouldHandleExit) {
-                                            val transition = resolveSearchTvFocusTransition(
-                                                currentZone = SearchTvFocusZone.SUGGESTIONS,
-                                                keyCode = event.nativeKeyEvent.keyCode,
-                                                action = action,
-                                                showResults = state.showResults,
-                                                hasSuggestions = state.suggestions.isNotEmpty(),
-                                                hasHistory = state.historyList.isNotEmpty() || state.hotList.isNotEmpty()
-                                            )
-                                            if (transition.consumeEvent) {
-                                                tvFocusZone = transition.nextZone
-                                                searchFocusRequester.requestFocus()
-                                                true
-                                            } else {
-                                                false
-                                            }
-                                        } else if (shouldHandleTvSelectKey(
-                                                event.nativeKeyEvent.keyCode,
-                                                event.nativeKeyEvent.action
-                                            )
-                                        ) {
-                                            viewModel.search(suggestion)
-                                            keyboardController?.hide()
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
                                     .clickable {
                                         viewModel.search(suggestion)
                                         keyboardController?.hide()
@@ -873,7 +713,6 @@ fun SearchTopBar(
     onClearQuery: () -> Unit,
     placeholder: String = "搜索视频、UP主...",
     focusRequester: androidx.compose.ui.focus.FocusRequester = remember { androidx.compose.ui.focus.FocusRequester() },
-    onTvMoveFocusDown: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     //  Focus 状态追踪
@@ -957,18 +796,7 @@ fun SearchTopBar(
                         modifier = Modifier
                             .weight(1f)
                             .focusRequester(focusRequester)  //  应用 focusRequester
-                            .onFocusChanged { isFocused = it.isFocused }
-                            .onPreviewKeyEvent { event ->
-                                if (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-                                    event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
-                                    onTvMoveFocusDown != null
-                                ) {
-                                    onTvMoveFocusDown.invoke()
-                                    true
-                                } else {
-                                    false
-                                }
-                            },
+                            .onFocusChanged { isFocused = it.isFocused },
                         textStyle = TextStyle(
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 15.sp
@@ -1720,12 +1548,27 @@ fun SearchResultCard(
             modifier = Modifier.padding(horizontal = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = video.owner.name,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            UpBadgeName(
+                name = video.owner.name,
+                leadingContent = if (video.owner.face.isNotBlank()) {
+                    {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(FormatUtils.fixImageUrl(video.owner.face))
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(12.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                } else null,
+                nameStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                nameColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                 modifier = Modifier.weight(1f, fill = false)
             )
             

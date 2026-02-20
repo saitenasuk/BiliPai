@@ -24,11 +24,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,7 +71,6 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
 import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
-import com.android.purebilibili.core.ui.animation.tvFocusableJiggle
 import com.android.purebilibili.feature.cast.DeviceListDialog
 import com.android.purebilibili.feature.cast.DlnaManager
 import com.android.purebilibili.feature.cast.LocalProxyServer
@@ -89,10 +85,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import android.view.KeyEvent
-import com.android.purebilibili.core.util.rememberIsTvDevice
-import com.android.purebilibili.core.util.shouldHandleTvMenuKey
-import com.android.purebilibili.core.util.shouldHandleTvSelectKey
 import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
 
 
@@ -255,15 +247,11 @@ fun VideoPlayerOverlay(
     //  双击检测状态
     var lastTapTime by remember { mutableLongStateOf(0L) }
     var showLikeAnimation by remember { mutableStateOf(false) }
-    val isTvDevice = rememberIsTvDevice()
-    val overlayVisualPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val overlayVisualPolicy = remember(configuration.screenWidthDp) {
         resolveVideoPlayerOverlayVisualPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
-    val tvOverlayFocusRequester = remember { FocusRequester() }
-    var tvFocusZone by remember { mutableStateOf(VideoOverlayTvFocusZone.CENTER) }
 
     // 📺 [DLNA] 按需权限请求
     val dlnaPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -347,16 +335,6 @@ fun VideoPlayerOverlay(
         }
     }
 
-    LaunchedEffect(isTvDevice, isVisible) {
-        if (isTvDevice && isVisible) {
-            tvOverlayFocusRequester.requestFocus()
-        }
-        tvFocusZone = resolveInitialVideoOverlayTvFocusZone(
-            isTv = isTvDevice,
-            overlayVisible = isVisible
-        ) ?: VideoOverlayTvFocusZone.CENTER
-    }
-
     fun togglePlayPause() {
         if (player.playbackState == Player.STATE_ENDED) {
             onSeekTo?.invoke(0L) ?: player.seekTo(0L)
@@ -374,76 +352,6 @@ fun VideoPlayerOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .then(
-                if (isTvDevice) {
-                    Modifier
-                        .focusRequester(tvOverlayFocusRequester)
-                        .focusable()
-                        .onPreviewKeyEvent { event ->
-                            val keyCode = event.nativeKeyEvent.keyCode
-                            val action = event.nativeKeyEvent.action
-
-                            if (shouldHandleTvSelectKey(keyCode, action)) {
-                                return@onPreviewKeyEvent when (
-                                    resolveVideoOverlayTvSelectAction(tvFocusZone)
-                                ) {
-                                    VideoOverlayTvSelectAction.BACK -> {
-                                        onBack()
-                                        true
-                                    }
-                                    VideoOverlayTvSelectAction.TOGGLE_PLAY_PAUSE -> {
-                                        togglePlayPause()
-                                        true
-                                    }
-                                    VideoOverlayTvSelectAction.TOGGLE_DRAWER -> {
-                                        showEndDrawer = !showEndDrawer
-                                        true
-                                    }
-                                    VideoOverlayTvSelectAction.NOOP -> false
-                                }
-                            }
-
-                            if (shouldHandleTvMenuKey(keyCode, action)) {
-                                showEndDrawer = !showEndDrawer
-                                return@onPreviewKeyEvent true
-                            }
-
-                            when (
-                                resolveVideoOverlayTvBackAction(
-                                    keyCode = keyCode,
-                                    action = action,
-                                    drawerVisible = showEndDrawer
-                                )
-                            ) {
-                                VideoOverlayTvBackAction.DISMISS_DRAWER -> {
-                                    showEndDrawer = false
-                                    return@onPreviewKeyEvent true
-                                }
-
-                                VideoOverlayTvBackAction.NAVIGATE_BACK -> {
-                                    onBack()
-                                    return@onPreviewKeyEvent true
-                                }
-
-                                VideoOverlayTvBackAction.NOOP -> Unit
-                            }
-
-                            val nextFocusZone = resolveVideoOverlayTvFocusZone(
-                                current = tvFocusZone,
-                                keyCode = keyCode,
-                                action = action
-                            )
-                            if (nextFocusZone != tvFocusZone) {
-                                tvFocusZone = nextFocusZone
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                } else {
-                    Modifier
-                }
-            )
     ) {
         // --- 1. 顶部渐变遮罩 ---
         AnimatedVisibility(
@@ -970,12 +878,10 @@ private fun PortraitTopBar(
     onDanmakuToggle: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolvePortraitTopBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
 
@@ -1125,11 +1031,7 @@ fun LandscapeEndDrawer(
     onVideoClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isTvDevice = rememberIsTvDevice()
     val context = LocalContext.current
-    val tvPerformanceProfileEnabled by SettingsManager
-        .getTvPerformanceProfileEnabled(context)
-        .collectAsState(initial = isTvDevice)
     val configuration = LocalConfiguration.current
     val widthSizeClass = remember(configuration.screenWidthDp) {
         when {
@@ -1138,11 +1040,9 @@ fun LandscapeEndDrawer(
             else -> WindowWidthSizeClass.Expanded
         }
     }
-    val deviceUiProfile = remember(isTvDevice, widthSizeClass, tvPerformanceProfileEnabled) {
+    val deviceUiProfile = remember(widthSizeClass) {
         resolveDeviceUiProfile(
-            isTv = isTvDevice,
-            widthSizeClass = widthSizeClass,
-            tvPerformanceProfileEnabled = tvPerformanceProfileEnabled
+            widthSizeClass = widthSizeClass
         )
     }
     val cardAnimationEnabled by SettingsManager
@@ -1152,16 +1052,14 @@ fun LandscapeEndDrawer(
         baseTier = deviceUiProfile.motionTier,
         animationEnabled = cardAnimationEnabled
     )
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveLandscapeEndDrawerLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
-    val overlayVisualPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val overlayVisualPolicy = remember(configuration.screenWidthDp) {
         resolveVideoPlayerOverlayVisualPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
 
@@ -1326,7 +1224,6 @@ fun LandscapeEndDrawer(
                                     LandscapeVideoItem(
                                         video = video,
                                         layoutPolicy = layoutPolicy,
-                                        isTvDevice = isTvDevice,
                                         screenWidthDp = configuration.screenWidthDp,
                                         motionTier = overlayMotionTier,
                                         isCurrent = video.bvid == currentBvid,
@@ -1354,7 +1251,6 @@ fun LandscapeEndDrawer(
                                         LandscapeEpisodeItem(
                                             episode = episode,
                                             layoutPolicy = layoutPolicy,
-                                            isTvDevice = isTvDevice,
                                             screenWidthDp = configuration.screenWidthDp,
                                             motionTier = overlayMotionTier,
                                             isCurrent = episode.bvid == currentBvid,
@@ -1593,7 +1489,6 @@ private fun LandscapeProgressIcon(
 private fun LandscapeVideoItem(
     video: com.android.purebilibili.data.model.response.RelatedVideo,
     layoutPolicy: LandscapeEndDrawerLayoutPolicy,
-    isTvDevice: Boolean,
     screenWidthDp: Int,
     motionTier: MotionTier,
     isCurrent: Boolean,
@@ -1603,12 +1498,6 @@ private fun LandscapeVideoItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(layoutPolicy.videoItemHeightDp.dp)
-            .tvFocusableJiggle(
-                isTv = isTvDevice,
-                screenWidthDp = screenWidthDp,
-                reducedMotion = false,
-                motionTier = motionTier
-            )
             .clickable(onClick = onClick)
             .background(if (isCurrent) MaterialTheme.colorScheme.onSurface.copy(0.1f) else Color.Transparent, RoundedCornerShape(4.dp))
             .padding(4.dp)
@@ -1666,7 +1555,6 @@ private fun LandscapeVideoItem(
 private fun LandscapeEpisodeItem(
     episode: com.android.purebilibili.data.model.response.UgcEpisode,
     layoutPolicy: LandscapeEndDrawerLayoutPolicy,
-    isTvDevice: Boolean,
     screenWidthDp: Int,
     motionTier: MotionTier,
     isCurrent: Boolean,
@@ -1676,12 +1564,6 @@ private fun LandscapeEpisodeItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(layoutPolicy.episodeItemHeightDp.dp)
-            .tvFocusableJiggle(
-                isTv = isTvDevice,
-                screenWidthDp = screenWidthDp,
-                reducedMotion = false,
-                motionTier = motionTier
-            )
             .clickable(onClick = onClick)
             .background(if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent, RoundedCornerShape(4.dp))
             .padding(4.dp),

@@ -29,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.rememberIsTvDevice
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.draw.clip
@@ -90,18 +89,15 @@ fun BottomControlBar(
     
     modifier: Modifier = Modifier
 ) {
-    val isTvDevice = rememberIsTvDevice()
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveBottomControlBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
-    val progressLayoutPolicy = remember(configuration.screenWidthDp, isTvDevice) {
+    val progressLayoutPolicy = remember(configuration.screenWidthDp) {
         resolveVideoProgressBarLayoutPolicy(
-            widthDp = configuration.screenWidthDp,
-            isTv = isTvDevice
+            widthDp = configuration.screenWidthDp
         )
     }
 
