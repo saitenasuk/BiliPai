@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "BiliPai Community Demo",
   "type": "feed",
-  "iconUrl": "https://raw.githubusercontent.com/jay3-yy/BiliPai/main/plugins/community/bp_demo_icon.jpg",
+  "iconUrl": "https://raw.githubusercontent.com/jay3-yy/BiliPai/codex/bp-demo-package/plugins/community/bp_demo_icon.jpg",
   "rules": [
     {
       "condition": {
