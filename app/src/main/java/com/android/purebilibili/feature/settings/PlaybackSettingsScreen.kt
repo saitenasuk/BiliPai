@@ -121,6 +121,10 @@ fun PlaybackSettingsContent(
         )
     val stopPlaybackOnExit by com.android.purebilibili.core.store.SettingsManager
         .getStopPlaybackOnExit(context).collectAsState(initial = false)
+    val defaultPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
+        .getDefaultPlaybackSpeed(context).collectAsState(initial = 1.0f)
+    val rememberLastPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
+        .getRememberLastPlaybackSpeed(context).collectAsState(initial = false)
     
     // ... [保留原有逻辑: checkPipPermission, gotoPipSettings] ...
     
@@ -216,15 +220,77 @@ fun PlaybackSettingsContent(
                     }
                 }
             }
-            
-            //  小窗播放
+
             item {
                 Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
-                    IOSSectionTitle("小窗播放")
+                    IOSSectionTitle("播放速度")
                 }
             }
             item {
                 Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
+                    val scope = rememberCoroutineScope()
+                    IOSGroup {
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Clock,
+                            title = "记忆上次播放速度",
+                            subtitle = if (rememberLastPlaybackSpeed) {
+                                "新视频将优先使用你最后一次手动设置的速度"
+                            } else {
+                                "关闭时将使用默认播放速度"
+                            },
+                            checked = rememberLastPlaybackSpeed,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setRememberLastPlaybackSpeed(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
+                        Divider()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "默认播放速度",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.3f, 1.5f, 2.0f).forEach { speed ->
+                                    FilterChip(
+                                        selected = defaultPlaybackSpeed == speed,
+                                        onClick = {
+                                            scope.launch {
+                                                com.android.purebilibili.core.store.SettingsManager
+                                                    .setDefaultPlaybackSpeed(context, speed)
+                                            }
+                                        },
+                                        label = {
+                                            Text(if (speed == 1.0f) "正常" else "${speed}x")
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            //  小窗播放
+            item {
+                Box(modifier = Modifier.staggeredEntrance(6, isVisible, motionTier = effectiveMotionTier)) {
+                    IOSSectionTitle("小窗播放")
+                }
+            }
+            item {
+                Box(modifier = Modifier.staggeredEntrance(7, isVisible, motionTier = effectiveMotionTier)) {
                     val scope = rememberCoroutineScope()
                     var isExpanded by remember { mutableStateOf(false) }
 
@@ -445,12 +511,12 @@ fun PlaybackSettingsContent(
             
             //  调试选项
             item {
-                Box(modifier = Modifier.staggeredEntrance(6, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.staggeredEntrance(8, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("调试")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(7, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.staggeredEntrance(9, isVisible, motionTier = effectiveMotionTier)) {
                     IOSGroup {
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChartBar,
@@ -469,12 +535,12 @@ fun PlaybackSettingsContent(
             
             //  交互设置
             item {
-                Box(modifier = Modifier.staggeredEntrance(8, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.staggeredEntrance(10, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("交互")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(9, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.staggeredEntrance(11, isVisible, motionTier = effectiveMotionTier)) {
                     val scope = rememberCoroutineScope()
                     val swipeHidePlayerEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getSwipeHidePlayerEnabled(context).collectAsState(initial = false)
@@ -611,12 +677,12 @@ fun PlaybackSettingsContent(
             
             //  网络与画质
             item {
-                Box(modifier = Modifier.staggeredEntrance(10, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.staggeredEntrance(12, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("网络与画质")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(11, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.staggeredEntrance(13, isVisible, motionTier = effectiveMotionTier)) {
                     val scope = rememberCoroutineScope()
                     val wifiQuality by com.android.purebilibili.core.store.SettingsManager
                         .getWifiQuality(context).collectAsState(initial = 80)
@@ -802,12 +868,12 @@ fun PlaybackSettingsContent(
             
             // 📉 省流量模式
             item {
-                Box(modifier = Modifier.staggeredEntrance(12, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.staggeredEntrance(14, isVisible, motionTier = effectiveMotionTier)) {
                     IOSSectionTitle("省流量")
                 }
             }
             item {
-                Box(modifier = Modifier.staggeredEntrance(13, isVisible, motionTier = effectiveMotionTier)) {
+                Box(modifier = Modifier.staggeredEntrance(15, isVisible, motionTier = effectiveMotionTier)) {
                     val scope = rememberCoroutineScope()
                     val dataSaverMode by com.android.purebilibili.core.store.SettingsManager
                         .getDataSaverMode(context).collectAsState(

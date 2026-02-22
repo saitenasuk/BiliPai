@@ -23,6 +23,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.purebilibili.core.store.SettingsManager
+import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.ui.gesture.GestureMode
@@ -93,6 +95,7 @@ fun FullscreenPlayerOverlay(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
+    val player = miniPlayerManager.player
     
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
@@ -104,7 +107,7 @@ fun FullscreenPlayerOverlay(
     var showDanmakuSettings by remember { mutableStateOf(false) }
     
     //  播放速度状态
-    var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
+    var playbackSpeed by remember(player) { mutableFloatStateOf(player?.playbackParameters?.speed ?: 1.0f) }
     var showSpeedMenu by remember { mutableStateOf(false) }
     
     //  视频比例状态
@@ -138,7 +141,6 @@ fun FullscreenPlayerOverlay(
     }
     
     // 播放器状态
-    val player = miniPlayerManager.player
     var isPlaying by remember { mutableStateOf(player?.isPlaying ?: false) }
     var currentProgress by remember { mutableFloatStateOf(0f) }
     var currentPosition by remember { mutableLongStateOf(0L) }
@@ -149,6 +151,24 @@ fun FullscreenPlayerOverlay(
             val now = System.currentTimeMillis()
             val nextMinuteDelay = (60_000L - (now % 60_000L)).coerceAtLeast(1_000L)
             delay(nextMinuteDelay)
+        }
+    }
+
+    DisposableEffect(player) {
+        val exoPlayer = player
+        if (exoPlayer == null) {
+            onDispose { }
+        } else {
+            playbackSpeed = exoPlayer.playbackParameters.speed
+            val speedListener = object : Player.Listener {
+                override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                    playbackSpeed = playbackParameters.speed
+                }
+            }
+            exoPlayer.addListener(speedListener)
+            onDispose {
+                exoPlayer.removeListener(speedListener)
+            }
         }
     }
     
@@ -549,11 +569,6 @@ fun FullscreenPlayerOverlay(
         
         // 视频播放器
         player?.let { exoPlayer ->
-            //  应用播放速度
-            LaunchedEffect(playbackSpeed) {
-                exoPlayer.setPlaybackSpeed(playbackSpeed)
-            }
-            
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
@@ -670,18 +685,42 @@ fun FullscreenPlayerOverlay(
                         )
                         
                         //  [新增] 弹幕开关按钮
-                        IconButton(
-                            onClick = {
-                                val newValue = !danmakuEnabled
-                                danmakuManager.isEnabled = newValue
-                                scope.launch { SettingsManager.setDanmakuEnabled(context, newValue) }
-                                com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " Danmaku toggle: $newValue")
-                            }
+                        val danmakuToggleInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (danmakuEnabled) {
+                                        Color(0xFF1B5E20).copy(alpha = 0.22f)
+                                    } else {
+                                        Color(0xFFB71C1C).copy(alpha = 0.22f)
+                                    }
+                                )
+                                .clickable(
+                                    interactionSource = danmakuToggleInteraction,
+                                    indication = null,
+                                    onClick = {
+                                        val newValue = !danmakuEnabled
+                                        danmakuManager.isEnabled = newValue
+                                        scope.launch { SettingsManager.setDanmakuEnabled(context, newValue) }
+                                        com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " Danmaku toggle: $newValue")
+                                    }
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                if (danmakuEnabled) CupertinoIcons.Default.TextBubble else CupertinoIcons.Default.TextBubble,
-                                contentDescription = "弹幕开关",
-                                tint = if (danmakuEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(0.5f)
+                                imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
+                                contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
+                                tint = if (danmakuEnabled) Color(0xFF4CAF50) else Color(0xFFE57373),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (danmakuEnabled) "开" else "关",
+                                color = if (danmakuEnabled) Color(0xFF4CAF50) else Color(0xFFE57373),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                         
@@ -914,6 +953,10 @@ fun FullscreenPlayerOverlay(
                     currentSpeed = playbackSpeed,
                     onSpeedSelected = { speed ->
                         playbackSpeed = speed
+                        player?.setPlaybackSpeed(speed)
+                        scope.launch {
+                            SettingsManager.setLastPlaybackSpeed(context, speed)
+                        }
                         showSpeedMenu = false
                         lastInteractionTime = System.currentTimeMillis()
                     },

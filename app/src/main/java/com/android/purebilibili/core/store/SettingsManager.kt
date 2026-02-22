@@ -48,6 +48,20 @@ enum class PlaybackCompletionBehavior(val value: Int, val label: String) {
     }
 }
 
+internal fun normalizePlaybackSpeed(speed: Float): Float {
+    return speed.coerceIn(0.1f, 8.0f)
+}
+
+internal fun resolvePreferredPlaybackSpeed(
+    defaultSpeed: Float,
+    rememberLastSpeed: Boolean,
+    lastSpeed: Float
+): Float {
+    val normalizedDefault = normalizePlaybackSpeed(defaultSpeed)
+    if (!rememberLastSpeed) return normalizedDefault
+    return normalizePlaybackSpeed(lastSpeed)
+}
+
 data class HomeSettings(
     val displayMode: Int = 0,              // 展示模式 (0=网格, 1=故事卡片)
     val isBottomBarFloating: Boolean = true,
@@ -84,6 +98,10 @@ object SettingsManager {
     private val KEY_SEEK_BACKWARD_SECONDS = intPreferencesKey("seek_backward_seconds")
     //  [新增] 长按倍速 (默认 2.0x)
     private val KEY_LONG_PRESS_SPEED = floatPreferencesKey("long_press_speed")
+    //  [新增] 默认播放速度/记忆上次播放速度
+    private val KEY_DEFAULT_PLAYBACK_SPEED = floatPreferencesKey("default_playback_speed")
+    private val KEY_REMEMBER_LAST_PLAYBACK_SPEED = booleanPreferencesKey("remember_last_playback_speed")
+    private val KEY_LAST_PLAYBACK_SPEED = floatPreferencesKey("last_playback_speed")
     private val KEY_THEME_COLOR_INDEX = intPreferencesKey("theme_color_index")
     //  [新增] 应用图标 Key (Blue, Red, Green...)
     private val KEY_APP_ICON = androidx.datastore.preferences.core.stringPreferencesKey("app_icon_key")
@@ -151,6 +169,10 @@ object SettingsManager {
     private val KEY_COMMENT_DEFAULT_SORT_MODE = intPreferencesKey("comment_default_sort_mode")
     //  [新增] 离开播放页后停止播放（优先于小窗/画中画模式）
     private val KEY_STOP_PLAYBACK_ON_EXIT = booleanPreferencesKey("stop_playback_on_exit")
+    private const val PLAYBACK_SPEED_CACHE_PREFS = "playback_speed_cache"
+    private const val CACHE_KEY_DEFAULT_PLAYBACK_SPEED = "default_speed"
+    private const val CACHE_KEY_REMEMBER_LAST_SPEED = "remember_last_speed"
+    private const val CACHE_KEY_LAST_PLAYBACK_SPEED = "last_speed"
     /**
      *  合并首页相关设置为单一 Flow
      * 避免 HomeScreen 中多个 collectAsState 导致频繁重组
@@ -408,6 +430,72 @@ object SettingsManager {
         context.settingsDataStore.edit { preferences -> 
             preferences[KEY_LONG_PRESS_SPEED] = speed.coerceIn(1.5f, 3.0f)
         }
+    }
+
+    //  [新增] --- 默认播放速度 / 记忆上次速度 ---
+    fun getDefaultPlaybackSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
+        .map { preferences -> normalizePlaybackSpeed(preferences[KEY_DEFAULT_PLAYBACK_SPEED] ?: 1.0f) }
+
+    suspend fun setDefaultPlaybackSpeed(context: Context, speed: Float) {
+        val normalized = normalizePlaybackSpeed(speed)
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DEFAULT_PLAYBACK_SPEED] = normalized
+        }
+        context.getSharedPreferences(PLAYBACK_SPEED_CACHE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putFloat(CACHE_KEY_DEFAULT_PLAYBACK_SPEED, normalized)
+            .apply()
+    }
+
+    fun getRememberLastPlaybackSpeed(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_REMEMBER_LAST_PLAYBACK_SPEED] ?: false }
+
+    suspend fun setRememberLastPlaybackSpeed(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_REMEMBER_LAST_PLAYBACK_SPEED] = enabled
+        }
+        context.getSharedPreferences(PLAYBACK_SPEED_CACHE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(CACHE_KEY_REMEMBER_LAST_SPEED, enabled)
+            .apply()
+    }
+
+    fun getLastPlaybackSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
+        .map { preferences -> normalizePlaybackSpeed(preferences[KEY_LAST_PLAYBACK_SPEED] ?: 1.0f) }
+
+    suspend fun setLastPlaybackSpeed(context: Context, speed: Float) {
+        val normalized = normalizePlaybackSpeed(speed)
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LAST_PLAYBACK_SPEED] = normalized
+        }
+        context.getSharedPreferences(PLAYBACK_SPEED_CACHE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putFloat(CACHE_KEY_LAST_PLAYBACK_SPEED, normalized)
+            .apply()
+    }
+
+    fun getPreferredPlaybackSpeed(context: Context): Flow<Float> = combine(
+        getDefaultPlaybackSpeed(context),
+        getRememberLastPlaybackSpeed(context),
+        getLastPlaybackSpeed(context)
+    ) { defaultSpeed, rememberLast, lastSpeed ->
+        resolvePreferredPlaybackSpeed(
+            defaultSpeed = defaultSpeed,
+            rememberLastSpeed = rememberLast,
+            lastSpeed = lastSpeed
+        )
+    }
+
+    fun getPreferredPlaybackSpeedSync(context: Context): Float {
+        val prefs = context.getSharedPreferences(PLAYBACK_SPEED_CACHE_PREFS, Context.MODE_PRIVATE)
+        val defaultSpeed = normalizePlaybackSpeed(prefs.getFloat(CACHE_KEY_DEFAULT_PLAYBACK_SPEED, 1.0f))
+        val rememberLast = prefs.getBoolean(CACHE_KEY_REMEMBER_LAST_SPEED, false)
+        val lastSpeed = normalizePlaybackSpeed(prefs.getFloat(CACHE_KEY_LAST_PLAYBACK_SPEED, 1.0f))
+        return resolvePreferredPlaybackSpeed(
+            defaultSpeed = defaultSpeed,
+            rememberLastSpeed = rememberLast,
+            lastSpeed = lastSpeed
+        )
     }
 
     //  [新增] --- 主题色索引 (0-5, 默认 0 = BiliPink) ---

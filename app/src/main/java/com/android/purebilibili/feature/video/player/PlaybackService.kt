@@ -11,11 +11,15 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import com.android.purebilibili.R
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.Logger
 
 internal fun shouldStartForegroundWithFallback(primaryNotification: Any?): Boolean {
     return primaryNotification == null
+}
+
+internal fun resolvePlaybackServiceFallbackIconRes(iconKey: String): Int {
+    return resolveNotificationSmallIconRes(iconKey)
 }
 
 /**
@@ -98,7 +102,11 @@ class PlaybackService : Service() {
     private fun buildFallbackNotification(): Notification {
         ensureNotificationChannel()
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher_3d_round)
+            .setSmallIcon(
+                resolvePlaybackServiceFallbackIconRes(
+                    SettingsManager.getAppIconSync(this)
+                )
+            )
             .setContentTitle("BiliPai")
             .setContentText("正在准备播放控件")
             .setOnlyAlertOnce(true)

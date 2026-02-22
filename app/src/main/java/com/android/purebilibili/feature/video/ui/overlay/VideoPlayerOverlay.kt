@@ -234,7 +234,7 @@ fun VideoPlayerOverlay(
     var showChapterList by remember { mutableStateOf(false) }  // 📖 章节列表
     var showCastDialog by remember { mutableStateOf(false) }   // 📺 投屏对话框
     var showPlaybackOrderSheet by remember { mutableStateOf(false) }
-    var currentSpeed by remember { mutableFloatStateOf(1.0f) }
+    var currentSpeed by remember(player) { mutableFloatStateOf(player.playbackParameters.speed) }
     //  使用传入的比例状态
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     
@@ -244,6 +244,17 @@ fun VideoPlayerOverlay(
     val playbackCompletionBehavior by SettingsManager
         .getPlaybackCompletionBehavior(context)
         .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
+
+    DisposableEffect(player) {
+        currentSpeed = player.playbackParameters.speed
+        val speedListener = object : Player.Listener {
+            override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                currentSpeed = playbackParameters.speed
+            }
+        }
+        player.addListener(speedListener)
+        onDispose { player.removeListener(speedListener) }
+    }
     
 
     //  双击检测状态
@@ -658,6 +669,9 @@ fun VideoPlayerOverlay(
                 onSpeedSelected = { speed ->
                     currentSpeed = speed
                     player.setPlaybackSpeed(speed)
+                    scope.launch {
+                        SettingsManager.setLastPlaybackSpeed(context, speed)
+                    }
                     showSpeedMenu = false
                 },
                 onDismiss = { showSpeedMenu = false }
@@ -740,6 +754,9 @@ fun VideoPlayerOverlay(
                 onSpeedChange = { speed ->
                     currentSpeed = speed
                     player.setPlaybackSpeed(speed)
+                    scope.launch {
+                        SettingsManager.setLastPlaybackSpeed(context, speed)
+                    }
                 },
                 isFlippedHorizontal = isFlippedHorizontal,
                 isFlippedVertical = isFlippedVertical,
@@ -840,19 +857,34 @@ fun VideoPlayerOverlay(
         
         // --- 12. 📺 投屏对话框 ---
         if (showCastDialog) {
+            suspend fun buildProxyUrlOrNull(): String? = withContext(Dispatchers.IO) {
+                runCatching {
+                    LocalProxyServer.ensureStarted()
+                    LocalProxyServer.getProxyUrl(context, currentVideoUrl)
+                }.getOrNull()
+            }
+
             DeviceListDialog(
                 onDismissRequest = { showCastDialog = false },
                 onDeviceSelected = { device ->
                     showCastDialog = false
-                    // Generate Proxy URL
-                    val proxyUrl = LocalProxyServer.getProxyUrl(context, currentVideoUrl)
-                    // Cast!
-                    DlnaManager.cast(device, proxyUrl, videoTitle, videoOwnerName)
+                    scope.launch {
+                        val proxyUrl = buildProxyUrlOrNull()
+                        if (proxyUrl == null) {
+                            android.widget.Toast.makeText(context, "代理服务启动失败", android.widget.Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+                        DlnaManager.cast(device, proxyUrl, videoTitle, videoOwnerName)
+                    }
                 },
                 onSsdpDeviceSelected = { ssdpDevice ->
                     showCastDialog = false
-                    val proxyUrl = LocalProxyServer.getProxyUrl(context, currentVideoUrl)
                     scope.launch {
+                        val proxyUrl = buildProxyUrlOrNull()
+                        if (proxyUrl == null) {
+                            android.widget.Toast.makeText(context, "代理服务启动失败", android.widget.Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
                         val result = SsdpCastClient.cast(
                             device = ssdpDevice,
                             mediaUrl = proxyUrl,

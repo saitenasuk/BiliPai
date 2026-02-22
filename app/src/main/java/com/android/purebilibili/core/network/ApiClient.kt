@@ -332,6 +332,13 @@ interface BilibiliApi {
         @Query("cid") cid: Long
     ): PlayerInfoResponse
 
+    @GET("x/stein/edgeinfo_v2")
+    suspend fun getInteractEdgeInfo(
+        @Query("bvid") bvid: String,
+        @Query("graph_version") graphVersion: Long,
+        @Query("edge_id") edgeId: Long? = null
+    ): InteractEdgeInfoResponse
+
     @GET("x/web-interface/archive/related")
     suspend fun getRelatedVideos(@Query("bvid") bvid: String): RelatedResponse
 
@@ -535,6 +542,14 @@ interface BilibiliApi {
     suspend fun getRelation(
         @Query("fid") fid: Long  // UP 主 mid
     ): RelationResponse
+
+    @GET("x/relation/tags")
+    suspend fun getRelationTags(): RelationTagsResponse
+
+    @GET("x/relation/tag/user")
+    suspend fun getRelationTagUser(
+        @Query("fid") fid: Long
+    ): RelationTagUserResponse
     
     //  [新增] 查询视频是否已收藏
     @GET("x/v2/fav/video/favoured")
@@ -548,6 +563,14 @@ interface BilibiliApi {
     suspend fun modifyRelation(
         @retrofit2.http.Field("fid") fid: Long,      // UP 主 mid
         @retrofit2.http.Field("act") act: Int,        // 1=关注, 2=取关
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/relation/tags/addUsers")
+    suspend fun addUsersToRelationTags(
+        @retrofit2.http.Field("fids") fids: String,
+        @retrofit2.http.Field("tagids") tagIds: String,
         @retrofit2.http.Field("csrf") csrf: String
     ): SimpleApiResponse
     

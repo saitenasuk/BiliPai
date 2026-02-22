@@ -249,6 +249,7 @@ fun PortraitVideoPager(
             .apply {
                 repeatMode = Player.REPEAT_MODE_ONE
                 volume = 1.0f
+                setPlaybackSpeed(SettingsManager.getPreferredPlaybackSpeedSync(context))
             }
     }
 

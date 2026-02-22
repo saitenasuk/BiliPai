@@ -344,7 +344,8 @@ fun WatchLaterScreen(
 
                                         com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
                                             externalPlaylist.playlistItems,
-                                            externalPlaylist.startIndex
+                                            externalPlaylist.startIndex,
+                                            source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.WATCH_LATER
                                         )
                                         com.android.purebilibili.feature.video.player.PlaylistManager
                                             .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
@@ -490,7 +491,8 @@ fun WatchLaterScreen(
                                                 if (externalPlaylist != null) {
                                                     com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
                                                         externalPlaylist.playlistItems,
-                                                        externalPlaylist.startIndex
+                                                        externalPlaylist.startIndex,
+                                                        source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.WATCH_LATER
                                                     )
                                                     com.android.purebilibili.feature.video.player.PlaylistManager
                                                         .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)

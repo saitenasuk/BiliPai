@@ -40,18 +40,8 @@ import com.android.purebilibili.feature.video.ui.components.CollectionSheet  // 
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.HandThumbsup
-import io.github.alexzhirkevich.cupertino.icons.filled.Play
-import io.github.alexzhirkevich.cupertino.icons.filled.Star
-import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowDownRightAndArrowUpLeft
-import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowUpLeftAndArrowDownRight
-import io.github.alexzhirkevich.cupertino.icons.outlined.BackwardEnd
-import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronDown
-import io.github.alexzhirkevich.cupertino.icons.outlined.ForwardEnd
-import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
-import io.github.alexzhirkevich.cupertino.icons.outlined.Pause
-import io.github.alexzhirkevich.cupertino.icons.outlined.PlayCircle
-import io.github.alexzhirkevich.cupertino.icons.outlined.Star
+import io.github.alexzhirkevich.cupertino.icons.filled.*
+import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
@@ -179,7 +169,7 @@ fun AudioModeScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        CupertinoIcons.Outlined.PlayCircle,
+                                        CupertinoIcons.Default.PlayCircle,
                                         contentDescription = null,
                                         tint = Color.White,
                                         modifier = Modifier.size(18.dp)
@@ -205,8 +195,8 @@ fun AudioModeScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        if (isFullScreenCover) CupertinoIcons.Outlined.ArrowDownRightAndArrowUpLeft 
-                                        else CupertinoIcons.Outlined.ArrowUpLeftAndArrowDownRight,
+                                        if (isFullScreenCover) CupertinoIcons.Default.ArrowDownRightAndArrowUpLeft
+                                        else CupertinoIcons.Default.ArrowUpLeftAndArrowDownRight,
                                         contentDescription = null,
                                         tint = Color.White,
                                         modifier = Modifier.size(18.dp)
@@ -307,7 +297,7 @@ fun AudioModeScreen(
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             InteractionButton(
-                                icon = if (successState.isLiked) CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Outlined.HandThumbsup,
+                                icon = if (successState.isLiked) CupertinoIcons.Filled.HandThumbsup else CupertinoIcons.Default.HandThumbsup,
                                 label = FormatUtils.formatStat(info.stat.like.toLong()),
                                 isActive = successState.isLiked,
                                 onClick = { viewModel.toggleLike() }
@@ -319,7 +309,7 @@ fun AudioModeScreen(
                                 onClick = { viewModel.openCoinDialog() }
                             )
                             InteractionButton(
-                                icon = if (successState.isFavorited) CupertinoIcons.Filled.Star else CupertinoIcons.Outlined.Star,
+                                icon = if (successState.isFavorited) CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark,
                                 label = FormatUtils.formatStat(info.stat.favorite.toLong()),
                                 isActive = successState.isFavorited,
                                 onClick = { viewModel.showFavoriteFolderDialog() }
@@ -543,7 +533,7 @@ private fun AudioModeTopBar(onBack: () -> Unit) {
     ) {
         IconButton(onClick = onBack) {
             Icon(
-                CupertinoIcons.Outlined.ChevronDown, // 下箭头表示收起
+                CupertinoIcons.Default.ChevronDown, // 下箭头表示收起
                 contentDescription = "Back",
                 tint = Color.White
             )
@@ -562,12 +552,17 @@ private fun InteractionButton(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clickable(onClick = onClick)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White,
-            modifier = Modifier.size(28.dp)
-        )
+        Box(
+            modifier = Modifier.size(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isActive) MaterialTheme.colorScheme.primary else Color.White,
+                modifier = Modifier.size(28.dp)
+            )
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
@@ -692,7 +687,7 @@ private fun PlayerControls(
             //  上一个推荐视频
             IconButton(onClick = onPrevious) {
                 Icon(
-                    CupertinoIcons.Outlined.BackwardEnd,
+                    CupertinoIcons.Default.BackwardEnd,
                     contentDescription = "上一个",
                     tint = Color.White,
                     modifier = Modifier.size(28.dp)
@@ -707,7 +702,7 @@ private fun PlayerControls(
                     .background(Color.White, CircleShape)
             ) {
                 Icon(
-                    imageVector = if (isPlaying) CupertinoIcons.Outlined.Pause else CupertinoIcons.Filled.Play,
+                    imageVector = if (isPlaying) CupertinoIcons.Filled.Pause else CupertinoIcons.Filled.Play,
                     contentDescription = "Play/Pause",
                     tint = Color.Black,
                     modifier = Modifier.size(32.dp)
@@ -717,7 +712,7 @@ private fun PlayerControls(
             //  下一个推荐视频
             IconButton(onClick = onNext) {
                 Icon(
-                    CupertinoIcons.Outlined.ForwardEnd,
+                    CupertinoIcons.Default.ForwardEnd,
                     contentDescription = "下一个",
                     tint = Color.White,
                     modifier = Modifier.size(28.dp)

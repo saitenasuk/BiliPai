@@ -39,6 +39,30 @@ data class RelationData(
     val isFollowing: Boolean get() = attribute == 2 || attribute == 6
 }
 
+@Serializable
+data class RelationTagItem(
+    val tagid: Long = 0,
+    val name: String = "",
+    val count: Int = 0,
+    val tip: String = ""
+)
+
+@Serializable
+data class RelationTagsResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 0,
+    val data: List<RelationTagItem> = emptyList()
+)
+
+@Serializable
+data class RelationTagUserResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 0,
+    val data: Map<String, String> = emptyMap()
+)
+
 // --- 0.2 收藏状态响应 ---
 @Serializable
 data class FavouredResponse(

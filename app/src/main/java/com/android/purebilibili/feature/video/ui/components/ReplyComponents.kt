@@ -617,7 +617,7 @@ fun LevelTag(level: Int) {
 
 fun formatTime(timestamp: Long): String {
     val date = Date(timestamp * 1000)
-    val sdf = SimpleDateFormat("MM-dd", Locale.getDefault()) // Shortened date format for iOS style
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     return sdf.format(date)
 }
 

@@ -40,6 +40,15 @@ enum class PlayMode {
     REPEAT_ONE    // 单曲循环
 }
 
+@Serializable
+enum class ExternalPlaylistSource {
+    NONE,
+    WATCH_LATER,
+    SPACE,
+    FAVORITE,
+    UNKNOWN
+}
+
 /**
  *  播放列表管理器
  * 
@@ -51,7 +60,8 @@ object PlaylistManager {
         val playlist: List<PlaylistItem> = emptyList(),
         val currentIndex: Int = -1,
         val playMode: PlayMode = PlayMode.SEQUENTIAL,
-        val isExternalPlaylist: Boolean = false
+        val isExternalPlaylist: Boolean = false,
+        val externalPlaylistSource: ExternalPlaylistSource = ExternalPlaylistSource.NONE
     )
     
     // ========== 状态 ==========
@@ -69,6 +79,9 @@ object PlaylistManager {
     // 适用于：稍后再看全部播放、UP主页全部播放、收藏夹播放等
     private val _isExternalPlaylist = MutableStateFlow(false)
     val isExternalPlaylist = _isExternalPlaylist.asStateFlow()
+
+    private val _externalPlaylistSource = MutableStateFlow(ExternalPlaylistSource.NONE)
+    val externalPlaylistSource = _externalPlaylistSource.asStateFlow()
     
     // 已播放的随机索引（用于随机模式历史）
     private val shuffleHistory = mutableListOf<Int>()
@@ -95,7 +108,8 @@ object PlaylistManager {
         _playlist.value = items
         _currentIndex.value = resolveStartIndex(items, startIndex)
         _isExternalPlaylist.value = false  // 重置外部播放列表标志
-        
+        _externalPlaylistSource.value = ExternalPlaylistSource.NONE
+
         resetShuffleHistoryForCurrentIndex()
         persistState()
     }
@@ -106,12 +120,17 @@ object PlaylistManager {
      * @param items 播放列表
      * @param startIndex 开始播放的索引
      */
-    fun setExternalPlaylist(items: List<PlaylistItem>, startIndex: Int = 0) {
-        Logger.d(TAG, "🔒 设置外部播放列表: ${items.size} 项, 从索引 $startIndex 开始")
+    fun setExternalPlaylist(
+        items: List<PlaylistItem>,
+        startIndex: Int = 0,
+        source: ExternalPlaylistSource = ExternalPlaylistSource.UNKNOWN
+    ) {
+        Logger.d(TAG, "🔒 设置外部播放列表: ${items.size} 项, 从索引 $startIndex 开始, source=$source")
         _playlist.value = items
         _currentIndex.value = resolveStartIndex(items, startIndex)
         _isExternalPlaylist.value = true  // 标记为外部播放列表
-        
+        _externalPlaylistSource.value = source
+
         resetShuffleHistoryForCurrentIndex()
         persistState()
     }
@@ -167,6 +186,7 @@ object PlaylistManager {
         _playlist.value = emptyList()
         _currentIndex.value = -1
         _isExternalPlaylist.value = false
+        _externalPlaylistSource.value = ExternalPlaylistSource.NONE
         shuffleHistory.clear()
         shuffleHistoryIndex = -1
         Logger.d(TAG, " 清空播放列表")
@@ -387,7 +407,8 @@ object PlaylistManager {
                 playlist = _playlist.value,
                 currentIndex = _currentIndex.value,
                 playMode = _playMode.value,
-                isExternalPlaylist = _isExternalPlaylist.value
+                isExternalPlaylist = _isExternalPlaylist.value,
+                externalPlaylistSource = _externalPlaylistSource.value
             )
             val raw = json.encodeToString(snapshot)
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -412,11 +433,16 @@ object PlaylistManager {
             _playlist.value = snapshot.playlist
             _playMode.value = snapshot.playMode
             _isExternalPlaylist.value = snapshot.isExternalPlaylist
+            _externalPlaylistSource.value = if (snapshot.isExternalPlaylist) {
+                snapshot.externalPlaylistSource
+            } else {
+                ExternalPlaylistSource.NONE
+            }
             _currentIndex.value = resolveStartIndex(snapshot.playlist, snapshot.currentIndex)
             resetShuffleHistoryForCurrentIndex()
             Logger.d(
                 TAG,
-                "♻️ Restored playlist: size=${snapshot.playlist.size}, index=${_currentIndex.value}, external=${snapshot.isExternalPlaylist}"
+                "♻️ Restored playlist: size=${snapshot.playlist.size}, index=${_currentIndex.value}, external=${snapshot.isExternalPlaylist}, source=${_externalPlaylistSource.value}"
             )
         }.onFailure { e ->
             Logger.e(TAG, "⚠️ Failed to restore playlist state, clearing cache", e)

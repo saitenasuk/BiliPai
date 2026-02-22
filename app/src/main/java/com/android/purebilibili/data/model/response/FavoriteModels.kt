@@ -63,16 +63,20 @@ data class FavoriteData(
     val id: Long = 0,
     val title: String = "",
     val cover: String = "",
+    val bv_id: String = "",
     val bvid: String = "",
     val duration: Int = 0,
     val upper: Upper? = null,
-    val cnt_info: CntInfo? = null
+    val cnt_info: CntInfo? = null,
+    val ugc: FavoriteUgc? = null
 ) {
     fun toVideoItem(): VideoItem {
+        val resolvedBvid = bvid.ifBlank { bv_id }
         return VideoItem(
             id = id,
             aid = id, // [Fix] FavoriteData.id is equivalent to aid, required for removing favorite
-            bvid = bvid,
+            bvid = resolvedBvid,
+            cid = ugc?.first_cid ?: 0L,
             title = title,
             pic = cover,
             owner = Owner(mid = upper?.mid ?: 0, name = upper?.name ?: "", face = upper?.face ?: ""),
@@ -81,6 +85,11 @@ data class FavoriteData(
         )
     }
 }
+
+@Serializable
+data class FavoriteUgc(
+    val first_cid: Long = 0
+)
 
 @Serializable
 data class Upper(

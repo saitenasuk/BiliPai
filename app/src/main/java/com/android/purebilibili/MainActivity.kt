@@ -17,14 +17,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -62,6 +60,8 @@ import kotlinx.coroutines.runBlocking
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import kotlin.math.max
+import kotlin.math.pow
 
 private const val TAG = "MainActivity"
 private const val PREFS_NAME = "app_welcome"
@@ -126,6 +126,116 @@ internal fun resolvePluginInstallDeepLink(rawDeepLink: String): PluginInstallDee
     return PluginInstallDeepLinkRequest(pluginUrl = rawUrl)
 }
 
+internal fun shouldNavigateToVideoFromNotification(
+    currentRoute: String?,
+    currentBvid: String?,
+    targetBvid: String
+): Boolean {
+    val isInVideoRoute = currentRoute?.substringBefore("/") == com.android.purebilibili.navigation.VideoRoute.base
+    return !(isInVideoRoute && currentBvid == targetBvid)
+}
+
+internal fun shouldUseRealtimeSplashBlur(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.S
+
+@Suppress("DEPRECATION")
+internal fun resolveLaunchIconResId(context: Context, launchIntent: android.content.Intent?): Int {
+    val fromLaunchComponent = runCatching {
+        launchIntent?.component
+            ?.let { context.packageManager.getActivityInfo(it, 0).getIconResource() }
+            ?: 0
+    }.getOrDefault(0)
+    if (fromLaunchComponent != 0) return fromLaunchComponent
+
+    return context.applicationInfo.icon
+}
+
+internal fun shouldShowCustomSplashOverlay(
+    customSplashEnabled: Boolean,
+    splashUri: String,
+    splashFlyoutEnabled: Boolean
+): Boolean {
+    if (splashFlyoutEnabled) return false
+    return customSplashEnabled && splashUri.isNotEmpty()
+}
+
+internal fun shouldReadCustomSplashPreferences(splashFlyoutEnabled: Boolean): Boolean {
+    return !splashFlyoutEnabled
+}
+
+internal fun shouldStartLocalProxyOnAppLaunch(): Boolean = false
+
+internal fun splashExitDurationMs(): Long = 920L
+internal fun splashExitTranslateYDp(): Float = 220f
+internal fun splashExitScaleEnd(): Float = 1.12f
+internal fun splashExitBlurRadiusEnd(): Float = 32f
+internal fun splashMaxKeepOnScreenMs(): Long = 1000L
+
+internal fun splashExitTravelDistancePx(
+    splashHeightPx: Int,
+    targetSizePx: Int,
+    minTravelPx: Float
+): Float {
+    if (splashHeightPx <= 0) return minTravelPx
+    // Center icon needs to pass the top edge and leave some margin to feel like a full fly-out.
+    val dynamicTravel = (splashHeightPx / 2f) + targetSizePx + 24f
+    return max(minTravelPx, dynamicTravel)
+}
+
+internal fun splashExitBlurProgress(progress: Float): Float {
+    val normalized = progress.coerceIn(0f, 1f)
+    return normalized.pow(1.6f)
+}
+
+internal fun splashExitIconAlpha(progress: Float): Float {
+    if (progress <= 0.12f) return 1f
+    val normalized = ((progress - 0.12f) / 0.88f).coerceIn(0f, 1f)
+    return (1f - normalized.pow(1.6f)).coerceIn(0f, 1f)
+}
+
+internal fun splashExitBackgroundAlpha(progress: Float): Float {
+    if (progress <= 0.18f) return 1f
+    val normalized = ((progress - 0.18f) / 0.82f).coerceIn(0f, 1f)
+    return (1f - normalized.pow(1.1f)).coerceIn(0f, 1f)
+}
+
+internal fun splashTrailPrimaryAlpha(progress: Float): Float {
+    val normalized = progress.coerceIn(0f, 1f)
+    if (normalized <= 0.08f) return 0f
+    val trailProgress = ((normalized - 0.08f) / 0.92f).coerceIn(0f, 1f)
+    return (0.34f * (1f - trailProgress).pow(1.15f)).coerceIn(0f, 1f)
+}
+
+internal fun splashTrailSecondaryAlpha(progress: Float): Float {
+    val normalized = progress.coerceIn(0f, 1f)
+    if (normalized <= 0.16f) return 0f
+    val trailProgress = ((normalized - 0.16f) / 0.84f).coerceIn(0f, 1f)
+    return (0.2f * (1f - trailProgress).pow(1.22f)).coerceIn(0f, 1f)
+}
+
+internal enum class SplashFlyoutTargetType {
+    SYSTEM_ICON,
+    FALLBACK_ICON,
+    SPLASH_ROOT
+}
+
+internal fun resolveSplashFlyoutTargetType(
+    hasSystemIcon: Boolean,
+    hasFallbackIcon: Boolean
+): SplashFlyoutTargetType {
+    return when {
+        hasSystemIcon -> SplashFlyoutTargetType.SYSTEM_ICON
+        hasFallbackIcon -> SplashFlyoutTargetType.FALLBACK_ICON
+        else -> SplashFlyoutTargetType.SPLASH_ROOT
+    }
+}
+
+internal fun shouldLogWarmResume(
+    hasCompletedInitialResume: Boolean,
+    isChangingConfigurations: Boolean
+): Boolean {
+    return hasCompletedInitialResume && !isChangingConfigurations
+}
+
 @OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
 class MainActivity : ComponentActivity() {
     
@@ -138,10 +248,20 @@ class MainActivity : ComponentActivity() {
     
     //  小窗管理器
     private lateinit var miniPlayerManager: MiniPlayerManager
+    private var hasCompletedInitialResume = false
+    private var splashFlyoutEnabledAtCreate = false
+    private var splashExitCallbackTriggered = false
     
     override fun onCreate(savedInstanceState: Bundle?) {
         //  安装 SplashScreen
         val splashScreen = installSplashScreen()
+        val splashFlyoutEnabled = true
+        val splashFlyoutIconResId = resolveLaunchIconResId(this, intent)
+        splashFlyoutEnabledAtCreate = splashFlyoutEnabled
+        Logger.d(
+            TAG,
+            "🚀 Splash setup. flyoutEnabled=$splashFlyoutEnabled, taskRoot=$isTaskRoot, savedState=${savedInstanceState != null}, intentFlags=0x${intent?.flags?.toString(16) ?: "0"}, launchIconResId=$splashFlyoutIconResId"
+        )
         
         //  🚀 [启动优化] 立即开始预加载首页数据
         // 这个必须尽早调用，利用开屏动画的时间并行加载数据
@@ -167,9 +287,9 @@ class MainActivity : ComponentActivity() {
             // 计算耗时
             val elapsed = System.currentTimeMillis() - startTime
             
-            // 条件：数据未就绪 且 未超时(2500ms)
+            // 条件：数据未就绪 且 未超时(1400ms)
             // 如果超时，强制进入（会显示骨架屏），避免用户以为死机
-            val shouldKeep = !isDataReady && elapsed < 2500L
+            val shouldKeep = !isDataReady && elapsed < splashMaxKeepOnScreenMs()
             
             if (!shouldKeep) {
                  Logger.d(TAG, "🚀 Splash dismissed. DataReady=$isDataReady, Elapsed=${elapsed}ms")
@@ -177,7 +297,186 @@ class MainActivity : ComponentActivity() {
             
             shouldKeep
         }
-        
+
+        if (splashFlyoutEnabled) {
+            Logger.d(TAG, "🚀 Splash flyout exit listener registered")
+            splashScreen.setOnExitAnimationListener { splashScreenViewProvider ->
+                splashExitCallbackTriggered = true
+                runCatching {
+                    val splashView = splashScreenViewProvider.view
+                    val systemIconView = splashScreenViewProvider.iconView
+                    if (systemIconView == null) {
+                        Logger.w(TAG, "⚠️ Splash system iconView unavailable, attempting fallback icon")
+                    }
+                    val fallbackIconView = if (systemIconView == null) {
+                        (splashView as? android.view.ViewGroup)?.let { container ->
+                            val sizePx = (112f * resources.displayMetrics.density).toInt()
+                            ImageView(this).apply {
+                                scaleType = ImageView.ScaleType.FIT_CENTER
+                                setImageResource(splashFlyoutIconResId)
+                                if (container is android.widget.FrameLayout) {
+                                    container.addView(
+                                        this,
+                                        android.widget.FrameLayout.LayoutParams(
+                                            sizePx,
+                                            sizePx,
+                                            android.view.Gravity.CENTER
+                                        )
+                                    )
+                                } else {
+                                    container.addView(
+                                        this,
+                                        android.view.ViewGroup.LayoutParams(sizePx, sizePx)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        null
+                    }
+                    val animatedTarget = systemIconView ?: fallbackIconView ?: splashView
+                    val targetType = resolveSplashFlyoutTargetType(
+                        hasSystemIcon = systemIconView != null,
+                        hasFallbackIcon = fallbackIconView != null
+                    )
+                    Logger.d(
+                        TAG,
+                        "🚀 Splash exit animation start. targetType=$targetType, hasSystemIcon=${systemIconView != null}, hasFallbackIcon=${fallbackIconView != null}"
+                    )
+                    if (targetType == SplashFlyoutTargetType.SPLASH_ROOT) {
+                        Logger.w(
+                            TAG,
+                            "⚠️ Splash flyout degraded to splash root animation (icon target unavailable)"
+                        )
+                    }
+                    val frameContainer = splashView as? android.widget.FrameLayout
+                    val targetDrawableState = (animatedTarget as? ImageView)
+                        ?.drawable
+                        ?.constantState
+                    val targetSizePx = if (animatedTarget.width > 0 && animatedTarget.height > 0) {
+                        minOf(animatedTarget.width, animatedTarget.height)
+                    } else {
+                        (112f * resources.displayMetrics.density).toInt()
+                    }
+                    Logger.d(
+                        TAG,
+                        "🚀 Splash exit target metrics. targetSizePx=$targetSizePx, hasFrameContainer=${frameContainer != null}, useRealtimeBlur=${shouldUseRealtimeSplashBlur(Build.VERSION.SDK_INT)}"
+                    )
+                    fun createTrailView(): ImageView? {
+                        val container = frameContainer ?: return null
+                        val drawable = targetDrawableState?.newDrawable(resources)?.mutate()
+                        if (drawable == null && splashFlyoutIconResId == 0) return null
+                        return ImageView(this).apply {
+                            scaleType = ImageView.ScaleType.FIT_CENTER
+                            alpha = 0f
+                            if (drawable != null) {
+                                setImageDrawable(drawable)
+                            } else {
+                                setImageResource(splashFlyoutIconResId)
+                            }
+                            val anchorIndex = container.indexOfChild(animatedTarget)
+                                .let { if (it >= 0) it else container.childCount }
+                            container.addView(
+                                this,
+                                anchorIndex,
+                                android.widget.FrameLayout.LayoutParams(
+                                    targetSizePx,
+                                    targetSizePx,
+                                    android.view.Gravity.CENTER
+                                )
+                            )
+                        }
+                    }
+                    val primaryTrailView = createTrailView()
+                    val secondaryTrailView = createTrailView()
+                    val minTranslateYPx = splashExitTranslateYDp() * resources.displayMetrics.density
+                    val translateYPx = splashExitTravelDistancePx(
+                        splashHeightPx = splashView.height,
+                        targetSizePx = targetSizePx,
+                        minTravelPx = minTranslateYPx
+                    )
+                    val useRealtimeBlur = shouldUseRealtimeSplashBlur(Build.VERSION.SDK_INT)
+                    val animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                        duration = splashExitDurationMs()
+                        interpolator = android.view.animation.PathInterpolator(0.12f, 0.98f, 0.2f, 1.0f)
+                        addUpdateListener { valueAnimator ->
+                            val progress = valueAnimator.animatedValue as Float
+                            val trailProgressPrimary = ((progress - 0.08f) / 0.92f).coerceIn(0f, 1f)
+                            val trailProgressSecondary = ((progress - 0.16f) / 0.84f).coerceIn(0f, 1f)
+                            animatedTarget.translationY = -translateYPx * progress
+                            animatedTarget.alpha = splashExitIconAlpha(progress)
+                            splashView.alpha = splashExitBackgroundAlpha(progress)
+
+                            val scale = 1f + (splashExitScaleEnd() - 1f) * progress
+                            animatedTarget.scaleX = scale
+                            animatedTarget.scaleY = scale
+
+                            primaryTrailView?.let { trail ->
+                                trail.translationY = -translateYPx * trailProgressPrimary
+                                trail.alpha = splashTrailPrimaryAlpha(progress)
+                                trail.scaleX = scale * 1.03f
+                                trail.scaleY = scale * 1.03f
+                            }
+
+                            secondaryTrailView?.let { trail ->
+                                trail.translationY = -translateYPx * trailProgressSecondary
+                                trail.alpha = splashTrailSecondaryAlpha(progress)
+                                trail.scaleX = scale * 1.06f
+                                trail.scaleY = scale * 1.06f
+                            }
+
+                            if (useRealtimeBlur) {
+                                val radius = splashExitBlurRadiusEnd() * splashExitBlurProgress(progress)
+                                splashView.setRenderEffect(
+                                    android.graphics.RenderEffect.createBlurEffect(
+                                        radius * 0.55f,
+                                        radius * 0.55f,
+                                        android.graphics.Shader.TileMode.CLAMP
+                                    )
+                                )
+                                animatedTarget.setRenderEffect(
+                                    android.graphics.RenderEffect.createBlurEffect(
+                                        radius,
+                                        radius,
+                                        android.graphics.Shader.TileMode.CLAMP
+                                    )
+                                )
+                                primaryTrailView?.setRenderEffect(
+                                    android.graphics.RenderEffect.createBlurEffect(
+                                        radius * 1.2f,
+                                        radius * 1.2f,
+                                        android.graphics.Shader.TileMode.CLAMP
+                                    )
+                                )
+                                secondaryTrailView?.setRenderEffect(
+                                    android.graphics.RenderEffect.createBlurEffect(
+                                        radius * 1.45f,
+                                        radius * 1.45f,
+                                        android.graphics.Shader.TileMode.CLAMP
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    animator.doOnEnd {
+                        if (useRealtimeBlur) {
+                            splashView.setRenderEffect(null)
+                            animatedTarget.setRenderEffect(null)
+                            primaryTrailView?.setRenderEffect(null)
+                            secondaryTrailView?.setRenderEffect(null)
+                        }
+                        primaryTrailView?.let { frameContainer?.removeView(it) }
+                        secondaryTrailView?.let { frameContainer?.removeView(it) }
+                        splashScreenViewProvider.remove()
+                    }
+                    animator.start()
+                }.onFailure {
+                    Logger.e(TAG, "❌ Splash exit animation failed, removing splash immediately", it)
+                    splashScreenViewProvider.remove()
+                }
+            }
+        }
+
         //  [新增] 处理 deep link 或分享意图
         handleIntent(intent)
         
@@ -185,16 +484,19 @@ class MainActivity : ComponentActivity() {
         // Android 12+ 需要运行时权限
         // requestDlnaPermissionsAndBind()
         
-        // Start Local Proxy Server (on IO thread)
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                // Singleton instance to prevent multiple servers? 
-                // Simple implementation for now: create and start.
-                val proxy = com.android.purebilibili.feature.cast.LocalProxyServer()
-                proxy.start()
-                com.android.purebilibili.core.util.Logger.d(TAG, "📺 Local Proxy Server started on port 8901")
-            } catch (e: Exception) {
-                com.android.purebilibili.core.util.Logger.e(TAG, "❌ Failed to start Local Proxy Server", e)
+        if (shouldStartLocalProxyOnAppLaunch()) {
+            // Optional warmup path; default keeps proxy off cold-start critical path.
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val started = com.android.purebilibili.feature.cast.LocalProxyServer.ensureStarted()
+                    if (started) {
+                        com.android.purebilibili.core.util.Logger.d(TAG, "📺 Local Proxy Server started on port 8901")
+                    } else {
+                        com.android.purebilibili.core.util.Logger.d(TAG, "📺 Local Proxy Server already running")
+                    }
+                } catch (e: Exception) {
+                    com.android.purebilibili.core.util.Logger.e(TAG, "❌ Failed to start Local Proxy Server", e)
+                }
             }
         }
 
@@ -205,11 +507,25 @@ class MainActivity : ComponentActivity() {
             //  [新增] 监听 pendingVideoId 并导航到视频详情页
             LaunchedEffect(pendingVideoId) {
                 pendingVideoId?.let { videoId ->
-                    Logger.d(TAG, "🚀 导航到视频: $videoId")
-                    navController.navigate("video/$videoId?cid=0&cover=") {
-                        launchSingleTop = true
+                    val currentEntry = navController.currentBackStackEntry
+                    val currentRoute = currentEntry?.destination?.route
+                    val currentBvid = currentEntry?.arguments?.getString("bvid")
+                    val shouldNavigate = shouldNavigateToVideoFromNotification(
+                        currentRoute = currentRoute,
+                        currentBvid = currentBvid,
+                        targetBvid = videoId
+                    )
+
+                    if (shouldNavigate) {
+                        Logger.d(TAG, "🚀 导航到视频: $videoId")
+                        miniPlayerManager.isNavigatingToVideo = true
+                        navController.navigate("video/$videoId?cid=0&cover=") {
+                            launchSingleTop = true
+                        }
+                    } else {
+                        Logger.d(TAG, "🎯 已在目标视频页，跳过重复导航: $videoId")
                     }
-                    pendingVideoId = null  // 清除，避免重复导航
+                    pendingVideoId = null
                 }
             }
             
@@ -380,7 +696,28 @@ class MainActivity : ComponentActivity() {
                     }
                     
                     // [New] Custom Splash Wallpaper Overlay
-                    var showSplash by remember { mutableStateOf(SettingsManager.isSplashEnabledSync(context)) }
+                    val readCustomSplashPrefs = remember(splashFlyoutEnabled) {
+                        shouldReadCustomSplashPreferences(splashFlyoutEnabled)
+                    }
+                    val splashUri = remember(readCustomSplashPrefs) {
+                        if (readCustomSplashPrefs) {
+                            SettingsManager.getSplashWallpaperUriSync(context)
+                        } else {
+                            ""
+                        }
+                    }
+                    val showCustomSplashInitially = remember(readCustomSplashPrefs, splashUri) {
+                        if (!readCustomSplashPrefs) {
+                            false
+                        } else {
+                            shouldShowCustomSplashOverlay(
+                                customSplashEnabled = SettingsManager.isSplashEnabledSync(context),
+                                splashUri = splashUri,
+                                splashFlyoutEnabled = splashFlyoutEnabled
+                            )
+                        }
+                    }
+                    var showSplash by remember { mutableStateOf(showCustomSplashInitially) }
                     // [Optimization] If we delayed enough in splash screen, we might want to skip custom splash or show it briefly?
                     // Logic: If user uses custom splash, system splash shows icon, then custom splash shows wallpaper.
                     // If we use setKeepOnScreenCondition, system splash (icon) stays longer.
@@ -388,11 +725,9 @@ class MainActivity : ComponentActivity() {
                     // Or if custom wallpaper is enabled, maybe we shouldn't delay system splash?
                     // User request: "当用户看见遮罩的时候，异步加载首页视频". Mask usually means System Splash (Icon) OR Custom Wallpaper.
                     // Implementing delay on System Splash ensures data is likely ready when ANY content shows.
-                    
-                    val splashUri = remember { SettingsManager.getSplashWallpaperUriSync(context) }
-                    
+
                     LaunchedEffect(Unit) {
-                        if (showSplash && splashUri.isNotEmpty()) {
+                        if (showSplash) {
                             kotlinx.coroutines.delay(2000) // Display seconds
                             showSplash = false 
                         } else {
@@ -416,9 +751,27 @@ class MainActivity : ComponentActivity() {
                             // For now, simple clear image.
                         }
                     }
+
                 }
                 }  // 📐 CompositionLocalProvider 结束
             }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (shouldLogWarmResume(hasCompletedInitialResume, isChangingConfigurations)) {
+            Logger.d(
+                TAG,
+                "🔁 Warm resume path. splash flyout is not expected (Activity already created). flyoutEnabledAtCreate=$splashFlyoutEnabledAtCreate, splashExitCallbackTriggered=$splashExitCallbackTriggered"
+            )
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!hasCompletedInitialResume) {
+            hasCompletedInitialResume = true
         }
     }
     

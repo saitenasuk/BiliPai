@@ -103,8 +103,8 @@ object CacheUtils {
     /**
      *  清除所有缓存（优化顺序，避免冲突）
      */
-    suspend fun clearAllCache(context: Context) = withContext(Dispatchers.IO) {
-        try {
+    suspend fun clearAllCache(context: Context): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
             // ===== 第 1 阶段：清除内存缓存 =====
             
             // 1.1 清除 Coil 图片内存缓存
@@ -159,7 +159,7 @@ object CacheUtils {
             Logger.d(TAG, " Playback cooldown cleared")
                 
             Logger.d(TAG, "🎉 All cache cleared successfully")
-        } catch (e: Exception) {
+        }.onFailure { e ->
             Logger.e(TAG, "Error clearing cache", e)
         }
     }

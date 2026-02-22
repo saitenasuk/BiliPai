@@ -59,6 +59,7 @@ import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
+import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import com.android.purebilibili.data.model.response.AiSummaryData
 import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
@@ -104,6 +105,8 @@ fun VideoContentSection(
     onWatchLaterClick: () -> Unit = {},
     onTimestampClick: ((Long) -> Unit)? = null,
     onDanmakuSendClick: () -> Unit = {},
+    danmakuEnabled: Boolean = true,
+    onDanmakuToggle: () -> Unit = {},
     // [新增] 删除与动画参数
     currentMid: Long = 0,
     dissolvingIds: Set<Long> = emptySet(),
@@ -208,6 +211,8 @@ fun VideoContentSection(
             selectedTabIndex = pagerState.currentPage,
             onTabSelected = onTabSelected,
             onDanmakuSendClick = onDanmakuSendClick,
+            danmakuEnabled = danmakuEnabled,
+            onDanmakuToggle = onDanmakuToggle,
             modifier = Modifier,
             isPlayerCollapsed = isPlayerCollapsed,
             onRestorePlayer = onRestorePlayer
@@ -650,6 +655,8 @@ private fun VideoContentTabBar(
     selectedTabIndex: Int,
     onTabSelected: (Int) -> Unit,
     onDanmakuSendClick: () -> Unit,
+    danmakuEnabled: Boolean,
+    onDanmakuToggle: () -> Unit,
     modifier: Modifier = Modifier,
     isPlayerCollapsed: Boolean = false,
     onRestorePlayer: () -> Unit = {}
@@ -729,6 +736,41 @@ private fun VideoContentTabBar(
             }
             
             // 发弹幕入口
+            val danmakuToggleInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(
+                        if (danmakuEnabled) {
+                            Color(0xFF1B5E20).copy(alpha = 0.16f)
+                        } else {
+                            Color(0xFFB71C1C).copy(alpha = 0.16f)
+                        }
+                    )
+                    .clickable(
+                        interactionSource = danmakuToggleInteraction,
+                        indication = null,
+                        onClick = onDanmakuToggle
+                    )
+                    .padding(horizontal = 8.dp, vertical = 5.dp)
+            ) {
+                Icon(
+                    imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
+                    contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
+                    tint = if (danmakuEnabled) Color(0xFF2E7D32) else Color(0xFFC62828),
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (danmakuEnabled) "开" else "关",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (danmakuEnabled) Color(0xFF2E7D32) else Color(0xFFC62828)
+                )
+            }
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier

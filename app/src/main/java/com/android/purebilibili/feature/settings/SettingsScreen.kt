@@ -214,13 +214,23 @@ fun SettingsScreen(
                 )
                 kotlinx.coroutines.delay(150)
             }
-            viewModel.clearCache()
-            cacheProgress = CacheClearProgress(
-                current = totalSize,
-                total = totalSize,
-                isComplete = true,
-                clearedSize = clearedSizeStr
-            )
+            val clearResult = viewModel.clearCache()
+            if (shouldMarkCacheClearAnimationComplete(clearResult.isSuccess)) {
+                cacheProgress = CacheClearProgress(
+                    current = totalSize,
+                    total = totalSize,
+                    isComplete = true,
+                    clearedSize = clearedSizeStr
+                )
+            } else {
+                Toast.makeText(
+                    context,
+                    resolveCacheClearFailureMessage(clearResult.exceptionOrNull()),
+                    Toast.LENGTH_SHORT
+                ).show()
+                showCacheAnimation = false
+                cacheProgress = null
+            }
         }
     }
 
@@ -527,12 +537,43 @@ fun SettingsScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-private enum class MobileSettingsSubpage(val title: String) {
-    CONTENT_AND_STORAGE("内容与存储"),
-    PRIVACY_AND_SECURITY("隐私与安全"),
-    EXTENSIONS_AND_DEBUG("扩展与调试"),
-    ABOUT_AND_SUPPORT("关于与支持")
+internal enum class MobileSettingsRootSection {
+    FOLLOW_AUTHOR,
+    GENERAL,
+    PRIVACY,
+    STORAGE,
+    DEVELOPER,
+    FEED,
+    ABOUT,
+    SUPPORT
+}
+
+internal fun resolveMobileSettingsRootSectionOrder(): List<MobileSettingsRootSection> = listOf(
+    MobileSettingsRootSection.FOLLOW_AUTHOR,
+    MobileSettingsRootSection.GENERAL,
+    MobileSettingsRootSection.PRIVACY,
+    MobileSettingsRootSection.STORAGE,
+    MobileSettingsRootSection.DEVELOPER,
+    MobileSettingsRootSection.FEED,
+    MobileSettingsRootSection.ABOUT,
+    MobileSettingsRootSection.SUPPORT
+)
+
+internal fun shouldMarkCacheClearAnimationComplete(clearSucceeded: Boolean): Boolean = clearSucceeded
+
+internal fun resolveCacheClearFailureMessage(error: Throwable?): String {
+    return error?.message?.takeIf { it.isNotBlank() } ?: "清理缓存失败，请稍后重试"
+}
+
+@Composable
+private fun SettingsCategoryHeader(title: String) {
+    Text(
+        text = title,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 8.dp)
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -586,9 +627,7 @@ private fun MobileSettingsLayout(
     incrementalTimelineRefreshEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit
 ) {
-    var activeSubpage by rememberSaveable { mutableStateOf<MobileSettingsSubpage?>(null) }
-    var isVisible by remember(activeSubpage) { mutableStateOf(false) }
-    val context = LocalContext.current
+    var isVisible by remember { mutableStateOf(false) }
     val windowSizeClass = LocalWindowSizeClass.current
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
@@ -601,37 +640,29 @@ private fun MobileSettingsLayout(
             animationEnabled = cardAnimationEnabled
         )
     }
+    val sectionOrder = remember { resolveMobileSettingsRootSectionOrder() }
+    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    BackHandler(enabled = activeSubpage != null) {
-        activeSubpage = null
-    }
-
-    LaunchedEffect(activeSubpage) { isVisible = true }
+    LaunchedEffect(Unit) { isVisible = true }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(activeSubpage?.title ?: "设置", fontWeight = FontWeight.Bold)
+                    Text("设置", fontWeight = FontWeight.Bold)
                 },
                 navigationIcon = {
                     IconButton(
-                        onClick = {
-                            if (activeSubpage == null) {
-                                onBack()
-                            } else {
-                                activeSubpage = null
-                            }
-                        }
+                        onClick = onBack
                     ) {
                         Icon(
                             CupertinoIcons.Outlined.ChevronBackward,
-                            contentDescription = if (activeSubpage == null) "返回" else "返回上一级"
+                            contentDescription = "返回"
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                     navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
                     actionIconContentColor = MaterialTheme.colorScheme.onSurface
@@ -641,213 +672,110 @@ private fun MobileSettingsLayout(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
-        AnimatedContent(
-            targetState = activeSubpage,
-            transitionSpec = {
-                val enteringFromRight = targetState != null
-                if (enteringFromRight) {
-                    (slideInHorizontally { it / 3 } + fadeIn()).togetherWith(
-                        slideOutHorizontally { -it / 3 } + fadeOut()
-                    )
-                } else {
-                    (slideInHorizontally { -it / 3 } + fadeIn()).togetherWith(
-                        slideOutHorizontally { it / 3 } + fadeOut()
-                    )
+        LazyColumn(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize(),
+            contentPadding = PaddingValues(bottom = bottomInset + 28.dp)
+        ) {
+            sectionOrder.forEachIndexed { index, section ->
+                item {
+                    Box(modifier = Modifier.staggeredEntrance(index * 2, isVisible, motionTier = effectiveMotionTier)) {
+                        SettingsCategoryHeader(
+                            title = when (section) {
+                                MobileSettingsRootSection.FOLLOW_AUTHOR -> "关注作者"
+                                MobileSettingsRootSection.GENERAL -> "常规"
+                                MobileSettingsRootSection.PRIVACY -> "隐私与安全"
+                                MobileSettingsRootSection.STORAGE -> "数据与存储"
+                                MobileSettingsRootSection.DEVELOPER -> "开发者选项"
+                                MobileSettingsRootSection.FEED -> "推荐流"
+                                MobileSettingsRootSection.ABOUT -> "关于"
+                                MobileSettingsRootSection.SUPPORT -> "帮助与系统"
+                            }
+                        )
+                    }
                 }
-            },
-            label = "MobileSettingsSubpage"
-        ) { subpage ->
-            LazyColumn(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 100.dp)
-            ) {
-                if (subpage == null) {
-                    item {
-                        Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
-                            IOSSectionTitle("核心设置")
-                        }
-                    }
-                    item {
-                        Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
-                            GeneralSection(
-                                onAppearanceClick = onAppearanceClick,
-                                onPlaybackClick = onPlaybackClick,
-                                onBottomBarClick = onNavigateToBottomBarSettings
-                            )
-                        }
-                    }
-                    item {
-                        Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
-                            IOSSectionTitle("更多分类")
-                        }
-                    }
-                    item {
-                        Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
-                            SettingsSubpageEntrySection(
-                                onContentAndStorageClick = {
-                                    activeSubpage = MobileSettingsSubpage.CONTENT_AND_STORAGE
-                                },
-                                onPrivacyAndSecurityClick = {
-                                    activeSubpage = MobileSettingsSubpage.PRIVACY_AND_SECURITY
-                                },
-                                onExtensionsAndDebugClick = {
-                                    activeSubpage = MobileSettingsSubpage.EXTENSIONS_AND_DEBUG
-                                },
-                                onAboutAndSupportClick = {
-                                    activeSubpage = MobileSettingsSubpage.ABOUT_AND_SUPPORT
-                                }
-                            )
-                        }
-                    }
-                    item { Spacer(modifier = Modifier.height(32.dp)) }
-                } else {
-                    when (subpage) {
-                        MobileSettingsSubpage.CONTENT_AND_STORAGE -> {
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
-                                    IOSSectionTitle("推荐流")
-                                }
+                item {
+                    Box(modifier = Modifier.staggeredEntrance(index * 2 + 1, isVisible, motionTier = effectiveMotionTier)) {
+                        when (section) {
+                            MobileSettingsRootSection.FOLLOW_AUTHOR -> {
+                                FollowAuthorSection(
+                                    onTelegramClick = onTelegramClick,
+                                    onTwitterClick = onTwitterClick,
+                                    onDonateClick = onDonateClick
+                                )
                             }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
-                                    FeedApiSection(
-                                        feedApiType = feedApiType,
-                                        onFeedApiTypeChange = onFeedApiTypeChange,
-                                        incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
-                                        onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange
-                                    )
-                                }
+                            MobileSettingsRootSection.GENERAL -> {
+                                GeneralSection(
+                                    onAppearanceClick = onAppearanceClick,
+                                    onPlaybackClick = onPlaybackClick,
+                                    onBottomBarClick = onNavigateToBottomBarSettings
+                                )
                             }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
-                                    IOSSectionTitle("数据与存储")
-                                }
+                            MobileSettingsRootSection.PRIVACY -> {
+                                PrivacySection(
+                                    privacyModeEnabled = privacyModeEnabled,
+                                    onPrivacyModeChange = onPrivacyModeChange,
+                                    onPermissionClick = onPermissionClick,
+                                    onBlockedListClick = onBlockedListClick
+                                )
                             }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
-                                    DataStorageSection(
-                                        customDownloadPath = customDownloadPath,
-                                        cacheSize = cacheSize,
-                                        onDownloadPathClick = onDownloadPathClick,
-                                        onClearCacheClick = onClearCacheClick
-                                    )
-                                }
+                            MobileSettingsRootSection.STORAGE -> {
+                                DataStorageSection(
+                                    customDownloadPath = customDownloadPath,
+                                    cacheSize = cacheSize,
+                                    onDownloadPathClick = onDownloadPathClick,
+                                    onClearCacheClick = onClearCacheClick
+                                )
                             }
-                        }
-
-                        MobileSettingsSubpage.PRIVACY_AND_SECURITY -> {
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
-                                    IOSSectionTitle("隐私与安全")
-                                }
+                            MobileSettingsRootSection.DEVELOPER -> {
+                                DeveloperSection(
+                                    crashTrackingEnabled = crashTrackingEnabled,
+                                    analyticsEnabled = analyticsEnabled,
+                                    pluginCount = pluginCount,
+                                    onCrashTrackingChange = onCrashTrackingChange,
+                                    onAnalyticsChange = onAnalyticsChange,
+                                    onPluginsClick = onPluginsClick,
+                                    onExportLogsClick = onExportLogsClick
+                                )
                             }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
-                                    PrivacySection(
-                                        privacyModeEnabled = privacyModeEnabled,
-                                        onPrivacyModeChange = onPrivacyModeChange,
-                                        onPermissionClick = onPermissionClick,
-                                        onBlockedListClick = onBlockedListClick
-                                    )
-                                }
+                            MobileSettingsRootSection.FEED -> {
+                                FeedApiSection(
+                                    feedApiType = feedApiType,
+                                    onFeedApiTypeChange = onFeedApiTypeChange,
+                                    incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
+                                    onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange
+                                )
                             }
-                        }
-
-                        MobileSettingsSubpage.EXTENSIONS_AND_DEBUG -> {
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
-                                    IOSSectionTitle("扩展与调试")
-                                }
+                            MobileSettingsRootSection.ABOUT -> {
+                                AboutSection(
+                                    versionName = versionName,
+                                    easterEggEnabled = easterEggEnabled,
+                                    onDisclaimerClick = onDisclaimerClick,
+                                    onLicenseClick = onLicenseClick,
+                                    onGithubClick = onGithubClick,
+                                    onCheckUpdateClick = onCheckUpdateClick,
+                                    onVersionClick = onVersionClick,
+                                    onReplayOnboardingClick = onReplayOnboardingClick,
+                                    onEasterEggChange = onEasterEggChange,
+                                    updateStatusText = updateStatusText,
+                                    isCheckingUpdate = isCheckingUpdate,
+                                    versionClickCount = versionClickCount,
+                                    versionClickThreshold = versionClickThreshold
+                                )
                             }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
-                                    DeveloperSection(
-                                        crashTrackingEnabled = crashTrackingEnabled,
-                                        analyticsEnabled = analyticsEnabled,
-                                        pluginCount = pluginCount,
-                                        onCrashTrackingChange = onCrashTrackingChange,
-                                        onAnalyticsChange = onAnalyticsChange,
-                                        onPluginsClick = onPluginsClick,
-                                        onExportLogsClick = onExportLogsClick
-                                    )
-                                }
-                            }
-                        }
-
-                        MobileSettingsSubpage.ABOUT_AND_SUPPORT -> {
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(0, isVisible, motionTier = effectiveMotionTier)) {
-                                    IOSSectionTitle("发布渠道")
-                                }
-                            }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(1, isVisible, motionTier = effectiveMotionTier)) {
-                                    ReleaseChannelPinnedCard(
-                                        onGithubClick = onGithubClick,
-                                        onTelegramClick = onTelegramClick,
-                                        onDisclaimerClick = onDisclaimerClick
-                                    )
-                                }
-                            }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
-                                    IOSSectionTitle("关注作者")
-                                }
-                            }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
-                                    FollowAuthorSection(
-                                        onTelegramClick = onTelegramClick,
-                                        onTwitterClick = onTwitterClick,
-                                        onDonateClick = onDonateClick
-                                    )
-                                }
-                            }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(4, isVisible, motionTier = effectiveMotionTier)) {
-                                    IOSSectionTitle("关于")
-                                }
-                            }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(5, isVisible, motionTier = effectiveMotionTier)) {
-                                    AboutSection(
-                                        versionName = versionName,
-                                        easterEggEnabled = easterEggEnabled,
-                                        onDisclaimerClick = onDisclaimerClick,
-                                        onLicenseClick = onLicenseClick,
-                                        onGithubClick = onGithubClick,
-                                        onCheckUpdateClick = onCheckUpdateClick,
-                                        onVersionClick = onVersionClick,
-                                        onReplayOnboardingClick = onReplayOnboardingClick,
-                                        onEasterEggChange = onEasterEggChange,
-                                        updateStatusText = updateStatusText,
-                                        isCheckingUpdate = isCheckingUpdate,
-                                        versionClickCount = versionClickCount,
-                                        versionClickThreshold = versionClickThreshold
-                                    )
-                                }
-                            }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(6, isVisible, motionTier = effectiveMotionTier)) {
-                                    IOSSectionTitle("帮助与系统")
-                                }
-                            }
-                            item {
-                                Box(modifier = Modifier.staggeredEntrance(7, isVisible, motionTier = effectiveMotionTier)) {
-                                    SupportToolsSection(
-                                        onTipsClick = onTipsClick,
-                                        onOpenLinksClick = onOpenLinksClick
-                                    )
-                                }
+                            MobileSettingsRootSection.SUPPORT -> {
+                                SupportToolsSection(
+                                    onTipsClick = onTipsClick,
+                                    onOpenLinksClick = onOpenLinksClick
+                                )
                             }
                         }
                     }
-
-                    item { Spacer(modifier = Modifier.height(32.dp)) }
                 }
             }
+
+            item { Spacer(modifier = Modifier.height(16.dp)) }
         }
     }
 }

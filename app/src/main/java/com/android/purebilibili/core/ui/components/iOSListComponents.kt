@@ -45,6 +45,7 @@ fun IOSGroup(
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surface,
     shape: androidx.compose.ui.graphics.Shape? = null,
+    border: androidx.compose.foundation.BorderStroke? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val cornerRadiusScale = LocalCornerRadiusScale.current
@@ -57,7 +58,8 @@ fun IOSGroup(
             .clip(appliedShape),
         color = containerColor,
         shadowElevation = 0.dp,
-        tonalElevation = 1.dp
+        tonalElevation = 1.dp,
+        border = border
     ) {
         Column(content = content)
     }

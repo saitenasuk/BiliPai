@@ -5,6 +5,7 @@ import com.android.purebilibili.R
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class BackgroundPlaybackPolicyTest {
@@ -150,12 +151,121 @@ class BackgroundPlaybackPolicyTest {
 
     @Test
     fun notificationIconShouldFollowSelectedAppIconKey() {
-        assertEquals(R.mipmap.ic_launcher_telegram_blue_round, resolveNotificationSmallIconRes("icon_telegram_blue"))
-        assertEquals(R.mipmap.ic_launcher_neon_round, resolveNotificationSmallIconRes("Neon"))
-        assertEquals(R.mipmap.ic_launcher_telegram_pink_round, resolveNotificationSmallIconRes("Pink"))
-        assertEquals(R.mipmap.ic_launcher_telegram_dark_round, resolveNotificationSmallIconRes("Dark"))
-        assertEquals(R.mipmap.ic_launcher_flat_material_round, resolveNotificationSmallIconRes("icon_flat_material"))
-        assertEquals(R.mipmap.ic_launcher_flat_material_round, resolveNotificationSmallIconRes("Flat Material"))
-        assertEquals(R.mipmap.ic_launcher_3d_round, resolveNotificationSmallIconRes("unknown_key"))
+        assertEquals(R.mipmap.ic_launcher_telegram_blue, resolveNotificationSmallIconRes("icon_telegram_blue"))
+        assertEquals(R.mipmap.ic_launcher_neon, resolveNotificationSmallIconRes("Neon"))
+        assertEquals(R.mipmap.ic_launcher_telegram_pink, resolveNotificationSmallIconRes("Pink"))
+        assertEquals(R.mipmap.ic_launcher_telegram_dark, resolveNotificationSmallIconRes("Dark"))
+        assertEquals(R.mipmap.ic_launcher_flat_material, resolveNotificationSmallIconRes("icon_flat_material"))
+        assertEquals(R.mipmap.ic_launcher_flat_material, resolveNotificationSmallIconRes("Flat Material"))
+        assertEquals(R.mipmap.ic_launcher_3d, resolveNotificationSmallIconRes("unknown_key"))
+    }
+
+    @Test
+    fun playlistNavigationDispatchRequiresCallback() {
+        val item = PlaylistItem(
+            bvid = "BV1xx",
+            title = "sample",
+            cover = "",
+            owner = "tester"
+        )
+
+        var invoked = false
+        assertFalse(dispatchPlaylistNavigation(item, callback = null))
+        assertFalse(invoked)
+
+        assertTrue(
+            dispatchPlaylistNavigation(item) {
+                invoked = true
+            }
+        )
+        assertTrue(invoked)
+    }
+
+    @Test
+    fun playlistNavigationDispatchRejectsBangumiAndEmptyItem() {
+        val bangumiItem = PlaylistItem(
+            bvid = "BV2yy",
+            title = "ep",
+            cover = "",
+            owner = "tester",
+            isBangumi = true
+        )
+        assertFalse(dispatchPlaylistNavigation(null, callback = {}))
+        assertFalse(dispatchPlaylistNavigation(bangumiItem, callback = {}))
+    }
+
+    @Test
+    fun bangumiNavigationDispatchRequiresValidEpisodeContext() {
+        val bangumiItem = PlaylistItem(
+            bvid = "",
+            title = "第1话",
+            cover = "",
+            owner = "番剧",
+            isBangumi = true,
+            seasonId = 100L,
+            epId = 200L
+        )
+        var invoked = false
+        assertTrue(
+            dispatchBangumiNavigation(bangumiItem) {
+                invoked = true
+            }
+        )
+        assertTrue(invoked)
+
+        assertFalse(
+            dispatchBangumiNavigation(
+                bangumiItem.copy(seasonId = 0L),
+                callback = {}
+            )
+        )
+        assertFalse(
+            dispatchBangumiNavigation(
+                bangumiItem.copy(epId = null),
+                callback = {}
+            )
+        )
+        assertFalse(dispatchBangumiNavigation(bangumiItem, callback = null))
+        assertFalse(dispatchBangumiNavigation(null, callback = {}))
+        assertFalse(dispatchBangumiNavigation(bangumiItem.copy(isBangumi = false), callback = {}))
+    }
+
+    @Test
+    fun mediaButtonControlTypeShouldMapKeyEvents() {
+        assertEquals(
+            MediaControlType.PREVIOUS,
+            resolveMediaButtonControlType(
+                keyCode = android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                action = android.view.KeyEvent.ACTION_DOWN
+            )
+        )
+        assertEquals(
+            MediaControlType.PLAY_PAUSE,
+            resolveMediaButtonControlType(
+                keyCode = android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                action = android.view.KeyEvent.ACTION_DOWN
+            )
+        )
+        assertEquals(
+            MediaControlType.NEXT,
+            resolveMediaButtonControlType(
+                keyCode = android.view.KeyEvent.KEYCODE_MEDIA_NEXT,
+                action = android.view.KeyEvent.ACTION_DOWN
+            )
+        )
+        assertNull(
+            resolveMediaButtonControlType(
+                keyCode = android.view.KeyEvent.KEYCODE_MEDIA_NEXT,
+                action = android.view.KeyEvent.ACTION_UP
+            )
+        )
+    }
+
+    @Test
+    fun controlTypeShouldResolveFromIntentExtra() {
+        assertEquals(MediaControlType.PREVIOUS, resolveMediaControlType(MiniPlayerManager.ACTION_PREVIOUS))
+        assertEquals(MediaControlType.PLAY_PAUSE, resolveMediaControlType(MiniPlayerManager.ACTION_PLAY_PAUSE))
+        assertEquals(MediaControlType.NEXT, resolveMediaControlType(MiniPlayerManager.ACTION_NEXT))
+        assertNull(resolveMediaControlType(-1))
     }
 }

@@ -425,6 +425,7 @@ fun CommonListScreen(
                                 Tab(
                                     selected = selectedFolderIndex == index,
                                     onClick = { 
+                                        favoriteViewModel?.switchFolder(index)
                                         // 
                                         scope.launch {
                                             pagerState.animateScrollToPage(index)

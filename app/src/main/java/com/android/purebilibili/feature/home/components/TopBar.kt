@@ -256,7 +256,7 @@ fun FluidHomeTopBar(
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        CupertinoIcons.Default.Gear,
+                        CupertinoIcons.Default.Gearshape,
                         contentDescription = "Settings",
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         modifier = Modifier.size(22.dp)

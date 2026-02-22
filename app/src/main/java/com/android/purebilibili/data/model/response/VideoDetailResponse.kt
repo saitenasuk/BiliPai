@@ -1,6 +1,7 @@
 package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class VideoDetailResponse(
@@ -38,6 +39,8 @@ data class ViewInfo(
     val owner: Owner = Owner(),
     val stat: Stat = Stat(),
     val pages: List<Page> = emptyList(),
+    @SerialName("is_stein_gate")
+    val isSteinGate: Int = 0,
     val dimension: Dimension? = null,  //  视频尺寸信息
     val ugc_season: UgcSeason? = null  //  [新增] 视频合集信息
 )

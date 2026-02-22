@@ -226,7 +226,11 @@ fun ElegantVideoCard(
                                 onLongClick(video)
                             } else if (shouldOpenLongPressMenu(hasPreviewAction, hasLongPressMenu)) {
                                 haptic(HapticType.HEAVY)
-                                showDismissMenu = true
+                                if (onUnfavorite != null && onDismiss == null && onWatchLater == null) {
+                                    showUnfavoriteDialog = true
+                                } else {
+                                    showDismissMenu = true
+                                }
                             }
                         },
                         onTap = {
@@ -359,7 +363,11 @@ fun ElegantVideoCard(
                                   onLongClick(video)
                                 } else if (shouldOpenLongPressMenu(hasPreviewAction, hasLongPressMenu)) {
                                     haptic(HapticType.HEAVY)
-                                    showDismissMenu = true
+                                    if (onUnfavorite != null && onDismiss == null && onWatchLater == null) {
+                                        showUnfavoriteDialog = true
+                                    } else {
+                                        showDismissMenu = true
+                                    }
                                 }
                             },
                             onTap = {

@@ -250,6 +250,9 @@ fun rememberVideoPlayerState(
     //  [修复] 添加唯一 key 强制在每次进入时重新创建 player
     // 解决重复打开同一视频时 player 已被释放导致无声音的问题
     val playerCreationKey = remember { System.currentTimeMillis() }
+    val preferredPlaybackSpeed = remember(context) {
+        SettingsManager.getPreferredPlaybackSpeedSync(context)
+    }
     
     val player = remember(context, bvid, playerCreationKey) {
         // 如果小窗有这个视频的 player，直接复用
@@ -330,6 +333,7 @@ fun rememberVideoPlayerState(
                     //  [修复] 确保音量正常，解决第二次播放静音问题
                     //  如果 startPaused 为 true，则静音
                     volume = if (startPaused) 0f else 1.0f
+                    setPlaybackSpeed(preferredPlaybackSpeed)
                     //  [重构] 不在此处调用 prepare()，因为还没有媒体源
                     // prepare() 和 playWhenReady 将在 attachPlayer/loadVideo 设置媒体源后调用
                     playWhenReady = !startPaused

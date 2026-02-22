@@ -13,6 +13,10 @@ import kotlinx.coroutines.withContext
 object ActionRepository {
     private val api = NetworkModule.api
 
+    private fun normalizeRelationTagIds(raw: Set<Long>): Set<Long> {
+        return raw.asSequence().filter { it != 0L }.toSet()
+    }
+
     /**
      * 关注/取关 UP 主
      * @param mid UP 主的用户 ID
@@ -148,6 +152,84 @@ object ActionRepository {
             } catch (e: Exception) {
                 android.util.Log.e("ActionRepository", "checkFollowStatus failed", e)
                 false
+            }
+        }
+    }
+
+    suspend fun getFollowGroupTags(): Result<List<com.android.purebilibili.data.model.response.RelationTagItem>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.getRelationTags()
+                if (response.code == 0) {
+                    Result.success(response.data)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "获取关注分组失败: ${response.code}" }))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun getUserFollowGroupIds(mid: Long): Result<Set<Long>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.getRelationTagUser(mid)
+                if (response.code != 0) {
+                    return@withContext Result.failure(
+                        Exception(response.message.ifEmpty { "获取分组信息失败: ${response.code}" })
+                    )
+                }
+                val ids = response.data.keys.mapNotNull { it.toLongOrNull() }.toSet()
+                Result.success(normalizeRelationTagIds(ids))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun overwriteFollowGroupIds(
+        targetMids: Set<Long>,
+        selectedTagIds: Set<Long>
+    ): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                if (targetMids.isEmpty()) return@withContext Result.success(true)
+                val csrf = TokenManager.csrfCache ?: ""
+                if (csrf.isEmpty()) {
+                    return@withContext Result.failure(Exception("请先登录"))
+                }
+                val fids = targetMids.joinToString(",")
+                val normalizedSelection = normalizeRelationTagIds(selectedTagIds)
+
+                // 先移动到默认分组，确保“完全覆盖”生效。
+                val resetResponse = api.addUsersToRelationTags(
+                    fids = fids,
+                    tagIds = "0",
+                    csrf = csrf
+                )
+                if (resetResponse.code != 0) {
+                    return@withContext Result.failure(
+                        Exception(resetResponse.message.ifEmpty { "分组设置失败: ${resetResponse.code}" })
+                    )
+                }
+
+                if (normalizedSelection.isNotEmpty()) {
+                    val applyResponse = api.addUsersToRelationTags(
+                        fids = fids,
+                        tagIds = normalizedSelection.joinToString(","),
+                        csrf = csrf
+                    )
+                    if (applyResponse.code != 0) {
+                        return@withContext Result.failure(
+                            Exception(applyResponse.message.ifEmpty { "分组设置失败: ${applyResponse.code}" })
+                        )
+                    }
+                }
+
+                Result.success(true)
+            } catch (e: Exception) {
+                Result.failure(e)
             }
         }
     }

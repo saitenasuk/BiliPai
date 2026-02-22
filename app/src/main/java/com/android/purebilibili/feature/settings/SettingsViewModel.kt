@@ -332,13 +332,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun clearCache() {
-        viewModelScope.launch {
-            CacheUtils.clearAllCache(context)
+    suspend fun clearCache(): Result<CacheUtils.CacheBreakdown> {
+        return CacheUtils.clearAllCache(context).mapCatching {
             // 清理后立即刷新
             val breakdown = CacheUtils.getCacheBreakdown(context)
             _cacheSize.value = breakdown.format()
             _cacheBreakdown.value = breakdown
+            breakdown
         }
     }
 

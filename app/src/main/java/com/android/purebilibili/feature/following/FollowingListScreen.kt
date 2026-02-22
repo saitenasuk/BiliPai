@@ -3,8 +3,10 @@ package com.android.purebilibili.feature.following
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
@@ -30,8 +32,12 @@ import coil.request.ImageRequest
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.FollowingUser
+import com.android.purebilibili.data.model.response.RelationTagItem
 import com.android.purebilibili.data.repository.ActionRepository
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -76,6 +82,26 @@ internal fun buildBatchUnfollowResultMessage(successCount: Int, failedCount: Int
         successCount == 0 -> "批量取关失败，请稍后重试"
         else -> "已取消关注 $successCount 位，$failedCount 位失败"
     }
+}
+
+data class BatchFollowGroupDialogData(
+    val tags: List<RelationTagItem>,
+    val initialSelection: Set<Long>,
+    val hasMixedSelection: Boolean
+)
+
+internal fun resolveFollowGroupInitialSelection(groupSets: List<Set<Long>>): Set<Long> {
+    if (groupSets.isEmpty()) return emptySet()
+    val normalized = groupSets.map { it.filterNot { id -> id == 0L }.toSet() }
+    val first = normalized.first()
+    val allSame = normalized.all { it == first }
+    return if (allSame) first else emptySet()
+}
+
+internal fun hasMixedFollowGroupSelection(groupSets: List<Set<Long>>): Boolean {
+    if (groupSets.isEmpty()) return false
+    val normalized = groupSets.map { it.filterNot { id -> id == 0L }.toSet() }
+    return normalized.distinct().size > 1
 }
 
 class FollowingListViewModel : ViewModel() {
@@ -227,6 +253,41 @@ class FollowingListViewModel : ViewModel() {
             total = reducedTotal
         )
     }
+
+    suspend fun prepareBatchGroupDialogData(targetMids: List<Long>): Result<BatchFollowGroupDialogData> {
+        return runCatching {
+            val mids = targetMids.toSet().toList()
+            if (mids.isEmpty()) {
+                return@runCatching BatchFollowGroupDialogData(
+                    tags = emptyList(),
+                    initialSelection = emptySet(),
+                    hasMixedSelection = false
+                )
+            }
+
+            val tags = ActionRepository.getFollowGroupTags().getOrThrow()
+                .filter { it.tagid != 0L }
+                .sortedBy { it.tagid != -10L }
+
+            val groupSets = coroutineScope {
+                mids.map { mid ->
+                    async {
+                        ActionRepository.getUserFollowGroupIds(mid).getOrElse { emptySet() }
+                    }
+                }.awaitAll()
+            }
+
+            BatchFollowGroupDialogData(
+                tags = tags,
+                initialSelection = resolveFollowGroupInitialSelection(groupSets),
+                hasMixedSelection = hasMixedFollowGroupSelection(groupSets)
+            )
+        }
+    }
+
+    suspend fun saveBatchGroupSelection(targetMids: List<Long>, selectedTagIds: Set<Long>): Result<Boolean> {
+        return ActionRepository.overwriteFollowGroupIds(targetMids.toSet(), selectedTagIds)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -250,6 +311,12 @@ fun FollowingListScreen(
     var isEditMode by remember { mutableStateOf(false) }
     var selectedMids by remember { mutableStateOf(setOf<Long>()) }
     var showBatchUnfollowConfirm by remember { mutableStateOf(false) }
+    var showBatchGroupDialog by remember { mutableStateOf(false) }
+    var groupDialogLoading by remember { mutableStateOf(false) }
+    var groupDialogSaving by remember { mutableStateOf(false) }
+    var groupDialogTags by remember { mutableStateOf<List<RelationTagItem>>(emptyList()) }
+    var groupDialogSelection by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var groupDialogMixed by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -440,6 +507,28 @@ fun FollowingListScreen(
                                         Text(if (allVisibleSelected) "取消全选" else "全选当前")
                                     }
 
+                                    OutlinedButton(
+                                        onClick = {
+                                            showBatchGroupDialog = true
+                                            groupDialogLoading = true
+                                            scope.launch {
+                                                val result = viewModel.prepareBatchGroupDialogData(selectedMids.toList())
+                                                result.onSuccess { dialogData ->
+                                                    groupDialogTags = dialogData.tags
+                                                    groupDialogSelection = dialogData.initialSelection
+                                                    groupDialogMixed = dialogData.hasMixedSelection
+                                                }.onFailure {
+                                                    showBatchGroupDialog = false
+                                                    snackbarHostState.showSnackbar("加载分组失败: ${it.message}")
+                                                }
+                                                groupDialogLoading = false
+                                            }
+                                        },
+                                        enabled = hasSelection && !isBatchUnfollowing
+                                    ) {
+                                        Text("设置分组")
+                                    }
+
                                     Button(
                                         onClick = { showBatchUnfollowConfirm = true },
                                         enabled = hasSelection && !isBatchUnfollowing,
@@ -494,6 +583,127 @@ fun FollowingListScreen(
                                     TextButton(
                                         onClick = { showBatchUnfollowConfirm = false },
                                         enabled = !isBatchUnfollowing
+                                    ) {
+                                        Text("取消")
+                                    }
+                                }
+                            )
+                        }
+
+                        if (showBatchGroupDialog) {
+                            AlertDialog(
+                                onDismissRequest = {
+                                    if (!groupDialogSaving) showBatchGroupDialog = false
+                                },
+                                title = { Text("批量设置分组") },
+                                text = {
+                                    if (groupDialogLoading) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 12.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CupertinoActivityIndicator()
+                                        }
+                                    } else {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 320.dp)
+                                                .verticalScroll(rememberScrollState())
+                                        ) {
+                                            if (groupDialogMixed) {
+                                                Text(
+                                                    text = "检测到已选 UP 主原分组不一致，已默认全部不选。",
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 12.sp,
+                                                    modifier = Modifier.padding(bottom = 8.dp)
+                                                )
+                                            }
+                                            if (groupDialogTags.isEmpty()) {
+                                                Text(
+                                                    text = "暂无可用分组（不勾选即回到默认分组）",
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 13.sp
+                                                )
+                                            } else {
+                                                groupDialogTags.forEach { tag ->
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clickable {
+                                                                groupDialogSelection = if (groupDialogSelection.contains(tag.tagid)) {
+                                                                    groupDialogSelection - tag.tagid
+                                                                } else {
+                                                                    groupDialogSelection + tag.tagid
+                                                                }
+                                                            }
+                                                            .padding(vertical = 6.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Checkbox(
+                                                            checked = groupDialogSelection.contains(tag.tagid),
+                                                            onCheckedChange = { checked ->
+                                                                groupDialogSelection = if (checked == true) {
+                                                                    groupDialogSelection + tag.tagid
+                                                                } else {
+                                                                    groupDialogSelection - tag.tagid
+                                                                }
+                                                            }
+                                                        )
+                                                        Text(
+                                                            text = "${tag.name} (${tag.count})",
+                                                            fontSize = 14.sp,
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Text(
+                                                text = "确定后会完全覆盖原分组设置。",
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier.padding(top = 8.dp)
+                                            )
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            groupDialogSaving = true
+                                            scope.launch {
+                                                val result = viewModel.saveBatchGroupSelection(
+                                                    targetMids = selectedMids.toList(),
+                                                    selectedTagIds = groupDialogSelection
+                                                )
+                                                result.onSuccess {
+                                                    showBatchGroupDialog = false
+                                                    snackbarHostState.showSnackbar("分组设置已保存")
+                                                }.onFailure {
+                                                    snackbarHostState.showSnackbar("分组设置失败: ${it.message}")
+                                                }
+                                                groupDialogSaving = false
+                                            }
+                                        },
+                                        enabled = !groupDialogLoading && !groupDialogSaving
+                                    ) {
+                                        if (groupDialogSaving) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        } else {
+                                            Text("确定")
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(
+                                        onClick = { showBatchGroupDialog = false },
+                                        enabled = !groupDialogSaving
                                     ) {
                                         Text("取消")
                                     }

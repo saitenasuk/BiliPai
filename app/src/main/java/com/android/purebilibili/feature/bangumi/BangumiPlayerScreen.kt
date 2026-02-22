@@ -26,6 +26,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
+import com.android.purebilibili.feature.video.player.PlaylistItem
 //  使用提取后的组件
 import com.android.purebilibili.feature.bangumi.ui.player.BangumiPlayerView
 import com.android.purebilibili.feature.bangumi.ui.player.BangumiMiniProgressBar
@@ -64,6 +66,36 @@ fun BangumiPlayerScreen(
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             playWhenReady = true
+        }
+    }
+    val miniPlayerManager = remember(context) {
+        MiniPlayerManager.getInstance(context.applicationContext)
+    }
+
+    DisposableEffect(miniPlayerManager, viewModel) {
+        val nextBangumiCallback: (PlaylistItem) -> Unit = { item ->
+            val season = item.seasonId
+            val ep = item.epId
+            if (season != null && ep != null && season > 0L && ep > 0L) {
+                viewModel.loadBangumiPlay(season, ep)
+            }
+        }
+        val previousBangumiCallback: (PlaylistItem) -> Unit = { item ->
+            val season = item.seasonId
+            val ep = item.epId
+            if (season != null && ep != null && season > 0L && ep > 0L) {
+                viewModel.loadBangumiPlay(season, ep)
+            }
+        }
+        miniPlayerManager.onPlayNextBangumiCallback = nextBangumiCallback
+        miniPlayerManager.onPlayPreviousBangumiCallback = previousBangumiCallback
+        onDispose {
+            if (miniPlayerManager.onPlayNextBangumiCallback === nextBangumiCallback) {
+                miniPlayerManager.onPlayNextBangumiCallback = null
+            }
+            if (miniPlayerManager.onPlayPreviousBangumiCallback === previousBangumiCallback) {
+                miniPlayerManager.onPlayPreviousBangumiCallback = null
+            }
         }
     }
     

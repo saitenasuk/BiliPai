@@ -11,6 +11,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import android.view.KeyEvent
 import com.android.purebilibili.core.util.Logger
 import android.view.ViewGroup
 import androidx.compose.runtime.getValue
@@ -38,6 +39,7 @@ import coil.transform.RoundedCornersTransformation
 import com.android.purebilibili.R
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.normalizeAppIconKey
 import com.android.purebilibili.core.util.FormatUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -95,24 +97,72 @@ internal fun shouldClearPlaybackNotificationOnNavigationExit(
 }
 
 internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
-    val normalizedKey = iconKey.trim()
+    val normalizedKey = normalizeAppIconKey(iconKey)
     return when (normalizedKey) {
-        "icon_blue", "Blue" -> R.mipmap.ic_launcher_blue_round
-        "icon_neon", "Neon" -> R.mipmap.ic_launcher_neon_round
-        "icon_retro", "Retro" -> R.mipmap.ic_launcher_retro_round
-        "icon_flat", "Flat" -> R.mipmap.ic_launcher_flat_round
-        "icon_flat_material", "Flat Material", "FlatMaterial" -> R.mipmap.ic_launcher_flat_material_round
-        "icon_anime", "Anime" -> R.mipmap.ic_launcher_anime
-        "icon_telegram_blue", "Telegram Blue" -> R.mipmap.ic_launcher_telegram_blue_round
-        "icon_telegram_green", "Green", "Telegram Green" -> R.mipmap.ic_launcher_telegram_green_round
-        "icon_telegram_pink", "Pink", "Telegram Pink" -> R.mipmap.ic_launcher_telegram_pink_round
-        "icon_telegram_purple", "Purple", "Telegram Purple" -> R.mipmap.ic_launcher_telegram_purple_round
-        "icon_telegram_dark", "Dark", "Telegram Dark" -> R.mipmap.ic_launcher_telegram_dark_round
-        "Headphone", "icon_headphone" -> R.mipmap.ic_launcher_headphone
-        "Yuki" -> R.mipmap.ic_launcher_round
-        "default", "icon_3d", "3D" -> R.mipmap.ic_launcher_3d_round
-        else -> R.mipmap.ic_launcher_3d_round
+        "icon_blue" -> R.mipmap.ic_launcher_blue
+        "icon_neon" -> R.mipmap.ic_launcher_neon
+        "icon_retro" -> R.mipmap.ic_launcher_retro
+        "icon_flat" -> R.mipmap.ic_launcher_flat
+        "icon_flat_material" -> R.mipmap.ic_launcher_flat_material
+        "icon_anime" -> R.mipmap.ic_launcher_anime
+        "icon_telegram_blue" -> R.mipmap.ic_launcher_telegram_blue
+        "icon_telegram_green" -> R.mipmap.ic_launcher_telegram_green
+        "icon_telegram_pink" -> R.mipmap.ic_launcher_telegram_pink
+        "icon_telegram_purple" -> R.mipmap.ic_launcher_telegram_purple
+        "icon_telegram_dark" -> R.mipmap.ic_launcher_telegram_dark
+        "Headphone" -> R.mipmap.ic_launcher_headphone
+        "Yuki" -> R.mipmap.ic_launcher
+        "icon_3d" -> R.mipmap.ic_launcher_3d
+        else -> R.mipmap.ic_launcher_3d
     }
+}
+
+internal enum class MediaControlType {
+    PREVIOUS,
+    PLAY_PAUSE,
+    NEXT
+}
+
+internal fun resolveMediaControlType(controlType: Int): MediaControlType? {
+    return when (controlType) {
+        MiniPlayerManager.ACTION_PREVIOUS -> MediaControlType.PREVIOUS
+        MiniPlayerManager.ACTION_PLAY_PAUSE -> MediaControlType.PLAY_PAUSE
+        MiniPlayerManager.ACTION_NEXT -> MediaControlType.NEXT
+        else -> null
+    }
+}
+
+internal fun resolveMediaButtonControlType(keyCode: Int, action: Int): MediaControlType? {
+    if (action != KeyEvent.ACTION_DOWN) return null
+    return when (keyCode) {
+        KeyEvent.KEYCODE_MEDIA_PREVIOUS -> MediaControlType.PREVIOUS
+        KeyEvent.KEYCODE_MEDIA_NEXT -> MediaControlType.NEXT
+        KeyEvent.KEYCODE_MEDIA_PLAY,
+        KeyEvent.KEYCODE_MEDIA_PAUSE,
+        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> MediaControlType.PLAY_PAUSE
+        else -> null
+    }
+}
+
+internal fun dispatchPlaylistNavigation(
+    item: PlaylistItem?,
+    callback: ((PlaylistItem) -> Unit)?
+): Boolean {
+    if (item == null || item.isBangumi || callback == null) return false
+    callback(item)
+    return true
+}
+
+internal fun dispatchBangumiNavigation(
+    item: PlaylistItem?,
+    callback: ((PlaylistItem) -> Unit)?
+): Boolean {
+    if (item == null || !item.isBangumi || callback == null) return false
+    val seasonId = item.seasonId ?: 0L
+    val epId = item.epId ?: 0L
+    if (seasonId <= 0L || epId <= 0L) return false
+    callback(item)
+    return true
 }
 
 /**
@@ -157,19 +207,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
     private val mediaControlReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ACTION_MEDIA_CONTROL) {
-                when (intent.getIntExtra(EXTRA_CONTROL_TYPE, 0)) {
-                    ACTION_PREVIOUS -> {
-                        Logger.d(TAG, "🔔 通知栏: 上一曲")
-                        playPrevious()
-                    }
-                    ACTION_PLAY_PAUSE -> {
-                        Logger.d(TAG, "🔔 通知栏: 播放/暂停")
-                        togglePlayPause()
-                    }
-                    ACTION_NEXT -> {
-                        Logger.d(TAG, "🔔 通知栏: 下一曲")
-                        playNext()
-                    }
+                val controlType = resolveMediaControlType(intent.getIntExtra(EXTRA_CONTROL_TYPE, 0))
+                if (controlType != null) {
+                    Logger.d(TAG, "🔔 通知栏控制: $controlType")
+                    performMediaControl(controlType)
                 }
             }
         }
@@ -365,6 +406,18 @@ class MiniPlayerManager private constructor(private val context: Context) :
             intent: Intent
         ): Boolean {
             Logger.d(TAG, " onMediaButtonEvent: action=${intent.action}")
+            val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT) as? KeyEvent
+            }
+            val controlType = keyEvent?.let { resolveMediaButtonControlType(it.keyCode, it.action) }
+            if (controlType != null) {
+                Logger.d(TAG, "🎮 媒体按键控制: $controlType")
+                performMediaControl(controlType)
+                return true
+            }
             return super.onMediaButtonEvent(session, controllerInfo, intent)
         }
         
@@ -377,8 +430,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
         ): com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.SessionResult> {
             Logger.d(TAG, " onCustomCommand: ${customCommand.customAction}")
             when (customCommand.customAction) {
-                "SKIP_TO_PREVIOUS" -> playPrevious()
-                "SKIP_TO_NEXT" -> playNext()
+                "SKIP_TO_PREVIOUS" -> performMediaControl(MediaControlType.PREVIOUS)
+                "SKIP_TO_NEXT" -> performMediaControl(MediaControlType.NEXT)
             }
             return com.google.common.util.concurrent.Futures.immediateFuture(
                 androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_SUCCESS)
@@ -542,6 +595,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     addListener(playerListener)
                     //  [修复] 确保音量正常
                     volume = 1.0f
+                    setPlaybackSpeed(SettingsManager.getPreferredPlaybackSpeedSync(context))
                     prepare()
                 }
             
@@ -812,6 +866,14 @@ class MiniPlayerManager private constructor(private val context: Context) :
         }
     }
 
+    private fun performMediaControl(controlType: MediaControlType) {
+        when (controlType) {
+            MediaControlType.PREVIOUS -> playPrevious()
+            MediaControlType.PLAY_PAUSE -> togglePlayPause()
+            MediaControlType.NEXT -> playNext()
+        }
+    }
+
     /**
      * Seek 到指定位置
      */
@@ -825,38 +887,56 @@ class MiniPlayerManager private constructor(private val context: Context) :
      *  播放下一曲
      */
     fun playNext(): Boolean {
-        val nextItem = PlaylistManager.playNext()
-        if (nextItem != null) {
-            if (nextItem.isBangumi) {
-                // 番剧需要特殊处理，通过事件通知
-                Logger.d(TAG, " 下一集是番剧，需要特殊处理")
-                return false  // TODO: 实现番剧切换
-            } else {
-                // 普通视频：通过回调通知 ViewModel 加载
-                Logger.d(TAG, " 播放下一曲: ${nextItem.title}")
-                onPlayNextCallback?.invoke(nextItem)
-                return true
-            }
+        if (onPlayNextCallback == null && onPlayNextBangumiCallback == null) {
+            Logger.w(TAG, "⚠️ playNext ignored: no callback bound")
+            return false
         }
-        return false
+        val nextItem = PlaylistManager.playNext()
+        if (nextItem?.isBangumi == true) {
+            val handled = dispatchBangumiNavigation(nextItem, onPlayNextBangumiCallback)
+            if (!handled) {
+                Logger.w(TAG, "⚠️ playNext bangumi ignored: callback/context missing")
+            }
+            return handled
+        }
+        val callback = onPlayNextCallback
+        if (callback == null) {
+            Logger.w(TAG, "⚠️ playNext ignored: callback not bound")
+            return false
+        }
+        val handled = dispatchPlaylistNavigation(nextItem, callback)
+        if (handled) {
+            Logger.d(TAG, " 播放下一曲: ${nextItem?.title}")
+        }
+        return handled
     }
     
     /**
      *  播放上一曲
      */
     fun playPrevious(): Boolean {
-        val prevItem = PlaylistManager.playPrevious()
-        if (prevItem != null) {
-            if (prevItem.isBangumi) {
-                Logger.d(TAG, "⏮️ 上一集是番剧，需要特殊处理")
-                return false  // TODO: 实现番剧切换
-            } else {
-                Logger.d(TAG, "⏮️ 播放上一曲: ${prevItem.title}")
-                onPlayPreviousCallback?.invoke(prevItem)
-                return true
-            }
+        if (onPlayPreviousCallback == null && onPlayPreviousBangumiCallback == null) {
+            Logger.w(TAG, "⚠️ playPrevious ignored: no callback bound")
+            return false
         }
-        return false
+        val prevItem = PlaylistManager.playPrevious()
+        if (prevItem?.isBangumi == true) {
+            val handled = dispatchBangumiNavigation(prevItem, onPlayPreviousBangumiCallback)
+            if (!handled) {
+                Logger.w(TAG, "⚠️ playPrevious bangumi ignored: callback/context missing")
+            }
+            return handled
+        }
+        val callback = onPlayPreviousCallback
+        if (callback == null) {
+            Logger.w(TAG, "⚠️ playPrevious ignored: callback not bound")
+            return false
+        }
+        val handled = dispatchPlaylistNavigation(prevItem, callback)
+        if (handled) {
+            Logger.d(TAG, "⏮️ 播放上一曲: ${prevItem?.title}")
+        }
+        return handled
     }
     
     /**
@@ -874,6 +954,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
     // 回调函数（由 PlayerViewModel 设置）
     var onPlayNextCallback: ((PlaylistItem) -> Unit)? = null
     var onPlayPreviousCallback: ((PlaylistItem) -> Unit)? = null
+    var onPlayNextBangumiCallback: ((PlaylistItem) -> Unit)? = null
+    var onPlayPreviousBangumiCallback: ((PlaylistItem) -> Unit)? = null
 
 
     /**
@@ -1005,7 +1087,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
         // 上一曲按钮
         val prevIntent = android.app.PendingIntent.getBroadcast(
             context, ACTION_PREVIOUS,
-            android.content.Intent(ACTION_MEDIA_CONTROL).putExtra(EXTRA_CONTROL_TYPE, ACTION_PREVIOUS),
+            android.content.Intent(ACTION_MEDIA_CONTROL)
+                .setPackage(context.packageName)
+                .putExtra(EXTRA_CONTROL_TYPE, ACTION_PREVIOUS),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
         )
         builder.addAction(
@@ -1019,7 +1103,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
         // 播放/暂停按钮
         val playPauseIntent = android.app.PendingIntent.getBroadcast(
             context, ACTION_PLAY_PAUSE,
-            android.content.Intent(ACTION_MEDIA_CONTROL).putExtra(EXTRA_CONTROL_TYPE, ACTION_PLAY_PAUSE),
+            android.content.Intent(ACTION_MEDIA_CONTROL)
+                .setPackage(context.packageName)
+                .putExtra(EXTRA_CONTROL_TYPE, ACTION_PLAY_PAUSE),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
         )
         val playPauseIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
@@ -1035,7 +1121,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
         // 下一曲按钮
         val nextIntent = android.app.PendingIntent.getBroadcast(
             context, ACTION_NEXT,
-            android.content.Intent(ACTION_MEDIA_CONTROL).putExtra(EXTRA_CONTROL_TYPE, ACTION_NEXT),
+            android.content.Intent(ACTION_MEDIA_CONTROL)
+                .setPackage(context.packageName)
+                .putExtra(EXTRA_CONTROL_TYPE, ACTION_NEXT),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
         )
         builder.addAction(

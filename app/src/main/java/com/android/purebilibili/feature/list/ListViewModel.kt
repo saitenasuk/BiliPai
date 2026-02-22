@@ -368,25 +368,38 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
         // aid 作为 resourceId
         val resourceId = video.aid 
         if (resourceId == 0L || allFolderIds.isEmpty()) return
-        
-        val currentMediaId = allFolderIds[currentFolderIndex]
+
+        val folderIndex = _selectedFolderIndex.value
+        if (folderIndex < 0 || folderIndex >= allFolderIds.size) return
+        currentFolderIndex = folderIndex
+
+        val currentMediaId = allFolderIds[folderIndex]
+        val stateFlow = _folderStates.getOrPut(folderIndex) {
+            MutableStateFlow(ListUiState(isLoading = false))
+        }
         
         viewModelScope.launch {
+            val originalState = stateFlow.value
             try {
-                // Optimistic update: Remove locally immediately for better UX
-                val originalItems = _uiState.value.items
-                _uiState.value = _uiState.value.copy(
-                    items = originalItems.filter { it.id != video.id }
-                )
+                // Optimistic update: remove from current folder state immediately.
+                val updatedItems = originalState.items.filter { it.id != video.id }
+                stateFlow.value = originalState.copy(items = updatedItems, error = null)
+                if (_uiState.value.items.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(items = updatedItems)
+                }
                 
                 val result = com.android.purebilibili.data.repository.FavoriteRepository.removeResource(currentMediaId, resourceId)
                 if (result.isFailure) {
                     // Revert if failed
-                    _uiState.value = _uiState.value.copy(items = originalItems)
-                    _uiState.value = _uiState.value.copy(error = "取消收藏失败: ${result.exceptionOrNull()?.message}")
+                    val error = "取消收藏失败: ${result.exceptionOrNull()?.message}"
+                    stateFlow.value = originalState.copy(error = error)
+                    _uiState.value = _uiState.value.copy(error = error)
                 }
             } catch (e: Exception) {
                  e.printStackTrace()
+                 val message = e.message ?: "取消收藏失败"
+                 stateFlow.value = originalState.copy(error = message)
+                 _uiState.value = _uiState.value.copy(error = message)
             }
         }
     }

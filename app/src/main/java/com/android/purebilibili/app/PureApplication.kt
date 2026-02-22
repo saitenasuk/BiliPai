@@ -40,6 +40,11 @@ import kotlinx.coroutines.flow.first
 
 private const val TAG = "PureApplication"
 
+internal fun shouldBlockStartupForHomeVisualDefaultsMigration(): Boolean = false
+internal fun shouldDeferPlaylistRestoreAtStartup(): Boolean = true
+internal fun shouldDeferTelemetryInitAtStartup(): Boolean = true
+internal fun deferredNonCriticalStartupDelayMs(): Long = 900L
+
 //  实现 ImageLoaderFactory 以提供自定义 Coil 配置
 //  实现 ComponentCallbacks2 响应系统内存警告
 class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
@@ -96,8 +101,15 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         super.onCreate()
 
         // 启动即确保首页视觉默认值生效：底栏悬浮 + 液态玻璃 + 顶部模糊
-        runBlocking(Dispatchers.IO) {
-            SettingsManager.ensureHomeVisualDefaults(this@PureApplication)
+        // 冷启动路径不阻塞主线程，迁移改为后台执行。
+        if (shouldBlockStartupForHomeVisualDefaultsMigration()) {
+            runBlocking(Dispatchers.IO) {
+                SettingsManager.ensureHomeVisualDefaults(this@PureApplication)
+            }
+        } else {
+            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                SettingsManager.ensureHomeVisualDefaults(this@PureApplication)
+            }
         }
         
         //  关键初始化（同步，必须在启动时完成）
@@ -106,22 +118,11 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         com.android.purebilibili.data.repository.VideoRepository.init(this) //  [新增] 初始化 VideoRepo
         BackgroundManager.init(this)  // 📱 后台状态管理
         com.android.purebilibili.core.store.PlayerSettingsCache.init(this) // 🎬 [新增] 播放器设置缓存
-        com.android.purebilibili.feature.video.player.PlaylistManager.init(this) // 🎵 [新增] 恢复播放队列状态
+        initPlaylistRestore() // 🎵 [优化] 播放队列恢复可延后，避免阻塞冷启动主线程
         
         createNotificationChannel()
         
-        //  初始化 Firebase Crashlytics
-        initCrashlytics()
-        
-        //  初始化 Firebase Analytics
-        initAnalytics()
-
-        //  监听全局前后台状态，增强会话与崩溃上下文
-        BackgroundManager.addListener(telemetryListener)
-        if (!BackgroundManager.isInBackground) {
-            AnalyticsHelper.onAppForeground()
-            CrashReporter.setAppForegroundState(true)
-        }
+        initTelemetry() // [优化] 埋点初始化支持延后到首屏阶段之后
         
         //  [冷启动优化] 延迟非关键初始化到主线程空闲时 (IdleHandler 确保首帧绘制后再执行)
         Looper.myQueue().addIdleHandler {
@@ -169,6 +170,41 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
             }
             
             false // 返回 false 表示只执行一次
+        }
+    }
+
+    private fun initPlaylistRestore() {
+        if (shouldDeferPlaylistRestoreAtStartup()) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                    com.android.purebilibili.feature.video.player.PlaylistManager.init(this@PureApplication)
+                }
+            }, deferredNonCriticalStartupDelayMs())
+            return
+        }
+        com.android.purebilibili.feature.video.player.PlaylistManager.init(this)
+    }
+
+    private fun initTelemetry() {
+        if (shouldDeferTelemetryInitAtStartup()) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                initCrashlytics()
+                initAnalytics()
+                attachTelemetryListener()
+            }, deferredNonCriticalStartupDelayMs())
+            return
+        }
+        initCrashlytics()
+        initAnalytics()
+        attachTelemetryListener()
+    }
+
+    private fun attachTelemetryListener() {
+        // 监听全局前后台状态，增强会话与崩溃上下文
+        BackgroundManager.addListener(telemetryListener)
+        if (!BackgroundManager.isInBackground) {
+            AnalyticsHelper.onAppForeground()
+            CrashReporter.setAppForegroundState(true)
         }
     }
     

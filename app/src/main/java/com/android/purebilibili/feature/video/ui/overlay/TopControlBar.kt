@@ -21,12 +21,11 @@ import androidx.compose.ui.unit.sp
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import com.android.purebilibili.core.ui.AppIcons
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbDown
-import androidx.compose.material.icons.rounded.MonetizationOn
-import androidx.compose.material.icons.outlined.MonetizationOn
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.rounded.MoreVert
@@ -167,7 +166,7 @@ fun TopControlBar(
                 
                 // Coin
                 ActionIcon(
-                    icon = if (isCoined) Icons.Rounded.MonetizationOn else Icons.Outlined.MonetizationOn,
+                    icon = AppIcons.BiliCoin,
                     contentDescription = "投币",
                     isActive = isCoined,
                     onClick = onCoinClick,

@@ -42,4 +42,21 @@ class FollowingBatchSelectionPolicyTest {
         assertTrue(message.contains("7"))
         assertTrue(message.contains("2"))
     }
+
+    @Test
+    fun `group preselection should keep existing tags when every user has same groups`() {
+        val initial = resolveFollowGroupInitialSelection(
+            listOf(setOf(-10L, 1001L), setOf(1001L, -10L), setOf(1001L, -10L))
+        )
+        assertEquals(setOf(-10L, 1001L), initial)
+        assertTrue(!hasMixedFollowGroupSelection(listOf(setOf(-10L, 1001L), setOf(1001L, -10L))))
+    }
+
+    @Test
+    fun `group preselection should default empty when any user groups differ`() {
+        val sets = listOf(setOf(-10L, 1001L), setOf(1001L), emptySet())
+        val initial = resolveFollowGroupInitialSelection(sets)
+        assertTrue(initial.isEmpty())
+        assertTrue(hasMixedFollowGroupSelection(sets))
+    }
 }

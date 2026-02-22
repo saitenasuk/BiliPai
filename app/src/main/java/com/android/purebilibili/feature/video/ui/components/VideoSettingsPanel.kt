@@ -102,6 +102,12 @@ fun VideoSettingsPanel(
     val longPressSpeed by com.android.purebilibili.core.store.SettingsManager
         .getLongPressSpeed(context)
         .collectAsState(initial = 2.0f)
+    val defaultPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
+        .getDefaultPlaybackSpeed(context)
+        .collectAsState(initial = 1.0f)
+    val rememberLastPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
+        .getRememberLastPlaybackSpeed(context)
+        .collectAsState(initial = false)
     
     com.android.purebilibili.core.ui.IOSModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -675,6 +681,67 @@ fun VideoSettingsPanel(
                 SettingsDivider()
             }
 
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = CupertinoIcons.Default.Gearshape,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "默认播放速度",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (rememberLastPlaybackSpeed) {
+                                    "已开启记忆上次速度（当前优先）"
+                                } else {
+                                    "当前默认 ${defaultPlaybackSpeed}x"
+                                },
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = rememberLastPlaybackSpeed,
+                            onCheckedChange = { checked ->
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setRememberLastPlaybackSpeed(context, checked)
+                                }
+                            },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    SpeedOptions(
+                        currentSpeed = defaultPlaybackSpeed,
+                        onSelect = { speed ->
+                            scope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setDefaultPlaybackSpeed(context, speed)
+                            }
+                        }
+                    )
+                }
+                SettingsDivider()
+            }
+
             //  [新增] 双击跳转秒数设置 (带开关)
             item {
                 Column(
@@ -949,6 +1016,7 @@ private fun SpeedOptions(
         0.75f to "0.75x",
         1.0f to "正常",
         1.25f to "1.25x",
+        1.3f to "1.3x",
         1.5f to "1.5x",
         2.0f to "2x"
     )

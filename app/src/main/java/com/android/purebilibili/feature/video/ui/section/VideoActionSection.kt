@@ -18,10 +18,8 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.MonetizationOn
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.ThumbUp
-import androidx.compose.material.icons.rounded.MonetizationOn
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material3.*
@@ -40,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.data.model.response.ViewInfo
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -113,7 +112,7 @@ fun ActionButtonsRow(
             contentAlignment = Alignment.Center
         ) {
             BiliActionButton(
-                icon = if (coinCount > 0) Icons.Rounded.MonetizationOn else Icons.Outlined.MonetizationOn,
+                icon = AppIcons.BiliCoin,
                 text = if (coinCount > 0) "已投币" else "投币",
                 isActive = coinCount > 0,
                 activeColor = Color(0xFFFFB300),

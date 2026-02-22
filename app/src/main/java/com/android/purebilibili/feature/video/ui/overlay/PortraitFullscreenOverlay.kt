@@ -281,11 +281,29 @@ private fun PortraitTopControlBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(layoutPolicy.topActionSpacingDp.dp)
         ) {
-            IconButton(onClick = onDanmakuToggle) {
+            val danmakuToggleInteraction = remember { MutableInteractionSource() }
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (danmakuEnabled) {
+                            Color(0xFF1B5E20).copy(alpha = 0.2f)
+                        } else {
+                            Color(0xFFB71C1C).copy(alpha = 0.2f)
+                        }
+                    )
+                    .clickable(
+                        interactionSource = danmakuToggleInteraction,
+                        indication = null,
+                        onClick = onDanmakuToggle
+                    )
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Icon(
-                    imageVector = if (danmakuEnabled) CupertinoIcons.Default.TextBubble else CupertinoIcons.Outlined.TextBubble,
+                    imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
                     contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
-                    tint = if (danmakuEnabled) Color.White else Color.White.copy(alpha = 0.7f),
+                    tint = if (danmakuEnabled) Color(0xFF4CAF50) else Color(0xFFE57373),
                     modifier = Modifier.size(layoutPolicy.topActionIconSizeDp.dp)
                 )
             }

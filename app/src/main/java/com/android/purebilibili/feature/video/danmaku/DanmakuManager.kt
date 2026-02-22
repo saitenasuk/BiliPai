@@ -873,20 +873,30 @@ class DanmakuManager private constructor(
     
     /**
      * ⚙️ [漂移修复] 启动定期漂移检测
-     * 每 5 秒检测一次，仅当播放时同步
-     * 注意：不再使用 setData，避免干扰 Seek 处理
+     * 根据倍速动态调整检测频率；非 1.0x 周期性强制重建时间轴
      */
     private fun startDriftSync() {
         syncJob?.cancel()
         syncJob = scope.launch {
+            var tickCount = 0
             while (isActive) {
-                delay(5000L)  // 每 5 秒检测一次
+                delay(resolveDanmakuDriftSyncIntervalMs(currentVideoSpeed))
                 player?.let { p ->
                     if (p.isPlaying && config.isEnabled && isPlaying) {
                         val playerPos = p.currentPosition
-                        // 仅调用 start() 重新同步位置，不重新设置数据
-                        controller?.start(playerPos)
-                        Log.d(TAG, "⚙️ Drift sync at ${playerPos}ms")
+                        tickCount++
+                        controller?.let { ctrl ->
+                            if (shouldForceDanmakuDataResync(currentVideoSpeed, tickCount)) {
+                                cachedDanmakuList?.let { list ->
+                                    ctrl.setData(list, 0)
+                                }
+                            }
+                            ctrl.start(playerPos)
+                        }
+                        Log.d(
+                            TAG,
+                            "⚙️ Drift sync at ${playerPos}ms speed=$currentVideoSpeed tick=$tickCount"
+                        )
                     }
                 }
             }
@@ -924,6 +934,10 @@ class DanmakuManager private constructor(
         }
         
         player = exoPlayer
+        currentVideoSpeed = exoPlayer.playbackParameters.speed.coerceAtLeast(0.1f)
+        controller?.let { ctrl ->
+            ctrl.config.scroll.moveTime = (originalMoveTime / currentVideoSpeed).toLong()
+        }
         
         // 🎬 [根本修复] 不在这里启动帧同步，而是在 onIsPlayingChanged 中启动
         
@@ -1014,7 +1028,7 @@ class DanmakuManager private constructor(
             //  [新增] 视频倍速变化时同步弹幕速度
             //  [问题10修复] 优化长按加速视频时的弹幕同步
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
-                val videoSpeed = playbackParameters.speed
+                val videoSpeed = playbackParameters.speed.coerceAtLeast(0.1f)
                 Log.w(TAG, "⏩ onPlaybackParametersChanged: videoSpeed=$videoSpeed, previous=$currentVideoSpeed")
                 
                 //  同步弹幕速度：视频 2x 时，弹幕也需要 2 倍速滚动

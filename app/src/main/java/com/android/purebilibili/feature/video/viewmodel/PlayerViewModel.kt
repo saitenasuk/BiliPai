@@ -38,9 +38,20 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.PlaylistManager
 import com.android.purebilibili.feature.video.player.PlaylistItem
 import com.android.purebilibili.feature.video.player.PlayMode
+import com.android.purebilibili.feature.video.interaction.InteractiveChoicePanelUiState
+import com.android.purebilibili.feature.video.interaction.InteractiveChoiceUiModel
+import com.android.purebilibili.feature.video.interaction.normalizeInteractiveCountdownMs
+import com.android.purebilibili.feature.video.interaction.resolveInteractiveAutoChoice
+import com.android.purebilibili.feature.video.interaction.resolveInteractiveChoiceCid
+import com.android.purebilibili.feature.video.interaction.resolveInteractiveChoiceEdgeId
+import com.android.purebilibili.feature.video.interaction.resolveInteractiveQuestionTriggerMs
+import com.android.purebilibili.feature.video.interaction.applyInteractiveNativeAction
+import com.android.purebilibili.feature.video.interaction.evaluateInteractiveChoiceCondition
+import com.android.purebilibili.feature.video.interaction.shouldTriggerInteractiveQuestion
 
 // ========== UI State ==========
 sealed class PlayerUiState {
@@ -229,6 +240,18 @@ class PlayerViewModel : ViewModel() {
     //  [新增] 视频章节/看点数据
     private val _viewPoints = MutableStateFlow<List<ViewPoint>>(emptyList())
     val viewPoints = _viewPoints.asStateFlow()
+
+    private val _interactiveChoicePanel = MutableStateFlow(InteractiveChoicePanelUiState())
+    val interactiveChoicePanel = _interactiveChoicePanel.asStateFlow()
+
+    private var interactiveGraphVersion: Long = 0L
+    private var interactiveCurrentEdgeId: Long = 0L
+    private var interactiveQuestionMonitorJob: Job? = null
+    private var interactiveCountdownJob: Job? = null
+    private var isApplyingInteractiveChoice = false
+    private var interactivePausedByQuestion = false
+    private val interactiveHiddenVariables = mutableMapOf<String, Double>()
+    private val interactiveEdgeStartPositionMs = mutableMapOf<Long, Long>()
     
     // [新增] 播放完成选择对话框状态
     private val _showPlaybackEndedDialog = MutableStateFlow(false)
@@ -255,6 +278,52 @@ class PlayerViewModel : ViewModel() {
 
     fun dismissDanmakuInputDialog() {
         _showDanmakuInputDialog.value = false
+    }
+
+    fun dismissInteractiveChoicePanel() {
+        interactiveQuestionMonitorJob?.cancel()
+        interactiveCountdownJob?.cancel()
+        _interactiveChoicePanel.value = _interactiveChoicePanel.value.copy(visible = false, remainingMs = null)
+        if (interactivePausedByQuestion) {
+            exoPlayer?.play()
+            interactivePausedByQuestion = false
+        }
+    }
+
+    fun selectInteractiveChoice(edgeId: Long, cid: Long) {
+        if (cid <= 0L || isApplyingInteractiveChoice) return
+        val selectedChoice = _interactiveChoicePanel.value.choices
+            .firstOrNull { it.edgeId == edgeId && it.cid == cid }
+        val resolvedEdgeId = selectedChoice?.edgeId ?: edgeId
+        if (resolvedEdgeId <= 0L) return
+        isApplyingInteractiveChoice = true
+        interactiveQuestionMonitorJob?.cancel()
+        interactiveCountdownJob?.cancel()
+        _interactiveChoicePanel.value = _interactiveChoicePanel.value.copy(visible = false, remainingMs = null)
+        viewModelScope.launch {
+            selectedChoice?.nativeAction
+                ?.takeIf { it.isNotBlank() }
+                ?.let { action ->
+                    applyInteractiveNativeAction(
+                        nativeAction = action,
+                        variables = interactiveHiddenVariables
+                    )
+                }
+            interactiveCurrentEdgeId = resolvedEdgeId
+            val switched = switchToInteractiveCid(
+                targetCid = cid,
+                targetEdgeId = resolvedEdgeId
+            )
+            if (switched) {
+                if (interactivePausedByQuestion) {
+                    exoPlayer?.play()
+                }
+            } else {
+                toast("互动分支切换失败")
+            }
+            interactivePausedByQuestion = false
+            isApplyingInteractiveChoice = false
+        }
     }
     
     // Internal state
@@ -343,6 +412,23 @@ class PlayerViewModel : ViewModel() {
 
     private var lastSavedFavoriteFolderIds: Set<Long> = emptySet()
     private var favoriteFoldersBoundAid: Long? = null
+
+    private val _followGroupDialogVisible = MutableStateFlow(false)
+    val followGroupDialogVisible = _followGroupDialogVisible.asStateFlow()
+
+    private val _followGroupTags = MutableStateFlow<List<com.android.purebilibili.data.model.response.RelationTagItem>>(emptyList())
+    val followGroupTags = _followGroupTags.asStateFlow()
+
+    private val _followGroupSelectedTagIds = MutableStateFlow<Set<Long>>(emptySet())
+    val followGroupSelectedTagIds = _followGroupSelectedTagIds.asStateFlow()
+
+    private val _isFollowGroupsLoading = MutableStateFlow(false)
+    val isFollowGroupsLoading = _isFollowGroupsLoading.asStateFlow()
+
+    private val _isSavingFollowGroups = MutableStateFlow(false)
+    val isSavingFollowGroups = _isSavingFollowGroups.asStateFlow()
+
+    private var followGroupTargetMid: Long = 0L
     
     fun showFavoriteFolderDialog() {
         val current = _uiState.value as? PlayerUiState.Success ?: return
@@ -476,6 +562,70 @@ class PlayerViewModel : ViewModel() {
             }
         }
     }
+
+    fun showFollowGroupDialogForUser(mid: Long) {
+        if (mid <= 0L) return
+        followGroupTargetMid = mid
+        _followGroupDialogVisible.value = true
+        loadFollowGroupsForTarget()
+    }
+
+    fun dismissFollowGroupDialog() {
+        _followGroupDialogVisible.value = false
+    }
+
+    fun toggleFollowGroupSelection(tagId: Long) {
+        if (tagId == 0L) return
+        _followGroupSelectedTagIds.update { selected ->
+            if (selected.contains(tagId)) selected - tagId else selected + tagId
+        }
+    }
+
+    fun saveFollowGroupSelection() {
+        if (_isSavingFollowGroups.value || followGroupTargetMid <= 0L) return
+        val selected = _followGroupSelectedTagIds.value
+        viewModelScope.launch {
+            _isSavingFollowGroups.value = true
+            com.android.purebilibili.data.repository.ActionRepository
+                .overwriteFollowGroupIds(
+                    targetMids = setOf(followGroupTargetMid),
+                    selectedTagIds = selected
+                )
+                .onSuccess {
+                    dismissFollowGroupDialog()
+                    toast("分组设置已保存")
+                }
+                .onFailure { e ->
+                    toast("分组设置失败: ${e.message}")
+                }
+            _isSavingFollowGroups.value = false
+        }
+    }
+
+    private fun loadFollowGroupsForTarget() {
+        val targetMid = followGroupTargetMid
+        if (targetMid <= 0L) return
+        viewModelScope.launch {
+            _isFollowGroupsLoading.value = true
+            val tagsResult = com.android.purebilibili.data.repository.ActionRepository.getFollowGroupTags()
+            val userGroupResult = com.android.purebilibili.data.repository.ActionRepository.getUserFollowGroupIds(targetMid)
+
+            tagsResult.onSuccess { tags ->
+                _followGroupTags.value = tags.filter { it.tagid != 0L }
+            }.onFailure { e ->
+                _followGroupTags.value = emptyList()
+                toast("加载分组失败: ${e.message}")
+            }
+
+            userGroupResult.onSuccess { groupIds ->
+                _followGroupSelectedTagIds.value = groupIds.filterNot { it == 0L }.toSet()
+            }.onFailure {
+                _followGroupSelectedTagIds.value = emptySet()
+            }
+
+            _isFollowGroupsLoading.value = false
+        }
+    }
     
     // ========== Public API ==========
     
@@ -485,6 +635,18 @@ class PlayerViewModel : ViewModel() {
     fun initWithContext(context: android.content.Context) {
         appContext = context.applicationContext  //  [新增] 保存应用 Context
         playbackUseCase.initWithContext(context)
+
+        val miniPlayerManager = MiniPlayerManager.getInstance(context.applicationContext)
+        miniPlayerManager.onPlayNextCallback = { item ->
+            viewModelScope.launch {
+                loadVideo(item.bvid, autoPlay = true)
+            }
+        }
+        miniPlayerManager.onPlayPreviousCallback = { item ->
+            viewModelScope.launch {
+                loadVideo(item.bvid, autoPlay = true)
+            }
+        }
         
         // 🎧 Start observing settings preferences
         viewModelScope.launch {
@@ -817,6 +979,7 @@ class PlayerViewModel : ViewModel() {
         
         val cachedPosition = playbackUseCase.getCachedPosition(bvid)
         currentBvid = bvid
+        clearInteractiveChoiceRuntime()
         lastCreatorSignalPositionSec = cachedPosition / 1000L
         
         viewModelScope.launch {
@@ -1327,7 +1490,21 @@ class PlayerViewModel : ViewModel() {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         viewModelScope.launch {
             interactionUseCase.toggleFollow(current.info.owner.mid, current.isFollowing)
-                .onSuccess { _uiState.value = current.copy(isFollowing = it); toast(if (it) "\u5173\u6ce8\u6210\u529f" else "\u5df2\u53d6\u6d88\u5173\u6ce8") }
+                .onSuccess {
+                    _uiState.update { state ->
+                        if (state is PlayerUiState.Success) {
+                            val newSet = state.followingMids.toMutableSet()
+                            if (it) newSet.add(state.info.owner.mid) else newSet.remove(state.info.owner.mid)
+                            state.copy(isFollowing = it, followingMids = newSet)
+                        } else {
+                            state
+                        }
+                    }
+                    toast(if (it) "关注成功" else "已取消关注")
+                    if (it) {
+                        showFollowGroupDialogForUser(current.info.owner.mid)
+                    }
+                }
                 .onFailure { toast(it.message ?: "\u64cd\u4f5c\u5931\u8d25") }
         }
     }
@@ -1349,6 +1526,9 @@ class PlayerViewModel : ViewModel() {
                         } else state
                     }
                     toast(if (isFollowing) "关注成功" else "已取消关注")
+                    if (isFollowing) {
+                        showFollowGroupDialogForUser(mid)
+                    }
                 }
                 .onFailure { toast(it.message ?: "操作失败") }
         }
@@ -2115,8 +2295,8 @@ class PlayerViewModel : ViewModel() {
         }
     }
     
-    //  [新增] 异步加载播放器额外信息 (章节/看点 + BGM)
-    private fun loadPlayerInfo(bvid: String, cid: Long) {
+    //  [新增] 异步加载播放器额外信息 (章节/看点 + BGM + 互动剧情图)
+    private fun loadPlayerInfo(bvid: String, cid: Long, preferredEdgeId: Long? = null) {
         viewModelScope.launch {
             try {
                 // 使用 Repository 的 wrapper 方法
@@ -2141,6 +2321,20 @@ class PlayerViewModel : ViewModel() {
                         }
                         Logger.d("PlayerVM", "🎵 Loaded BGM: ${data.bgmInfo?.musicTitle}")
                     }
+
+                    // 3. 互动剧情图
+                    interactiveGraphVersion = data.interaction?.graphVersion ?: 0L
+                    val current = _uiState.value as? PlayerUiState.Success
+                    val shouldEnableInteractive = current != null &&
+                        current.info.bvid == bvid &&
+                        current.info.isSteinGate == 1 &&
+                        interactiveGraphVersion > 0L
+                    if (shouldEnableInteractive) {
+                        val edgeId = preferredEdgeId ?: interactiveCurrentEdgeId.takeIf { it > 0L }
+                        loadInteractiveEdgeInfo(edgeId = edgeId)
+                    } else {
+                        clearInteractiveChoiceRuntime()
+                    }
                 }.onFailure { e ->
                     Logger.d("PlayerVM", "📖 Failed to load player info: ${e.message}")
                     _viewPoints.value = emptyList()
@@ -2148,6 +2342,222 @@ class PlayerViewModel : ViewModel() {
             } catch (e: Exception) {
                 Logger.d("PlayerVM", "📖 Exception loading player info: ${e.message}")
                 _viewPoints.value = emptyList()
+            }
+        }
+    }
+
+    private fun clearInteractiveChoiceRuntime() {
+        interactiveQuestionMonitorJob?.cancel()
+        interactiveCountdownJob?.cancel()
+        interactiveGraphVersion = 0L
+        interactiveCurrentEdgeId = 0L
+        interactivePausedByQuestion = false
+        interactiveHiddenVariables.clear()
+        interactiveEdgeStartPositionMs.clear()
+        _interactiveChoicePanel.value = InteractiveChoicePanelUiState()
+    }
+
+    private suspend fun loadInteractiveEdgeInfo(edgeId: Long?) {
+        val current = _uiState.value as? PlayerUiState.Success ?: return
+        if (current.info.isSteinGate != 1 || interactiveGraphVersion <= 0L) {
+            clearInteractiveChoiceRuntime()
+            return
+        }
+
+        VideoRepository.getInteractEdgeInfo(
+            bvid = current.info.bvid,
+            graphVersion = interactiveGraphVersion,
+            edgeId = edgeId
+        ).onSuccess { data ->
+            processInteractiveEdgeData(current, data)
+        }.onFailure { e ->
+            Logger.w("PlayerVM", "Interactive edge load failed: ${e.message}")
+        }
+    }
+
+    private fun processInteractiveEdgeData(
+        current: PlayerUiState.Success,
+        data: InteractEdgeInfoData
+    ) {
+        interactiveCurrentEdgeId = data.edgeId.takeIf { it > 0L } ?: interactiveCurrentEdgeId
+        data.hiddenVars.forEach { variable ->
+            val key = variable.idV2.ifBlank { variable.id }
+            if (key.isNotBlank()) {
+                interactiveHiddenVariables[key] = variable.value
+            }
+        }
+        data.storyList.forEach { node ->
+            if (node.edgeId > 0L && node.startPos >= 0L) {
+                interactiveEdgeStartPositionMs[node.edgeId] = node.startPos
+            }
+        }
+
+        if (data.isLeaf == 1) {
+            _interactiveChoicePanel.value = InteractiveChoicePanelUiState()
+            return
+        }
+
+        val questionWithChoices = data.edges?.questions
+            ?.asSequence()
+            ?.map { question -> question to buildInteractiveChoices(question, current.info.cid) }
+            ?.firstOrNull { (_, choices) -> choices.isNotEmpty() }
+            ?: run {
+                _interactiveChoicePanel.value = InteractiveChoicePanelUiState()
+                return
+            }
+        val question = questionWithChoices.first
+        val uiChoices = questionWithChoices.second
+
+        val resolvedEdgeId = data.edgeId.takeIf { it > 0L } ?: interactiveCurrentEdgeId
+        val edgeStartMs = resolveInteractiveEdgeStartPositionMs(data, resolvedEdgeId)
+        val triggerOffsetMs = question.startTimeR.toLong().coerceAtLeast(0L)
+        val absoluteTriggerMs = resolveInteractiveQuestionTriggerMs(edgeStartMs, triggerOffsetMs)
+        val dimension = data.edges?.dimension
+
+        scheduleInteractiveQuestion(
+            edgeId = resolvedEdgeId,
+            questionId = question.id,
+            title = if (question.title.isBlank()) "剧情分支" else question.title,
+            questionType = question.type,
+            triggerMs = absoluteTriggerMs,
+            durationMs = normalizeInteractiveCountdownMs(question.duration),
+            pauseVideo = question.pauseVideo == 1,
+            sourceVideoWidth = dimension?.width ?: 0,
+            sourceVideoHeight = dimension?.height ?: 0,
+            choices = uiChoices
+        )
+    }
+
+    private fun buildInteractiveChoices(
+        question: InteractQuestion,
+        currentCid: Long
+    ): List<InteractiveChoiceUiModel> {
+        return question.choices
+            .filter { choice ->
+                val resolvedEdgeId = resolveInteractiveChoiceEdgeId(
+                    choiceEdgeId = choice.id,
+                    platformAction = choice.platformAction
+                )
+                resolvedEdgeId != null &&
+                    choice.isHidden != 1 &&
+                    evaluateInteractiveChoiceCondition(
+                        condition = choice.condition,
+                        variables = interactiveHiddenVariables
+                    )
+            }
+            .mapNotNull { choice ->
+                val resolvedEdgeId = resolveInteractiveChoiceEdgeId(
+                    choiceEdgeId = choice.id,
+                    platformAction = choice.platformAction
+                ) ?: return@mapNotNull null
+                val resolvedCid = resolveInteractiveChoiceCid(
+                    choiceCid = choice.cid,
+                    platformAction = choice.platformAction,
+                    currentCid = currentCid
+                ) ?: return@mapNotNull null
+                InteractiveChoiceUiModel(
+                    edgeId = resolvedEdgeId,
+                    cid = resolvedCid,
+                    text = choice.option.ifBlank { "继续" },
+                    isDefault = choice.isDefault == 1,
+                    nativeAction = choice.nativeAction,
+                    x = choice.x.takeIf { it > 0 },
+                    y = choice.y.takeIf { it > 0 },
+                    textAlign = choice.textAlign
+                )
+            }
+    }
+
+    private fun resolveInteractiveEdgeStartPositionMs(
+        data: InteractEdgeInfoData,
+        edgeId: Long
+    ): Long {
+        val currentNodeStart = data.storyList
+            .firstOrNull { it.isCurrent == 1 && it.startPos >= 0L }
+            ?.startPos
+        if (currentNodeStart != null) return currentNodeStart
+
+        val edgeNodeStart = data.storyList
+            .firstOrNull { it.edgeId == edgeId && it.startPos >= 0L }
+            ?.startPos
+        if (edgeNodeStart != null) return edgeNodeStart
+
+        return interactiveEdgeStartPositionMs[edgeId]?.coerceAtLeast(0L) ?: 0L
+    }
+
+    private fun scheduleInteractiveQuestion(
+        edgeId: Long,
+        questionId: Long,
+        title: String,
+        questionType: Int,
+        triggerMs: Long,
+        durationMs: Long?,
+        pauseVideo: Boolean,
+        sourceVideoWidth: Int,
+        sourceVideoHeight: Int,
+        choices: List<InteractiveChoiceUiModel>
+    ) {
+        interactiveQuestionMonitorJob?.cancel()
+        interactiveCountdownJob?.cancel()
+        _interactiveChoicePanel.value = InteractiveChoicePanelUiState(
+            visible = false,
+            title = title,
+            edgeId = edgeId,
+            questionId = questionId,
+            questionType = questionType,
+            choices = choices,
+            remainingMs = durationMs,
+            pauseVideo = pauseVideo,
+            sourceVideoWidth = sourceVideoWidth,
+            sourceVideoHeight = sourceVideoHeight
+        )
+
+        interactiveQuestionMonitorJob = viewModelScope.launch {
+            while (true) {
+                val current = _uiState.value as? PlayerUiState.Success ?: return@launch
+                if (current.info.cid != currentCid) return@launch
+                val currentPosition = playbackUseCase.getCurrentPosition().coerceAtLeast(0L)
+                if (shouldTriggerInteractiveQuestion(currentPosition, triggerMs)) {
+                    showInteractiveChoicePanel(durationMs = durationMs, pauseVideo = pauseVideo)
+                    return@launch
+                }
+                delay(200L)
+            }
+        }
+    }
+
+    private fun showInteractiveChoicePanel(durationMs: Long?, pauseVideo: Boolean) {
+        if (pauseVideo) {
+            exoPlayer?.pause()
+            interactivePausedByQuestion = true
+        } else {
+            interactivePausedByQuestion = false
+        }
+        _interactiveChoicePanel.update { panel ->
+            panel.copy(visible = true, remainingMs = durationMs)
+        }
+
+        if (durationMs == null) return
+        interactiveCountdownJob?.cancel()
+        interactiveCountdownJob = viewModelScope.launch {
+            val startAt = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startAt
+                val remaining = (durationMs - elapsed).coerceAtLeast(0L)
+                _interactiveChoicePanel.update { panel ->
+                    if (!panel.visible) panel else panel.copy(remainingMs = remaining)
+                }
+                if (remaining <= 0L) break
+                delay(200L)
+            }
+
+            val panel = _interactiveChoicePanel.value
+            if (!panel.visible) return@launch
+            val autoChoice = resolveInteractiveAutoChoice(panel.choices)
+            if (autoChoice != null) {
+                selectInteractiveChoice(autoChoice.edgeId, autoChoice.cid)
+            } else {
+                dismissInteractiveChoicePanel()
             }
         }
     }
@@ -2441,6 +2851,8 @@ class PlayerViewModel : ViewModel() {
                             cachedDashVideos = playUrlData.dash?.video ?: emptyList(),
                             cachedDashAudios = playUrlData.dash?.audio ?: emptyList()
                         )
+                        interactiveCurrentEdgeId = 0L
+                        loadPlayerInfo(currentBvid, page.cid)
                         toast("\u5df2\u5207\u6362\u81f3 P${pageIndex + 1}")
                         return@launch
                     }
@@ -2450,6 +2862,90 @@ class PlayerViewModel : ViewModel() {
             } catch (e: Exception) {
                 _uiState.value = current.copy(isQualitySwitching = false)
             }
+        }
+    }
+
+    private suspend fun switchToInteractiveCid(targetCid: Long, targetEdgeId: Long? = null): Boolean {
+        val current = _uiState.value as? PlayerUiState.Success ?: return false
+        if (targetCid <= 0L) return false
+        if (targetCid == currentCid) {
+            val edgeId = targetEdgeId?.takeIf { it > 0L } ?: interactiveCurrentEdgeId.takeIf { it > 0L }
+            if (edgeId == null || interactiveGraphVersion <= 0L || current.info.isSteinGate != 1) return false
+
+            var applied = false
+            VideoRepository.getInteractEdgeInfo(
+                bvid = current.info.bvid,
+                graphVersion = interactiveGraphVersion,
+                edgeId = edgeId
+            ).onSuccess { data ->
+                val resolvedEdgeId = data.edgeId.takeIf { it > 0L } ?: edgeId
+                val startPositionMs = resolveInteractiveEdgeStartPositionMs(data, resolvedEdgeId)
+                if (startPositionMs >= 0L) {
+                    playbackUseCase.seekTo(startPositionMs)
+                }
+                processInteractiveEdgeData(current, data)
+                applied = true
+            }.onFailure { e ->
+                Logger.w("PlayerVM", "Interactive same-cid edge load failed: ${e.message}")
+            }
+            return applied
+        }
+
+        return try {
+            val playUrlData = VideoRepository.getPlayUrlData(
+                bvid = currentBvid,
+                cid = targetCid,
+                qn = current.currentQuality,
+                audioLang = current.currentAudioLang
+            ) ?: return false
+
+            val videoCodecPreference = appContext?.let {
+                com.android.purebilibili.core.store.SettingsManager.getVideoCodecSync(it)
+            } ?: "hev1"
+            val audioQualityPreference = appContext?.let {
+                com.android.purebilibili.core.store.SettingsManager.getAudioQualitySync(it)
+            } ?: -1
+
+            val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
+            val isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+
+            val dashVideo = playUrlData.dash?.getBestVideo(
+                current.currentQuality,
+                preferCodec = videoCodecPreference,
+                isHevcSupported = isHevcSupported,
+                isAv1Supported = isAv1Supported
+            )
+            val dashAudio = playUrlData.dash?.getBestAudio(audioQualityPreference)
+            val videoUrl = dashVideo?.getValidUrl() ?: playUrlData.durl?.firstOrNull()?.url.orEmpty()
+            val audioUrl = dashAudio?.getValidUrl()
+            if (videoUrl.isBlank()) return false
+
+            if (dashVideo != null) {
+                playbackUseCase.playDashVideo(videoUrl, audioUrl, 0L)
+            } else {
+                playbackUseCase.playVideo(videoUrl, 0L)
+            }
+
+            currentCid = targetCid
+            _uiState.value = current.copy(
+                info = current.info.copy(cid = targetCid),
+                playUrl = videoUrl,
+                audioUrl = audioUrl,
+                startPosition = 0L,
+                videoDurationMs = playUrlData.timelength.coerceAtLeast(0L),
+                cachedDashVideos = playUrlData.dash?.video ?: emptyList(),
+                cachedDashAudios = playUrlData.dash?.audio ?: emptyList()
+            )
+            loadPlayerInfo(
+                currentBvid,
+                targetCid,
+                preferredEdgeId = targetEdgeId ?: interactiveCurrentEdgeId.takeIf { it > 0L }
+            )
+            loadVideoshot(currentBvid, targetCid)
+            true
+        } catch (e: Exception) {
+            Logger.w("PlayerVM", "switchToInteractiveCid failed: ${e.message}")
+            false
         }
     }
     
@@ -2566,6 +3062,11 @@ class PlayerViewModel : ViewModel() {
         heartbeatJob?.cancel()
         pluginCheckJob?.cancel()
         onlineCountJob?.cancel()  // 👀 取消在线人数轮询
+        appContext?.let { context ->
+            val miniPlayerManager = MiniPlayerManager.getInstance(context)
+            miniPlayerManager.onPlayNextCallback = null
+            miniPlayerManager.onPlayPreviousCallback = null
+        }
         
         //  通知插件系统：视频结束
         PluginManager.getEnabledPlayerPlugins().forEach { plugin ->

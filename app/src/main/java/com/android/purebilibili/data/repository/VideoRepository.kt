@@ -6,14 +6,38 @@ import com.android.purebilibili.core.network.AppSignUtils
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.network.WbiUtils
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.InputStream
 import java.util.TreeMap
+
+private const val HOME_PRELOAD_WAIT_MAX_MS = 1200L
+private const val HOME_PRELOAD_WAIT_STEP_MS = 35L
+
+internal fun shouldPrimeBuvidForHomePreload(feedApiType: SettingsManager.FeedApiType): Boolean {
+    return feedApiType == SettingsManager.FeedApiType.MOBILE
+}
+
+internal fun shouldReuseInFlightPreloadForHomeRequest(
+    idx: Int,
+    isPreloading: Boolean,
+    hasPreloadedData: Boolean
+): Boolean {
+    return idx == 0 && isPreloading && !hasPreloadedData
+}
+
+internal fun shouldReportHomeDataReadyForSplash(
+    hasCompletedPreload: Boolean,
+    hasPreloadedData: Boolean
+): Boolean {
+    return hasCompletedPreload || hasPreloadedData
+}
 
 object VideoRepository {
     private val api = NetworkModule.api
@@ -80,26 +104,41 @@ object VideoRepository {
     }
 
     // [新增] 预加载缓存
-    private var preloadedHomeVideos: Result<List<VideoItem>>? = null
-    private var isPreloading = false
+    @Volatile private var preloadedHomeVideos: Result<List<VideoItem>>? = null
+    @Volatile private var isPreloading = false
+    @Volatile private var hasCompletedHomePreload = false
     
     // [新增] 检查首页数据是否就绪
     fun isHomeDataReady(): Boolean {
-        return preloadedHomeVideos != null
+        return shouldReportHomeDataReadyForSplash(
+            hasCompletedPreload = hasCompletedHomePreload,
+            hasPreloadedData = preloadedHomeVideos != null
+        )
     }
 
     // [新增] 预加载首页数据 (在 MainActivity onCreate 调用)
     fun preloadHomeData() {
         if (isPreloading || preloadedHomeVideos != null) return
         isPreloading = true
+        hasCompletedHomePreload = false
         
         com.android.purebilibili.core.util.Logger.d("VideoRepo", "🚀 Starting home data preload...")
         
         // 使用 GlobalScope 或自定义 Scope 确保预加载不被取消
         kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
-                // 确保依赖项就绪 (TokenManager 已同步初始化)
-                ensureBuvid3FromSpi()
+                val feedApiType = NetworkModule.appContext
+                    ?.let { SettingsManager.getFeedApiTypeSync(it) }
+                    ?: SettingsManager.FeedApiType.WEB
+                if (shouldPrimeBuvidForHomePreload(feedApiType)) {
+                    // 移动端推荐流可能依赖 buvid 会话，保留预热。
+                    ensureBuvid3FromSpi()
+                } else {
+                    com.android.purebilibili.core.util.Logger.d(
+                        "VideoRepo",
+                        "🚀 Skip buvid warmup for WEB home preload"
+                    )
+                }
                 
                 // 执行加载
                 val result = getHomeVideosInternal(idx = 0)
@@ -111,6 +150,7 @@ object VideoRepository {
                 preloadedHomeVideos = Result.failure(e)
             } finally {
                 isPreloading = false
+                hasCompletedHomePreload = true
             }
         }
     }
@@ -124,6 +164,22 @@ object VideoRepository {
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Using preloaded home data!")
                 preloadedHomeVideos = null // 消费后清除，避免后续刷新无法获取新数据
                 return@withContext cached
+            }
+            if (shouldReuseInFlightPreloadForHomeRequest(idx, isPreloading, hasPreloadedData = false)) {
+                val waitStart = System.currentTimeMillis()
+                while (isPreloading && preloadedHomeVideos == null &&
+                    (System.currentTimeMillis() - waitStart) < HOME_PRELOAD_WAIT_MAX_MS) {
+                    delay(HOME_PRELOAD_WAIT_STEP_MS)
+                }
+                val awaited = preloadedHomeVideos
+                if (awaited != null) {
+                    com.android.purebilibili.core.util.Logger.d(
+                        "VideoRepo",
+                        "✅ Reused in-flight home preload after ${System.currentTimeMillis() - waitStart}ms"
+                    )
+                    preloadedHomeVideos = null
+                    return@withContext awaited
+                }
             }
         }
         
@@ -1058,6 +1114,23 @@ object VideoRepository {
                 Result.success(response.data)
             } else {
                 Result.failure(Exception("PlayerInfo error: ${response.code}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getInteractEdgeInfo(
+        bvid: String,
+        graphVersion: Long,
+        edgeId: Long? = null
+    ): Result<InteractEdgeInfoData> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getInteractEdgeInfo(bvid = bvid, graphVersion = graphVersion, edgeId = edgeId)
+            if (response.code == 0 && response.data != null) {
+                Result.success(response.data)
+            } else {
+                Result.failure(Exception(response.message.ifBlank { "互动分支信息加载失败(${response.code})" }))
             }
         } catch (e: Exception) {
             Result.failure(e)

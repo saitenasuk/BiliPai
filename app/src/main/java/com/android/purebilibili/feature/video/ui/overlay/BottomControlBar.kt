@@ -158,14 +158,39 @@ fun BottomControlBar(
             // Center area: Danmaku Controls (Switch + Input) - Only visible in Fullscreen/Landscape
             if (isFullscreen) {
                 // Danmaku Switch
-                Icon(
-                    imageVector = if (danmakuEnabled) CupertinoIcons.Default.TextBubble else CupertinoIcons.Outlined.TextBubble,
-                    contentDescription = "Danmaku Toggle",
-                    tint = if (danmakuEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
+                val danmakuToggleInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                Row(
                     modifier = Modifier
-                        .size(layoutPolicy.danmakuIconSizeDp.dp)
-                        .clickable(onClick = onDanmakuToggle)
-                )
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            if (danmakuEnabled) {
+                                Color(0xFF1B5E20).copy(alpha = 0.22f)
+                            } else {
+                                Color(0xFFB71C1C).copy(alpha = 0.22f)
+                            }
+                        )
+                        .clickable(
+                            interactionSource = danmakuToggleInteraction,
+                            indication = null,
+                            onClick = onDanmakuToggle
+                        )
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
+                        contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
+                        tint = if (danmakuEnabled) Color(0xFF43A047) else Color(0xFFE57373),
+                        modifier = Modifier.size(layoutPolicy.danmakuIconSizeDp.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (danmakuEnabled) "开" else "关",
+                        color = if (danmakuEnabled) Color(0xFF43A047) else Color(0xFFE57373),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
                 
                 Spacer(modifier = Modifier.width(layoutPolicy.danmakuSwitchToInputSpacingDp.dp))
                 

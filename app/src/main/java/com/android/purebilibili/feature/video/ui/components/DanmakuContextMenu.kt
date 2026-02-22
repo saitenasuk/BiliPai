@@ -47,6 +47,7 @@ fun DanmakuContextMenu(
     onDismiss: () -> Unit,
     onLike: () -> Unit,
     onRecall: () -> Unit,
+    canRecall: Boolean = false,
     onReport: (reason: Int) -> Unit,
     voteCount: Int = 0,
     hasLiked: Boolean = false,
@@ -93,6 +94,7 @@ fun DanmakuContextMenu(
                         hasLiked = hasLiked,
                         voteLoading = voteLoading,
                         canVote = canVote,
+                        canRecall = canRecall,
                         onLike = {
                             onLike()
                             onDismiss()
@@ -124,6 +126,7 @@ private fun MainMenu(
     hasLiked: Boolean,
     voteLoading: Boolean,
     canVote: Boolean,
+    canRecall: Boolean,
     onLike: () -> Unit,
     onRecall: () -> Unit,
     onReportClick: () -> Unit,
@@ -188,14 +191,15 @@ private fun MainMenu(
 
         MenuSeparator()
 
-        // Distanced actions or specialized
-        MenuItem(
-            label = "撤回弹幕",
-            icon = Icons.AutoMirrored.Filled.Reply, // Using Reply as Recall-like icon
-            onClick = onRecall
-        )
-
-        MenuSeparator()
+        if (canRecall) {
+            // 仅自己的弹幕才允许撤回
+            MenuItem(
+                label = "撤回弹幕",
+                icon = Icons.AutoMirrored.Filled.Reply,
+                onClick = onRecall
+            )
+            MenuSeparator()
+        }
         
         MenuItem(
             label = "屏蔽发送者",

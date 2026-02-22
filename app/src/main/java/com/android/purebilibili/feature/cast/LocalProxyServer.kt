@@ -111,6 +111,19 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
 
     companion object {
         const val PORT = 8901
+        @Volatile private var sharedServer: LocalProxyServer? = null
+        private val bootstrapLock = Any()
+
+        @JvmStatic
+        fun ensureStarted(): Boolean {
+            synchronized(bootstrapLock) {
+                if (sharedServer != null) return false
+                val server = LocalProxyServer(PORT)
+                server.start()
+                sharedServer = server
+                return true
+            }
+        }
         
         /**
          * 生成代理 URL供 DLNA 设备使用

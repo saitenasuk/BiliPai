@@ -2,6 +2,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
@@ -160,15 +161,30 @@ fun LandscapeBottomControlBar(
                 Spacer(modifier = Modifier.width(8.dp))
                 
                 // 弹幕开关按钮
-                IconButton(
-                    onClick = onDanmakuToggle,
-                    modifier = Modifier.size(36.dp)
+                val danmakuToggleInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (danmakuEnabled) {
+                                Color(0xFF1B5E20).copy(alpha = 0.22f)
+                            } else {
+                                Color(0xFFB71C1C).copy(alpha = 0.22f)
+                            }
+                        )
+                        .clickable(
+                            interactionSource = danmakuToggleInteraction,
+                            indication = null,
+                            onClick = onDanmakuToggle
+                        )
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        if (danmakuEnabled) CupertinoIcons.Default.TextBubble else CupertinoIcons.Default.TextBubble,
-                        contentDescription = "弹幕开关",
-                        tint = if (danmakuEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(0.6f),
-                        modifier = Modifier.size(20.dp)
+                        if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
+                        contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
+                        tint = if (danmakuEnabled) Color(0xFF4CAF50) else Color(0xFFE57373),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
                 

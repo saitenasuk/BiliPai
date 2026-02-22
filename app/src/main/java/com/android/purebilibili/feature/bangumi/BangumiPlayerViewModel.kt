@@ -6,6 +6,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.data.repository.BangumiRepository
 import com.android.purebilibili.feature.player.BasePlayerViewModel
+import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
+import com.android.purebilibili.feature.video.player.PlaylistItem
+import com.android.purebilibili.feature.video.player.PlaylistManager
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +38,42 @@ sealed class BangumiPlayerState {
         val isLoginRequired: Boolean = false,
         val canRetry: Boolean = true
     ) : BangumiPlayerState()
+}
+
+internal data class BangumiExternalPlaylist(
+    val playlistItems: List<PlaylistItem>,
+    val startIndex: Int
+)
+
+internal fun buildExternalPlaylistFromBangumi(
+    detail: BangumiDetail,
+    currentEpisodeId: Long
+): BangumiExternalPlaylist? {
+    val seasonId = detail.seasonId
+    val episodes = detail.episodes.orEmpty().filter { it.id > 0L }
+    if (seasonId <= 0L || episodes.isEmpty()) return null
+
+    val playlistItems = episodes.map { episode ->
+        PlaylistItem(
+            bvid = episode.bvid,
+            title = episode.title.ifBlank { episode.longTitle.ifBlank { "第${episode.id}集" } },
+            cover = episode.cover.ifBlank { detail.cover },
+            owner = detail.title,
+            duration = (episode.duration / 1000L).coerceAtLeast(0L),
+            isBangumi = true,
+            seasonId = seasonId,
+            epId = episode.id
+        )
+    }
+
+    val startIndex = episodes.indexOfFirst { it.id == currentEpisodeId }
+        .takeIf { it >= 0 }
+        ?: 0
+
+    return BangumiExternalPlaylist(
+        playlistItems = playlistItems,
+        startIndex = startIndex
+    )
 }
 
 /**
@@ -268,6 +307,17 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 acceptQuality = playData.acceptQuality ?: emptyList(),
                 acceptDescription = playData.acceptDescription ?: emptyList()
             )
+
+            buildExternalPlaylistFromBangumi(
+                detail = correctedDetail,
+                currentEpisodeId = episode.id
+            )?.let { externalPlaylist ->
+                PlaylistManager.setExternalPlaylist(
+                    items = externalPlaylist.playlistItems,
+                    startIndex = externalPlaylist.startIndex,
+                    source = ExternalPlaylistSource.UNKNOWN
+                )
+            }
             
             //  [修复] 检查播放器是否已附加，添加调试日志
             com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "🎯 About to call playDashVideo, exoPlayer attached: ${exoPlayer != null}")

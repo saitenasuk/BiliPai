@@ -27,11 +27,15 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,6 +62,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.draggable
+import androidx.compose.ui.layout.ContentScale
 import androidx.core.view.WindowCompat
 import com.android.purebilibili.data.model.response.BgmInfo
 import androidx.core.view.WindowInsetsCompat
@@ -112,16 +117,83 @@ import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.PlaybackService
+import com.android.purebilibili.feature.video.player.PlaylistItem
+import com.android.purebilibili.feature.video.player.PlaylistManager
+import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 // 📱 [新增] 竖屏全屏
 import com.android.purebilibili.feature.video.ui.overlay.PortraitFullscreenOverlay
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.ui.components.BottomInputBar // [New] Bottom Input Bar
+import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.ui.IOSModalBottomSheet
+import coil.compose.AsyncImage
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import com.android.purebilibili.feature.video.ui.components.DanmakuContextMenu
+import com.android.purebilibili.feature.video.ui.components.InteractiveChoiceOverlay
 import kotlin.math.abs
+import kotlin.math.roundToInt
+
+internal fun shouldHandleVideoDetailDisposeAsNavigationExit(
+    isNavigatingToAudioMode: Boolean,
+    isNavigatingToMiniMode: Boolean,
+    isChangingConfigurations: Boolean,
+    isNavigatingToVideo: Boolean
+): Boolean {
+    return !isNavigatingToAudioMode &&
+        !isNavigatingToMiniMode &&
+        !isChangingConfigurations &&
+        !isNavigatingToVideo
+}
+
+internal fun shouldShowWatchLaterQueueBarByPolicy(
+    isExternalPlaylist: Boolean,
+    externalPlaylistSource: ExternalPlaylistSource,
+    playlistSize: Int
+): Boolean {
+    return isExternalPlaylist &&
+        externalPlaylistSource == ExternalPlaylistSource.WATCH_LATER &&
+        playlistSize > 0
+}
+
+internal fun normalizePlaylistCoverUrlForUi(rawUrl: String?): String {
+    val url = rawUrl?.trim().orEmpty()
+    if (url.isBlank()) return ""
+    return when {
+        url.startsWith("//") -> "https:$url"
+        url.startsWith("http://", ignoreCase = true) -> "https://${url.substring(7)}"
+        else -> url
+    }
+}
+
+internal fun resolveWatchLaterQueueListMaxHeightDp(screenHeightDp: Int): Int {
+    val dynamicHeight = (screenHeightDp * 0.72f).roundToInt()
+    return dynamicHeight.coerceIn(420, 680)
+}
+
+internal fun resolveWatchLaterQueueBottomSpacerDp(navigationBarBottomDp: Int): Int {
+    return (navigationBarBottomDp + 8).coerceAtLeast(8)
+}
+
+internal enum class WatchLaterQueueSheetPresentation {
+    INLINE_HAZE,
+    MODAL
+}
+
+internal fun resolveWatchLaterQueueSheetPresentation(
+    requireRealtimeHaze: Boolean
+): WatchLaterQueueSheetPresentation {
+    return if (requireRealtimeHaze) {
+        WatchLaterQueueSheetPresentation.INLINE_HAZE
+    } else {
+        WatchLaterQueueSheetPresentation.MODAL
+    }
+}
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
@@ -177,6 +249,9 @@ fun VideoDetailScreen(
         CommentSortMode.fromApiMode(commentDefaultSortMode)
     }
     val sortPreferenceScope = rememberCoroutineScope()
+    val danmakuEnabledForDetail by com.android.purebilibili.core.store.SettingsManager
+        .getDanmakuEnabled(context)
+        .collectAsState(initial = true)
     val showFavoriteFolderDialog by viewModel.favoriteFolderDialogVisible.collectAsState()
     val favoriteFolders by viewModel.favoriteFolders.collectAsState()
     val isFavoriteFoldersLoading by viewModel.isFavoriteFoldersLoading.collectAsState()
@@ -194,6 +269,8 @@ fun VideoDetailScreen(
     //     .collectAsState(initial = false)
 
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val interactiveChoicePanel by viewModel.interactiveChoicePanel.collectAsState()
     
     // 📐 [大屏适配] 仅 Expanded 才启用平板分栏布局
     val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
@@ -234,6 +311,25 @@ fun VideoDetailScreen(
     
     // 🔁 [新增] 播放模式状态
     val currentPlayMode by com.android.purebilibili.feature.video.player.PlaylistManager.playMode.collectAsState()
+    val playlistItems by PlaylistManager.playlist.collectAsState()
+    val playlistCurrentIndex by PlaylistManager.currentIndex.collectAsState()
+    val isExternalPlaylist by PlaylistManager.isExternalPlaylist.collectAsState()
+    val externalPlaylistSource by PlaylistManager.externalPlaylistSource.collectAsState()
+    val shouldShowWatchLaterQueueBar = shouldShowWatchLaterQueueBarByPolicy(
+        isExternalPlaylist = isExternalPlaylist,
+        externalPlaylistSource = externalPlaylistSource,
+        playlistSize = playlistItems.size
+    )
+    var showWatchLaterQueueSheet by rememberSaveable { mutableStateOf(false) }
+    val watchLaterSheetPresentation = remember {
+        resolveWatchLaterQueueSheetPresentation(requireRealtimeHaze = true)
+    }
+
+    LaunchedEffect(shouldShowWatchLaterQueueBar) {
+        if (!shouldShowWatchLaterQueueBar) {
+            showWatchLaterQueueSheet = false
+        }
+    }
     
     //  从小窗展开时自动进入全屏
     LaunchedEffect(startInFullscreen) {
@@ -407,9 +503,15 @@ fun VideoDetailScreen(
                 }
             }
             
-            // 🔕 [修复] 退出视频页时取消媒体通知（防止状态不同步）
-            // 音频模式/小窗模式属于保活场景，保留通知
-            if (!isNavigatingToAudioMode && !isNavigatingToMiniMode) {
+            val shouldHandleAsNavigationExit = shouldHandleVideoDetailDisposeAsNavigationExit(
+                isNavigatingToAudioMode = isNavigatingToAudioMode,
+                isNavigatingToMiniMode = isNavigatingToMiniMode,
+                isChangingConfigurations = activity?.isChangingConfigurations == true,
+                isNavigatingToVideo = miniPlayerManager?.isNavigatingToVideo == true
+            )
+
+            // 🔕 [修复] 仅在真正离开视频域时才取消媒体通知，避免通知回流/视频内跳转误清理
+            if (shouldHandleAsNavigationExit) {
                 val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) 
                     as android.app.NotificationManager
                 notificationManager.cancel(1001)  // NOTIFICATION_ID from VideoPlayerState
@@ -569,7 +671,13 @@ fun VideoDetailScreen(
             // 标记页面正在退出
             // 配置切换不标记离开；音频模式/小窗模式为主动保活场景，也不标记离开。
             val isChangingConfigurations = activity?.isChangingConfigurations == true
-            if (!isNavigatingToAudioMode && !isNavigatingToMiniMode && !isChangingConfigurations) {
+            val shouldHandleAsNavigationExit = shouldHandleVideoDetailDisposeAsNavigationExit(
+                isNavigatingToAudioMode = isNavigatingToAudioMode,
+                isNavigatingToMiniMode = isNavigatingToMiniMode,
+                isChangingConfigurations = isChangingConfigurations,
+                isNavigatingToVideo = miniPlayerManager?.isNavigatingToVideo == true
+            )
+            if (shouldHandleAsNavigationExit) {
                 com.android.purebilibili.core.util.Logger.d(
                     "VideoDetailScreen",
                     "🛑 Disposing screen as navigation exit, notifying MiniPlayerManager"
@@ -1389,6 +1497,14 @@ fun VideoDetailScreen(
                                                             android.util.Log.d("VideoDetailScreen", "📤 Danmaku send clicked!")
                                                             viewModel.showDanmakuSendDialog()
                                                         },
+                                                        danmakuEnabled = danmakuEnabledForDetail,
+                                                        onDanmakuToggle = {
+                                                            val newValue = !danmakuEnabledForDetail
+                                                            sortPreferenceScope.launch {
+                                                                com.android.purebilibili.core.store.SettingsManager
+                                                                    .setDanmakuEnabled(context, newValue)
+                                                            }
+                                                        },
                                                         // 🔗 [新增] 传递共享元素过渡开关
                                                         transitionEnabled = transitionEnabled,
                                                         
@@ -1416,7 +1532,7 @@ fun VideoDetailScreen(
                                                     )
 
                                                     // 底部输入栏 (覆盖在内容之上)
-                                                    if (shouldShowVideoDetailBottomInteractionBar()) {
+                                                    if (shouldShowVideoDetailBottomInteractionBar() && !shouldShowWatchLaterQueueBar) {
                                                         BottomInputBar(
                                                             modifier = Modifier.align(Alignment.BottomCenter),
                                                             isLiked = success.isLiked,
@@ -1441,6 +1557,18 @@ fun VideoDetailScreen(
                                                                 viewModel.showCommentInputDialog()
                                                             },
                                                             hazeState = hazeState
+                                                        )
+                                                    }
+
+                                                    if (shouldShowWatchLaterQueueBar) {
+                                                        WatchLaterQueueCollapsedBar(
+                                                            videoCount = playlistItems.size,
+                                                            onClick = { showWatchLaterQueueSheet = true },
+                                                            hazeState = hazeState,
+                                                            modifier = Modifier
+                                                                .align(Alignment.BottomCenter)
+                                                                .navigationBarsPadding()
+                                                                .padding(horizontal = 12.dp, vertical = 8.dp)
                                                         )
                                                     }
                                                 }
@@ -1629,6 +1757,15 @@ fun VideoDetailScreen(
                 }
             )
         }
+
+        InteractiveChoiceOverlay(
+            state = interactiveChoicePanel,
+            onSelectChoice = { edgeId, targetCid ->
+                viewModel.selectInteractiveChoice(edgeId = edgeId, cid = targetCid)
+            },
+            onDismiss = { viewModel.dismissInteractiveChoicePanel() }
+        )
+
         //  [新增] 投币对话框
         val coinDialogVisible by viewModel.coinDialogVisible.collectAsState()
         val currentCoinCount = (uiState as? PlayerUiState.Success)?.coinCount ?: 0
@@ -1639,6 +1776,114 @@ fun VideoDetailScreen(
             userBalance = userBalance,
             onDismiss = { viewModel.closeCoinDialog() },
             onConfirm = { count, alsoLike -> viewModel.doCoin(count, alsoLike) }
+        )
+
+        val followGroupDialogVisible by viewModel.followGroupDialogVisible.collectAsState()
+        val followGroupTags by viewModel.followGroupTags.collectAsState()
+        val followGroupSelectedTagIds by viewModel.followGroupSelectedTagIds.collectAsState()
+        val isFollowGroupsLoading by viewModel.isFollowGroupsLoading.collectAsState()
+        val isSavingFollowGroups by viewModel.isSavingFollowGroups.collectAsState()
+        if (followGroupDialogVisible) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isSavingFollowGroups) viewModel.dismissFollowGroupDialog()
+                },
+                title = { Text("设置关注分组") },
+                text = {
+                    if (isFollowGroupsLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CupertinoActivityIndicator()
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 320.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            if (followGroupTags.isEmpty()) {
+                                Text(
+                                    text = "暂无可用分组（不勾选即为默认分组）",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 13.sp
+                                )
+                            } else {
+                                followGroupTags.forEach { tag ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.toggleFollowGroupSelection(tag.tagid) }
+                                            .padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = followGroupSelectedTagIds.contains(tag.tagid),
+                                            onCheckedChange = { viewModel.toggleFollowGroupSelection(tag.tagid) }
+                                        )
+                                        Text(
+                                            text = "${tag.name} (${tag.count})",
+                                            fontSize = 14.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                text = "可多选，确定后覆盖原分组设置。",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.saveFollowGroupSelection() },
+                        enabled = !isFollowGroupsLoading && !isSavingFollowGroups
+                    ) {
+                        if (isSavingFollowGroups) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text("确定")
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.dismissFollowGroupDialog() },
+                        enabled = !isSavingFollowGroups
+                    ) {
+                        Text("取消")
+                    }
+                }
+            )
+        }
+
+        WatchLaterQueueSheet(
+            visible = shouldShowWatchLaterQueueBar && showWatchLaterQueueSheet,
+            playlist = playlistItems,
+            currentIndex = playlistCurrentIndex,
+            hazeState = hazeState,
+            presentation = watchLaterSheetPresentation,
+            onDismiss = { showWatchLaterQueueSheet = false },
+            onVideoSelected = { index, item ->
+                PlaylistManager.playAt(index)
+                showWatchLaterQueueSheet = false
+                val currentSuccess = uiState as? PlayerUiState.Success
+                if (currentSuccess?.info?.bvid != item.bvid) {
+                    viewModel.loadVideo(item.bvid, autoPlay = true)
+                }
+            }
         )
         
         // [新增] 播放完成选择对话框
@@ -2084,6 +2329,7 @@ fun VideoDetailScreen(
                 hasLiked = danmakuMenuState.hasLiked,
                 voteLoading = danmakuMenuState.voteLoading,
                 canVote = danmakuMenuState.canVote,
+                canRecall = danmakuMenuState.isSelf,
                 onBlockUser = {
                     viewModel.toast("暂不支持屏蔽用户")
                 }
@@ -2095,6 +2341,288 @@ fun VideoDetailScreen(
             danmakuManager.setOnDanmakuClickListener { text, dmid, uid, isSelf ->
                 android.util.Log.d("VideoDetailScreen", "👆 Danmaku clicked: $text")
                 viewModel.showDanmakuMenu(dmid, text, uid, isSelf)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalHazeMaterialsApi::class)
+@Composable
+private fun WatchLaterQueueCollapsedBar(
+    videoCount: Int,
+    onClick: () -> Unit,
+    hazeState: HazeState,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(16.dp)
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .hazeEffect(
+                state = hazeState,
+                style = HazeMaterials.ultraThin()
+            )
+            .clickable { onClick() },
+        shape = shape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.74f),
+        tonalElevation = 0.dp,
+        border = BorderStroke(
+            width = 0.6.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "稍后再看",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${videoCount}个视频",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = CupertinoIcons.Outlined.ChevronUp,
+                contentDescription = "展开稍后再看队列",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@Composable
+private fun WatchLaterQueueSheet(
+    visible: Boolean,
+    playlist: List<PlaylistItem>,
+    currentIndex: Int,
+    hazeState: HazeState,
+    presentation: WatchLaterQueueSheetPresentation,
+    onDismiss: () -> Unit,
+    onVideoSelected: (Int, PlaylistItem) -> Unit
+) {
+    if (!visible) return
+
+    val configuration = LocalConfiguration.current
+    val listMaxHeight = resolveWatchLaterQueueListMaxHeightDp(configuration.screenHeightDp).dp
+    val navigationBarBottomPadding = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+    val bottomSpacerHeight = resolveWatchLaterQueueBottomSpacerDp(
+        navigationBarBottomPadding.value.roundToInt()
+    ).dp
+    val sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+
+    when (presentation) {
+        WatchLaterQueueSheetPresentation.INLINE_HAZE -> {
+            val interactionSource = remember { MutableInteractionSource() }
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.18f))
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null
+                        ) { onDismiss() }
+                )
+
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .clip(sheetShape)
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeMaterials.ultraThin()
+                        ),
+                    shape = sheetShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.74f),
+                    tonalElevation = 0.dp,
+                    border = BorderStroke(
+                        width = 0.6.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
+                ) {
+                    WatchLaterQueueSheetContent(
+                        playlist = playlist,
+                        currentIndex = currentIndex,
+                        listMaxHeight = listMaxHeight,
+                        bottomSpacerHeight = bottomSpacerHeight,
+                        onVideoSelected = onVideoSelected
+                    )
+                }
+            }
+        }
+        WatchLaterQueueSheetPresentation.MODAL -> {
+            IOSModalBottomSheet(
+                onDismissRequest = onDismiss,
+                containerColor = Color.Transparent,
+                windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(sheetShape)
+                        .unifiedBlur(hazeState = hazeState, shape = sheetShape),
+                    shape = sheetShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.80f),
+                    tonalElevation = 0.dp,
+                    border = BorderStroke(
+                        width = 0.6.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
+                ) {
+                    WatchLaterQueueSheetContent(
+                        playlist = playlist,
+                        currentIndex = currentIndex,
+                        listMaxHeight = listMaxHeight,
+                        bottomSpacerHeight = bottomSpacerHeight,
+                        onVideoSelected = onVideoSelected
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WatchLaterQueueSheetContent(
+    playlist: List<PlaylistItem>,
+    currentIndex: Int,
+    listMaxHeight: androidx.compose.ui.unit.Dp,
+    bottomSpacerHeight: androidx.compose.ui.unit.Dp,
+    onVideoSelected: (Int, PlaylistItem) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "稍后再看",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${playlist.size}个视频",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = listMaxHeight),
+            contentPadding = PaddingValues(bottom = bottomSpacerHeight)
+        ) {
+            items(playlist.size, key = { index -> playlist[index].bvid }) { index ->
+                val item = playlist[index]
+                val selected = index == currentIndex
+                val normalizedCoverUrl = normalizePlaylistCoverUrlForUi(item.cover)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                            } else {
+                                Color.Transparent
+                            }
+                        )
+                        .clickable { onVideoSelected(index, item) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${index + 1}",
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(96.dp)
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                    ) {
+                        if (normalizedCoverUrl.isNotEmpty()) {
+                            AsyncImage(
+                                model = normalizedCoverUrl,
+                                contentDescription = item.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "无封面",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = item.title,
+                            maxLines = 1,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = item.owner,
+                            maxLines = 1,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp
+                        )
+                    }
+                    if (selected) {
+                        Icon(
+                            imageVector = CupertinoIcons.Outlined.Play,
+                            contentDescription = "当前播放",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
         }
     }

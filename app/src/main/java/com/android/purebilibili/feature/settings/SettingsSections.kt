@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.settings
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -49,12 +51,37 @@ import com.android.purebilibili.core.ui.components.IOSDivider as SettingsDivider
 // ═══════════════════════════════════════════════════
 
 @Composable
+private fun SettingsCardGroup(
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.45f
+    val containerColor = if (isDark) {
+        Color(0xFF141C28).copy(alpha = 0.92f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    val borderColor = if (isDark) {
+        Color.White.copy(alpha = 0.06f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)
+    }
+
+    SettingsGroup(
+        containerColor = containerColor,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(0.6.dp, borderColor)
+    ) {
+        content()
+    }
+}
+
+@Composable
 fun FollowAuthorSection(
     onTelegramClick: () -> Unit,
     onTwitterClick: () -> Unit,
     onDonateClick: () -> Unit
 ) {
-    SettingsGroup {
+    SettingsCardGroup {
         SettingClickableItem(
             iconPainter = painterResource(R.drawable.ic_telegram_mono),
             title = "Telegram 频道",
@@ -90,9 +117,9 @@ fun GeneralSection(
     onPlaybackClick: () -> Unit,
     onBottomBarClick: () -> Unit
 ) {
-    SettingsGroup {
+    SettingsCardGroup {
         SettingClickableItem(
-            icon = CupertinoIcons.Default.Paintpalette,
+            icon = CupertinoIcons.Default.PaintbrushPointed,
             title = "外观设置",
             value = "主题、图标、模糊效果",
             onClick = onAppearanceClick,
@@ -100,7 +127,7 @@ fun GeneralSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.Play,
+            icon = CupertinoIcons.Default.PlayCircle,
             title = "播放设置",
             value = "解码、手势、后台播放",
             onClick = onPlaybackClick,
@@ -108,7 +135,7 @@ fun GeneralSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.RectangleStack,
+            icon = CupertinoIcons.Default.ListBullet,
             title = "底栏设置",
             value = "自定义底栏项目",
             onClick = onBottomBarClick,
@@ -122,7 +149,7 @@ fun SupportToolsSection(
     onTipsClick: () -> Unit,
     onOpenLinksClick: () -> Unit
 ) {
-    SettingsGroup {
+    SettingsCardGroup {
         SettingClickableItem(
             icon = CupertinoIcons.Default.Lightbulb,
             title = "小贴士 & 隐藏操作",
@@ -201,9 +228,9 @@ fun SettingsSubpageEntrySection(
     onExtensionsAndDebugClick: () -> Unit,
     onAboutAndSupportClick: () -> Unit
 ) {
-    SettingsGroup {
+    SettingsCardGroup {
         SettingClickableItem(
-            icon = CupertinoIcons.Default.FolderBadgePlus,
+            icon = CupertinoIcons.Default.Folder,
             title = "内容与存储",
             value = "推荐流、下载与缓存",
             onClick = onContentAndStorageClick,
@@ -211,7 +238,7 @@ fun SettingsSubpageEntrySection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.HandRaised,
+            icon = CupertinoIcons.Default.Lock,
             title = "隐私与安全",
             value = "无痕模式、权限与黑名单",
             onClick = onPrivacyAndSecurityClick,
@@ -243,7 +270,7 @@ fun FeedApiSection(
     incrementalTimelineRefreshEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit
 ) {
-    SettingsGroup {
+    SettingsCardGroup {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -379,7 +406,7 @@ fun PrivacySection(
     onPermissionClick: () -> Unit,
     onBlockedListClick: () -> Unit // [New]
 ) {
-    SettingsGroup {
+    SettingsCardGroup {
         SettingSwitchItem(
             icon = CupertinoIcons.Default.EyeSlash,
             title = "隐私无痕模式",
@@ -398,7 +425,7 @@ fun PrivacySection(
         )
          SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.PersonCropCircle, // Fallback icon
+            icon = CupertinoIcons.Default.Person,
             title = "黑名单管理",
             value = "管理已屏蔽的 UP 主",
             onClick = onBlockedListClick,
@@ -414,9 +441,9 @@ fun DataStorageSection(
     onDownloadPathClick: () -> Unit,
     onClearCacheClick: () -> Unit
 ) {
-    SettingsGroup {
+    SettingsCardGroup {
         SettingClickableItem(
-            icon = CupertinoIcons.Default.FolderBadgePlus,
+            icon = CupertinoIcons.Default.Folder,
             title = "下载位置",
             value = if (customDownloadPath != null) "自定义" else "默认",
             onClick = onDownloadPathClick,
@@ -443,7 +470,7 @@ fun DeveloperSection(
     onPluginsClick: () -> Unit,
     onExportLogsClick: () -> Unit
 ) {
-    SettingsGroup {
+    SettingsCardGroup {
         SettingSwitchItem(
             icon = CupertinoIcons.Default.ExclamationmarkTriangle,
             title = "崩溃追踪",
@@ -471,7 +498,7 @@ fun DeveloperSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.DocTextMagnifyingglass,
+            icon = CupertinoIcons.Default.DocText,
             title = "导出日志",
             value = "用于反馈问题",
             onClick = onExportLogsClick,
@@ -522,9 +549,9 @@ fun AboutSection(
         }
     }
 
-    SettingsGroup {
+    SettingsCardGroup {
         SettingClickableItem(
-            icon = CupertinoIcons.Default.Link,
+            icon = CupertinoIcons.Default.ExclamationmarkTriangle,
             title = "发布渠道声明",
             value = "仅 GitHub / Telegram",
             onClick = onDisclaimerClick,
@@ -557,7 +584,7 @@ fun AboutSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.InfoCircle,
+            icon = CupertinoIcons.Default.Tag,
             title = "版本",
             value = versionValue,
             onClick = onVersionClick,
@@ -566,7 +593,7 @@ fun AboutSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.BookCircle,
+            icon = CupertinoIcons.Default.Lightbulb,
             title = "重播新手引导",
             value = "了解应用功能",
             onClick = onReplayOnboardingClick,

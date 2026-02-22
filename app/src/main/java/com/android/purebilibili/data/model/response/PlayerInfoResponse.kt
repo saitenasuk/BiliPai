@@ -31,8 +31,21 @@ data class PlayerInfoData(
     @SerialName("online_count")
     val onlineCount: Int = 0,
     val subtitle: SubtitleInfo? = null,
+    val interaction: PlayerInteractionInfo? = null,
     @SerialName("bgm_info")
     val bgmInfo: BgmInfo? = null
+)
+
+@Serializable
+data class PlayerInteractionInfo(
+    @SerialName("graph_version")
+    val graphVersion: Long = 0,
+    val msg: String = "",
+    @SerialName("error_toast")
+    val errorToast: String = "",
+    val mark: Int = 0,
+    @SerialName("need_reload")
+    val needReload: Int = 0
 )
 
 @Serializable
