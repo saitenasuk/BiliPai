@@ -161,6 +161,28 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun notificationIconShouldPreferLauncherIconResourceWhenAvailable() {
+        assertEquals(
+            12345,
+            resolveNotificationIconResByPriority(
+                launcherIconRes = 12345,
+                fallbackIconKey = "Yuki"
+            )
+        )
+    }
+
+    @Test
+    fun notificationIconShouldFallbackToIconKeyWhenLauncherIconMissing() {
+        assertEquals(
+            R.mipmap.ic_launcher_neon,
+            resolveNotificationIconResByPriority(
+                launcherIconRes = 0,
+                fallbackIconKey = "Neon"
+            )
+        )
+    }
+
+    @Test
     fun playlistNavigationDispatchRequiresCallback() {
         val item = PlaylistItem(
             bvid = "BV1xx",
@@ -267,5 +289,61 @@ class BackgroundPlaybackPolicyTest {
         assertEquals(MediaControlType.PLAY_PAUSE, resolveMediaControlType(MiniPlayerManager.ACTION_PLAY_PAUSE))
         assertEquals(MediaControlType.NEXT, resolveMediaControlType(MiniPlayerManager.ACTION_NEXT))
         assertNull(resolveMediaControlType(-1))
+    }
+
+    @Test
+    fun notificationPlaybackStateShouldPreferActualPlayerState() {
+        assertTrue(
+            resolveNotificationIsPlaying(
+                playerIsPlaying = true,
+                cachedIsPlaying = false
+            )
+        )
+        assertFalse(
+            resolveNotificationIsPlaying(
+                playerIsPlaying = false,
+                cachedIsPlaying = true
+            )
+        )
+    }
+
+    @Test
+    fun notificationPlaybackStateFallsBackToCacheWhenPlayerStateUnknown() {
+        assertTrue(
+            resolveNotificationIsPlaying(
+                playerIsPlaying = null,
+                cachedIsPlaying = true
+            )
+        )
+        assertFalse(
+            resolveNotificationIsPlaying(
+                playerIsPlaying = null,
+                cachedIsPlaying = false
+            )
+        )
+    }
+
+    @Test
+    fun mediaSessionShouldRebindWhenPlaybackPlayerDiffers() {
+        val sessionPlayer = Any()
+        val playbackPlayer = Any()
+        assertTrue(
+            shouldRebindMediaSessionPlayer(
+                sessionPlayer = sessionPlayer,
+                playbackPlayer = playbackPlayer
+            )
+        )
+        assertFalse(
+            shouldRebindMediaSessionPlayer(
+                sessionPlayer = sessionPlayer,
+                playbackPlayer = sessionPlayer
+            )
+        )
+        assertFalse(
+            shouldRebindMediaSessionPlayer(
+                sessionPlayer = sessionPlayer,
+                playbackPlayer = null
+            )
+        )
     }
 }

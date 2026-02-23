@@ -312,7 +312,7 @@ fun AudioModeScreen(
                                 icon = if (successState.isFavorited) CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark,
                                 label = FormatUtils.formatStat(info.stat.favorite.toLong()),
                                 isActive = successState.isFavorited,
-                                onClick = { viewModel.showFavoriteFolderDialog() }
+                                onClick = { viewModel.toggleFavorite() }
                             )
                         }
                         

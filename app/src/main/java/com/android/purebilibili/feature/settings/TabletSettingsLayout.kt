@@ -66,6 +66,7 @@ fun TabletSettingsLayout(
     onReplayOnboardingClick: () -> Unit,
     onTelegramClick: () -> Unit,
     onTwitterClick: () -> Unit,
+    onWebDavBackupClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
     onClearCacheClick: () -> Unit,
     onDonateClick: () -> Unit,
@@ -394,6 +395,7 @@ fun TabletSettingsLayout(
                                     DataStorageSection(
                                         customDownloadPath = customDownloadPath,
                                         cacheSize = cacheSize,
+                                        onWebDavBackupClick = onWebDavBackupClick,
                                         onDownloadPathClick = onDownloadPathClick,
                                         onClearCacheClick = onClearCacheClick
                                     )

@@ -3,6 +3,9 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
@@ -16,12 +19,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
+
+private fun Modifier.consumeTap(onTap: () -> Unit): Modifier {
+    return pointerInput(onTap) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            down.consume()
+            val up = waitForUpOrCancellation()
+            if (up != null) {
+                up.consume()
+                onTap()
+            }
+        }
+    }
+}
 
 /**
  *  横屏底部控制栏（官方 B 站样式）
@@ -161,9 +179,9 @@ fun LandscapeBottomControlBar(
                 Spacer(modifier = Modifier.width(8.dp))
                 
                 // 弹幕开关按钮
-                val danmakuToggleInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 Row(
                     modifier = Modifier
+                        .heightIn(min = 40.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             if (danmakuEnabled) {
@@ -172,12 +190,8 @@ fun LandscapeBottomControlBar(
                                 Color(0xFFB71C1C).copy(alpha = 0.22f)
                             }
                         )
-                        .clickable(
-                            interactionSource = danmakuToggleInteraction,
-                            indication = null,
-                            onClick = onDanmakuToggle
-                        )
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                        .consumeTap(onDanmakuToggle)
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(

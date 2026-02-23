@@ -123,10 +123,12 @@ fun IOSClickableItem(
     icon: ImageVector? = null,
     iconPainter: androidx.compose.ui.graphics.painter.Painter? = null,
     title: String,
+    subtitle: String? = null,
     value: String? = null,
     onClick: (() -> Unit)? = null,
     iconTint: Color = MaterialTheme.colorScheme.primary,
     textColor: Color = MaterialTheme.colorScheme.onSurface,
+    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     valueColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     chevronTint: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
     centered: Boolean = false,
@@ -176,14 +178,37 @@ fun IOSClickableItem(
             }
         }
         
-        Text(
-            text = title, 
-            style = MaterialTheme.typography.bodyLarge, 
-            color = textColor, 
-            modifier = if (centered) Modifier else Modifier.weight(1f), 
-            maxLines = 1,
-            textAlign = if (centered) androidx.compose.ui.text.style.TextAlign.Center else androidx.compose.ui.text.style.TextAlign.Start
-        )
+        if (centered) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = textColor,
+                modifier = Modifier,
+                maxLines = 1,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        } else {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = textColor,
+                    maxLines = if (subtitle != null) 2 else 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                )
+                if (subtitle != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subtitleColor,
+                        maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
         
         if (!centered) {
             Row(verticalAlignment = Alignment.CenterVertically) {

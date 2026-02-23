@@ -33,8 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.animation.doOnEnd
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.animation.doOnEnd
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
@@ -49,14 +47,13 @@ import com.android.purebilibili.core.ui.SharedTransitionProvider
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.feature.plugin.EyeProtectionOverlay
 import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenPlayerOverlay
 import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
 import com.android.purebilibili.navigation.AppNavigation
 import dev.chrisbanes.haze.haze
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -135,7 +132,15 @@ internal fun shouldNavigateToVideoFromNotification(
     return !(isInVideoRoute && currentBvid == targetBvid)
 }
 
-internal fun shouldUseRealtimeSplashBlur(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.S
+internal fun shouldForceStopPlaybackOnUserLeaveHint(
+    isInVideoDetail: Boolean,
+    stopPlaybackOnExit: Boolean,
+    shouldTriggerPip: Boolean
+): Boolean {
+    return isInVideoDetail && stopPlaybackOnExit && !shouldTriggerPip
+}
+
+internal fun shouldUseRealtimeSplashBlur(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 
 @Suppress("DEPRECATION")
 internal fun resolveLaunchIconResId(context: Context, launchIntent: android.content.Intent?): Int {
@@ -163,6 +168,20 @@ internal fun shouldReadCustomSplashPreferences(splashFlyoutEnabled: Boolean): Bo
 }
 
 internal fun shouldStartLocalProxyOnAppLaunch(): Boolean = false
+
+internal fun shouldEnableSplashFlyoutAnimation(
+    hasCompletedOnboarding: Boolean,
+    hasAcceptedReleaseDisclaimer: Boolean
+): Boolean {
+    return hasCompletedOnboarding && hasAcceptedReleaseDisclaimer
+}
+
+internal fun shouldApplySplashRealtimeBlur(
+    useRealtimeBlur: Boolean,
+    progress: Float
+): Boolean {
+    return useRealtimeBlur && progress > 0f
+}
 
 internal fun splashExitDurationMs(): Long = 920L
 internal fun splashExitTranslateYDp(): Float = 220f
@@ -255,12 +274,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         //  安装 SplashScreen
         val splashScreen = installSplashScreen()
-        val splashFlyoutEnabled = true
+        val welcomePrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val splashFlyoutEnabled = shouldEnableSplashFlyoutAnimation(
+            hasCompletedOnboarding = welcomePrefs.getBoolean(KEY_FIRST_LAUNCH, false),
+            hasAcceptedReleaseDisclaimer = welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false)
+        )
         val splashFlyoutIconResId = resolveLaunchIconResId(this, intent)
         splashFlyoutEnabledAtCreate = splashFlyoutEnabled
         Logger.d(
             TAG,
-            "🚀 Splash setup. flyoutEnabled=$splashFlyoutEnabled, taskRoot=$isTaskRoot, savedState=${savedInstanceState != null}, intentFlags=0x${intent?.flags?.toString(16) ?: "0"}, launchIconResId=$splashFlyoutIconResId"
+            "🚀 Splash setup. flyoutEnabled=$splashFlyoutEnabled, firstLaunchShown=${welcomePrefs.getBoolean(KEY_FIRST_LAUNCH, false)}, disclaimerAck=${welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false)}, taskRoot=$isTaskRoot, savedState=${savedInstanceState != null}, intentFlags=0x${intent?.flags?.toString(16) ?: "0"}, launchIconResId=$splashFlyoutIconResId"
         )
         
         //  🚀 [启动优化] 立即开始预加载首页数据
@@ -395,7 +418,8 @@ class MainActivity : ComponentActivity() {
                         targetSizePx = targetSizePx,
                         minTravelPx = minTranslateYPx
                     )
-                    val useRealtimeBlur = shouldUseRealtimeSplashBlur(Build.VERSION.SDK_INT)
+                    val supportsRealtimeBlur = shouldUseRealtimeSplashBlur(Build.VERSION.SDK_INT)
+                    var blurEffectEnabled = supportsRealtimeBlur
                     val animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
                         duration = splashExitDurationMs()
                         interpolator = android.view.animation.PathInterpolator(0.12f, 0.98f, 0.2f, 1.0f)
@@ -425,41 +449,50 @@ class MainActivity : ComponentActivity() {
                                 trail.scaleY = scale * 1.06f
                             }
 
-                            if (useRealtimeBlur) {
+                            if (shouldApplySplashRealtimeBlur(blurEffectEnabled, progress)) {
                                 val radius = splashExitBlurRadiusEnd() * splashExitBlurProgress(progress)
-                                splashView.setRenderEffect(
-                                    android.graphics.RenderEffect.createBlurEffect(
-                                        radius * 0.55f,
-                                        radius * 0.55f,
-                                        android.graphics.Shader.TileMode.CLAMP
+                                runCatching {
+                                    splashView.setRenderEffect(
+                                        android.graphics.RenderEffect.createBlurEffect(
+                                            radius * 0.55f,
+                                            radius * 0.55f,
+                                            android.graphics.Shader.TileMode.CLAMP
+                                        )
                                     )
-                                )
-                                animatedTarget.setRenderEffect(
-                                    android.graphics.RenderEffect.createBlurEffect(
-                                        radius,
-                                        radius,
-                                        android.graphics.Shader.TileMode.CLAMP
+                                    animatedTarget.setRenderEffect(
+                                        android.graphics.RenderEffect.createBlurEffect(
+                                            radius,
+                                            radius,
+                                            android.graphics.Shader.TileMode.CLAMP
+                                        )
                                     )
-                                )
-                                primaryTrailView?.setRenderEffect(
-                                    android.graphics.RenderEffect.createBlurEffect(
-                                        radius * 1.2f,
-                                        radius * 1.2f,
-                                        android.graphics.Shader.TileMode.CLAMP
+                                    primaryTrailView?.setRenderEffect(
+                                        android.graphics.RenderEffect.createBlurEffect(
+                                            radius * 1.2f,
+                                            radius * 1.2f,
+                                            android.graphics.Shader.TileMode.CLAMP
+                                        )
                                     )
-                                )
-                                secondaryTrailView?.setRenderEffect(
-                                    android.graphics.RenderEffect.createBlurEffect(
-                                        radius * 1.45f,
-                                        radius * 1.45f,
-                                        android.graphics.Shader.TileMode.CLAMP
+                                    secondaryTrailView?.setRenderEffect(
+                                        android.graphics.RenderEffect.createBlurEffect(
+                                            radius * 1.45f,
+                                            radius * 1.45f,
+                                            android.graphics.Shader.TileMode.CLAMP
+                                        )
                                     )
-                                )
+                                }.onFailure {
+                                    blurEffectEnabled = false
+                                    splashView.setRenderEffect(null)
+                                    animatedTarget.setRenderEffect(null)
+                                    primaryTrailView?.setRenderEffect(null)
+                                    secondaryTrailView?.setRenderEffect(null)
+                                    Logger.w(TAG, "⚠️ Splash realtime blur failed, fallback to non-blur flyout", it)
+                                }
                             }
                         }
                     }
                     animator.doOnEnd {
-                        if (useRealtimeBlur) {
+                        if (supportsRealtimeBlur) {
                             splashView.setRenderEffect(null)
                             animatedTarget.setRenderEffect(null)
                             primaryTrailView?.setRenderEffect(null)
@@ -780,7 +813,9 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         
         Logger.d(TAG, "👋 onUserLeaveHint 触发, isInVideoDetail=$isInVideoDetail, isMiniMode=${miniPlayerManager.isMiniMode}")
+        miniPlayerManager.refreshMediaSessionBinding()
         
+        val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(this)
         //  [重构] 使用新的模式判断方法
         val shouldEnterPip = miniPlayerManager.shouldEnterPip()
         val currentMode = miniPlayerManager.getCurrentMode()
@@ -792,6 +827,16 @@ class MainActivity : ComponentActivity() {
         val shouldTriggerPip = isInVideoDetail 
             && shouldEnterPip 
             && isActuallyPlaying
+
+        val shouldForceStopPlayback = shouldForceStopPlaybackOnUserLeaveHint(
+            isInVideoDetail = isInVideoDetail,
+            stopPlaybackOnExit = stopPlaybackOnExit,
+            shouldTriggerPip = shouldTriggerPip
+        )
+        if (shouldForceStopPlayback) {
+            Logger.d(TAG, "🛑 stopPlaybackOnExit=true, leaving by Home, force stop playback immediately")
+            miniPlayerManager.markLeavingByNavigation()
+        }
         
         Logger.d(TAG, " miniPlayerMode=$currentMode, shouldEnterPip=$shouldEnterPip, isPlaying=$isActuallyPlaying, shouldTriggerPip=$shouldTriggerPip, API=${Build.VERSION.SDK_INT}")
         

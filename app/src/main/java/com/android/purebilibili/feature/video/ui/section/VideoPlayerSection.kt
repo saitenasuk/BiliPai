@@ -84,6 +84,7 @@ fun VideoPlayerSection(
     onToggleFullscreen: () -> Unit,
     onQualityChange: (Int, Long) -> Unit,
     onBack: () -> Unit,
+    onDanmakuInputClick: () -> Unit = {},
     // 🔗 [新增] 分享功能
     bvid: String = "",
     coverUrl: String = "",
@@ -185,12 +186,19 @@ fun VideoPlayerSection(
         .getDoubleTapSeekEnabled(context)
         .collectAsState(initial = true)
 
+    val portraitSwipeToFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getPortraitSwipeToFullscreenEnabled(context)
+        .collectAsState(initial = true)
+
     val seekForwardSeconds by com.android.purebilibili.core.store.SettingsManager
         .getSeekForwardSeconds(context)
         .collectAsState(initial = 10)
     val seekBackwardSeconds by com.android.purebilibili.core.store.SettingsManager
         .getSeekBackwardSeconds(context)
         .collectAsState(initial = 10)
+    val fullscreenSwipeSeekSeconds by com.android.purebilibili.core.store.SettingsManager
+        .getFullscreenSwipeSeekSeconds(context)
+        .collectAsState(initial = 15)
     
     //  [新增] 双击跳转视觉反馈状态
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
@@ -330,7 +338,12 @@ fun VideoPlayerSection(
                 }
             }
             //  先处理拖拽手势 (音量/亮度/进度)
-            .pointerInput(isInPipMode, isScreenLocked) {
+            .pointerInput(
+                isInPipMode,
+                isScreenLocked,
+                portraitSwipeToFullscreenEnabled,
+                fullscreenSwipeSeekSeconds
+            ) {
                 if (!isInPipMode) {
                     detectDragGestures(
                         onDragStart = { offset ->
@@ -393,7 +406,10 @@ fun VideoPlayerSection(
                             } else if (gestureMode == VideoGestureMode.SwipeToFullscreen) {
                                 //  阈值判定：上滑超过一定距离触发全屏
                                 val swipeThreshold = 50.dp.toPx()
-                                if (totalDragDistanceY < -swipeThreshold && !isFullscreen) {
+                                if (portraitSwipeToFullscreenEnabled &&
+                                    totalDragDistanceY < -swipeThreshold &&
+                                    !isFullscreen
+                                ) {
                                     onToggleFullscreen()
                                     // 震动反馈 (可选)
                                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
@@ -441,14 +457,18 @@ fun VideoPlayerSection(
                                     val isSwipeUp = totalDragDistanceY < -minDragThreshold
                                     
                                     gestureMode = if (!isFullscreen) {
-                                        // 竖屏模式：上滑优先进入全屏，避免误触发亮度/音量浮层
-                                        if (isSwipeUp) {
+                                        // 竖屏模式：可选“上滑进全屏”；关闭后改为优先亮度/音量，不强制进全屏。
+                                        if (portraitSwipeToFullscreenEnabled && isSwipeUp) {
                                             VideoGestureMode.SwipeToFullscreen
                                         } else {
                                             when {
                                                 startX < leftZoneEnd -> VideoGestureMode.Brightness
                                                 startX > rightZoneStart -> VideoGestureMode.Volume
-                                                else -> VideoGestureMode.SwipeToFullscreen
+                                                else -> if (portraitSwipeToFullscreenEnabled) {
+                                                    VideoGestureMode.SwipeToFullscreen
+                                                } else {
+                                                    VideoGestureMode.None
+                                                }
                                             }
                                         }
                                     } else {
@@ -484,8 +504,15 @@ fun VideoPlayerSection(
                                 VideoGestureMode.Seek -> {
                                     // 距离已在上方累积，直接计算目标位置
                                     val duration = playerState.player.duration.coerceAtLeast(0L)
-                                    //  应用灵敏度
-                                    val seekDelta = (totalDragDistanceX * 200 * gestureSensitivity).toLong()
+                                    val seekDelta = if (isFullscreen) {
+                                        // 横屏时按固定秒数步长快进/快退，便于稳定控制。
+                                        val stepWidthPx = (size.width / 8f).coerceAtLeast(1f)
+                                        val stepCount = (totalDragDistanceX / stepWidthPx).toInt()
+                                        stepCount * fullscreenSwipeSeekSeconds * 1000L
+                                    } else {
+                                        // 竖屏保持原有线性拖动灵敏度体验。
+                                        (totalDragDistanceX * 200 * gestureSensitivity).toLong()
+                                    }
                                     seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
                                 }
                                 VideoGestureMode.Brightness -> {
@@ -701,33 +728,35 @@ fun VideoPlayerSection(
             )
         }
         
-        //  当视频加载成功时加载弹幕（不再依赖 isFullscreen，单例会保持弹幕）
+        //  当视频/开关状态变化时更新弹幕加载策略
         val cid = (uiState as? PlayerUiState.Success)?.info?.cid ?: 0L
         val aid = (uiState as? PlayerUiState.Success)?.info?.aid ?: 0L
-        //  监听 player 状态，等待 duration 可用后加载弹幕
-        LaunchedEffect(cid) {
-            if (cid > 0) {
-                danmakuManager.isEnabled = danmakuEnabled
-                
-                //  [修复] 等待播放器准备好并获取 duration (最多等待 5 秒)
-                var durationMs = 0L
-                var retries = 0
-                while (durationMs <= 0 && retries < 50) {
-                    durationMs = playerState.player.duration.takeIf { it > 0 } ?: 0L
-                    if (durationMs <= 0) {
-                        kotlinx.coroutines.delay(100)
-                        retries++
-                    }
-                }
-                
-                android.util.Log.d("VideoPlayerSection", "🎯 Loading danmaku for cid=$cid, aid=$aid, duration=${durationMs}ms (after $retries retries)")
-                danmakuManager.loadDanmaku(cid, aid, durationMs)  //  传入时长启用 Protobuf API
-            }
+        val danmakuLoadPolicy = remember(cid, danmakuEnabled) {
+            resolveVideoPlayerDanmakuLoadPolicy(
+                cid = cid,
+                danmakuEnabled = danmakuEnabled
+            )
         }
-        
-        //  弹幕开关变化时更新
-        LaunchedEffect(danmakuEnabled) {
-            danmakuManager.isEnabled = danmakuEnabled
+        //  监听 player 状态，等待 duration 可用后加载弹幕
+        LaunchedEffect(cid, aid, danmakuEnabled) {
+            danmakuManager.isEnabled = danmakuLoadPolicy.shouldEnable
+            if (!danmakuLoadPolicy.shouldLoad) {
+                return@LaunchedEffect
+            }
+
+            //  [修复] 等待播放器准备好并获取 duration (最多等待 5 秒)
+            var durationMs = 0L
+            var retries = 0
+            while (durationMs <= 0 && retries < 50) {
+                durationMs = playerState.player.duration.takeIf { it > 0 } ?: 0L
+                if (durationMs <= 0) {
+                    kotlinx.coroutines.delay(100)
+                    retries++
+                }
+            }
+
+            android.util.Log.d("VideoPlayerSection", "🎯 Loading danmaku for cid=$cid, aid=$aid, duration=${durationMs}ms (after $retries retries)")
+            danmakuManager.loadDanmaku(cid, aid, durationMs)  //  传入时长启用 Protobuf API
         }
 
         //  横竖屏/小窗切换后，若应当播放但未播放，主动恢复
@@ -1317,6 +1346,7 @@ fun VideoPlayerSection(
                     //  记录弹幕开关事件
                     com.android.purebilibili.core.util.AnalyticsHelper.logDanmakuToggle(newState)
                 },
+                onDanmakuInputClick = onDanmakuInputClick,
                 danmakuOpacity = danmakuOpacity,
                 danmakuFontScale = danmakuFontScale,
                 danmakuSpeed = danmakuSpeed,

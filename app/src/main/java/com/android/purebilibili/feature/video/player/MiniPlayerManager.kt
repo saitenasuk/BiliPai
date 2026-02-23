@@ -96,6 +96,35 @@ internal fun shouldClearPlaybackNotificationOnNavigationExit(
         mode == SettingsManager.MiniPlayerMode.SYSTEM_PIP
 }
 
+internal fun resolveNotificationIsPlaying(
+    playerIsPlaying: Boolean?,
+    cachedIsPlaying: Boolean
+): Boolean {
+    return playerIsPlaying ?: cachedIsPlaying
+}
+
+internal fun resolveNotificationIconResByPriority(
+    launcherIconRes: Int,
+    fallbackIconKey: String
+): Int {
+    return if (launcherIconRes != 0) launcherIconRes else resolveNotificationSmallIconRes(fallbackIconKey)
+}
+
+internal fun resolveLaunchActivityIconRes(context: Context): Int {
+    return runCatching {
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val component = launchIntent?.component ?: return@runCatching 0
+        context.packageManager.getActivityInfo(component, 0).iconResource
+    }.getOrDefault(0)
+}
+
+internal fun shouldRebindMediaSessionPlayer(
+    sessionPlayer: Any?,
+    playbackPlayer: Any?
+): Boolean {
+    return playbackPlayer != null && sessionPlayer !== playbackPlayer
+}
+
 internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
     val normalizedKey = normalizeAppIconKey(iconKey)
     return when (normalizedKey) {
@@ -517,6 +546,17 @@ class MiniPlayerManager private constructor(private val context: Context) :
             stopPlaybackOnExit = stopPlaybackOnExit
         )
     }
+
+    fun refreshMediaSessionBinding() {
+        val currentPlayer = player ?: return
+        if (shouldRebindMediaSessionPlayer(mediaSession?.player, currentPlayer)) {
+            updateMediaSession(currentPlayer)
+        }
+        isPlaying = resolveNotificationIsPlaying(
+            playerIsPlaying = currentPlayer.isPlaying,
+            cachedIsPlaying = isPlaying
+        )
+    }
     
     /**
      * 🔄 重置导航离开标志（在视频页计入时调用）
@@ -809,7 +849,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
         updateMediaSession(externalPlayer)
         
         // 同步播放状态
-        isPlaying = externalPlayer.isPlaying
+        isPlaying = resolveNotificationIsPlaying(
+            playerIsPlaying = externalPlayer.isPlaying,
+            cachedIsPlaying = isPlaying
+        )
         duration = externalPlayer.duration.coerceAtLeast(0L)
     }
     
@@ -997,6 +1040,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun updateMediaMetadata(title: String, artist: String, coverUrl: String) {
         val currentPlayer = player ?: return
+        if (shouldRebindMediaSessionPlayer(mediaSession?.player, currentPlayer)) {
+            updateMediaSession(currentPlayer)
+        }
+        isPlaying = resolveNotificationIsPlaying(
+            playerIsPlaying = currentPlayer.isPlaying,
+            cachedIsPlaying = isPlaying
+        )
         val currentItem = currentPlayer.currentMediaItem ?: return
 
         val metadata = MediaMetadata.Builder()
@@ -1042,6 +1092,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     private fun pushNotification(title: String, artist: String, bitmap: Bitmap?) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationIsPlaying = resolveNotificationIsPlaying(
+            playerIsPlaying = player?.isPlaying,
+            cachedIsPlaying = isPlaying
+        )
+        isPlaying = notificationIsPlaying
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
@@ -1059,14 +1114,19 @@ class MiniPlayerManager private constructor(private val context: Context) :
             .setShowActionsInCompactView(0, 1, 2)  //  显示前三个按钮
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(resolveNotificationSmallIconRes(SettingsManager.getAppIconSync(context)))
+            .setSmallIcon(
+                resolveNotificationIconResByPriority(
+                    launcherIconRes = resolveLaunchActivityIconRes(context),
+                    fallbackIconKey = SettingsManager.getAppIconSync(context)
+                )
+            )
             .setContentTitle(title)
             .setContentText(artist)
             .setLargeIcon(bitmap)
             .setStyle(style)
             .setColor(THEME_COLOR)
             .setColorized(true)
-            .setOngoing(isPlaying)
+            .setOngoing(notificationIsPlaying)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setContentIntent(mediaSession?.sessionActivity)
@@ -1108,8 +1168,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 .putExtra(EXTRA_CONTROL_TYPE, ACTION_PLAY_PAUSE),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
         )
-        val playPauseIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-        val playPauseText = if (isPlaying) "暂停" else "播放"
+        val playPauseIcon = if (notificationIsPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+        val playPauseText = if (notificationIsPlaying) "暂停" else "播放"
         builder.addAction(
             NotificationCompat.Action.Builder(
                 playPauseIcon,

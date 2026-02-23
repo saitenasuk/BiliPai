@@ -438,10 +438,20 @@ fun PrivacySection(
 fun DataStorageSection(
     customDownloadPath: String?,
     cacheSize: String,
+    onWebDavBackupClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
     onClearCacheClick: () -> Unit
 ) {
     SettingsCardGroup {
+        // WebDAV 是“备份副本”场景，使用双文档图标比链路图标更贴合语义。
+        SettingClickableItem(
+            icon = CupertinoIcons.Default.DocOnDoc,
+            title = "WebDAV 云备份",
+            value = "备份与恢复设置/插件",
+            onClick = onWebDavBackupClick,
+            iconTint = iOSBlue
+        )
+        SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
             icon = CupertinoIcons.Default.Folder,
             title = "下载位置",
@@ -593,7 +603,7 @@ fun AboutSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.Lightbulb,
+            icon = CupertinoIcons.Default.ArrowCounterclockwise,
             title = "重播新手引导",
             value = "了解应用功能",
             onClick = onReplayOnboardingClick,

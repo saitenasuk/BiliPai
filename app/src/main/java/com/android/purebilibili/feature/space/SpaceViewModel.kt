@@ -5,9 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.data.model.response.*
+import com.android.purebilibili.data.repository.ActionRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class SpaceSubTab { VIDEO, AUDIO, ARTICLE }
@@ -66,6 +68,23 @@ class SpaceViewModel : ViewModel() {
     private var currentMid: Long = 0
     private var currentPage = 1
     private val pageSize = 30
+
+    private val _followGroupDialogVisible = MutableStateFlow(false)
+    val followGroupDialogVisible = _followGroupDialogVisible.asStateFlow()
+
+    private val _followGroupTags = MutableStateFlow<List<RelationTagItem>>(emptyList())
+    val followGroupTags = _followGroupTags.asStateFlow()
+
+    private val _followGroupSelectedTagIds = MutableStateFlow<Set<Long>>(emptySet())
+    val followGroupSelectedTagIds = _followGroupSelectedTagIds.asStateFlow()
+
+    private val _isFollowGroupsLoading = MutableStateFlow(false)
+    val isFollowGroupsLoading = _isFollowGroupsLoading.asStateFlow()
+
+    private val _isSavingFollowGroups = MutableStateFlow(false)
+    val isSavingFollowGroups = _isSavingFollowGroups.asStateFlow()
+
+    private var followGroupTargetMid: Long = 0L
     
     //  缓存 WBI keys 避免重复请求
     private var cachedImgKey: String = ""
@@ -652,25 +671,26 @@ class SpaceViewModel : ViewModel() {
             _uiState.value = current.copy(userInfo = newUserInfo)
             
             try {
-                // 2. 调用 API
-                val act = if (isFollowing) 2 else 1  // 1=关注, 2=取关
-                val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
-                
-                // 使用 NetworkModule.api (BilibiliApi) 而不是 spaceApi
-                val response = NetworkModule.api.modifyRelation(
-                    fid = mid,
-                    act = act,
-                    csrf = csrf
-                )
-                
-                if (response.code != 0) {
-                    // 3. 失败回滚
-                    com.android.purebilibili.core.util.Logger.e("SpaceVM", "modifyRelation failed: ${response.message}")
-                    _uiState.value = current.copy(userInfo = current.userInfo) // Revert
-                    // 可以考虑发送一个一次性事件通知 UI 显示 Toast，这里简化处理
+                // 2. 调用统一仓库逻辑
+                val result = ActionRepository.followUser(mid = mid, follow = !isFollowing)
+                if (result.isFailure) {
+                    _uiState.value = current.copy(userInfo = current.userInfo)
+                    com.android.purebilibili.core.util.Logger.e(
+                        "SpaceVM",
+                        "toggleFollow failed: ${result.exceptionOrNull()?.message}"
+                    )
                 } else {
-                    com.android.purebilibili.core.util.Logger.d("SpaceVM", "modifyRelation success: act=$act")
-                    // 成功后，刷新一下关系统计数据（粉丝数等）
+                    val latestState = _uiState.value as? SpaceUiState.Success
+                    if (latestState != null) {
+                        _uiState.value = latestState.copy(
+                            userInfo = latestState.userInfo.copy(isFollowed = !isFollowing)
+                        )
+                    }
+
+                    if (!isFollowing) {
+                        showFollowGroupDialogForUser(mid)
+                    }
+
                     val relationStat = fetchRelationStat(mid)
                     if (relationStat != null) {
                         val currentState = _uiState.value as? SpaceUiState.Success
@@ -684,6 +704,71 @@ class SpaceViewModel : ViewModel() {
                 com.android.purebilibili.core.util.Logger.e("SpaceVM", "modifyRelation error: ${e.message}", e)
                 _uiState.value = current.copy(userInfo = current.userInfo) // Revert
             }
+        }
+    }
+
+    fun showFollowGroupDialogForUser(mid: Long) {
+        if (mid <= 0L) return
+        followGroupTargetMid = mid
+        _followGroupDialogVisible.value = true
+        loadFollowGroupsForTarget()
+    }
+
+    fun dismissFollowGroupDialog() {
+        _followGroupDialogVisible.value = false
+    }
+
+    fun toggleFollowGroupSelection(tagId: Long) {
+        if (tagId == 0L) return
+        _followGroupSelectedTagIds.update { selected ->
+            if (selected.contains(tagId)) selected - tagId else selected + tagId
+        }
+    }
+
+    fun saveFollowGroupSelection() {
+        if (_isSavingFollowGroups.value || followGroupTargetMid <= 0L) return
+        val selected = _followGroupSelectedTagIds.value
+        viewModelScope.launch {
+            _isSavingFollowGroups.value = true
+            ActionRepository
+                .overwriteFollowGroupIds(
+                    targetMids = setOf(followGroupTargetMid),
+                    selectedTagIds = selected
+                )
+                .onSuccess {
+                    dismissFollowGroupDialog()
+                }
+                .onFailure { e ->
+                    com.android.purebilibili.core.util.Logger.e(
+                        "SpaceVM",
+                        "saveFollowGroupSelection failed: ${e.message}"
+                    )
+                }
+            _isSavingFollowGroups.value = false
+        }
+    }
+
+    private fun loadFollowGroupsForTarget() {
+        val targetMid = followGroupTargetMid
+        if (targetMid <= 0L) return
+        viewModelScope.launch {
+            _isFollowGroupsLoading.value = true
+            val tagsResult = ActionRepository.getFollowGroupTags()
+            val userGroupResult = ActionRepository.getUserFollowGroupIds(targetMid)
+
+            tagsResult.onSuccess { tags ->
+                _followGroupTags.value = tags.filter { it.tagid != 0L }
+            }.onFailure {
+                _followGroupTags.value = emptyList()
+            }
+
+            userGroupResult.onSuccess { groupIds ->
+                _followGroupSelectedTagIds.value = groupIds.filterNot { it == 0L }.toSet()
+            }.onFailure {
+                _followGroupSelectedTagIds.value = emptySet()
+            }
+
+            _isFollowGroupsLoading.value = false
         }
     }
 

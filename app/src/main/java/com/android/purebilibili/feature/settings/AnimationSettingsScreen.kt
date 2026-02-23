@@ -244,7 +244,7 @@ fun AnimationSettingsContent(
 
                         // 磨砂效果 (始终显示)
                         IOSSwitchItem(
-                            icon = CupertinoIcons.Default.Sparkles,
+                            icon = CupertinoIcons.Default.SquareStack3dUp,
                             title = "顶部栏磨砂",
                             subtitle = "顶部导航栏的毛玻璃模糊效果",
                             checked = state.headerBlurEnabled,

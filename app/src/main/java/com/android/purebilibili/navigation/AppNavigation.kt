@@ -881,6 +881,7 @@ fun AppNavigation(
                 onPlaybackClick = { navController.navigate(ScreenRoutes.PlaybackSettings.route) },
                 onPermissionClick = { navController.navigate(ScreenRoutes.PermissionSettings.route) },
                 onPluginsClick = { navController.navigate(ScreenRoutes.PluginsSettings.createRoute()) },
+                onWebDavBackupClick = { navController.navigate(ScreenRoutes.WebDavBackup.route) },
                 onNavigateToBottomBarSettings = { navController.navigate(ScreenRoutes.BottomBarSettings.route) },
                 onTipsClick = { navController.navigate(ScreenRoutes.TipsSettings.route) }, // [Feature] Tips
                 onReplayOnboardingClick = { navController.navigate(ScreenRoutes.Onboarding.route) },
@@ -1060,6 +1061,17 @@ fun AppNavigation(
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
         ) {
             com.android.purebilibili.feature.settings.BottomBarSettingsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // --- WebDAV 备份中心 ---
+        composable(
+            route = ScreenRoutes.WebDavBackup.route,
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) {
+            com.android.purebilibili.feature.settings.WebDavBackupScreen(
                 onBack = { navController.popBackStack() }
             )
         }

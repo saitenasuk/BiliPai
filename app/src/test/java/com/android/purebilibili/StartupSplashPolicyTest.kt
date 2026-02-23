@@ -16,4 +16,32 @@ class StartupSplashPolicyTest {
     fun doesNotStartLocalProxyDuringColdStartByDefault() {
         assertFalse(shouldStartLocalProxyOnAppLaunch())
     }
+
+    @Test
+    fun enablesSplashFlyoutOnlyAfterStartupPrivacyFlowCompleted() {
+        assertFalse(
+            shouldEnableSplashFlyoutAnimation(
+                hasCompletedOnboarding = false,
+                hasAcceptedReleaseDisclaimer = false
+            )
+        )
+        assertFalse(
+            shouldEnableSplashFlyoutAnimation(
+                hasCompletedOnboarding = false,
+                hasAcceptedReleaseDisclaimer = true
+            )
+        )
+        assertFalse(
+            shouldEnableSplashFlyoutAnimation(
+                hasCompletedOnboarding = true,
+                hasAcceptedReleaseDisclaimer = false
+            )
+        )
+        assertTrue(
+            shouldEnableSplashFlyoutAnimation(
+                hasCompletedOnboarding = true,
+                hasAcceptedReleaseDisclaimer = true
+            )
+        )
+    }
 }

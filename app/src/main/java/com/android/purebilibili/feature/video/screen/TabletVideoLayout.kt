@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.unit.dp // Add this back
 import androidx.compose.ui.unit.sp
@@ -119,6 +120,7 @@ fun TabletVideoLayout(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .statusBarsPadding()
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 // 视频播放器（固定高度，不参与滚动）
@@ -222,7 +224,7 @@ fun TabletVideoLayout(
                         videoTags = success.videoTags,
                         relatedVideos = success.related,
                         onFollowClick = { viewModel.toggleFollow() },
-                        onFavoriteClick = { viewModel.showFavoriteFolderDialog() },
+                        onFavoriteClick = { viewModel.toggleFavorite() },
                         onLikeClick = { viewModel.toggleLike() },
                         onCoinClick = { viewModel.openCoinDialog() },
                         onTripleClick = { viewModel.doTripleAction() },
@@ -292,7 +294,30 @@ private fun TabletSecondaryContent(
     var sourceRect by remember { mutableStateOf<Rect?>(null) }
     
     val context = androidx.compose.ui.platform.LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
+    val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
+        val url = rawUrl.trim()
+        if (url.isEmpty()) return@openCommentUrl
+
+        val parsedResult = com.android.purebilibili.core.util.BilibiliUrlParser.parse(url)
+        if (parsedResult.bvid != null) {
+            onRelatedVideoClick(parsedResult.bvid, null)
+            return@openCommentUrl
+        }
+
+        if (shouldOpenCommentUrlInApp(url)) {
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                .setPackage(context.packageName)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            val launchedInApp = runCatching {
+                context.startActivity(intent)
+            }.isSuccess
+            if (launchedInApp) return@openCommentUrl
+        }
+
+        runCatching { uriHandler.openUri(url) }
+    }
     
     // 图片预览对话框
     if (showImagePreview && previewImages.isNotEmpty()) {
@@ -338,6 +363,7 @@ private fun TabletSecondaryContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .background(MaterialTheme.colorScheme.background)
     ) {
         Row(
@@ -411,6 +437,26 @@ private fun TabletSecondaryContent(
                                 }
                             )
                         }
+                        item {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                shape = RoundedCornerShape(14.dp),
+                                onClick = {
+                                    viewModel.clearReplyingTo()
+                                    viewModel.showCommentInputDialog()
+                                }
+                            ) {
+                                Text(
+                                    text = "写评论，直接和 UP 主交流",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                                )
+                            }
+                        }
                         
                         // 评论列表
                         items(
@@ -443,10 +489,15 @@ private fun TabletSecondaryContent(
                                     // [新增] 点赞按钮
                                     onLikeClick = { commentViewModel.likeComment(reply.rpid) },
                                     isLiked = reply.action == 1 || reply.rpid in commentState.likedComments,
+                                    onReplyClick = {
+                                        viewModel.setReplyingTo(reply)
+                                        viewModel.showCommentInputDialog()
+                                    },
                                     // [新增] 删除按钮
                                     onDeleteClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
                                         { commentViewModel.startDissolve(reply.rpid) }
                                     } else null,
+                                    onUrlClick = openCommentUrl,
                                     // [新增] 头像点击
                                     onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUpClick(it) } }
                                 )

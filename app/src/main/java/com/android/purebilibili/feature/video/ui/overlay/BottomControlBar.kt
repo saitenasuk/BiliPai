@@ -3,8 +3,11 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,6 +52,20 @@ data class PlayerProgress(
 internal fun shouldShowAspectRatioButtonInControlBar(isFullscreen: Boolean): Boolean = isFullscreen
 internal fun shouldShowPortraitSwitchButtonInControlBar(isFullscreen: Boolean): Boolean = isFullscreen
 
+private fun Modifier.consumeTap(onTap: () -> Unit): Modifier {
+    return pointerInput(onTap) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            down.consume()
+            val up = waitForUpOrCancellation()
+            if (up != null) {
+                up.consume()
+                onTap()
+            }
+        }
+    }
+}
+
 @Composable
 fun BottomControlBar(
     isPlaying: Boolean,
@@ -66,6 +83,7 @@ fun BottomControlBar(
     // Danmaku
     danmakuEnabled: Boolean = true,
     onDanmakuToggle: () -> Unit = {},
+    onDanmakuInputClick: () -> Unit = {},
     onDanmakuSettingsClick: () -> Unit = {},
     
     // Quality
@@ -158,9 +176,9 @@ fun BottomControlBar(
             // Center area: Danmaku Controls (Switch + Input) - Only visible in Fullscreen/Landscape
             if (isFullscreen) {
                 // Danmaku Switch
-                val danmakuToggleInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 Row(
                     modifier = Modifier
+                        .heightIn(min = 40.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(
                             if (danmakuEnabled) {
@@ -169,12 +187,8 @@ fun BottomControlBar(
                                 Color(0xFFB71C1C).copy(alpha = 0.22f)
                             }
                         )
-                        .clickable(
-                            interactionSource = danmakuToggleInteraction,
-                            indication = null,
-                            onClick = onDanmakuToggle
-                        )
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                        .consumeTap(onDanmakuToggle)
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -201,7 +215,7 @@ fun BottomControlBar(
                         .height(layoutPolicy.danmakuInputHeightDp.dp)
                         .clip(RoundedCornerShape((layoutPolicy.danmakuInputHeightDp / 2).dp))
                         .background(Color.White.copy(alpha = 0.2f))
-                        .clickable { /* TODO: Open Input Dialog */ },
+                        .consumeTap(onDanmakuInputClick),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Text(

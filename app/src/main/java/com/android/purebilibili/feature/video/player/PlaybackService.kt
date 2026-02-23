@@ -103,8 +103,9 @@ class PlaybackService : Service() {
         ensureNotificationChannel()
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(
-                resolvePlaybackServiceFallbackIconRes(
-                    SettingsManager.getAppIconSync(this)
+                resolveNotificationIconResByPriority(
+                    launcherIconRes = resolveLaunchActivityIconRes(this),
+                    fallbackIconKey = SettingsManager.getAppIconSync(this)
                 )
             )
             .setContentTitle("BiliPai")

@@ -195,6 +195,25 @@ internal fun resolveWatchLaterQueueSheetPresentation(
     }
 }
 
+internal fun shouldOpenCommentUrlInApp(url: String): Boolean {
+    val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return false
+    val scheme = uri.scheme?.lowercase().orEmpty()
+    if (scheme !in setOf("http", "https", "bili", "bilibili")) return false
+    val host = uri.host?.lowercase().orEmpty()
+    return host.contains("bilibili.com") || host.contains("b23.tv")
+}
+
+internal fun resolveDanmakuDialogTopReservePx(
+    isLandscape: Boolean,
+    isFullscreenMode: Boolean,
+    isPortraitFullscreen: Boolean,
+    playerBottomPx: Int?,
+    fallbackPlayerBottomPx: Int = 0
+): Int {
+    if (isLandscape || isFullscreenMode || isPortraitFullscreen) return 0
+    return (playerBottomPx ?: fallbackPlayerBottomPx).coerceAtLeast(0)
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -222,6 +241,28 @@ fun VideoDetailScreen(
     val configuration = LocalConfiguration.current
     val uiState by viewModel.uiState.collectAsState()
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
+        val url = rawUrl.trim()
+        if (url.isEmpty()) return@openCommentUrl
+
+        val parsedResult = com.android.purebilibili.core.util.BilibiliUrlParser.parse(url)
+        if (parsedResult.bvid != null) {
+            onVideoClick(parsedResult.bvid, null)
+            return@openCommentUrl
+        }
+
+        if (shouldOpenCommentUrlInApp(url)) {
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                .setPackage(context.packageName)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            val launchedInApp = runCatching {
+                context.startActivity(intent)
+            }.isSuccess
+            if (launchedInApp) return@openCommentUrl
+        }
+
+        runCatching { uriHandler.openUri(url) }
+    }
     
     // 🎭 [性能优化] 转场动画完成状态
     // 延迟加载重型组件（如评论区），确保转场动画流畅无卡顿
@@ -387,18 +428,26 @@ fun VideoDetailScreen(
     val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAutoRotateEnabled(context).collectAsState(initial = false)
     
-    LaunchedEffect(autoRotateEnabled, useTabletLayout) {
-        if (shouldApplyPhoneAutoRotatePolicy(useTabletLayout)) {  // 只对手机生效
-            activity?.requestedOrientation = if (autoRotateEnabled) {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR  // 传感器控制，跟随手机方向
-            } else {
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT  // 锁定竖屏
-            }
-            com.android.purebilibili.core.util.Logger.d(
-                "VideoDetailScreen", 
-                "🔄 Auto-rotate: enabled=$autoRotateEnabled, orientation=${if (autoRotateEnabled) "SENSOR" else "PORTRAIT"}"
-            )
+    LaunchedEffect(
+        autoRotateEnabled,
+        useTabletLayout,
+        isOrientationDrivenFullscreen,
+        isFullscreenMode
+    ) {
+        val requestedOrientation = resolvePhoneVideoRequestedOrientation(
+            autoRotateEnabled = autoRotateEnabled,
+            useTabletLayout = useTabletLayout,
+            isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+            isFullscreenMode = isFullscreenMode
+        ) ?: return@LaunchedEffect
+
+        if (activity?.requestedOrientation != requestedOrientation) {
+            activity?.requestedOrientation = requestedOrientation
         }
+        com.android.purebilibili.core.util.Logger.d(
+            "VideoDetailScreen",
+            "🔄 Auto-rotate: enabled=$autoRotateEnabled, requested=$requestedOrientation, fullscreen=$isFullscreenMode"
+        )
     }
 
     DisposableEffect(activity, isScreenActive) {
@@ -921,7 +970,11 @@ fun VideoDetailScreen(
                 // 📱 手机：通过旋转屏幕触发全屏
                 if (isLandscape) {
                     userRequestedFullscreen = false
-                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    activity.requestedOrientation = if (autoRotateEnabled) {
+                        ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                    } else {
+                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    }
                 } else {
                     userRequestedFullscreen = true
                     activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -1012,6 +1065,7 @@ fun VideoDetailScreen(
                 onToggleFullscreen = { toggleFullscreen() },
                 onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                 onBack = { toggleFullscreen() },
+                onDanmakuInputClick = { viewModel.showDanmakuSendDialog() },
                 // 🔗 [新增] 分享功能
                 bvid = bvid,
                 coverUrl = coverUrl,
@@ -1082,7 +1136,7 @@ fun VideoDetailScreen(
                 onToggleFollow = { viewModel.toggleFollow() },
                 onToggleLike = { viewModel.toggleLike() },
                 onCoin = { viewModel.showCoinDialog() },
-                onToggleFavorite = { viewModel.showFavoriteFolderDialog() },
+                onToggleFavorite = { viewModel.toggleFavorite() },
                 onTriple = { viewModel.doTripleAction() },
                 onRelatedVideoClick = onVideoClick
             )
@@ -1304,6 +1358,7 @@ fun VideoDetailScreen(
                                 onToggleFullscreen = { toggleFullscreen() },
                                 onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
                                 onBack = handleBack,
+                                onDanmakuInputClick = { viewModel.showDanmakuSendDialog() },
                                 // 🔗 [新增] 分享功能
                                 bvid = bvid,
                                 coverUrl = coverUrl,
@@ -1476,7 +1531,7 @@ fun VideoDetailScreen(
                                                         },
                                                         onUpOnlyToggle = { commentViewModel.toggleUpOnly() },
                                                         onFollowClick = { viewModel.toggleFollow() },
-                                                        onFavoriteClick = { viewModel.showFavoriteFolderDialog() }, // [修改] 单击直接打开收藏夹选择
+                                                        onFavoriteClick = { viewModel.toggleFavorite() }, // 单击立即收藏/取消收藏
                                                         onLikeClick = { viewModel.toggleLike() },
                                                         onCoinClick = { viewModel.openCoinDialog() },
                                                         onTripleClick = { viewModel.doTripleAction() },
@@ -1484,7 +1539,12 @@ fun VideoDetailScreen(
                                                         onUpClick = onUpClick,
                                                         onRelatedVideoClick = onVideoClick,
                                                         onSubReplyClick = { commentViewModel.openSubReply(it) },
+                                                        onRootCommentClick = {
+                                                            viewModel.clearReplyingTo()
+                                                            viewModel.showCommentInputDialog()
+                                                        },
                                                         onLoadMoreReplies = { commentViewModel.loadComments() },
+                                                        onCommentUrlClick = openCommentUrl,
                                                         onDownloadClick = { viewModel.openDownloadDialog() },
                                                         onWatchLaterClick = { viewModel.toggleWatchLater() },
                                                         //  [新增] 时间戳点击跳转
@@ -1539,7 +1599,7 @@ fun VideoDetailScreen(
                                                             isFavorited = success.isFavorited,
                                                             isCoined = success.coinCount > 0,
                                                             onLikeClick = { viewModel.toggleLike() },
-                                                            onFavoriteClick = { viewModel.showFavoriteFolderDialog() },
+                                                            onFavoriteClick = { viewModel.toggleFavorite() },
                                                             onCoinClick = { viewModel.openCoinDialog() },
                                                             onShareClick = {
                                                                 val shareText = "【${success.info.title}】\nhttps://www.bilibili.com/video/${success.info.bvid}"
@@ -1958,6 +2018,27 @@ fun VideoDetailScreen(
         //  [新增] 弹幕发送对话框
         val showDanmakuDialog by viewModel.showDanmakuDialog.collectAsState()
         val isSendingDanmaku by viewModel.isSendingDanmaku.collectAsState()
+        val fallbackPlayerBottomPx = with(LocalDensity.current) {
+            val fallbackPlayerHeight = configuration.screenWidthDp.dp * 9f / 16f
+            val fallbackStatusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            (fallbackPlayerHeight + fallbackStatusBar).toPx().roundToInt()
+        }
+        val danmakuDialogTopReservePx = remember(
+            isLandscape,
+            isFullscreenMode,
+            isPortraitFullscreen,
+            videoPlayerBounds,
+            fallbackPlayerBottomPx
+        ) {
+            resolveDanmakuDialogTopReservePx(
+                isLandscape = isLandscape,
+                isFullscreenMode = isFullscreenMode,
+                isPortraitFullscreen = isPortraitFullscreen,
+                playerBottomPx = videoPlayerBounds?.bottom,
+                fallbackPlayerBottomPx = fallbackPlayerBottomPx
+            )
+        }
+        val danmakuDialogTopReserveDp = with(LocalDensity.current) { danmakuDialogTopReservePx.toDp() }
         com.android.purebilibili.feature.video.ui.components.DanmakuSendDialog(
             visible = showDanmakuDialog,
             onDismiss = { viewModel.hideDanmakuSendDialog() },
@@ -1965,7 +2046,8 @@ fun VideoDetailScreen(
                 android.util.Log.d("VideoDetailScreen", "📤 Sending danmaku: $message")
                 viewModel.sendDanmaku(message, color, mode, fontSize)
             },
-            isSending = isSendingDanmaku
+            isSending = isSendingDanmaku,
+            topReservedSpace = danmakuDialogTopReserveDp
         )
         
         //  [新增] 评论输入对话框
@@ -2236,13 +2318,7 @@ fun VideoDetailScreen(
                 },
                 onCommentLike = commentViewModel::likeComment,
                 likedComments = commentState.likedComments,
-                onUrlClick = { url ->
-                    try {
-                        uriHandler.openUri(url)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                },
+                onUrlClick = openCommentUrl,
                 onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUpClick(it) } }
             )
         }
@@ -2663,6 +2739,21 @@ internal fun shouldApplyPhoneAutoRotatePolicy(
     useTabletLayout: Boolean
 ): Boolean {
     return !useTabletLayout 
+}
+
+internal fun resolvePhoneVideoRequestedOrientation(
+    autoRotateEnabled: Boolean,
+    useTabletLayout: Boolean,
+    isOrientationDrivenFullscreen: Boolean,
+    isFullscreenMode: Boolean
+): Int? {
+    if (!shouldApplyPhoneAutoRotatePolicy(useTabletLayout)) return null
+    if (autoRotateEnabled) return ActivityInfo.SCREEN_ORIENTATION_SENSOR
+    return if (isOrientationDrivenFullscreen && isFullscreenMode) {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    } else {
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
 }
 
 internal fun shouldEnableVideoCoverSharedTransition(

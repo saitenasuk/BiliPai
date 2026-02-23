@@ -200,14 +200,23 @@ fun HomeScreen(
     }
     val initialPage = resolveHomeTopTabIndex(state.currentCategory, topCategories)
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topCategories.size }
-    
-    // [修复] 监听 Pager 滑动，同步更新 ViewModel 分类
-    LaunchedEffect(pagerState.currentPage) {
-        val targetCategory = resolveHomeCategoryForTopTab(
-            index = pagerState.currentPage,
-            topCategories = topCategories
-        )
-        viewModel.switchCategory(targetCategory)
+    var hasSyncedPagerWithState by remember(topCategories) { mutableStateOf(false) }
+
+    // [修复] 仅在完成首次“状态->Pager”对齐后，才允许“Pager->状态”反向同步，避免返回首页时误跳分类。
+    LaunchedEffect(pagerState, topCategories, hasSyncedPagerWithState, state.currentCategory) {
+        if (!hasSyncedPagerWithState) return@LaunchedEffect
+        snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { (page, scrolling) ->
+                if (scrolling) return@collect
+                val targetCategory = resolveHomeCategoryForTopTab(
+                    index = page,
+                    topCategories = topCategories
+                )
+                if (targetCategory != state.currentCategory) {
+                    viewModel.switchCategory(targetCategory)
+                }
+            }
     }
 
     // [P2] 当前分类被隐藏时，自动落到首个可见分类
@@ -228,11 +237,16 @@ fun HomeScreen(
         }
     }
 
-    // [修复] 监听 ViewModel 状态变化，同步更新 Pager 位置
-    // 当点击 Tab 导致 state.currentCategory 变化时，让 Pager 自动跟随滚动
-    LaunchedEffect(state.currentCategory) {
+    // [修复] 状态变化时驱动 Pager：首次使用无动画对齐，后续用动画跟随
+    LaunchedEffect(state.currentCategory, topCategories) {
         val targetPage = topCategories.indexOf(state.currentCategory)
-        if (targetPage >= 0 && targetPage != pagerState.currentPage && !pagerState.isScrollInProgress) {
+        if (targetPage < 0) return@LaunchedEffect
+        if (!hasSyncedPagerWithState) {
+            pagerState.scrollToPage(targetPage)
+            hasSyncedPagerWithState = true
+            return@LaunchedEffect
+        }
+        if (targetPage != pagerState.currentPage && !pagerState.isScrollInProgress) {
             pagerState.animateScrollToPage(targetPage)
         }
     }
@@ -1012,6 +1026,7 @@ fun HomeScreen(
                                      cardMotionTier = cardMotionTier,
                                      cardTransitionEnabled = cardTransitionEnabled,
                                      isDataSaverActive = isDataSaverActive,
+                                     compactStatsOnCover = homeSettings.compactVideoStatsOnCover,
                                      oldContentAnchorBvid = if (category == HomeCategory.RECOMMEND &&
                                          dividerRevealRefreshKey == state.refreshNewItemsKey
                                      ) {

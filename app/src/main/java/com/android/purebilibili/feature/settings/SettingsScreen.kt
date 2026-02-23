@@ -71,6 +71,7 @@ fun SettingsScreen(
     onPlaybackClick: () -> Unit = {},
     onPermissionClick: () -> Unit = {},
     onPluginsClick: () -> Unit = {},
+    onWebDavBackupClick: () -> Unit = {},
     onNavigateToBottomBarSettings: () -> Unit = {},
     onTipsClick: () -> Unit = {}, // [Feature] Tips
     onReplayOnboardingClick: () -> Unit = {},
@@ -432,6 +433,7 @@ fun SettingsScreen(
                     onTipsClick = onTipsClick, // [Feature]
                     onTelegramClick = onTelegramClick,
                     onTwitterClick = onTwitterClick,
+                    onWebDavBackupClick = onWebDavBackupClick,
                     onDownloadPathClick = onDownloadPathAction,
                     onClearCacheClick = onClearCacheAction,
                     onPrivacyModeChange = onPrivacyModeChange,
@@ -489,6 +491,7 @@ fun SettingsScreen(
                     onReplayOnboardingClick = onReplayOnboardingClick,
                     onTelegramClick = onTelegramClick,
                     onTwitterClick = onTwitterClick,
+                    onWebDavBackupClick = onWebDavBackupClick,
                     onDownloadPathClick = onDownloadPathAction,
                     onClearCacheClick = onClearCacheAction,
                     onPrivacyModeChange = onPrivacyModeChange,
@@ -596,6 +599,7 @@ private fun MobileSettingsLayout(
     onReplayOnboardingClick: () -> Unit,
     onTelegramClick: () -> Unit,
     onTwitterClick: () -> Unit,
+    onWebDavBackupClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
     onClearCacheClick: () -> Unit,
     onDonateClick: () -> Unit,
@@ -724,6 +728,7 @@ private fun MobileSettingsLayout(
                                 DataStorageSection(
                                     customDownloadPath = customDownloadPath,
                                     cacheSize = cacheSize,
+                                    onWebDavBackupClick = onWebDavBackupClick,
                                     onDownloadPathClick = onDownloadPathClick,
                                     onClearCacheClick = onClearCacheClick
                                 )

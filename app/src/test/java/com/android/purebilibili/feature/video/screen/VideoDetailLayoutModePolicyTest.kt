@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
+import android.content.pm.ActivityInfo
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -133,5 +134,62 @@ class VideoDetailLayoutModePolicyTest {
         )
 
         assertEquals(null, selected)
+    }
+
+    @Test
+    fun phoneOrientationPolicy_returnsNullOnTabletLayout() {
+        assertEquals(
+            null,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                useTabletLayout = true,
+                isOrientationDrivenFullscreen = false,
+                isFullscreenMode = false
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_autoRotateEnabled_usesSensorAlways() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = true
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_autoRotateDisabled_switchesBetweenPortraitAndLandscapeLock() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = false,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = false,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = true
+            )
+        )
     }
 }

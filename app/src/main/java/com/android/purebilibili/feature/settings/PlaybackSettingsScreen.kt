@@ -544,6 +544,10 @@ fun PlaybackSettingsContent(
                     val scope = rememberCoroutineScope()
                     val swipeHidePlayerEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getSwipeHidePlayerEnabled(context).collectAsState(initial = false)
+                    val portraitSwipeToFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
+                        .getPortraitSwipeToFullscreenEnabled(context).collectAsState(initial = true)
+                    val fullscreenSwipeSeekSeconds by com.android.purebilibili.core.store.SettingsManager
+                        .getFullscreenSwipeSeekSeconds(context).collectAsState(initial = 15)
                     
                     //  [新增] 自动播放下一个
                     val autoPlayEnabled by com.android.purebilibili.core.store.SettingsManager
@@ -653,6 +657,61 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
+
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.ArrowLeftArrowRight,
+                            title = "竖屏上滑进入全屏",
+                            subtitle = if (portraitSwipeToFullscreenEnabled) {
+                                "开启后上滑可直接进入横屏全屏"
+                            } else {
+                                "关闭后上滑不再强制进入全屏"
+                            },
+                            checked = portraitSwipeToFullscreenEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setPortraitSwipeToFullscreenEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSTeal
+                        )
+
+                        Divider()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "横屏滑动快进/快退步长",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "左右滑动时每档跳转秒数：当前 ${fullscreenSwipeSeekSeconds}s",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(10, 15, 20, 30).forEach { seconds ->
+                                    FilterChip(
+                                        selected = fullscreenSwipeSeekSeconds == seconds,
+                                        onClick = {
+                                            scope.launch {
+                                                com.android.purebilibili.core.store.SettingsManager
+                                                    .setFullscreenSwipeSeekSeconds(context, seconds)
+                                            }
+                                        },
+                                        label = { Text("${seconds}s") }
+                                    )
+                                }
+                            }
+                        }
                         
                         // 🔄 [新增] 自动横竖屏切换
                         Divider()

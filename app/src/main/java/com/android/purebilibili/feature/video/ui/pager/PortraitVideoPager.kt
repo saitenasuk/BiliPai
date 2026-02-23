@@ -1173,7 +1173,7 @@ private fun VideoPageItem(
             },
             onLikeClick = { if (isCurrentModelVideo) viewModel.toggleLike() },
             onCoinClick = { },
-            onFavoriteClick = { if (isCurrentModelVideo) viewModel.showFavoriteFolderDialog() },
+            onFavoriteClick = { if (isCurrentModelVideo) viewModel.toggleFavorite() },
             onCommentClick = { showCommentSheet = true },
             onShareClick = {
                 val shareText = buildPortraitShareText(title = title, bvid = bvid)

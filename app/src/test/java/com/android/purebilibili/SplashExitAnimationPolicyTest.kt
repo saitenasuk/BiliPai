@@ -7,13 +7,14 @@ import org.junit.Test
 class SplashExitAnimationPolicyTest {
 
     @Test
-    fun enablesRealtimeBlurOnAndroid12AndAbove() {
-        assertTrue(shouldUseRealtimeSplashBlur(31))
+    fun enablesRealtimeBlurOnlyOnAndroid14AndAbove() {
+        assertFalse(shouldUseRealtimeSplashBlur(31))
+        assertFalse(shouldUseRealtimeSplashBlur(33))
         assertTrue(shouldUseRealtimeSplashBlur(34))
     }
 
     @Test
-    fun disablesRealtimeBlurBelowAndroid12() {
+    fun disablesRealtimeBlurBelowAndroid14() {
         assertFalse(shouldUseRealtimeSplashBlur(30))
     }
 
@@ -37,5 +38,12 @@ class SplashExitAnimationPolicyTest {
                 splashFlyoutEnabled = false
             )
         )
+    }
+
+    @Test
+    fun appliesRealtimeBlurOnlyAfterAnimationProgressStarts() {
+        assertFalse(shouldApplySplashRealtimeBlur(useRealtimeBlur = true, progress = 0f))
+        assertTrue(shouldApplySplashRealtimeBlur(useRealtimeBlur = true, progress = 0.12f))
+        assertFalse(shouldApplySplashRealtimeBlur(useRealtimeBlur = false, progress = 0.5f))
     }
 }

@@ -3,9 +3,11 @@ package com.android.purebilibili.feature.space
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
@@ -66,6 +68,11 @@ fun SpaceScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val followGroupDialogVisible by viewModel.followGroupDialogVisible.collectAsState()
+    val followGroupTags by viewModel.followGroupTags.collectAsState()
+    val followGroupSelectedTagIds by viewModel.followGroupSelectedTagIds.collectAsState()
+    val isFollowGroupsLoading by viewModel.isFollowGroupsLoading.collectAsState()
+    val isSavingFollowGroups by viewModel.isSavingFollowGroups.collectAsState()
     
     // [Block] Repository & State
     val blockedUpRepository = remember { com.android.purebilibili.data.repository.BlockedUpRepository(context) }
@@ -225,6 +232,92 @@ fun SpaceScreen(
             },
             dismissButton = {
                 com.android.purebilibili.core.ui.IOSDialogAction(onClick = { showBlockConfirmDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    if (followGroupDialogVisible) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isSavingFollowGroups) viewModel.dismissFollowGroupDialog()
+            },
+            title = { Text("设置关注分组") },
+            text = {
+                if (isFollowGroupsLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CupertinoActivityIndicator()
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        if (followGroupTags.isEmpty()) {
+                            Text(
+                                text = "暂无可用分组（不勾选即为默认分组）",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp
+                            )
+                        } else {
+                            followGroupTags.forEach { tag ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.toggleFollowGroupSelection(tag.tagid) }
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = followGroupSelectedTagIds.contains(tag.tagid),
+                                        onCheckedChange = { viewModel.toggleFollowGroupSelection(tag.tagid) }
+                                    )
+                                    Text(
+                                        text = "${tag.name} (${tag.count})",
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = "可多选，确定后覆盖原分组设置。",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.saveFollowGroupSelection() },
+                    enabled = !isFollowGroupsLoading && !isSavingFollowGroups
+                ) {
+                    if (isSavingFollowGroups) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("确定")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.dismissFollowGroupDialog() },
+                    enabled = !isSavingFollowGroups
+                ) {
+                    Text("取消")
+                }
             }
         )
     }

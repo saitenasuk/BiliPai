@@ -149,6 +149,10 @@ fun AppearanceSettingsContent(
             animationEnabled = state.cardAnimationEnabled
         )
     }
+    val scope = rememberCoroutineScope()
+    val compactVideoStatsOnCover by SettingsManager
+        .getCompactVideoStatsOnCover(context)
+        .collectAsState(initial = true)
 
     LazyColumn(
         modifier = modifier
@@ -702,6 +706,24 @@ fun AppearanceSettingsContent(
                             checked = state.isHeaderCollapseEnabled,
                             onCheckedChange = { viewModel.toggleHeaderCollapse(it) },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
+
+                        Divider(modifier = Modifier.padding(start = 16.dp))
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.SquareOnSquare,
+                            title = "统计信息贴封面（紧凑）",
+                            subtitle = if (compactVideoStatsOnCover) {
+                                "播放量和评论数显示在封面底部，缩小卡片间距"
+                            } else {
+                                "播放量和评论数显示在封面外部"
+                            },
+                            checked = compactVideoStatsOnCover,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setCompactVideoStatsOnCover(context, it)
+                                }
+                            },
+                            iconTint = iOSTeal
                         )
                         
                         // 网格列数设置 (仅在双列网格模式下显示)

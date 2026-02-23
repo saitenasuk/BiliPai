@@ -81,6 +81,7 @@ fun ElegantVideoCard(
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     showPublishTime: Boolean = false,   //  是否显示发布时间（搜索结果用）
     isDataSaverActive: Boolean = false, // 🚀 [性能优化] 从父级传入，避免每个卡片重复计算
+    compactStatsOnCover: Boolean = true, // 播放量/评论数是否贴在封面底部
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
     onWatchLater: (() -> Unit)? = null,  //  [新增] 稍后再看回调
     onUnfavorite: (() -> Unit)? = null,  //  [新增] 取消收藏回调
@@ -289,6 +290,59 @@ fun ElegantVideoCard(
                         )
                     )
             )
+
+            if (compactStatsOnCover) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 8.dp, bottom = 8.dp, end = 64.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Icon(
+                            imageVector = CupertinoIcons.Outlined.PlayCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = Color.White.copy(alpha = 0.92f)
+                        )
+                        Text(
+                            text = if (video.stat.view > 0) {
+                                FormatUtils.formatStat(video.stat.view.toLong())
+                            } else {
+                                FormatUtils.formatProgress(video.progress, video.duration)
+                            },
+                            color = Color.White.copy(alpha = 0.92f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    val commentCount = video.stat.reply.takeIf { it > 0 } ?: video.stat.danmaku
+                    if (commentCount > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Outlined.BubbleLeft,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = Color.White.copy(alpha = 0.86f)
+                            )
+                            Text(
+                                text = FormatUtils.formatStat(commentCount.toLong()),
+                                color = Color.White.copy(alpha = 0.86f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
             
             //  时长标签 - 右下角 (官方风格)
             Surface(
@@ -513,30 +567,13 @@ fun ElegantVideoCard(
                 )
             }
         }
-        
-        Spacer(modifier = Modifier.height(6.dp))
-        
-        //  [重设计] 播放数据行 - 独立展示，精致风格
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // 播放量
-            // 🔗 [共享元素] 播放量
-            var viewsModifier = Modifier.wrapContentSize()
-            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    viewsModifier = viewsModifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(key = "video_views_${video.bvid}"),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = { _, _ ->
-                            com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
-                        }
-                    )
-                }
-            }
 
-            Box(modifier = viewsModifier) {
+        if (!compactStatsOnCover) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -548,32 +585,19 @@ fun ElegantVideoCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = if (video.stat.view > 0) FormatUtils.formatStat(video.stat.view.toLong())
-                               else FormatUtils.formatProgress(video.progress, video.duration),
+                        text = if (video.stat.view > 0) {
+                            FormatUtils.formatStat(video.stat.view.toLong())
+                        } else {
+                            FormatUtils.formatProgress(video.progress, video.duration)
+                        },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
-            }
-            
-            // 弹幕数 (仅当有播放量时显示，保持逻辑一致)
-            if (video.stat.view > 0 && video.stat.danmaku > 0) {
-                // 🔗 [共享元素] 弹幕数
-                var danmakuModifier = Modifier.wrapContentSize()
-                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        danmakuModifier = danmakuModifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "video_danmaku_${video.bvid}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ ->
-                                com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
-                            }
-                        )
-                    }
-                }
 
-                Box(modifier = danmakuModifier) {
+                val commentCount = video.stat.reply.takeIf { it > 0 } ?: video.stat.danmaku
+                if (commentCount > 0) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -585,7 +609,7 @@ fun ElegantVideoCard(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = FormatUtils.formatStat(video.stat.danmaku.toLong()),
+                            text = FormatUtils.formatStat(commentCount.toLong()),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
@@ -594,6 +618,7 @@ fun ElegantVideoCard(
                 }
             }
         }
+
     }
     
     

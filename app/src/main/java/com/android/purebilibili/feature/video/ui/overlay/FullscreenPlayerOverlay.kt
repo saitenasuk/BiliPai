@@ -130,6 +130,10 @@ fun FullscreenPlayerOverlay(
     var gestureValue by remember { mutableFloatStateOf(0f) }
     var dragDelta by remember { mutableFloatStateOf(0f) }
     var seekPreviewPosition by remember { mutableLongStateOf(0L) }
+    var gestureSeekStartPosition by remember { mutableLongStateOf(0L) }
+    val fullscreenSwipeSeekSeconds by SettingsManager
+        .getFullscreenSwipeSeekSeconds(context)
+        .collectAsState(initial = 15)
     
     // 亮度状态
     var currentBrightness by remember { 
@@ -302,7 +306,7 @@ fun FullscreenPlayerOverlay(
                     }
                 )
             }
-            .pointerInput(gesturesEnabled) {
+            .pointerInput(gesturesEnabled, fullscreenSwipeSeekSeconds) {
                 if (!gesturesEnabled) return@pointerInput
                 
                 val screenWidth = size.width.toFloat()
@@ -332,6 +336,7 @@ fun FullscreenPlayerOverlay(
                             }
                             else -> {
                                 seekPreviewPosition = currentPosition
+                                gestureSeekStartPosition = currentPosition
                                 FullscreenGestureMode.Seek
                             }
                         }
@@ -368,8 +373,11 @@ fun FullscreenPlayerOverlay(
                             }
                             FullscreenGestureMode.Seek -> {
                                 dragDelta += dragAmount.x
-                                val seekDelta = (dragDelta / screenWidth * duration).toLong()
-                                seekPreviewPosition = (currentPosition + seekDelta).coerceIn(0L, duration)
+                                // 按步长离散化横向滑动，便于控制 15/30/45/60 秒等固定跳转体验。
+                                val stepWidthPx = (screenWidth / 8f).coerceAtLeast(1f)
+                                val stepCount = (dragDelta / stepWidthPx).toInt()
+                                val seekDelta = stepCount * fullscreenSwipeSeekSeconds * 1000L
+                                seekPreviewPosition = (gestureSeekStartPosition + seekDelta).coerceIn(0L, duration)
                                 currentProgress = (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
                             }
                             else -> {}

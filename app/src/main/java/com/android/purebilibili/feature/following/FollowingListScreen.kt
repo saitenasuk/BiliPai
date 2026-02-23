@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.following
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,6 +42,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.util.PinyinUtils
 
@@ -90,6 +92,9 @@ data class BatchFollowGroupDialogData(
     val hasMixedSelection: Boolean
 )
 
+private const val SPECIAL_FOLLOW_TAG_ID = -10L
+private const val DEFAULT_FOLLOW_TAG_ID = 0L
+
 internal fun resolveFollowGroupInitialSelection(groupSets: List<Set<Long>>): Set<Long> {
     if (groupSets.isEmpty()) return emptySet()
     val normalized = groupSets.map { it.filterNot { id -> id == 0L }.toSet() }
@@ -110,6 +115,15 @@ class FollowingListViewModel : ViewModel() {
 
     private val _isBatchUnfollowing = MutableStateFlow(false)
     val isBatchUnfollowing = _isBatchUnfollowing.asStateFlow()
+
+    private val _followGroupTags = MutableStateFlow<List<RelationTagItem>>(emptyList())
+    val followGroupTags = _followGroupTags.asStateFlow()
+
+    private val _userFollowGroupIds = MutableStateFlow<Map<Long, Set<Long>>>(emptyMap())
+    val userFollowGroupIds = _userFollowGroupIds.asStateFlow()
+
+    private val _isFollowGroupMetaLoading = MutableStateFlow(false)
+    val isFollowGroupMetaLoading = _isFollowGroupMetaLoading.asStateFlow()
 
     private var currentMid: Long = 0
     private val removedUserMids = mutableSetOf<Long>()
@@ -135,6 +149,7 @@ class FollowingListViewModel : ViewModel() {
                         total = total,
                         hasMore = initialUsers.size < total // 还有更多数据需要加载
                     )
+                    refreshFollowGroupMetadata(initialUsers)
                     
                     // 2. 如果还有更多数据，自动在后台加载剩余所有页面 (为了支持全量搜索)
                     if (initialUsers.size < total) {
@@ -183,6 +198,7 @@ class FollowingListViewModel : ViewModel() {
                                 hasMore = page < totalPages,
                                 isLoadingMore = true // 显示正在后台加载
                             )
+                            refreshFollowGroupMetadata(currentUsers)
                         }
                     } else {
                         break // 出错停止加载
@@ -248,10 +264,51 @@ class FollowingListViewModel : ViewModel() {
         val current = _uiState.value as? FollowingListUiState.Success ?: return
         val remainingUsers = current.users.filterNot { removedMids.contains(it.mid) }
         val reducedTotal = (current.total - removedMids.size).coerceAtLeast(remainingUsers.size)
+        _userFollowGroupIds.update { currentMap ->
+            currentMap - removedMids
+        }
         _uiState.value = current.copy(
             users = remainingUsers,
             total = reducedTotal
         )
+    }
+
+    private fun refreshFollowGroupMetadata(users: List<FollowingUser>) {
+        val mids = users.map { it.mid }.toSet()
+        if (mids.isEmpty()) return
+
+        viewModelScope.launch {
+            if (_followGroupTags.value.isEmpty()) {
+                ActionRepository.getFollowGroupTags().onSuccess { tags ->
+                    _followGroupTags.value = tags
+                        .filter { it.tagid != DEFAULT_FOLLOW_TAG_ID }
+                        .sortedBy { it.tagid != SPECIAL_FOLLOW_TAG_ID }
+                }
+            }
+
+            val existing = _userFollowGroupIds.value
+            val missingMids = mids.filterNot { existing.containsKey(it) }
+            if (missingMids.isEmpty()) return@launch
+
+            _isFollowGroupMetaLoading.value = true
+            try {
+                val fetched = coroutineScope {
+                    missingMids.map { mid ->
+                        async {
+                            val groupIds = ActionRepository.getUserFollowGroupIds(mid)
+                                .getOrElse { emptySet() }
+                            mid to groupIds
+                        }
+                    }.awaitAll()
+                }.toMap()
+
+                _userFollowGroupIds.update { currentMap ->
+                    currentMap + fetched
+                }
+            } finally {
+                _isFollowGroupMetaLoading.value = false
+            }
+        }
     }
 
     suspend fun prepareBatchGroupDialogData(targetMids: List<Long>): Result<BatchFollowGroupDialogData> {
@@ -300,6 +357,9 @@ fun FollowingListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isBatchUnfollowing by viewModel.isBatchUnfollowing.collectAsState()
+    val followGroupTags by viewModel.followGroupTags.collectAsState()
+    val userFollowGroupIds by viewModel.userFollowGroupIds.collectAsState()
+    val isFollowGroupMetaLoading by viewModel.isFollowGroupMetaLoading.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -308,6 +368,7 @@ fun FollowingListScreen(
     }
 
     var searchQuery by remember { mutableStateOf("") }
+    var selectedGroupFilter by remember { mutableStateOf<Long?>(null) }
     var isEditMode by remember { mutableStateOf(false) }
     var selectedMids by remember { mutableStateOf(setOf<Long>()) }
     var showBatchUnfollowConfirm by remember { mutableStateOf(false) }
@@ -398,11 +459,45 @@ fun FollowingListScreen(
                             selectedMids = selectedMids.intersect(available)
                         }
 
+                        val groupFilterChips = remember(state.users, followGroupTags, userFollowGroupIds) {
+                            val users = state.users
+                            val defaultCount = users.count { user ->
+                                userFollowGroupIds[user.mid].isNullOrEmpty()
+                            }
+                            val dynamicTags = followGroupTags.ifEmpty {
+                                listOf(
+                                    RelationTagItem(tagid = SPECIAL_FOLLOW_TAG_ID, name = "特别关注", count = 0)
+                                )
+                            }
+                            buildList {
+                                add(RelationTagItem(tagid = Long.MIN_VALUE, name = "全部", count = users.size))
+                                add(RelationTagItem(tagid = DEFAULT_FOLLOW_TAG_ID, name = "默认分组", count = defaultCount))
+                                dynamicTags.forEach { tag ->
+                                    val count = users.count { user ->
+                                        userFollowGroupIds[user.mid]?.contains(tag.tagid) == true
+                                    }
+                                    add(tag.copy(count = count))
+                                }
+                            }
+                        }
+
+                        val usersByGroup = remember(state.users, selectedGroupFilter, userFollowGroupIds) {
+                            when (selectedGroupFilter) {
+                                null, Long.MIN_VALUE -> state.users
+                                DEFAULT_FOLLOW_TAG_ID -> state.users.filter { user ->
+                                    userFollowGroupIds[user.mid].isNullOrEmpty()
+                                }
+                                else -> state.users.filter { user ->
+                                    userFollowGroupIds[user.mid]?.contains(selectedGroupFilter) == true
+                                }
+                            }
+                        }
+
                         // 🔍 过滤列表
-                        val filteredUsers = remember(state.users, searchQuery) {
-                            if (searchQuery.isBlank()) state.users
+                        val filteredUsers = remember(usersByGroup, searchQuery) {
+                            if (searchQuery.isBlank()) usersByGroup
                             else {
-                                state.users.filter { 
+                                usersByGroup.filter {
                                     PinyinUtils.matches(it.uname, searchQuery) ||
                                     PinyinUtils.matches(it.sign, searchQuery)
                                 }
@@ -423,13 +518,48 @@ fun FollowingListScreen(
                                     Text(
                                         text = when {
                                             isEditMode -> "已选 $selectedCount 人"
-                                            searchQuery.isEmpty() -> "共 ${state.total} 个关注"
+                                            searchQuery.isEmpty() && (selectedGroupFilter == null || selectedGroupFilter == Long.MIN_VALUE) ->
+                                                "共 ${state.total} 个关注"
+                                            searchQuery.isEmpty() -> "当前分组 ${filteredUsers.size} 人"
                                             else -> "找到 ${filteredUsers.size} 个结果"
                                         },
                                         fontSize = 13.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                                     )
+                                }
+
+                                item {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState())
+                                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        groupFilterChips.forEach { chip ->
+                                            val chipFilterId = if (chip.tagid == Long.MIN_VALUE) null else chip.tagid
+                                            FilterChip(
+                                                selected = selectedGroupFilter == chipFilterId ||
+                                                    (selectedGroupFilter == null && chip.tagid == Long.MIN_VALUE),
+                                                onClick = { selectedGroupFilter = chipFilterId },
+                                                label = {
+                                                    Text("${chip.name} ${chip.count}")
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (isFollowGroupMetaLoading) {
+                                    item {
+                                        Text(
+                                            text = "分组信息加载中...",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
                                 
                                 items(filteredUsers, key = { it.mid }) { user ->

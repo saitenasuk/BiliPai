@@ -139,24 +139,62 @@ object DanmakuProto {
                 when (fieldNumber) {
                     1 -> state = input.readVarint().toInt()
                     2 -> textSide = input.readString()
-                    3 -> { // dmSge
-                         val bytes = input.readBytes()
-                         dmSge = parseDmSegConfig(bytes)
+                    // 兼容旧/新 web/view 字段：旧版 dmSge=3、flag=4；新版 dmSge=4、flag=5
+                    3, 4 -> {
+                        if (wireType == 2) {
+                            val bytes = input.readBytes()
+                            val dmSegCandidate = parseDmSegConfig(bytes)
+                            if (isLikelyDmSegConfig(dmSegCandidate)) {
+                                dmSge = dmSegCandidate
+                            } else {
+                                val flagCandidate = parseDanmakuFlagConfig(bytes)
+                                if (isLikelyDanmakuFlagConfig(flagCandidate)) {
+                                    flag = flagCandidate
+                                }
+                            }
+                        } else {
+                            input.skipField(wireType)
+                        }
                     }
-                    4 -> { // flag
-                        val bytes = input.readBytes()
-                        flag = parseDanmakuFlagConfig(bytes)
+                    // 旧版 specialDms=5，新版 flag=5
+                    5 -> {
+                        if (wireType == 2) {
+                            val bytes = input.readBytes()
+                            val flagCandidate = parseDanmakuFlagConfig(bytes)
+                            if (isLikelyDanmakuFlagConfig(flagCandidate)) {
+                                flag = flagCandidate
+                            } else {
+                                decodeSpecialDmUrl(bytes)?.let { specialDms.add(it) }
+                            }
+                        } else {
+                            input.skipField(wireType)
+                        }
                     }
-                    5 -> specialDms.add(input.readString())
                     6 -> checkBox = input.readVarint() != 0L
-                    7 -> count = input.readVarint()
-                    8 -> { // commandDms
-                        val bytes = input.readBytes()
-                        parseCommandDm(bytes)?.let { commandDms.add(it) }
+                    // 旧版 count=7，新版 count=8；旧版 commandDms=8，新版 commandDms=9
+                    7, 8 -> {
+                        when (wireType) {
+                            0 -> count = input.readVarint()
+                            2 -> {
+                                val bytes = input.readBytes()
+                                parseCommandDm(bytes)?.let { commandDms.add(it) }
+                            }
+                            else -> input.skipField(wireType)
+                        }
                     }
-                    9 -> { // dmSetting
-                        val bytes = input.readBytes()
-                        dmSetting = parseDmSetting(bytes)
+                    // 旧版 dmSetting=9，新版 dmSetting=10
+                    9, 10 -> {
+                        if (wireType == 2) {
+                            val bytes = input.readBytes()
+                            val command = parseCommandDm(bytes)
+                            if (command != null) {
+                                commandDms.add(command)
+                            } else {
+                                dmSetting = parseDmSetting(bytes)
+                            }
+                        } else {
+                            input.skipField(wireType)
+                        }
                     }
                     else -> input.skipField(wireType)
                 }
@@ -166,6 +204,23 @@ object DanmakuProto {
         }
 
         return DmWebViewReply(state, textSide, dmSge, flag, specialDms, checkBox, count, commandDms, dmSetting)
+    }
+
+    private fun isLikelyDmSegConfig(config: DmSegConfig): Boolean {
+        return config.pageSize >= 1_000L &&
+            config.total in 1L..10_000L
+    }
+
+    private fun isLikelyDanmakuFlagConfig(config: DanmakuFlagConfig): Boolean {
+        return config.recFlag != 0 ||
+            config.recSwitch != 0 ||
+            config.recText.isNotEmpty()
+    }
+
+    private fun decodeSpecialDmUrl(data: ByteArray): String? {
+        if (data.isEmpty()) return null
+        val text = String(data, StandardCharsets.UTF_8).trim()
+        return text.takeIf { it.startsWith("http://") || it.startsWith("https://") || it.startsWith("//") }
     }
 
     private fun parseDmSegConfig(data: ByteArray): DmSegConfig {

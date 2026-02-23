@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -164,6 +165,7 @@ fun TabletCinemaLayout(
         Row(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .padding(horizontal = policy.horizontalPaddingDp.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -206,7 +208,7 @@ fun TabletCinemaLayout(
                         modifier = Modifier.weight(1f),
                         onFollowClick = { viewModel.toggleFollow() },
                         onUpClick = onUpClick,
-                        onFavoriteClick = { viewModel.showFavoriteFolderDialog() },
+                        onFavoriteClick = { viewModel.toggleFavorite() },
                         onLikeClick = { viewModel.toggleLike() },
                         onCoinClick = { viewModel.openCoinDialog() },
                         onTripleClick = { viewModel.doTripleAction() },
@@ -386,7 +388,7 @@ private fun CinemaStagePlayer(
                     onToggleFollow = { viewModel.toggleFollow() },
                     onToggleLike = { viewModel.toggleLike() },
                     onCoin = { viewModel.showCoinDialog() },
-                    onToggleFavorite = { viewModel.showFavoriteFolderDialog() },
+                    onToggleFavorite = { viewModel.toggleFavorite() },
                     onTriple = { viewModel.doTripleAction() }
                 )
             }
@@ -626,6 +628,7 @@ private fun CinemaSideCurtain(
                                 success = success,
                                 commentState = commentState,
                                 commentViewModel = commentViewModel,
+                                viewModel = viewModel,
                                 playerState = playerState,
                                 onUpClick = onUpClick,
                                 context = context
@@ -656,12 +659,28 @@ private fun CinemaCommentsPane(
     success: PlayerUiState.Success,
     commentState: CommentUiState,
     commentViewModel: VideoCommentViewModel,
+    viewModel: PlayerViewModel,
     playerState: VideoPlayerState,
     onUpClick: (Long) -> Unit,
     context: android.content.Context
 ) {
     val listState = rememberLazyListState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
+        val url = rawUrl.trim()
+        if (url.isEmpty()) return@openCommentUrl
+        if (shouldOpenCommentUrlInApp(url)) {
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                .setPackage(context.packageName)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            val launchedInApp = runCatching {
+                context.startActivity(intent)
+            }.isSuccess
+            if (launchedInApp) return@openCommentUrl
+        }
+        runCatching { uriHandler.openUri(url) }
+    }
     var showImagePreview by remember { mutableStateOf(false) }
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
@@ -709,6 +728,26 @@ private fun CinemaCommentsPane(
                     onUpOnlyToggle = { commentViewModel.toggleUpOnly() }
                 )
             }
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(14.dp),
+                    onClick = {
+                        viewModel.clearReplyingTo()
+                        viewModel.showCommentInputDialog()
+                    }
+                ) {
+                    Text(
+                        text = "写评论，直接和 UP 主交流",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
+            }
             items(
                 items = commentState.replies,
                 key = { "curtain_reply_${it.rpid}" }
@@ -731,6 +770,10 @@ private fun CinemaCommentsPane(
                     },
                     onLikeClick = { commentViewModel.likeComment(reply.rpid) },
                     isLiked = reply.action == 1 || reply.rpid in commentState.likedComments,
+                    onReplyClick = {
+                        viewModel.setReplyingTo(reply)
+                        viewModel.showCommentInputDialog()
+                    },
                     onDeleteClick = if (
                         commentState.currentMid > 0 && reply.mid == commentState.currentMid
                     ) {
@@ -738,6 +781,7 @@ private fun CinemaCommentsPane(
                     } else {
                         null
                     },
+                    onUrlClick = openCommentUrl,
                     onAvatarClick = { mid ->
                         mid.toLongOrNull()?.let(onUpClick)
                     }

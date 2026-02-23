@@ -100,6 +100,7 @@ fun VideoContentSection(
     onUpClick: (Long) -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     onSubReplyClick: (ReplyItem) -> Unit,
+    onRootCommentClick: () -> Unit = {},
     onLoadMoreReplies: () -> Unit,
     onDownloadClick: () -> Unit = {},
     onWatchLaterClick: () -> Unit = {},
@@ -116,6 +117,7 @@ fun VideoContentSection(
     onCommentLike: (Long) -> Unit = {},
     // [新增] 已点赞的评论 ID 集合
     likedComments: Set<Long> = emptySet(),
+    onCommentUrlClick: (String) -> Unit = {},
     // 🔗 [新增] 共享元素过渡开关
     transitionEnabled: Boolean = false,
     // [新增] 收藏夹相关参数
@@ -179,20 +181,6 @@ fun VideoContentSection(
         }
     }
     
-    // 收藏夹底部弹窗
-    if (favoriteFolderDialogVisible) {
-        com.android.purebilibili.feature.video.ui.components.FavoriteFolderSheet(
-            folders = favoriteFolders,
-            isLoading = isFavoriteFoldersLoading,
-            selectedFolderIds = selectedFavoriteFolderIds,
-            isSaving = isSavingFavoriteFolders,
-            onFolderToggle = onFavoriteFolderToggle,
-            onSaveClick = onSaveFavoriteFolders,
-            onDismissRequest = onDismissFavoriteFolderDialog,
-            onCreateFolder = onCreateFavoriteFolder
-        )
-    }
-
     val onTabSelected: (Int) -> Unit = { index ->
         scope.launch { pagerState.animateScrollToPage(index) }
     }
@@ -277,6 +265,7 @@ fun VideoContentSection(
                     onUpOnlyToggle = onUpOnlyToggle,
                     onUpClick = onUpClick,
                     onSubReplyClick = onSubReplyClick,
+                    onRootCommentClick = onRootCommentClick,
                     onLoadMoreReplies = onLoadMoreReplies,
                     
                     // [新增] 传递删除相关参数
@@ -287,6 +276,7 @@ fun VideoContentSection(
                     // [新增] 传递点赞回调
                     onCommentLike = onCommentLike,
                     likedComments = likedComments,
+                    onCommentUrlClick = onCommentUrlClick,
 
                     onImagePreview = { images, index, rect ->
                         previewImages = images
@@ -431,6 +421,7 @@ private fun VideoCommentTab(
     onUpOnlyToggle: () -> Unit,
     onUpClick: (Long) -> Unit,
     onSubReplyClick: (ReplyItem) -> Unit,
+    onRootCommentClick: () -> Unit,
     onLoadMoreReplies: () -> Unit,
     onImagePreview: (List<String>, Int, Rect?) -> Unit,
     onTimestampClick: ((Long) -> Unit)?,
@@ -442,10 +433,9 @@ private fun VideoCommentTab(
     onDissolveStart: (Long) -> Unit,
     // [新增] 点赞回调
     onCommentLike: (Long) -> Unit,
-    likedComments: Set<Long>
+    likedComments: Set<Long>,
+    onCommentUrlClick: (String) -> Unit
 ) {
-    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-
     Box(
         modifier = modifier.fillMaxSize()
     ) {
@@ -462,6 +452,23 @@ private fun VideoCommentTab(
                     upOnly = upOnlyFilter,
                     onUpOnlyToggle = onUpOnlyToggle
                 )
+            }
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(16.dp),
+                    onClick = onRootCommentClick
+                ) {
+                    Text(
+                        text = "说点什么，直接评论 UP 主和大家",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
             }
 
             if (isRepliesLoading && replies.isEmpty()) {
@@ -507,13 +514,7 @@ private fun VideoCommentTab(
                                 { onDissolveStart(reply.rpid) }
                             } else null,
                             // [新增] URL 点击跳转
-                            onUrlClick = { url ->
-                                try {
-                                    uriHandler.openUri(url)
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            },
+                            onUrlClick = onCommentUrlClick,
                             // [新增] 头像点击
                             onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUpClick(it) } }
                         )

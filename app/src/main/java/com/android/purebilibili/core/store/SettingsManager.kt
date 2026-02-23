@@ -16,6 +16,7 @@ import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRules
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlin.math.abs
 
 // 声明 DataStore 扩展属性
 private val Context.settingsDataStore by preferencesDataStore(name = "settings_prefs")
@@ -75,6 +76,7 @@ data class HomeSettings(
     val gridColumnCount: Int = 0, // [New] 网格列数 (0=自动, 1-6=固定)
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = true,    //  卡片过渡动画（默认开启）
+    val compactVideoStatsOnCover: Boolean = true, //  播放量/评论数显示在封面底部（默认开启）
     //  [修复] 默认值改为 true，避免在 Flow 加载实际值之前错误触发弹窗
     // 当 Flow 加载完成后，如果实际值是 false，LaunchedEffect 会再次触发并显示弹窗
     val crashTrackingConsentShown: Boolean = true
@@ -159,6 +161,8 @@ object SettingsManager {
     private val KEY_CARD_ANIMATION_ENABLED = booleanPreferencesKey("card_animation_enabled")
     //  [新增] 卡片过渡动画开关
     private val KEY_CARD_TRANSITION_ENABLED = booleanPreferencesKey("card_transition_enabled")
+    //  [新增] 视频卡片统计信息贴封面开关
+    private val KEY_COMPACT_VIDEO_STATS_ON_COVER = booleanPreferencesKey("compact_video_stats_on_cover")
     //  [合并] 崩溃追踪同意弹窗
     private val KEY_CRASH_TRACKING_CONSENT_SHOWN = booleanPreferencesKey("crash_tracking_consent_shown")
     //  [新增] 底栏自定义 - 顺序和可见性
@@ -194,6 +198,7 @@ object SettingsManager {
         val crashConsentFlow = context.settingsDataStore.data.map { it[KEY_CRASH_TRACKING_CONSENT_SHOWN] ?: false }
         val cardAnimationFlow = context.settingsDataStore.data.map { it[KEY_CARD_ANIMATION_ENABLED] ?: false }
         val cardTransitionFlow = context.settingsDataStore.data.map { it[KEY_CARD_TRANSITION_ENABLED] ?: true }  // 默认开启
+        val compactVideoStatsFlow = context.settingsDataStore.data.map { it[KEY_COMPACT_VIDEO_STATS_ON_COVER] ?: true }
         
         // 🔧 Kotlin combine() 最多支持 5 个参数，这里我们满了，需要重组 flow 或者使用 combine 的 list 重载
         // Since we added liquidGlassFlow, we have 6 flows in total now for 'firstFive'.
@@ -230,19 +235,32 @@ object SettingsManager {
                 liquidGlassStyle = visual.s, // [New]
                 cardAnimationEnabled = false, // placeholder
                 cardTransitionEnabled = false,
+                compactVideoStatsOnCover = true,
                 crashTrackingConsentShown = false
             )
         }
         
-        val extraFlow = combine(crashConsentFlow, cardAnimationFlow, cardTransitionFlow) { consent, cardAnim, cardTransition ->
-            Triple(consent, cardAnim, cardTransition)
+        val extraFlow = combine(
+            crashConsentFlow,
+            cardAnimationFlow,
+            cardTransitionFlow,
+            compactVideoStatsFlow
+        ) { consent, cardAnim, cardTransition, compactStats ->
+            data class Extra(
+                val consent: Boolean,
+                val cardAnim: Boolean,
+                val cardTransition: Boolean,
+                val compactStats: Boolean
+            )
+            Extra(consent, cardAnim, cardTransition, compactStats)
         }
         
         return combine(coreSettingsFlow, extraFlow) { settings, extra ->
             settings.copy(
-                crashTrackingConsentShown = extra.first,
-                cardAnimationEnabled = extra.second,
-                cardTransitionEnabled = extra.third
+                crashTrackingConsentShown = extra.consent,
+                cardAnimationEnabled = extra.cardAnim,
+                cardTransitionEnabled = extra.cardTransition,
+                compactVideoStatsOnCover = extra.compactStats
             )
         }
     }
@@ -544,6 +562,14 @@ object SettingsManager {
 
     suspend fun setCardTransitionEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] = value }
+    }
+
+    //  [新增] --- 视频卡片统计信息贴封面 ---
+    fun getCompactVideoStatsOnCover(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_COMPACT_VIDEO_STATS_ON_COVER] ?: true }
+
+    suspend fun setCompactVideoStatsOnCover(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_COMPACT_VIDEO_STATS_ON_COVER] = value }
     }
 
     //  [新增] --- 应用图标 ---
@@ -1600,6 +1626,9 @@ object SettingsManager {
     // ==========  播放器设置 ==========
     
     private val KEY_SWIPE_HIDE_PLAYER = booleanPreferencesKey("swipe_hide_player")
+    private val KEY_PORTRAIT_SWIPE_TO_FULLSCREEN = booleanPreferencesKey("portrait_swipe_to_fullscreen")
+    private val KEY_FULLSCREEN_SWIPE_SEEK_SECONDS = intPreferencesKey("fullscreen_swipe_seek_seconds")
+    private val FULLSCREEN_SWIPE_SEEK_OPTIONS = listOf(10, 15, 20, 30)
     
     // --- 上滑隐藏播放器开关 ---
     fun getSwipeHidePlayerEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
@@ -1607,6 +1636,31 @@ object SettingsManager {
 
     suspend fun setSwipeHidePlayerEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_SWIPE_HIDE_PLAYER] = value }
+    }
+
+    // --- 竖屏上滑进入全屏（默认开启） ---
+    fun getPortraitSwipeToFullscreenEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PORTRAIT_SWIPE_TO_FULLSCREEN] ?: true }
+
+    suspend fun setPortraitSwipeToFullscreenEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_PORTRAIT_SWIPE_TO_FULLSCREEN] = value }
+    }
+
+    // --- 横屏左右滑动快进/快退步长（秒，默认 15） ---
+    fun getFullscreenSwipeSeekSeconds(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            val raw = preferences[KEY_FULLSCREEN_SWIPE_SEEK_SECONDS] ?: 15
+            normalizeFullscreenSwipeSeekSeconds(raw)
+        }
+
+    suspend fun setFullscreenSwipeSeekSeconds(context: Context, seconds: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FULLSCREEN_SWIPE_SEEK_SECONDS] = normalizeFullscreenSwipeSeekSeconds(seconds)
+        }
+    }
+
+    private fun normalizeFullscreenSwipeSeekSeconds(seconds: Int): Int {
+        return FULLSCREEN_SWIPE_SEEK_OPTIONS.minByOrNull { option -> abs(option - seconds) } ?: 15
     }
     
 

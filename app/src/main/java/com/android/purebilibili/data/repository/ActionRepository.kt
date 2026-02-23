@@ -12,9 +12,25 @@ import kotlinx.coroutines.withContext
  */
 object ActionRepository {
     private val api = NetworkModule.api
+    private const val SPECIAL_FOLLOW_TAG_ID = -10L
 
     private fun normalizeRelationTagIds(raw: Set<Long>): Set<Long> {
         return raw.asSequence().filter { it != 0L }.toSet()
+    }
+
+    private fun normalizeRelationTags(
+        raw: List<com.android.purebilibili.data.model.response.RelationTagItem>
+    ): List<com.android.purebilibili.data.model.response.RelationTagItem> {
+        val merged = raw.distinctBy { it.tagid }.toMutableList()
+        if (merged.none { it.tagid == SPECIAL_FOLLOW_TAG_ID }) {
+            merged += com.android.purebilibili.data.model.response.RelationTagItem(
+                tagid = SPECIAL_FOLLOW_TAG_ID,
+                name = "特别关注",
+                count = 0,
+                tip = "第一时间收到该分组下用户更新稿件的通知"
+            )
+        }
+        return merged.sortedBy { it.tagid != SPECIAL_FOLLOW_TAG_ID }
     }
 
     /**
@@ -161,7 +177,7 @@ object ActionRepository {
             try {
                 val response = api.getRelationTags()
                 if (response.code == 0) {
-                    Result.success(response.data)
+                    Result.success(normalizeRelationTags(response.data))
                 } else {
                     Result.failure(Exception(response.message.ifEmpty { "获取关注分组失败: ${response.code}" }))
                 }

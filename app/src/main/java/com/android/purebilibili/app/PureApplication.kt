@@ -44,6 +44,14 @@ internal fun shouldBlockStartupForHomeVisualDefaultsMigration(): Boolean = false
 internal fun shouldDeferPlaylistRestoreAtStartup(): Boolean = true
 internal fun shouldDeferTelemetryInitAtStartup(): Boolean = true
 internal fun deferredNonCriticalStartupDelayMs(): Long = 900L
+internal fun shouldClearImageMemoryCacheOnTrimLevel(level: Int): Boolean {
+    return when (level) {
+        ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
+        ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
+        ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> true
+        else -> false
+    }
+}
 
 //  实现 ImageLoaderFactory 以提供自定义 Coil 配置
 //  实现 ComponentCallbacks2 响应系统内存警告
@@ -265,24 +273,16 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
     // � [后台内存优化] 响应系统内存警告
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        when (level) {
-            ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
-                //  UI 隐藏时(进入后台)，清理图片内存缓存
-                _imageLoader?.memoryCache?.clear()
-                Logger.d(TAG, " UI hidden, cleared image memory cache")
-            }
-            ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
-            ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> {
-                //  低内存时，更激进地清理
-                _imageLoader?.memoryCache?.clear()
+        if (shouldClearImageMemoryCacheOnTrimLevel(level)) {
+            _imageLoader?.memoryCache?.clear()
+            if (level == ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
+                Logger.d(TAG, "🚨 TRIM_MEMORY_COMPLETE, released image memory cache")
+            } else {
                 System.gc()
-                Logger.d(TAG, " Low memory, aggressive cleanup")
+                Logger.d(TAG, " Low memory trim(level=$level), cleared image memory cache")
             }
-            ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
-                //  进程即将被杀死，释放所有可能的内存
-                _imageLoader?.memoryCache?.clear()
-                Logger.d(TAG, "🚨 TRIM_MEMORY_COMPLETE, released all caches")
-            }
+        } else if (level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            Logger.d(TAG, " UI hidden, keep image memory cache for faster resume")
         }
     }
     
@@ -356,6 +356,12 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                 val currentIcon = normalizeAppIconKey(
                     SettingsManager.getAppIcon(this@PureApplication).first()
                 )
+                val cacheSynced = this@PureApplication
+                    .getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("current_icon", currentIcon)
+                    .commit()
+                Logger.d(TAG, " Synced app icon cache from DataStore: $currentIcon (success=$cacheSynced)")
 
                 val allUniqueAliases = allManagedAppIconLauncherAliases(packageName)
                 val targetAlias = resolveAppIconLauncherAlias(packageName, currentIcon)

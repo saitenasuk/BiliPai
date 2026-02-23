@@ -123,6 +123,7 @@ fun VideoPlayerOverlay(
     //  [新增] 弹幕开关和设置
     danmakuEnabled: Boolean = true,
     onDanmakuToggle: () -> Unit = {},
+    onDanmakuInputClick: () -> Unit = {},
     danmakuOpacity: Float = 0.85f,
     danmakuFontScale: Float = 1.0f,
     danmakuSpeed: Float = 1.0f,
@@ -470,9 +471,6 @@ fun VideoPlayerOverlay(
                         isAudioOnly = isAudioOnly,
                         //  [新增] 投屏按钮
                         onCastClick = onCastClickAction,
-                        // 📱 左上角改为弹幕开关，画质只保留底部入口
-                        danmakuEnabled = danmakuEnabled,
-                        onDanmakuToggle = onDanmakuToggle,
                         modifier = Modifier.align(Alignment.TopStart)
                     )
                 }
@@ -495,6 +493,7 @@ fun VideoPlayerOverlay(
                     //  [新增] 竖屏模式弹幕和清晰度控制
                     danmakuEnabled = danmakuEnabled,
                     onDanmakuToggle = onDanmakuToggle,
+                    onDanmakuInputClick = onDanmakuInputClick,
                     onDanmakuSettingsClick = { showDanmakuSettings = true },
                     currentQualityLabel = currentQualityLabel,
                     onQualityClick = { showQualityMenu = true },
@@ -907,7 +906,7 @@ fun VideoPlayerOverlay(
 /**
  *  竖屏模式顶部控制栏
  * 
- * 包含返回首页按钮、弹幕开关、设置按钮和分享按钮
+ * 包含返回首页按钮、设置按钮和分享按钮
  */
 @Composable
 private fun PortraitTopBar(
@@ -919,9 +918,6 @@ private fun PortraitTopBar(
     isAudioOnly: Boolean,
     // 📺 [新增] 投屏
     onCastClick: () -> Unit = {},
-    // 📱 左上角快捷入口：弹幕开关
-    danmakuEnabled: Boolean = true,
-    onDanmakuToggle: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -941,7 +937,7 @@ private fun PortraitTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 左侧：返回按钮 + 弹幕开关
+        // 左侧：返回按钮 + 在线人数
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(layoutPolicy.leftSectionSpacingDp.dp)
@@ -956,23 +952,6 @@ private fun PortraitTopBar(
                     contentDescription = "返回",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
-                )
-            }
-            
-            Surface(
-                onClick = onDanmakuToggle,
-                color = if (danmakuEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(4.dp)
-            ) {
-                Text(
-                    text = if (danmakuEnabled) "弹幕开" else "弹幕关",
-                    color = Color.White,
-                    fontSize = layoutPolicy.chipFontSp.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(
-                        horizontal = layoutPolicy.chipHorizontalPaddingDp.dp,
-                        vertical = layoutPolicy.chipVerticalPaddingDp.dp
-                    )
                 )
             }
             

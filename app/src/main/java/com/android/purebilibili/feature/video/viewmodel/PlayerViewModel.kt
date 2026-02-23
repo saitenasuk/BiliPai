@@ -1535,7 +1535,39 @@ class PlayerViewModel : ViewModel() {
     }
     
     fun toggleFavorite() {
-        showFavoriteFolderDialog()
+        val current = _uiState.value as? PlayerUiState.Success ?: return
+        viewModelScope.launch {
+            interactionUseCase.toggleFavorite(
+                aid = current.info.aid,
+                currentlyFavorited = current.isFavorited,
+                bvid = current.info.bvid
+            ).onSuccess { favorited ->
+                _uiState.update { state ->
+                    if (state is PlayerUiState.Success) {
+                        val updatedFavoriteCount = (state.info.stat.favorite + if (favorited) 1 else -1)
+                            .coerceAtLeast(0)
+                        state.copy(
+                            isFavorited = favorited,
+                            info = state.info.copy(
+                                stat = state.info.stat.copy(favorite = updatedFavoriteCount)
+                            )
+                        )
+                    } else {
+                        state
+                    }
+                }
+                // 收藏状态已变化，清空缓存，确保下次打开收藏夹弹窗时拉取最新远端选中状态。
+                favoriteFoldersBoundAid = null
+                _favoriteFolders.value = emptyList()
+                if (!favorited) {
+                    lastSavedFavoriteFolderIds = emptySet()
+                    _favoriteSelectedFolderIds.value = emptySet()
+                }
+                toast(if (favorited) "收藏成功" else "已取消收藏")
+            }.onFailure { e ->
+                toast(e.message ?: "收藏操作失败")
+            }
+        }
     }
     
     fun toggleLike() {

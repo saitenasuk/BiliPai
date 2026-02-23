@@ -139,21 +139,6 @@ fun VideoCardLarge(
                 Text(archive.duration_text, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
             }
             
-            // 播放量和弹幕 - 左下角
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(CupertinoIcons.Default.Play, null, modifier = Modifier.size(14.dp), tint = Color.White)
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(archive.stat.play, fontSize = 12.sp, color = Color.White)
-                Spacer(modifier = Modifier.width(12.dp))
-                Icon(CupertinoIcons.Default.Message, null, modifier = Modifier.size(13.dp), tint = Color.White)
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(archive.stat.danmaku, fontSize = 12.sp, color = Color.White)
-            }
         }
         
         Spacer(modifier = Modifier.height(10.dp))
@@ -189,6 +174,37 @@ fun VideoCardLarge(
                 overflow = TextOverflow.Ellipsis,
                 lineHeight = 20.sp,
                 color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                CupertinoIcons.Default.Play,
+                contentDescription = null,
+                modifier = Modifier.size(13.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                archive.stat.play,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Icon(
+                CupertinoIcons.Default.Message,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                archive.stat.danmaku,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
