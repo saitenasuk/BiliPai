@@ -451,30 +451,34 @@ JSON 规则插件是一种**无需编程**的轻量级插件格式，只需编�
 
 ```
 app/src/main/java/com/android/purebilibili/
-├── app/                # Application 初始化
-├── core/               # 核心工具类
-│   ├── network/        # 网络配置
-│   ├── utils/          # 工具函数
-│   └── ui/             # 通用 UI 组件
-├── data/               # 数据层
-│   ├── api/            # API 接口定义
-│   ├── model/          # 数据模型
-│   └── repository/     # 数据仓库
-├── domain/             # 领域层
-│   └── usecase/        # 用例
-├── feature/            # 功能模块
-│   ├── home/           # 首页
-│   ├── video/          # 视频播放
-│   ├── bangumi/        # 番剧
-│   ├── live/           # 直播
-│   ├── dynamic/        # 动态
-│   ├── search/         # 搜索
-│   ├── download/       # 下载
-│   ├── profile/        # 个人中心
-│   ├── settings/       # 设置
-│   └── login/          # 登录
-└── navigation/         # 导航
+├── app/                      # Application 入口与启动初始化
+├── core/                     # 跨功能公共能力
+│   ├── cache/                # 缓存与预热策略
+│   ├── cooldown/             # 频控与节流策略
+│   ├── database/             # Room 数据库/DAO/实体
+│   ├── lifecycle/            # 生命周期封装
+│   ├── network/              # 网络请求与长连接
+│   ├── plugin/               # 插件引擎与 JSON 规则
+│   ├── store/                # DataStore 本地配置
+│   ├── theme/                # 全局主题
+│   ├── ui/                   # 通用 UI 组件
+│   └── util/                 # 工具函数
+├── data/                     # 数据层
+│   ├── model/                # 数据模型（entity/response）
+│   └── repository/           # 数据仓库实现
+├── domain/                   # 领域层
+│   └── usecase/              # 业务用例
+├── feature/                  # 业务功能模块（按场景拆分）
+│   ├── home/ video/ player/ cast/ audio/ watchlater/
+│   ├── bangumi/ live/ dynamic/ search/ web/
+│   ├── profile/ space/ following/ message/
+│   ├── category/ partition/ list/ story/
+│   └── settings/ plugin/ download/ login/ onboarding/
+└── navigation/               # 全局导航
 ```
+
+> [!TIP]
+> 结构按 `v6.1.1` 主分支整理。新增目录会在 Release 周期内同步到文档。
 
 ---
 
