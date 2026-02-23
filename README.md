@@ -583,13 +583,23 @@ cd BiliPai
 | [Room](https://developer.android.com/training/data-storage/room) | 数据库持久化 |
 | [DataStore](https://developer.android.com/topic/libraries/architecture/datastore) | 偏好设置存储 |
 | [Retrofit](https://github.com/square/retrofit) | HTTP 网络请求 |
+| [Retrofit Kotlinx Serialization Converter](https://github.com/JakeWharton/retrofit2-kotlinx-serialization-converter) | Retrofit + Kotlinx 序列化转换器 |
 | [OkHttp](https://github.com/square/okhttp) | HTTP 客户端 |
+| [Brotli Decoder](https://github.com/google/brotli) | Brotli 内容解压支持 |
+| [Cling](https://github.com/4thline/cling) | DLNA/UPnP 投屏能力 |
+| [Jetty](https://github.com/jetty/jetty.project) | 内嵌 HTTP/Servlet 容器（投屏服务链路） |
+| [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) | 轻量本地代理服务（投屏回源） |
+| [pinyin4j](https://sourceforge.net/projects/pinyin4j/) | 中文拼音转换（搜索/排序辅助） |
 | [Kotlinx Serialization](https://github.com/Kotlin/kotlinx.serialization) | Kotlin 序列化库 |
 | [Firebase Crashlytics](https://firebase.google.com/docs/crashlytics) | 崩溃追踪分析 |
 | [Orbital](https://github.com/skydoves/Orbital) | 共享元素过渡动画 |
 | [AndroidX Palette](https://developer.android.com/training/material/palette-colors) | 动态取色引擎 |
 | [LeakCanary](https://github.com/square/leakcanary) | 内存泄漏检测 |
 | [WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager) | 后台任务管理 |
+| [MockK](https://github.com/mockk/mockk) | Kotlin 单元测试 Mock 框架 |
+| [Turbine](https://github.com/cashapp/turbine) | Kotlin Flow 测试断言工具 |
+
+如有遗漏，欢迎通过 Issue / PR 继续补充致谢项目与说明。
 
 ---
 
