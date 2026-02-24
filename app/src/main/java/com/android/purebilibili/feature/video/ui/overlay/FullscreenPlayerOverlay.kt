@@ -135,6 +135,15 @@ fun FullscreenPlayerOverlay(
     val fullscreenSwipeSeekSeconds by SettingsManager
         .getFullscreenSwipeSeekSeconds(context)
         .collectAsState(initial = 15)
+    val doubleTapSeekEnabled by SettingsManager
+        .getDoubleTapSeekEnabled(context)
+        .collectAsState(initial = true)
+    val seekForwardSeconds by SettingsManager
+        .getSeekForwardSeconds(context)
+        .collectAsState(initial = 10)
+    val seekBackwardSeconds by SettingsManager
+        .getSeekBackwardSeconds(context)
+        .collectAsState(initial = 10)
     
     // 亮度状态
     var currentBrightness by remember { 
@@ -278,7 +287,12 @@ fun FullscreenPlayerOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(gesturesEnabled) {
+            .pointerInput(
+                gesturesEnabled,
+                doubleTapSeekEnabled,
+                seekForwardSeconds,
+                seekBackwardSeconds
+            ) {
                 if (!gesturesEnabled) return@pointerInput
                 
                 val screenWidth = size.width.toFloat()
@@ -289,24 +303,29 @@ fun FullscreenPlayerOverlay(
                         if (showControls) lastInteractionTime = System.currentTimeMillis()
                     },
                     onDoubleTap = { offset ->
-                        // [问题7修复] 分区双击：左侧后退、中间暂停、右侧快进
+                        // 分区双击策略可由设置控制：关闭跳转时全屏双击仅暂停/播放
                         val relativeX = offset.x / screenWidth
                         player?.let { p ->
-                            when {
-                                relativeX < 0.3f -> {
-                                    // 左侧双击：后退 10 秒
-                                    val newPos = (p.currentPosition - 10000).coerceAtLeast(0)
+                            when (resolveFullscreenDoubleTapAction(relativeX, doubleTapSeekEnabled)) {
+                                FullscreenDoubleTapAction.SeekBackward -> {
+                                    val seekMs = seekBackwardSeconds * 1000L
+                                    val newPos = (p.currentPosition - seekMs).coerceAtLeast(0L)
                                     p.seekTo(newPos)
                                     danmakuManager.seekTo(newPos)
                                 }
-                                relativeX > 0.7f -> {
-                                    // 右侧双击：前进 10 秒
-                                    val newPos = (p.currentPosition + 10000).coerceAtMost(p.duration)
+                                FullscreenDoubleTapAction.SeekForward -> {
+                                    val seekMs = seekForwardSeconds * 1000L
+                                    val durationLimit = p.duration.coerceAtLeast(0L)
+                                    val target = p.currentPosition + seekMs
+                                    val newPos = if (durationLimit > 0L) {
+                                        target.coerceAtMost(durationLimit)
+                                    } else {
+                                        target
+                                    }
                                     p.seekTo(newPos)
                                     danmakuManager.seekTo(newPos)
                                 }
-                                else -> {
-                                    // 中间双击：播放/暂停
+                                FullscreenDoubleTapAction.TogglePlayPause -> {
                                     if (p.isPlaying) p.pause() else p.play()
                                 }
                             }

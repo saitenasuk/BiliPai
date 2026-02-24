@@ -51,6 +51,24 @@ data class PlayerProgress(
 
 internal fun shouldShowAspectRatioButtonInControlBar(isFullscreen: Boolean): Boolean = isFullscreen
 internal fun shouldShowPortraitSwitchButtonInControlBar(isFullscreen: Boolean): Boolean = isFullscreen
+internal fun shouldShowNextEpisodeButtonInControlBar(
+    isFullscreen: Boolean,
+    hasNextEpisode: Boolean
+): Boolean = isFullscreen && hasNextEpisode
+internal fun shouldShowEpisodeButtonInControlBar(
+    isFullscreen: Boolean,
+    hasEpisodeEntry: Boolean
+): Boolean = isFullscreen && hasEpisodeEntry
+
+internal fun shouldShowPlaybackOrderLabelInControlBar(
+    isFullscreen: Boolean,
+    widthDp: Int
+): Boolean = isFullscreen && widthDp >= 840
+
+internal fun shouldShowAspectRatioButtonInControlBar(
+    isFullscreen: Boolean,
+    widthDp: Int
+): Boolean = isFullscreen && widthDp >= 700
 
 private fun Modifier.consumeTap(onTap: () -> Unit): Modifier {
     return pointerInput(onTap) {
@@ -78,6 +96,10 @@ fun BottomControlBar(
     onSeekStart: () -> Unit = {},
     onSpeedClick: () -> Unit = {},
     onRatioClick: () -> Unit = {},
+    onNextEpisodeClick: () -> Unit = {},
+    hasNextEpisode: Boolean = false,
+    onEpisodeClick: () -> Unit = {},
+    hasEpisodeEntry: Boolean = false,
     onToggleFullscreen: () -> Unit,
     
     // Danmaku
@@ -116,6 +138,31 @@ fun BottomControlBar(
     val progressLayoutPolicy = remember(configuration.screenWidthDp) {
         resolveVideoProgressBarLayoutPolicy(
             widthDp = configuration.screenWidthDp
+        )
+    }
+    val showEpisodeButton = remember(isFullscreen, hasEpisodeEntry) {
+        shouldShowEpisodeButtonInControlBar(
+            isFullscreen = isFullscreen,
+            hasEpisodeEntry = hasEpisodeEntry
+        )
+    }
+    val showPlaybackOrderLabel = remember(isFullscreen, configuration.screenWidthDp, playbackOrderLabel) {
+        playbackOrderLabel.isNotBlank() &&
+            shouldShowPlaybackOrderLabelInControlBar(
+                isFullscreen = isFullscreen,
+                widthDp = configuration.screenWidthDp
+            )
+    }
+    val showAspectRatioButton = remember(isFullscreen, configuration.screenWidthDp) {
+        shouldShowAspectRatioButtonInControlBar(
+            isFullscreen = isFullscreen,
+            widthDp = configuration.screenWidthDp
+        )
+    }
+    val showNextEpisodeButton = remember(isFullscreen, hasNextEpisode) {
+        shouldShowNextEpisodeButtonInControlBar(
+            isFullscreen = isFullscreen,
+            hasNextEpisode = hasNextEpisode
         )
     }
 
@@ -262,6 +309,16 @@ fun BottomControlBar(
                         modifier = Modifier.clickable(onClick = onQualityClick)
                     )
                 }
+
+                if (showEpisodeButton) {
+                    Text(
+                        text = "分集",
+                        color = Color.White,
+                        fontSize = layoutPolicy.actionTextFontSp.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable(onClick = onEpisodeClick)
+                    )
+                }
                 
                 // Speed
                 Text(
@@ -272,7 +329,17 @@ fun BottomControlBar(
                     modifier = Modifier.clickable(onClick = onSpeedClick)
                 )
 
-                if (playbackOrderLabel.isNotBlank()) {
+                if (showNextEpisodeButton) {
+                    Text(
+                        text = "下集",
+                        color = Color.White,
+                        fontSize = layoutPolicy.actionTextFontSp.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable(onClick = onNextEpisodeClick)
+                    )
+                }
+
+                if (showPlaybackOrderLabel) {
                     Text(
                         text = playbackOrderLabel,
                         color = Color.White,
@@ -283,7 +350,7 @@ fun BottomControlBar(
                 }
 
                 // 📺 横屏全屏模式下显示画面比例按钮
-                if (shouldShowAspectRatioButtonInControlBar(isFullscreen)) {
+                if (showAspectRatioButton) {
                     Text(
                         text = currentRatio.displayName,
                         color = if (currentRatio == VideoAspectRatio.FIT) Color.White else MaterialTheme.colorScheme.primary,

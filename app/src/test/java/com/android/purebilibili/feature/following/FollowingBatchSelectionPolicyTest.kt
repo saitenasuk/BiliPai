@@ -59,4 +59,12 @@ class FollowingBatchSelectionPolicyTest {
         assertTrue(initial.isEmpty())
         assertTrue(hasMixedFollowGroupSelection(sets))
     }
+
+    @Test
+    fun `isRetryableBatchOperationError should detect risk-control messages`() {
+        assertTrue(isRetryableBatchOperationError("请求过于频繁，请稍后重试"))
+        assertTrue(isRetryableBatchOperationError("触发风控，请稍后再试"))
+        assertTrue(isRetryableBatchOperationError("too many requests"))
+        assertTrue(!isRetryableBatchOperationError("内容不存在"))
+    }
 }

@@ -47,6 +47,12 @@ abstract class BaseListViewModel(application: Application, private val pageTitle
 // --- 历史记录 ViewModel (支持游标分页加载) ---
 class HistoryViewModel(application: Application) : BaseListViewModel(application, "历史记录") {
     
+    private val progressManager by lazy {
+        com.android.purebilibili.feature.video.controller.PlaybackProgressManager.getInstance(
+            getApplication<Application>()
+        )
+    }
+    
     // 游标分页状态
     private var cursorMax: Long = 0
     private var cursorViewAt: Long = 0
@@ -62,6 +68,10 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     
     // [新增] 保存完整的历史记录项（包含导航信息）
     private val _historyItemsMap = mutableMapOf<String, com.android.purebilibili.data.model.response.HistoryItem>()
+    private val _historyItemsByRenderKey = mutableMapOf<String, com.android.purebilibili.data.model.response.HistoryItem>()
+
+    private val _dissolvingIds = MutableStateFlow<Set<String>>(emptySet())
+    val dissolvingIds = _dissolvingIds.asStateFlow()
     
     /**
      * 根据 bvid 获取历史记录项的导航信息
@@ -69,12 +79,70 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     fun getHistoryItem(bvid: String): com.android.purebilibili.data.model.response.HistoryItem? {
         return _historyItemsMap[bvid]
     }
+
+    fun resolveHistoryRenderKey(video: VideoItem): String {
+        val bvid = video.bvid.trim()
+        if (bvid.isNotEmpty()) return bvid
+        val matched = _historyItemsByRenderKey.entries.firstOrNull { (_, item) ->
+            item.videoItem.id == video.id &&
+                item.videoItem.cid == video.cid &&
+                item.videoItem.title == video.title
+        }?.key
+        if (!matched.isNullOrBlank()) return matched
+        return "unknown_${video.id.coerceAtLeast(0L)}"
+    }
+
+    fun startVideoDissolve(renderKey: String) {
+        val key = renderKey.trim()
+        if (key.isEmpty()) return
+        _dissolvingIds.value = _dissolvingIds.value + key
+    }
+
+    fun startBatchVideoDissolve(renderKeys: Set<String>) {
+        if (renderKeys.isEmpty()) return
+        _dissolvingIds.value = _dissolvingIds.value + renderKeys
+    }
+
+    fun completeVideoDissolve(renderKey: String) {
+        val key = renderKey.trim()
+        if (key.isEmpty()) return
+        _dissolvingIds.value = _dissolvingIds.value - key
+        deleteHistoryItems(setOf(key))
+    }
+
+    private fun enrichHistoryProgress(
+        historyItems: List<com.android.purebilibili.data.model.response.HistoryItem>
+    ): List<com.android.purebilibili.data.model.response.HistoryItem> {
+        return historyItems.map { item ->
+            val video = item.videoItem
+            if (video.bvid.isBlank()) return@map item
+
+            val cid = (item.cid.takeIf { it > 0L } ?: video.cid).coerceAtLeast(0L)
+            val localCachedMs = progressManager.getCachedPosition(video.bvid, cid)
+            val resolvedProgress = resolveHistoryDisplayProgress(
+                serverProgressSec = item.progress,
+                durationSec = video.duration,
+                localPositionMs = localCachedMs
+            )
+
+            if (resolvedProgress == item.progress && resolvedProgress == video.progress) {
+                item
+            } else {
+                item.copy(
+                    progress = resolvedProgress,
+                    videoItem = video.copy(progress = resolvedProgress)
+                )
+            }
+        }
+    }
     
     override suspend fun fetchItems(): List<VideoItem> {
         // 重置游标
         cursorMax = 0
         cursorViewAt = 0
         _historyItemsMap.clear()
+        _historyItemsByRenderKey.clear()
+        _dissolvingIds.value = emptySet()
         
         val result = com.android.purebilibili.data.repository.HistoryRepository.getHistoryList(
             ps = 30,
@@ -100,10 +168,8 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         _hasMoreState.value = hasMore
         
         // 保存历史记录项并转换为 VideoItem
-        val historyItems = historyResult.list.map { it.toHistoryItem() }
-        historyItems.forEach { item ->
-            _historyItemsMap[item.videoItem.bvid] = item
-        }
+        val historyItems = enrichHistoryProgress(historyResult.list.map { it.toHistoryItem() })
+        cacheHistoryItems(historyItems)
         
         com.android.purebilibili.core.util.Logger.d("HistoryVM", " First page: ${historyResult.list.size} items, hasMore=$hasMore, nextMax=$cursorMax")
         
@@ -145,10 +211,8 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
                 _hasMoreState.value = hasMore
                 
                 // 保存历史记录项并转换为 VideoItem
-                val historyItems = historyResult.list.map { it.toHistoryItem() }
-                historyItems.forEach { item ->
-                    _historyItemsMap[item.videoItem.bvid] = item
-                }
+                val historyItems = enrichHistoryProgress(historyResult.list.map { it.toHistoryItem() })
+                cacheHistoryItems(historyItems)
                 
                 val newItems = historyItems.map { it.videoItem }
                 com.android.purebilibili.core.util.Logger.d("HistoryVM", " Loaded ${newItems.size} more items, hasMore=$hasMore")
@@ -169,6 +233,154 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
                 _isLoadingMoreState.value = false
             }
         }
+    }
+
+    fun deleteHistoryItems(renderKeys: Set<String>) {
+        if (renderKeys.isEmpty()) return
+        val snapshotItems = _uiState.value.items
+        val snapshotRenderMap = HashMap(_historyItemsByRenderKey)
+        val snapshotBvidMap = HashMap(_historyItemsMap)
+        val targetKeys = renderKeys.filter { it in snapshotRenderMap }.toSet()
+        if (targetKeys.isEmpty()) return
+
+        val optimisticList = snapshotItems.filter { video ->
+            val key = resolveHistoryRenderKeyFromSnapshot(video, snapshotRenderMap)
+            key !in targetKeys
+        }
+        _uiState.value = _uiState.value.copy(items = optimisticList)
+        _historyItemsByRenderKey.keys.removeAll(targetKeys)
+        targetKeys.forEach { key ->
+            snapshotRenderMap[key]?.videoItem?.bvid?.takeIf { it.isNotBlank() }?.let { _historyItemsMap.remove(it) }
+        }
+
+        viewModelScope.launch {
+            try {
+                val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
+                if (csrf.isBlank()) {
+                    restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
+                    android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+
+                val targetEntries = targetKeys.mapNotNull { key ->
+                    snapshotRenderMap[key]?.let { key to it }
+                }
+                val successKeys = mutableSetOf<String>()
+                targetEntries.forEachIndexed { index, (key, item) ->
+                    val kid = resolveHistoryDeleteKid(item)
+                    if (!kid.isNullOrBlank()) {
+                        val result = deleteHistoryItemWithRetry(kid = kid, csrf = csrf)
+                        if (result.isSuccess) {
+                            successKeys += key
+                        }
+                    }
+                    if (index < targetEntries.lastIndex) {
+                        kotlinx.coroutines.delay(HISTORY_DELETE_INTERVAL_MS)
+                    }
+                }
+
+                if (successKeys.size == targetEntries.size) {
+                    val count = successKeys.size
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        if (count == 1) "已删除历史记录" else "已删除 $count 条历史记录",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    val restoredItems = snapshotItems.filter { video ->
+                        val key = resolveHistoryRenderKeyFromSnapshot(video, snapshotRenderMap)
+                        key !in successKeys
+                    }
+                    val restoredRenderMap = HashMap(snapshotRenderMap).apply {
+                        keys.removeAll(successKeys)
+                    }
+                    val restoredBvidMap = HashMap(snapshotBvidMap).apply {
+                        entries.removeAll { (_, value) ->
+                            resolveHistoryRenderKey(value) in successKeys
+                        }
+                    }
+                    _uiState.value = _uiState.value.copy(items = restoredItems)
+                    _historyItemsByRenderKey.clear()
+                    _historyItemsByRenderKey.putAll(restoredRenderMap)
+                    _historyItemsMap.clear()
+                    _historyItemsMap.putAll(restoredBvidMap)
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "批量删除完成：成功 ${successKeys.size} / ${targetEntries.size}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } catch (e: Exception) {
+                restoreHistorySnapshot(snapshotItems, snapshotRenderMap, snapshotBvidMap)
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    "删除历史失败: ${e.message ?: "请稍后重试"}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun cacheHistoryItems(historyItems: List<com.android.purebilibili.data.model.response.HistoryItem>) {
+        historyItems.forEach { item ->
+            val bvid = item.videoItem.bvid.trim()
+            if (bvid.isNotEmpty()) {
+                _historyItemsMap[bvid] = item
+            }
+            _historyItemsByRenderKey[resolveHistoryRenderKey(item)] = item
+        }
+    }
+
+    private fun resolveHistoryRenderKeyFromSnapshot(
+        video: VideoItem,
+        historyMap: Map<String, com.android.purebilibili.data.model.response.HistoryItem>
+    ): String {
+        val bvid = video.bvid.trim()
+        if (bvid.isNotEmpty()) return bvid
+        val matched = historyMap.entries.firstOrNull { (_, item) ->
+            item.videoItem.id == video.id &&
+                item.videoItem.cid == video.cid &&
+                item.videoItem.title == video.title
+        }?.key
+        if (!matched.isNullOrBlank()) return matched
+        return "unknown_${video.id.coerceAtLeast(0L)}"
+    }
+
+    private fun restoreHistorySnapshot(
+        items: List<VideoItem>,
+        renderMap: Map<String, com.android.purebilibili.data.model.response.HistoryItem>,
+        bvidMap: Map<String, com.android.purebilibili.data.model.response.HistoryItem>
+    ) {
+        _uiState.value = _uiState.value.copy(items = items)
+        _historyItemsByRenderKey.clear()
+        _historyItemsByRenderKey.putAll(renderMap)
+        _historyItemsMap.clear()
+        _historyItemsMap.putAll(bvidMap)
+    }
+
+    private suspend fun deleteHistoryItemWithRetry(
+        kid: String,
+        csrf: String
+    ): Result<Unit> {
+        repeat(HISTORY_DELETE_MAX_ATTEMPTS) { attempt ->
+            val result = com.android.purebilibili.data.repository.HistoryRepository.deleteHistoryItem(
+                kid = kid,
+                csrf = csrf
+            )
+            if (result.isSuccess) return Result.success(Unit)
+            if (attempt >= HISTORY_DELETE_MAX_ATTEMPTS - 1) {
+                return result
+            }
+            val backoffMs = HISTORY_DELETE_RETRY_BASE_DELAY_MS * (attempt + 1)
+            kotlinx.coroutines.delay(backoffMs)
+        }
+        return Result.failure(Exception("删除历史失败"))
+    }
+
+    companion object {
+        private const val HISTORY_DELETE_MAX_ATTEMPTS = 3
+        private const val HISTORY_DELETE_RETRY_BASE_DELAY_MS = 300L
+        private const val HISTORY_DELETE_INTERVAL_MS = 150L
     }
 }
 

@@ -18,6 +18,7 @@ import com.android.purebilibili.core.network.socket.DanmakuProtocol
 import com.android.purebilibili.data.repository.DanmakuRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
 
 /**
  * 直播弹幕 UI 模型
@@ -102,6 +103,7 @@ class LivePlayerViewModel : ViewModel() {
     val danmakuFlow = _danmakuFlow.asSharedFlow()
     
     private var danmakuClient: com.android.purebilibili.core.network.socket.LiveDanmakuClient? = null
+    private var danmakuCollectJob: Job? = null
     
     private var currentRoomId: Long = 0
     private var currentUid: Long = 0
@@ -457,6 +459,7 @@ class LivePlayerViewModel : ViewModel() {
      */
     private fun startLiveDanmaku(roomId: Long) {
         // 先断开旧连接
+        danmakuCollectJob?.cancel()
         danmakuClient?.disconnect()
         danmakuClient = null
         
@@ -466,7 +469,7 @@ class LivePlayerViewModel : ViewModel() {
                 danmakuClient = client
                 
                 // 监听弹幕消息
-                launch(Dispatchers.Default) {
+                danmakuCollectJob = launch(Dispatchers.Default) {
                     client.messageFlow.collect { packet ->
                         handleDanmakuPacket(packet)
                     }
@@ -629,6 +632,7 @@ class LivePlayerViewModel : ViewModel() {
     
     override fun onCleared() {
         super.onCleared()
+        danmakuCollectJob?.cancel()
         danmakuClient?.disconnect()
     }
 }

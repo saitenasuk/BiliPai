@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 //  Cupertino Icons
@@ -94,6 +95,12 @@ fun VideoSettingsPanel(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val context = androidx.compose.ui.platform.LocalContext.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val actionPolicy = remember(configuration.screenWidthDp) {
+        resolveVideoSettingsPanelActionPolicy(
+            widthDp = configuration.screenWidthDp
+        )
+    }
     val scope = rememberCoroutineScope()
     val seekForwardSeconds by com.android.purebilibili.core.store.SettingsManager
         .getSeekForwardSeconds(context)
@@ -193,78 +200,37 @@ fun VideoSettingsPanel(
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // 保存封面
-                        Button(
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(actionPolicy.rowItemSpacingDp.dp)
+                    ) {
+                        SettingsActionPill(
+                            icon = CupertinoIcons.Default.Photo,
+                            label = "保存封面",
                             onClick = {
                                 onSaveCover()
                                 onDismiss()
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    CupertinoIcons.Default.Photo, 
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("保存封面", color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            }
-                        }
-
-                        // 视频截图
-                        Button(
+                            policy = actionPolicy
+                        )
+                        SettingsActionPill(
+                            icon = Icons.Filled.PhotoCamera,
+                            label = "视频截图",
                             onClick = {
                                 onCaptureScreenshot()
                                 onDismiss()
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.PhotoCamera,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("视频截图", color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            }
-                        }
-                        
-                        // 下载音频
-                        Button(
+                            policy = actionPolicy
+                        )
+                        SettingsActionPill(
+                            icon = CupertinoIcons.Default.MusicNote,
+                            label = "下载音频",
                             onClick = {
                                 onDownloadAudio()
                                 onDismiss()
                             },
-                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    CupertinoIcons.Default.MusicNote, 
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("下载音频", color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            }
-                        }
+                            policy = actionPolicy
+                        )
                     }
                 }
                 SettingsDivider()
@@ -275,8 +241,9 @@ fun VideoSettingsPanel(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(actionPolicy.rowItemSpacingDp.dp)
                 ) {
                     // 左右翻转
                     FlipButton(
@@ -284,7 +251,7 @@ fun VideoSettingsPanel(
                         label = "左右翻转",
                         isActive = isFlippedHorizontal,
                         onClick = onFlipHorizontal,
-                        modifier = Modifier.weight(1f)
+                        policy = actionPolicy
                     )
                     
                     // 上下翻转
@@ -293,7 +260,7 @@ fun VideoSettingsPanel(
                         label = "上下翻转",
                         isActive = isFlippedVertical,
                         onClick = onFlipVertical,
-                        modifier = Modifier.weight(1f)
+                        policy = actionPolicy
                     )
                     
                     // 听视频（音频模式）
@@ -302,7 +269,7 @@ fun VideoSettingsPanel(
                         label = "听视频",
                         isActive = isAudioOnly,
                         onClick = onAudioOnlyToggle,
-                        modifier = Modifier.weight(1f)
+                        policy = actionPolicy
                     )
                 }
                 SettingsDivider()
@@ -1128,22 +1095,24 @@ private fun FlipButton(
     label: String,
     isActive: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    policy: VideoSettingsPanelActionPolicy
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(policy.pillHeightDp.dp),
         color = if (isActive) 
             MaterialTheme.colorScheme.primaryContainer 
         else 
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
         border = if (isActive) null else null,
-        modifier = modifier.height(48.dp)
+        modifier = Modifier
+            .height(policy.pillHeightDp.dp)
+            .defaultMinSize(minWidth = policy.pillMinWidthDp.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = policy.pillHorizontalPaddingDp.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1154,7 +1123,7 @@ private fun FlipButton(
                     MaterialTheme.colorScheme.onPrimaryContainer 
                 else 
                     MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(policy.pillIconSizeDp.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
@@ -1165,6 +1134,46 @@ private fun FlipButton(
                     MaterialTheme.colorScheme.onPrimaryContainer 
                 else 
                     MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsActionPill(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    policy: VideoSettingsPanelActionPolicy
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(policy.pillHeightDp.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier
+            .height(policy.pillHeightDp.dp)
+            .defaultMinSize(minWidth = policy.pillMinWidthDp.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = policy.pillHorizontalPaddingDp.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(policy.pillIconSizeDp.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

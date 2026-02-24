@@ -84,6 +84,21 @@ private fun fixCoverUrl(url: String?): String {
     }
 }
 
+private const val WATCH_LATER_DELETE_MAX_ATTEMPTS = 3
+private const val WATCH_LATER_DELETE_INTERVAL_MS = 280L
+private const val WATCH_LATER_DELETE_RETRY_BASE_DELAY_MS = 850L
+
+internal fun isRetryableWatchLaterDeleteError(code: Int, message: String): Boolean {
+    if (code in setOf(-412, -352, -509, 22015, 34004)) return true
+    if (message.isBlank()) return false
+    return message.contains("频繁") ||
+        message.contains("过快") ||
+        message.contains("风控") ||
+        message.contains("稍后") ||
+        message.contains("too many", ignoreCase = true) ||
+        message.contains("rate", ignoreCase = true)
+}
+
 /**
  * 稍后再看 UI 状态
  */
@@ -184,20 +199,26 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
 
         viewModelScope.launch {
             try {
-                val api = NetworkModule.api
                 val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
                 if (csrf.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(items = currentList)
                     android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
                     return@launch
                 }
-                val response = api.deleteFromWatchLater(aid = aid, csrf = csrf)
-                if (response.code == 0) {
+                val result = deleteWatchLaterAidWithRetry(aid = aid, csrf = csrf)
+                if (result.isSuccess) {
                     android.widget.Toast.makeText(getApplication(), "已从稍后再看移除", android.widget.Toast.LENGTH_SHORT).show()
                 } else {
-                    android.widget.Toast.makeText(getApplication(), "移除失败: ${response.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    _uiState.value = _uiState.value.copy(items = currentList)
+                    android.widget.Toast.makeText(
+                        getApplication(),
+                        "移除失败: ${result.exceptionOrNull()?.message ?: "请稍后重试"}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                _uiState.value = _uiState.value.copy(items = currentList)
                 android.widget.Toast.makeText(getApplication(), "移除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
@@ -214,7 +235,6 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
 
         viewModelScope.launch {
             try {
-                val api = NetworkModule.api
                 val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
                 if (csrf.isEmpty()) {
                     _uiState.value = _uiState.value.copy(items = snapshot)
@@ -222,14 +242,23 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                     return@launch
                 }
 
-                var successCount = 0
-                aids.forEach { aid ->
-                    runCatching {
-                        api.deleteFromWatchLater(aid = aid, csrf = csrf)
-                    }.onSuccess { response ->
-                        if (response.code == 0) successCount++
+                val successIds = mutableSetOf<Long>()
+                aids.forEachIndexed { index, aid ->
+                    val result = deleteWatchLaterAidWithRetry(aid = aid, csrf = csrf)
+                    if (result.isSuccess) {
+                        successIds += aid
+                    }
+                    if (index < aids.lastIndex) {
+                        kotlinx.coroutines.delay(WATCH_LATER_DELETE_INTERVAL_MS)
                     }
                 }
+
+                val successCount = successIds.size
+                _uiState.value = _uiState.value.copy(
+                    items = snapshot.filterNot { it.id in successIds },
+                    dissolvingIds = _uiState.value.dissolvingIds -
+                        snapshot.filter { it.id in successIds }.map { it.bvid }.toSet()
+                )
 
                 if (successCount == aids.size) {
                     android.widget.Toast.makeText(getApplication(), "已删除 ${aids.size} 个视频", android.widget.Toast.LENGTH_SHORT).show()
@@ -242,9 +271,40 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                _uiState.value = _uiState.value.copy(items = snapshot)
                 android.widget.Toast.makeText(getApplication(), "批量删除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private suspend fun deleteWatchLaterAidWithRetry(
+        aid: Long,
+        csrf: String
+    ): Result<Unit> {
+        val api = NetworkModule.api
+        repeat(WATCH_LATER_DELETE_MAX_ATTEMPTS) { attempt ->
+            try {
+                val response = api.deleteFromWatchLater(aid = aid, csrf = csrf)
+                if (response.code == 0) {
+                    return Result.success(Unit)
+                }
+
+                val retryable = isRetryableWatchLaterDeleteError(response.code, response.message)
+                if (!retryable || attempt >= WATCH_LATER_DELETE_MAX_ATTEMPTS - 1) {
+                    return Result.failure(
+                        Exception(response.message.ifEmpty { "删除失败: ${response.code}" })
+                    )
+                }
+            } catch (e: Exception) {
+                if (attempt >= WATCH_LATER_DELETE_MAX_ATTEMPTS - 1) {
+                    return Result.failure(e)
+                }
+            }
+
+            val backoffMs = WATCH_LATER_DELETE_RETRY_BASE_DELAY_MS * (attempt + 1)
+            kotlinx.coroutines.delay(backoffMs)
+        }
+        return Result.failure(Exception("删除失败，请稍后重试"))
     }
 }
 

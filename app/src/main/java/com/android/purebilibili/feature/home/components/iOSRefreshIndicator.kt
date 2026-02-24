@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.feature.home.resolvePullRefreshHintText
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 
 /**
@@ -40,15 +41,14 @@ fun iOSRefreshIndicator(
     val progress = state.distanceFraction
     
     //  是否达到刷新阈值
-    val isOverThreshold = progress >= 1f
+    val isOverThreshold = progress >= 1f && !state.isAnimating
     
     //  提示文字
-    val hintText = when {
-        isRefreshing -> "正在刷新..."
-        isOverThreshold -> "松手刷新"
-        progress > 0f -> "下拉刷新..."
-        else -> ""
-    }
+    val hintText = resolvePullRefreshHintText(
+        progress = progress,
+        isRefreshing = isRefreshing,
+        isStateAnimating = state.isAnimating
+    )
     
     //  箭头旋转角度（下拉超过阈值时翻转）- 使用低阻尼弹簧实现过冲
     val arrowRotation by animateFloatAsState(

@@ -39,4 +39,37 @@ class HistoryPlaybackPolicyTest {
 
         assertEquals(114L, resolved)
     }
+
+    @Test
+    fun `resolveHistoryDisplayProgress keeps server progress when available`() {
+        val resolved = resolveHistoryDisplayProgress(
+            serverProgressSec = 120,
+            durationSec = 600,
+            localPositionMs = 300_000L
+        )
+
+        assertEquals(120, resolved)
+    }
+
+    @Test
+    fun `resolveHistoryDisplayProgress falls back to local cached progress when server is zero`() {
+        val resolved = resolveHistoryDisplayProgress(
+            serverProgressSec = 0,
+            durationSec = 600,
+            localPositionMs = 180_000L
+        )
+
+        assertEquals(180, resolved)
+    }
+
+    @Test
+    fun `resolveHistoryDisplayProgress treats near-end local progress as completed`() {
+        val resolved = resolveHistoryDisplayProgress(
+            serverProgressSec = 0,
+            durationSec = 1000,
+            localPositionMs = 980_000L
+        )
+
+        assertEquals(-1, resolved)
+    }
 }

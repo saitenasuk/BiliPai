@@ -158,6 +158,13 @@ internal fun shouldHandleVideoDetailDisposeAsNavigationExit(
         !isNavigatingToVideo
 }
 
+internal fun resolveIsNavigatingToVideoDuringDispose(
+    localNavigatingToVideo: Boolean,
+    managerNavigatingToVideo: Boolean
+): Boolean {
+    return localNavigatingToVideo || managerNavigatingToVideo
+}
+
 internal fun shouldShowWatchLaterQueueBarByPolicy(
     isExternalPlaylist: Boolean,
     externalPlaylistSource: ExternalPlaylistSource,
@@ -277,13 +284,36 @@ fun VideoDetailScreen(
     val configuration = LocalConfiguration.current
     val uiState by viewModel.uiState.collectAsState()
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    var isNavigatingToVideo by remember { mutableStateOf(false) }
+    var isNavigatingToAudioMode by remember { mutableStateOf(false) }
+    var isNavigatingToMiniMode by remember { mutableStateOf(false) }
+
+    val navigateToRelatedVideo = remember(onVideoClick, miniPlayerManager, uiState) {
+        { targetBvid: String, options: android.os.Bundle? ->
+            isNavigatingToVideo = true
+            miniPlayerManager?.isNavigatingToVideo = true
+            val success = uiState as? PlayerUiState.Success
+            val explicitCid = options?.getLong(VIDEO_NAV_TARGET_CID_KEY) ?: 0L
+            val resolvedCid = resolveNavigationTargetCid(
+                targetBvid = targetBvid,
+                explicitCid = explicitCid,
+                ugcSeason = success?.info?.ugc_season
+            )
+            val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
+            if (resolvedCid > 0L) {
+                navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, resolvedCid)
+            }
+            onVideoClick(targetBvid, navOptions)
+        }
+    }
+
     val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
         val url = rawUrl.trim()
         if (url.isEmpty()) return@openCommentUrl
 
         val parsedResult = com.android.purebilibili.core.util.BilibiliUrlParser.parse(url)
         if (parsedResult.bvid != null) {
-            onVideoClick(parsedResult.bvid, null)
+            navigateToRelatedVideo(parsedResult.bvid, null)
             return@openCommentUrl
         }
 
@@ -481,7 +511,7 @@ fun VideoDetailScreen(
             isActuallyLeaving = true // 标记确实是用户通过点击或返回键离开
             isScreenActive = false  // 标记页面正在退出
             // 🎯 通知小窗管理器这是用户主动导航离开（用于控制后台音频）
-            miniPlayerManager?.markLeavingByNavigation()
+            miniPlayerManager?.markLeavingByNavigation(expectedBvid = currentBvid)
             
             restoreStatusBar()      //  立即恢复状态栏（动画开始前）
             onBack()                // 执行实际的返回导航
@@ -560,9 +590,6 @@ fun VideoDetailScreen(
     }
     
     // 退出重置亮度 +  屏幕常亮管理 + 状态栏恢复（作为安全网）
-    // 追踪是否正在导航到音频模式/小窗模式（防止误清理通知）
-    var isNavigatingToAudioMode by remember { mutableStateOf(false) }
-    var isNavigatingToMiniMode by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         //  [沉浸式] 启用边到边显示，让内容延伸到状态栏下方
@@ -620,7 +647,10 @@ fun VideoDetailScreen(
                 isNavigatingToAudioMode = isNavigatingToAudioMode,
                 isNavigatingToMiniMode = isNavigatingToMiniMode,
                 isChangingConfigurations = activity?.isChangingConfigurations == true,
-                isNavigatingToVideo = miniPlayerManager?.isNavigatingToVideo == true
+                isNavigatingToVideo = resolveIsNavigatingToVideoDuringDispose(
+                    localNavigatingToVideo = isNavigatingToVideo,
+                    managerNavigatingToVideo = miniPlayerManager?.isNavigatingToVideo == true
+                )
             )
 
             // 🔕 [修复] 仅在真正离开视频域时才取消媒体通知，避免通知回流/视频内跳转误清理
@@ -757,6 +787,7 @@ fun VideoDetailScreen(
         context = context,
         viewModel = viewModel,
         bvid = currentBvid,
+        cid = cid,
         startPaused = isPortraitFullscreen && !useSharedPortraitPlayer
     )
 
@@ -788,14 +819,17 @@ fun VideoDetailScreen(
                 isNavigatingToAudioMode = isNavigatingToAudioMode,
                 isNavigatingToMiniMode = isNavigatingToMiniMode,
                 isChangingConfigurations = isChangingConfigurations,
-                isNavigatingToVideo = miniPlayerManager?.isNavigatingToVideo == true
+                isNavigatingToVideo = resolveIsNavigatingToVideoDuringDispose(
+                    localNavigatingToVideo = isNavigatingToVideo,
+                    managerNavigatingToVideo = miniPlayerManager?.isNavigatingToVideo == true
+                )
             )
             if (shouldHandleAsNavigationExit) {
                 com.android.purebilibili.core.util.Logger.d(
                     "VideoDetailScreen",
                     "🛑 Disposing screen as navigation exit, notifying MiniPlayerManager"
                 )
-                miniPlayerManager?.markLeavingByNavigation()
+                miniPlayerManager?.markLeavingByNavigation(expectedBvid = currentBvid)
             } else {
                 com.android.purebilibili.core.util.Logger.d(
                     "VideoDetailScreen",
@@ -907,7 +941,7 @@ fun VideoDetailScreen(
                     "VideoDetailScreen",
                     "Stop-on-exit enabled, skip mini mode and leave page directly"
                 )
-                manager.markLeavingByNavigation()
+                manager.markLeavingByNavigation(expectedBvid = currentBvid)
                 onBack()
                 return@let
             }
@@ -1204,7 +1238,8 @@ fun VideoDetailScreen(
                 onCoin = { viewModel.showCoinDialog() },
                 onToggleFavorite = { viewModel.toggleFavorite() },
                 onTriple = { viewModel.doTripleAction() },
-                onRelatedVideoClick = onVideoClick
+                onRelatedVideoClick = navigateToRelatedVideo,
+                onPageSelect = { viewModel.switchPage(it) }
             )
         } else {
                 //  沉浸式布局：视频延伸到状态栏 + 内容区域
@@ -1276,7 +1311,7 @@ fun VideoDetailScreen(
                         onSecondCodecChange = { viewModel.setVideoSecondCodec(it) },
                         currentAudioQuality = audioQualityPreference,
                         onAudioQualityChange = { viewModel.setAudioQuality(it) },
-                        onRelatedVideoClick = onVideoClick,
+                        onRelatedVideoClick = navigateToRelatedVideo,
                         // 🔁 [新增] 播放模式
                         currentPlayMode = currentPlayMode,
                         onPlayModeClick = { com.android.purebilibili.feature.video.player.PlaylistManager.togglePlayMode() }
@@ -1621,7 +1656,7 @@ fun VideoDetailScreen(
                                                         onTripleClick = { viewModel.doTripleAction() },
                                                         onPageSelect = { viewModel.switchPage(it) },
                                                         onUpClick = onUpClick,
-                                                        onRelatedVideoClick = onVideoClick,
+                                                        onRelatedVideoClick = navigateToRelatedVideo,
                                                         onSubReplyClick = { commentViewModel.openSubReply(it) },
                                                         onRootCommentClick = {
                                                             viewModel.clearReplyingTo()
@@ -1672,6 +1707,8 @@ fun VideoDetailScreen(
                                                         aiSummary = success.aiSummary,
                                                         bgmInfo = success.bgmInfo,
                                                         onBgmClick = onBgmClick,
+                                                        ownerFollowerCount = success.ownerFollowerCount,
+                                                        ownerVideoCount = success.ownerVideoCount,
                                                         showInteractionActions = shouldShowVideoDetailActionButtons()
                                                     )
 
@@ -1855,6 +1892,10 @@ fun VideoDetailScreen(
                 initialInfo = success.info,
                 recommendations = success.related,
                 onBack = { isPortraitFullscreen = false },
+                onHomeClick = {
+                    isPortraitFullscreen = false
+                    handleBack()
+                },
                 onVideoChange = { newBvid ->
                     // 高频滑动期间不重载主播放器，避免与竖屏播放器抢焦点导致暂停。
                     // 退出竖屏时再同步到主播放器。

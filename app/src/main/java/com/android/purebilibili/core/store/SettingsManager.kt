@@ -1331,6 +1331,7 @@ object SettingsManager {
     // ==========  用户行为分析 (Analytics) ==========
     
     private val KEY_ANALYTICS_ENABLED = booleanPreferencesKey("analytics_enabled")
+    private val KEY_AUTO_CHECK_APP_UPDATE = booleanPreferencesKey("auto_check_app_update")
     
     // --- Analytics 开关 (与崩溃追踪共享设置) ---
     fun getAnalyticsEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
@@ -1341,6 +1342,14 @@ object SettingsManager {
         //  同步到 SharedPreferences，供 Application 同步读取
         context.getSharedPreferences("analytics_tracking", Context.MODE_PRIVATE)
             .edit().putBoolean("enabled", value).apply()
+    }
+
+    // ==========  应用更新 ==========
+    fun getAutoCheckAppUpdate(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_AUTO_CHECK_APP_UPDATE] ?: true } // 默认开启
+
+    suspend fun setAutoCheckAppUpdate(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_AUTO_CHECK_APP_UPDATE] = value }
     }
     
     // ==========  隐私无痕模式 ==========

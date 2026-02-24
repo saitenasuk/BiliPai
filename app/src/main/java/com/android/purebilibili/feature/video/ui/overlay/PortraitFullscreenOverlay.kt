@@ -99,6 +99,7 @@ fun PortraitFullscreenOverlay(
     
     // 回调
     onBack: () -> Unit,
+    onHomeClick: () -> Unit = onBack,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onSeekStart: () -> Unit = {},
@@ -138,6 +139,7 @@ fun PortraitFullscreenOverlay(
                 PortraitTopControlBar(
                     layoutPolicy = layoutPolicy,
                     onBack = onBack,
+                    onHomeClick = onHomeClick,
                     viewCount = statView,
                     danmakuEnabled = danmakuEnabled,
                     onDanmakuToggle = onDanmakuToggle,
@@ -237,6 +239,7 @@ fun PortraitFullscreenOverlay(
 private fun PortraitTopControlBar(
     layoutPolicy: PortraitFullscreenOverlayLayoutPolicy,
     onBack: () -> Unit,
+    onHomeClick: () -> Unit,
     viewCount: Int,
     danmakuEnabled: Boolean,
     onDanmakuToggle: () -> Unit,
@@ -267,6 +270,18 @@ private fun PortraitTopControlBar(
                 Icon(
                     imageVector = CupertinoIcons.Default.ChevronBackward,
                     contentDescription = "返回",
+                    tint = Color.White,
+                    modifier = Modifier.size(layoutPolicy.topBackIconSizeDp.dp)
+                )
+            }
+            IconButton(
+                onClick = onHomeClick,
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent),
+                modifier = Modifier.size(layoutPolicy.topBackButtonSizeDp.dp)
+            ) {
+                Icon(
+                    imageVector = CupertinoIcons.Default.House,
+                    contentDescription = "主界面",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.topBackIconSizeDp.dp)
                 )

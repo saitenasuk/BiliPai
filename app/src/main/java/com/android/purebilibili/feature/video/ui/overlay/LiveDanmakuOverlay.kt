@@ -22,6 +22,7 @@ import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_BOTTOM_CENTER
 import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
 import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_TOP_CENTER
 import com.bytedance.danmaku.render.engine.DanmakuView
+import com.bytedance.danmaku.render.engine.render.draw.bitmap.BitmapData
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -48,6 +49,8 @@ fun LiveDanmakuOverlay(
     var isStarted by remember { mutableStateOf(false) }
     val danmakuList = remember { mutableListOf<DanmakuData>() }
     val pendingDanmaku = remember { mutableListOf<DanmakuData>() }
+    val maxActiveDanmaku = 160
+    val maxPendingDanmaku = 80
 
     AndroidView(
         factory = { ctx ->
@@ -110,15 +113,27 @@ fun LiveDanmakuOverlay(
 
                     if (dataChanged || tick % 10 == 0) {
                         val expireBefore = currentTime - 20_000
-                        val beforeSize = danmakuList.size
-                        danmakuList.removeAll { it.showAtTime < expireBefore }
-                        if (beforeSize != danmakuList.size) {
+                        val iterator = danmakuList.iterator()
+                        var removedAny = false
+                        while (iterator.hasNext()) {
+                            val item = iterator.next()
+                            if (item.showAtTime < expireBefore) {
+                                iterator.remove()
+                                recycleDanmakuData(item)
+                                removedAny = true
+                            }
+                        }
+                        if (removedAny) {
                             dataChanged = true
                         }
                     }
 
                     if (dataChanged) {
                         danmakuList.sortBy { it.showAtTime }
+                        while (danmakuList.size > maxActiveDanmaku) {
+                            val removed = danmakuList.removeAt(0)
+                            recycleDanmakuData(removed)
+                        }
                         ctrl.setData(danmakuList.toList(), 0)
                         ctrl.invalidateView()
                     }
@@ -143,6 +158,10 @@ fun LiveDanmakuOverlay(
                 // 计算当前相对时间（使用单调时钟，避免系统时间调整导致漂移）
                 val currentTime = SystemClock.elapsedRealtime() - startTime
                 val danmakuData = createDanmakuData(item, currentTime, context, controller)
+                if (pendingDanmaku.size >= maxPendingDanmaku) {
+                    val dropped = pendingDanmaku.removeAt(0)
+                    recycleDanmakuData(dropped)
+                }
                 pendingDanmaku.add(danmakuData)
             } catch (e: Exception) {
                 android.util.Log.e("LiveDanmakuOverlay", "Danmaku collect error: ${e.message}")
@@ -156,6 +175,8 @@ fun LiveDanmakuOverlay(
             android.util.Log.d("LiveDanmakuOverlay", "Disposing DanmakuView")
             try {
                 controller?.stop()
+                danmakuList.forEach(::recycleDanmakuData)
+                pendingDanmaku.forEach(::recycleDanmakuData)
                 danmakuList.clear()
                 pendingDanmaku.clear()
                 isStarted = false
@@ -174,7 +195,7 @@ private fun createDanmakuData(
     context: android.content.Context,
     controller: DanmakuController?
 ): DanmakuData {
-    val textSize = 42f
+    val textSize = 34f
     val layerType = when (item.mode) {
         4 -> LAYER_TYPE_BOTTOM_CENTER
         5 -> LAYER_TYPE_TOP_CENTER
@@ -194,9 +215,17 @@ private fun createDanmakuData(
         textSize = textSize,
         layerType = layerType,
         showAtTime = currentTime + 50L,
+        enableEmoticon = false,
         onUpdate = {
             // 当图片加载完成后刷新视图
             controller?.invalidateView()
         }
     )
+}
+
+private fun recycleDanmakuData(data: DanmakuData) {
+    val bitmap = (data as? BitmapData)?.bitmap ?: return
+    if (!bitmap.isRecycled) {
+        bitmap.recycle()
+    }
 }

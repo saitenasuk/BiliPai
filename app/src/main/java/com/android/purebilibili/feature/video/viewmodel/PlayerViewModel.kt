@@ -105,7 +105,9 @@ sealed class PlayerUiState {
         // [New] AI Audio Translation
         val aiAudio: AiAudioInfo? = null,
         val currentAudioLang: String? = null,
-        val videoDurationMs: Long = 0L
+        val videoDurationMs: Long = 0L,
+        val ownerFollowerCount: Int? = null,
+        val ownerVideoCount: Int? = null
     ) : PlayerUiState() {
         val cdnCount: Int get() = allVideoUrls.size.coerceAtLeast(1)
         val currentCdnLabel: String get() = "线路${currentCdnIndex + 1}"
@@ -336,6 +338,12 @@ class PlayerViewModel : ViewModel() {
     private var hasUserStartedPlayback = false  // 🛡️ [修复] 用户是否主动开始播放（用于区分“加载已看完视频”和“自然播放结束”）
     private var isPortraitPlaybackSessionActive = false
     private val followStatusCheckInFlight = mutableSetOf<Long>()
+    private var cachedFollowingOwnerMid: Long = 0L
+    private var cachedFollowingMids: Set<Long> = emptySet()
+    private var cachedFollowingLoadedAtMs: Long = 0L
+    private var hasFollowingCache: Boolean = false
+    private var isFollowingMidsLoading: Boolean = false
+    private val followingMidsCacheTtlMs: Long = 10 * 60 * 1000L
     private var lastCreatorSignalPositionSec: Long = -1L
     
     //  Public Player Accessor
@@ -873,7 +881,7 @@ class PlayerViewModel : ViewModel() {
                 viewModelScope.launch {
                     toast("播放合集下一集: ${nextEpisode.title}")
                 }
-                loadVideo(nextEpisode.bvid, autoPlay = true)
+                loadVideo(nextEpisode.bvid, autoPlay = true, cid = nextEpisode.cid)
                 return
             }
             // 合集已播放完成
@@ -909,13 +917,13 @@ class PlayerViewModel : ViewModel() {
 
         // 💾 [修复] 在清除状态前明确保存进度，防止 loadVideo 读取到 0
         if (currentPos > 0) {
-            playbackUseCase.savePosition(bvid)
+            playbackUseCase.savePosition(bvid, currentCid)
             Logger.d("PlayerVM", "💾 reloadVideo: Saved position $currentPos ms")
         }
 
         Logger.d("PlayerVM", "🔄 Reloading video (forced)...")
         // 设置标志位，确保 loadVideo 不会跳过
-        loadVideo(bvid, force = true, autoPlay = true)
+        loadVideo(bvid, force = true, autoPlay = true, cid = currentCid)
         
         // 如果之前有进度，尝试恢复
         // 注意：loadVideo 是异步的，这里只是一个兜底，主要还是靠 loadVideo 内部读取 cachedPosition
@@ -937,7 +945,8 @@ class PlayerViewModel : ViewModel() {
         force: Boolean = false,
         autoPlay: Boolean? = null,
         audioLang: String? = null,
-        videoCodecOverride: String? = null
+        videoCodecOverride: String? = null,
+        cid: Long = 0L
     ) {
         if (bvid.isBlank()) return
         
@@ -993,7 +1002,13 @@ class PlayerViewModel : ViewModel() {
         // 🛡️ [修复] 加载新视频时重置标志
         hasUserStartedPlayback = false
         
-        val cachedPosition = playbackUseCase.getCachedPosition(bvid)
+        val progressCid = when {
+            cid > 0L -> cid
+            currentBvid == bvid && currentCid > 0L -> currentCid
+            currentSuccess?.info?.bvid == bvid -> currentSuccess.info.cid
+            else -> 0L
+        }
+        val cachedPosition = playbackUseCase.getCachedPosition(bvid, progressCid)
         currentBvid = bvid
         clearInteractiveChoiceRuntime()
         lastCreatorSignalPositionSec = cachedPosition / 1000L
@@ -1170,6 +1185,10 @@ class PlayerViewModel : ViewModel() {
                                 )
                                 loadFollowingMids()
                             }
+                            loadOwnerStats(
+                                bvid = loadedBvid,
+                                ownerMid = loadedOwnerMid
+                            )
                             loadVideoTags(loadedBvid)
                             loadVideoshot(loadedBvid, loadedCid)
                             loadPlayerInfo(loadedBvid, loadedCid)
@@ -2213,9 +2232,28 @@ class PlayerViewModel : ViewModel() {
 
     //  异步加载关注列表（用于推荐视频的已关注标签）
     private fun loadFollowingMids() {
+        if (isFollowingMidsLoading) return
+
+        val loginMid = com.android.purebilibili.core.store.TokenManager.midCache ?: return
+        val now = System.currentTimeMillis()
+        val cacheValid = hasFollowingCache &&
+            cachedFollowingOwnerMid == loginMid &&
+            (now - cachedFollowingLoadedAtMs) in 0..followingMidsCacheTtlMs
+
+        if (cacheValid) {
+            _uiState.update { state ->
+                if (state is PlayerUiState.Success && state.followingMids != cachedFollowingMids) {
+                    state.copy(followingMids = cachedFollowingMids)
+                } else {
+                    state
+                }
+            }
+            return
+        }
+
+        isFollowingMidsLoading = true
         viewModelScope.launch {
             try {
-                val mid = com.android.purebilibili.core.store.TokenManager.midCache ?: return@launch
                 val allMids = mutableSetOf<Long>()
                 var page = 1
                 val pageSize = 50
@@ -2223,7 +2261,7 @@ class PlayerViewModel : ViewModel() {
                 // 只加载前 200 个关注（4页），避免请求过多
                 while (page <= 4) {
                     try {
-                        val result = com.android.purebilibili.core.network.NetworkModule.api.getFollowings(mid, page, pageSize)
+                        val result = com.android.purebilibili.core.network.NetworkModule.api.getFollowings(loginMid, page, pageSize)
                         if (result.code == 0 && result.data != null) {
                             val list = result.data.list ?: break
                             if (list.isEmpty()) break
@@ -2237,6 +2275,11 @@ class PlayerViewModel : ViewModel() {
                         break
                     }
                 }
+
+                cachedFollowingOwnerMid = loginMid
+                cachedFollowingMids = allMids
+                cachedFollowingLoadedAtMs = System.currentTimeMillis()
+                hasFollowingCache = true
                 
                 // 更新 UI 状态
                 val current = _uiState.value as? PlayerUiState.Success ?: return@launch
@@ -2244,6 +2287,8 @@ class PlayerViewModel : ViewModel() {
                 Logger.d("PlayerVM", " Loaded ${allMids.size} following mids")
             } catch (e: Exception) {
                 Logger.d("PlayerVM", " Failed to load following mids: ${e.message}")
+            } finally {
+                isFollowingMidsLoading = false
             }
         }
     }
@@ -2298,6 +2343,27 @@ class PlayerViewModel : ViewModel() {
             toast("已开始下载音频")
         } else {
             toast("该任务已在下载中或已完成")
+        }
+    }
+
+    private fun loadOwnerStats(
+        bvid: String,
+        ownerMid: Long
+    ) {
+        if (ownerMid <= 0L) return
+        viewModelScope.launch {
+            VideoRepository.getCreatorCardStats(ownerMid).onSuccess { stats ->
+                _uiState.update { current ->
+                    if (current is PlayerUiState.Success && current.info.bvid == bvid) {
+                        current.copy(
+                            ownerFollowerCount = stats.followerCount,
+                            ownerVideoCount = stats.videoCount
+                        )
+                    } else {
+                        current
+                    }
+                }
+            }
         }
     }
 
@@ -2910,7 +2976,10 @@ class PlayerViewModel : ViewModel() {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         val page = current.info.pages.getOrNull(pageIndex) ?: return
         if (page.cid == currentCid) { toast("\u5df2\u662f\u5f53\u524d\u5206P"); return }
-        
+        val previousCid = currentCid
+        if (currentBvid.isNotEmpty() && previousCid > 0L) {
+            playbackUseCase.savePosition(currentBvid, previousCid)
+        }
         currentCid = page.cid
         _uiState.value = current.copy(isQualitySwitching = true)
         
@@ -2944,14 +3013,15 @@ class PlayerViewModel : ViewModel() {
                     
                     val videoUrl = dashVideo?.getValidUrl() ?: playUrlData.durl?.firstOrNull()?.url ?: ""
                     val audioUrl = dashAudio?.getValidUrl()
+                    val restoredPosition = playbackUseCase.getCachedPosition(currentBvid, page.cid)
                     
                     if (videoUrl.isNotEmpty()) {
-                        if (dashVideo != null) playbackUseCase.playDashVideo(videoUrl, audioUrl, 0L)
-                        else playbackUseCase.playVideo(videoUrl, 0L)
+                        if (dashVideo != null) playbackUseCase.playDashVideo(videoUrl, audioUrl, restoredPosition)
+                        else playbackUseCase.playVideo(videoUrl, restoredPosition)
                         
                         _uiState.value = current.copy(
                             info = current.info.copy(cid = page.cid), playUrl = videoUrl, audioUrl = audioUrl,
-                            startPosition = 0L, isQualitySwitching = false,
+                            startPosition = restoredPosition, isQualitySwitching = false,
                             cachedDashVideos = playUrlData.dash?.video ?: emptyList(),
                             cachedDashAudios = playUrlData.dash?.audio ?: emptyList()
                         )
@@ -3097,7 +3167,7 @@ class PlayerViewModel : ViewModel() {
     fun seekTo(pos: Long) { playbackUseCase.seekTo(pos) }
     fun getPlayerCurrentPosition() = playbackUseCase.getCurrentPosition()
     fun getPlayerDuration() = playbackUseCase.getDuration()
-    fun saveCurrentPosition() { playbackUseCase.savePosition(currentBvid) }
+    fun saveCurrentPosition() { playbackUseCase.savePosition(currentBvid, currentCid) }
     
     fun restoreFromCache(cachedState: PlayerUiState.Success, startPosition: Long = -1L) {
         currentBvid = cachedState.info.bvid

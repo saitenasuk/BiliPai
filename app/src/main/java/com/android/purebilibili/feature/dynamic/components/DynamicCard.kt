@@ -192,9 +192,13 @@ fun DynamicCardV2(
         
         //  视频类型动态 - 大图预览
         content?.major?.archive?.let { archive ->
+            val playableBvid = resolveArchivePlayableBvid(archive)
             VideoCardLarge(
                 archive = archive,
-                onClick = { onVideoClick(archive.bvid) },
+                onClick = {
+                    playableBvid?.let(onVideoClick)
+                        ?: onDynamicDetailClick?.invoke(item.id_str)
+                },
                 transitionName = "video-${archive.bvid}" // [新增] 共享元素过渡名称
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -293,21 +297,21 @@ fun DynamicCardV2(
         
         //  [新增] 合集/剧集动态
         content?.major?.ugc_season?.let { season ->
-            // 如果有 archive 字段，显示最近更新的视频
-            val archive = season.archive
-            if (archive != null) {
-                // 复用 VideoCardLarge，但增加合集标识
+            val seasonArchive = resolveUgcSeasonArchiveFallback(season)
+            val playableBvid = resolveUgcSeasonPlayableBvid(season)
+            if (seasonArchive != null) {
                 VideoCardLarge(
-                    archive = archive,
-                    onClick = { onVideoClick(archive.bvid) },
+                    archive = seasonArchive,
+                    onClick = {
+                        playableBvid?.let(onVideoClick)
+                            ?: onDynamicDetailClick?.invoke(item.id_str)
+                    },
                     isCollection = true,
                     collectionTitle = season.title,
-                    transitionName = "video-${archive.bvid}" // [新增] 共享元素过渡名称
+                    transitionName = "video-${seasonArchive.bvid}" // [新增] 共享元素过渡名称
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             } else {
-                // 如果没有 archive，显示由于合集封面和标题
-                // 这里可以使用一个简化版的卡片
                 Text(
                      "合集：${season.title}", 
                      fontWeight = FontWeight.Bold,
@@ -502,7 +506,9 @@ fun DynamicCardCompact(
             .fillMaxWidth()
             .clickable {
                 // 如果有视频则跳转视频
-                content?.major?.archive?.let { onVideoClick(it.bvid) }
+                content?.major?.archive
+                    ?.let(::resolveArchivePlayableBvid)
+                    ?.let(onVideoClick)
                     ?: author?.let { onUserClick(it.mid) }
             }
             .padding(horizontal = 16.dp, vertical = 12.dp),  //  优化间距

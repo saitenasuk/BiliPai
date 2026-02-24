@@ -23,9 +23,13 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 fun UpBadgeName(
     name: String,
     modifier: Modifier = Modifier,
+    badgeTrailingContent: (@Composable () -> Unit)? = null,
     leadingContent: (@Composable () -> Unit)? = null,
+    metaText: String? = null,
     nameStyle: TextStyle = MaterialTheme.typography.labelMedium,
     nameColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    metaStyle: TextStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+    metaColor: Color = MaterialTheme.colorScheme.primary,
     badgeTextColor: Color = nameColor.copy(alpha = 0.85f),
     badgeBorderColor: Color = nameColor.copy(alpha = 0.35f),
     badgeBackgroundColor: Color = Color.Transparent,
@@ -36,10 +40,11 @@ fun UpBadgeName(
     maxLines: Int = 1,
     overflow: TextOverflow = TextOverflow.Ellipsis
 ) {
+    val shouldShowMeta = !metaText.isNullOrBlank()
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(
             modifier = modifier,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = if (shouldShowMeta) Alignment.Top else Alignment.CenterVertically
         ) {
             Surface(
                 color = badgeBackgroundColor,
@@ -64,14 +69,32 @@ fun UpBadgeName(
                 Spacer(modifier = Modifier.width(spacing))
             }
 
-            Text(
-                text = name.ifBlank { "未知UP主" },
-                style = nameStyle,
-                color = nameColor,
-                maxLines = maxLines,
-                overflow = overflow,
-                modifier = Modifier.weight(1f, fill = false)
-            )
+            Column(
+                modifier = Modifier.weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = name.ifBlank { "未知UP主" },
+                    style = nameStyle,
+                    color = nameColor,
+                    maxLines = maxLines,
+                    overflow = overflow
+                )
+                if (shouldShowMeta) {
+                    Text(
+                        text = metaText.orEmpty(),
+                        style = metaStyle,
+                        color = metaColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            badgeTrailingContent?.let {
+                Spacer(modifier = Modifier.width(spacing))
+                it()
+            }
         }
     }
 }

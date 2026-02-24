@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -92,6 +91,8 @@ fun SettingsScreen(
     val feedApiType by SettingsManager.getFeedApiType(context).collectAsState(
         initial = SettingsManager.FeedApiType.WEB
     )
+    val autoCheckUpdateEnabled by SettingsManager.getAutoCheckAppUpdate(context)
+        .collectAsState(initial = true)
     val incrementalTimelineRefreshEnabled by SettingsManager.getIncrementalTimelineRefresh(context)
         .collectAsState(initial = false)
     
@@ -157,6 +158,9 @@ fun SettingsScreen(
     val onEasterEggChange: (Boolean) -> Unit = { enabled ->
         scope.launch { SettingsManager.setEasterEggEnabled(context, enabled) }
     }
+    val onAutoCheckUpdateChange: (Boolean) -> Unit = { enabled ->
+        scope.launch { SettingsManager.setAutoCheckAppUpdate(context, enabled) }
+    }
     
     val onVersionClickAction: () -> Unit = {
         versionClickCount++
@@ -186,27 +190,32 @@ fun SettingsScreen(
     val onGithubClick: () -> Unit = { uriHandler.openUri(OFFICIAL_GITHUB_URL) }
     val onDisclaimerClick: () -> Unit = { showReleaseDisclaimerDialog = true }
     val onBlockedListClickAction: () -> Unit = { showBlockedList = true }
+    suspend fun runUpdateCheck(silent: Boolean) {
+        isCheckingUpdate = true
+        if (!silent) {
+            updateStatusText = "检查中..."
+        }
+        val result = AppUpdateChecker.check(com.android.purebilibili.BuildConfig.VERSION_NAME)
+        result.onSuccess { info ->
+            updateStatusText = info.message
+            if (info.isUpdateAvailable) {
+                updateCheckResult = info
+            } else if (!silent) {
+                Toast.makeText(context, info.message, Toast.LENGTH_SHORT).show()
+            }
+        }.onFailure { error ->
+            if (!silent) {
+                updateStatusText = "检查失败"
+                Toast.makeText(context, error.message ?: "更新检查失败，请稍后重试", Toast.LENGTH_SHORT).show()
+            }
+        }
+        isCheckingUpdate = false
+    }
     val onCheckUpdateAction: () -> Unit = {
         if (isCheckingUpdate) {
             Toast.makeText(context, "正在检查更新，请稍候", Toast.LENGTH_SHORT).show()
         } else {
-            scope.launch {
-                isCheckingUpdate = true
-                updateStatusText = "检查中..."
-                val result = AppUpdateChecker.check(com.android.purebilibili.BuildConfig.VERSION_NAME)
-                result.onSuccess { info ->
-                    updateStatusText = info.message
-                    if (info.isUpdateAvailable) {
-                        updateCheckResult = info
-                    } else {
-                        Toast.makeText(context, info.message, Toast.LENGTH_SHORT).show()
-                    }
-                }.onFailure { error ->
-                    updateStatusText = "检查失败"
-                    Toast.makeText(context, error.message ?: "更新检查失败，请稍后重试", Toast.LENGTH_SHORT).show()
-                }
-                isCheckingUpdate = false
-            }
+            scope.launch { runUpdateCheck(silent = false) }
         }
     }
 
@@ -249,7 +258,7 @@ fun SettingsScreen(
         viewModel.refreshCacheSize()
         AnalyticsHelper.logScreenView("SettingsScreen")
     }
-    
+
     //  Transparent Navigation Bar
     val view = androidx.compose.ui.platform.LocalView.current
     DisposableEffect(Unit) {
@@ -414,6 +423,7 @@ fun SettingsScreen(
                     onCrashTrackingChange = onCrashTrackingChange,
                     onAnalyticsChange = onAnalyticsChange,
                     onEasterEggChange = onEasterEggChange,
+                    onAutoCheckUpdateChange = onAutoCheckUpdateChange,
                     privacyModeEnabled = privacyModeEnabled,
                     customDownloadPath = downloadExportTreeUri ?: customDownloadPath,
                     cacheSize = state.cacheSize,
@@ -426,6 +436,7 @@ fun SettingsScreen(
                     easterEggEnabled = easterEggEnabled,
                     updateStatusText = updateStatusText,
                     isCheckingUpdate = isCheckingUpdate,
+                    autoCheckUpdateEnabled = autoCheckUpdateEnabled,
                     onDonateClick = { showDonateDialog = true },
                     onOpenLinksClick = onOpenLinksAction,
                     onBlockedListClick = onBlockedListClickAction, // Pass to tablet layout
@@ -472,6 +483,7 @@ fun SettingsScreen(
                     onCrashTrackingChange = onCrashTrackingChange,
                     onAnalyticsChange = onAnalyticsChange,
                     onEasterEggChange = onEasterEggChange,
+                    onAutoCheckUpdateChange = onAutoCheckUpdateChange,
                     privacyModeEnabled = privacyModeEnabled,
                     customDownloadPath = downloadExportTreeUri ?: customDownloadPath,
                     cacheSize = state.cacheSize,
@@ -484,6 +496,7 @@ fun SettingsScreen(
                     easterEggEnabled = easterEggEnabled,
                     updateStatusText = updateStatusText,
                     isCheckingUpdate = isCheckingUpdate,
+                    autoCheckUpdateEnabled = autoCheckUpdateEnabled,
                     cardAnimationEnabled = state.cardAnimationEnabled,
                     feedApiType = feedApiType,
                     onFeedApiTypeChange = { type ->
@@ -585,6 +598,7 @@ private fun MobileSettingsLayout(
     onCrashTrackingChange: (Boolean) -> Unit,
     onAnalyticsChange: (Boolean) -> Unit,
     onEasterEggChange: (Boolean) -> Unit,
+    onAutoCheckUpdateChange: (Boolean) -> Unit,
     
     // State
     privacyModeEnabled: Boolean,
@@ -599,6 +613,7 @@ private fun MobileSettingsLayout(
     easterEggEnabled: Boolean,
     updateStatusText: String,
     isCheckingUpdate: Boolean,
+    autoCheckUpdateEnabled: Boolean,
     cardAnimationEnabled: Boolean,
     feedApiType: SettingsManager.FeedApiType,
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
@@ -734,6 +749,8 @@ private fun MobileSettingsLayout(
                                     onLicenseClick = onLicenseClick,
                                     onGithubClick = onGithubClick,
                                     onCheckUpdateClick = onCheckUpdateClick,
+                                    autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+                                    onAutoCheckUpdateChange = onAutoCheckUpdateChange,
                                     onVersionClick = onVersionClick,
                                     onReplayOnboardingClick = onReplayOnboardingClick,
                                     onEasterEggChange = onEasterEggChange,

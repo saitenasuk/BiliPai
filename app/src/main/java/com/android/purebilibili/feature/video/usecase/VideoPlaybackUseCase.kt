@@ -389,17 +389,21 @@ class VideoPlaybackUseCase(
     /**
      * Get cached position for video
      */
-    fun getCachedPosition(bvid: String): Long {
-        return progressManager.getCachedPosition(bvid)
+    fun getCachedPosition(bvid: String, cid: Long = 0L): Long {
+        return progressManager.getCachedPosition(bvid, cid)
     }
     
     /**
      * Save current playback position
      */
-    fun savePosition(bvid: String) {
+    fun savePosition(bvid: String, cid: Long = 0L) {
         val player = exoPlayer ?: return
         if (bvid.isNotEmpty() && player.currentPosition > 0) {
-            progressManager.savePosition(bvid, player.currentPosition)
+            progressManager.savePosition(
+                bvid = bvid,
+                cid = cid,
+                positionMs = player.currentPosition
+            )
         }
     }
     

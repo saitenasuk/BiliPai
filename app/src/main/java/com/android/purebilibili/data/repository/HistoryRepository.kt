@@ -48,4 +48,22 @@ object HistoryRepository {
             }
         }
     }
+
+    suspend fun deleteHistoryItem(
+        kid: String,
+        csrf: String
+    ): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.deleteHistoryItem(kid = kid, csrf = csrf)
+                if (response.code == 0) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception(response.message.ifEmpty { "删除历史失败: ${response.code}" }))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
 }

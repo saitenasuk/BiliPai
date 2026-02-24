@@ -36,10 +36,8 @@ import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.data.model.response.RelationTagItem
 import com.android.purebilibili.data.repository.ActionRepository
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -94,6 +92,23 @@ data class BatchFollowGroupDialogData(
 
 private const val SPECIAL_FOLLOW_TAG_ID = -10L
 private const val DEFAULT_FOLLOW_TAG_ID = 0L
+private const val FOLLOW_GROUP_META_FETCH_INTERVAL_MS = 80L
+private const val BATCH_UNFOLLOW_INTERVAL_MS = 320L
+private const val BATCH_UNFOLLOW_MAX_ATTEMPTS = 3
+private const val BATCH_UNFOLLOW_RETRY_BASE_DELAY_MS = 900L
+
+internal fun isRetryableBatchOperationError(message: String?): Boolean {
+    val text = message.orEmpty()
+    if (text.isBlank()) return false
+    return text.contains("频繁") ||
+        text.contains("过快") ||
+        text.contains("风控") ||
+        text.contains("稍后") ||
+        text.contains("-412") ||
+        text.contains("-352") ||
+        text.contains("too many", ignoreCase = true) ||
+        text.contains("rate", ignoreCase = true)
+}
 
 internal fun resolveFollowGroupInitialSelection(groupSets: List<Set<Long>>): Set<Long> {
     if (groupSets.isEmpty()) return emptySet()
@@ -127,6 +142,7 @@ class FollowingListViewModel : ViewModel() {
 
     private var currentMid: Long = 0
     private val removedUserMids = mutableSetOf<Long>()
+    private var followGroupRefreshJob: Job? = null
     
     fun loadFollowingList(mid: Long) {
         if (mid <= 0) return
@@ -236,14 +252,14 @@ class FollowingListViewModel : ViewModel() {
         var failedCount = 0
         try {
             targetUsers.forEachIndexed { index, user ->
-                val result = ActionRepository.followUser(user.mid, follow = false)
-                if (result.isSuccess) {
+                val success = unfollowWithRetry(user.mid)
+                if (success) {
                     successMids.add(user.mid)
                 } else {
                     failedCount += 1
                 }
                 if (index < targetUsers.lastIndex) {
-                    delay(150)
+                    delay(BATCH_UNFOLLOW_INTERVAL_MS)
                 }
             }
             if (successMids.isNotEmpty()) {
@@ -258,6 +274,23 @@ class FollowingListViewModel : ViewModel() {
         } finally {
             _isBatchUnfollowing.value = false
         }
+    }
+
+    private suspend fun unfollowWithRetry(mid: Long): Boolean {
+        repeat(BATCH_UNFOLLOW_MAX_ATTEMPTS) { attempt ->
+            val result = ActionRepository.followUser(mid, follow = false)
+            if (result.isSuccess) return true
+
+            val message = result.exceptionOrNull()?.message
+            val retryable = isRetryableBatchOperationError(message)
+            if (!retryable || attempt >= BATCH_UNFOLLOW_MAX_ATTEMPTS - 1) {
+                return false
+            }
+
+            val backoffMs = BATCH_UNFOLLOW_RETRY_BASE_DELAY_MS * (attempt + 1)
+            delay(backoffMs)
+        }
+        return false
     }
 
     private fun applyRemovedUsers(removedMids: Set<Long>) {
@@ -277,7 +310,8 @@ class FollowingListViewModel : ViewModel() {
         val mids = users.map { it.mid }.toSet()
         if (mids.isEmpty()) return
 
-        viewModelScope.launch {
+        followGroupRefreshJob?.cancel()
+        followGroupRefreshJob = viewModelScope.launch {
             if (_followGroupTags.value.isEmpty()) {
                 ActionRepository.getFollowGroupTags().onSuccess { tags ->
                     _followGroupTags.value = tags
@@ -292,15 +326,15 @@ class FollowingListViewModel : ViewModel() {
 
             _isFollowGroupMetaLoading.value = true
             try {
-                val fetched = coroutineScope {
-                    missingMids.map { mid ->
-                        async {
-                            val groupIds = ActionRepository.getUserFollowGroupIds(mid)
-                                .getOrElse { emptySet() }
-                            mid to groupIds
-                        }
-                    }.awaitAll()
-                }.toMap()
+                val fetched = linkedMapOf<Long, Set<Long>>()
+                missingMids.forEachIndexed { index, mid ->
+                    val groupIds = ActionRepository.getUserFollowGroupIds(mid)
+                        .getOrElse { emptySet() }
+                    fetched[mid] = groupIds
+                    if (index < missingMids.lastIndex) {
+                        delay(FOLLOW_GROUP_META_FETCH_INTERVAL_MS)
+                    }
+                }
 
                 _userFollowGroupIds.update { currentMap ->
                     currentMap + fetched
@@ -326,13 +360,20 @@ class FollowingListViewModel : ViewModel() {
                 .filter { it.tagid != 0L }
                 .sortedBy { it.tagid != -10L }
 
-            val groupSets = coroutineScope {
-                mids.map { mid ->
-                    async {
-                        ActionRepository.getUserFollowGroupIds(mid).getOrElse { emptySet() }
-                    }
-                }.awaitAll()
+            val currentGroups = _userFollowGroupIds.value
+            val missingMids = mids.filterNot { currentGroups.containsKey(it) }
+            val fetched = linkedMapOf<Long, Set<Long>>()
+            missingMids.forEachIndexed { index, mid ->
+                fetched[mid] = ActionRepository.getUserFollowGroupIds(mid).getOrElse { emptySet() }
+                if (index < missingMids.lastIndex) {
+                    delay(FOLLOW_GROUP_META_FETCH_INTERVAL_MS)
+                }
             }
+            if (fetched.isNotEmpty()) {
+                _userFollowGroupIds.update { it + fetched }
+            }
+            val mergedGroups = _userFollowGroupIds.value + fetched
+            val groupSets = mids.map { mid -> mergedGroups[mid] ?: emptySet() }
 
             BatchFollowGroupDialogData(
                 tags = tags,

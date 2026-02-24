@@ -29,10 +29,11 @@ fun createBitmapDanmaku(
     textSize: Float,
     layerType: Int,
     showAtTime: Long,
+    enableEmoticon: Boolean = true,
     onUpdate: () -> Unit
 ): BitmapData {
     // 1. 解析文本
-    val segments = parseSegments(text)
+    val segments = parseSegments(text, enableEmoticon)
     
     // 2. 测量尺寸
     val paint = TextPaint().apply {
@@ -100,7 +101,11 @@ private data class Segment(
 
 private val emoticonPattern = Pattern.compile("\\[(.*?)\\]")
 
-private fun parseSegments(text: String): List<Segment> {
+private fun parseSegments(text: String, enableEmoticon: Boolean): List<Segment> {
+    if (!enableEmoticon) {
+        return listOf(Segment(text, false))
+    }
+
     val list = mutableListOf<Segment>()
     val matcher = emoticonPattern.matcher(text)
     var lastIndex = 0
@@ -156,19 +161,29 @@ private fun drawContent(
     val textBaseLine = centerY - (fontMetrics.descent + fontMetrics.ascent) / 2f
     
     var xOffset = 0f
+    var emoticonCount = 0
+    val maxEmoticonPerDanmaku = 2
+    val imageLoader = ImageLoader(context)
     
     segments.forEach { seg ->
         if (seg.isEmoticon) {
+            if (emoticonCount >= maxEmoticonPerDanmaku) {
+                canvas.drawText(seg.content, xOffset, textBaseLine, paint)
+                xOffset += paint.measureText(seg.content)
+                return@forEach
+            }
             val url = DanmakuEmoticonMapper.emoticonMap.value[seg.content]
             if (url != null) {
                 // 尝试加载
                 val startX = xOffset
+                emoticonCount++
                 
                 // 加载图片
-                val imageLoader = ImageLoader(context)
                 val request = ImageRequest.Builder(context)
                     .data(url)
+                    .allowHardware(false)
                     .target { result ->
+                        if (targetBitmap.isRecycled) return@target
                         val loadedBitmap = result.toBitmap()
                         // 重绘！
                         // 注意：这里是异步回调。我们需要重新获取 Canvas (因为 Bitmap 是同一个)
@@ -179,6 +194,9 @@ private fun drawContent(
                         val top = centerY - iconSize / 2f
                         val dstRect = Rect(startX.toInt(), top.toInt(), (startX + iconSize).toInt(), (top + iconSize).toInt())
                         asyncCanvas.drawBitmap(loadedBitmap, null, dstRect, null)
+                        if (!loadedBitmap.isRecycled) {
+                            loadedBitmap.recycle()
+                        }
                         
                         // 通知 UI 刷新
                         onUpdate()

@@ -626,84 +626,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
      * - type=17, oid=动态id → 纯文字/图文动态 (WORD/OPUS)
      */
     private fun getCommentParams(item: DynamicItem): Pair<Long, Int>? {
-        // [方案1] 优先使用 API 返回的 basic 参数 - 这是最可靠的方式
-        val basic = item.basic
-        if (basic != null && basic.comment_id_str.isNotEmpty() && basic.comment_type > 0) {
-            val oid = basic.comment_id_str.toLongOrNull()
-            if (oid != null) {
-                com.android.purebilibili.core.util.Logger.d("DynamicVM", 
-                    "使用 basic 参数: oid=$oid, type=${basic.comment_type}")
-                return Pair(oid, basic.comment_type)
-            }
+        val directTarget = resolveDynamicCommentTarget(item)
+        if (directTarget != null) {
+            return Pair(directTarget.oid, directTarget.type)
         }
-        
-        // [方案2] 备用: 根据 major.type 和 item.type 推断
-        val major = item.modules.module_dynamic?.major
-        val majorType = major?.type ?: ""
-        
-        com.android.purebilibili.core.util.Logger.d("DynamicVM", 
-            "getCommentParams fallback: id_str=${item.id_str}, item.type=${item.type}, major.type=$majorType")
-        
-        // MAJOR_TYPE_OPUS 是 B站新版图文动态格式，统一使用 type=17
-        if (majorType == "MAJOR_TYPE_OPUS") {
-            val oid = item.id_str.toLongOrNull()
-            com.android.purebilibili.core.util.Logger.d("DynamicVM", "OPUS 动态: oid=$oid, type=17")
-            return if (oid != null) Pair(oid, 17) else null
-        }
-        
-        // MAJOR_TYPE_ARCHIVE 是视频
-        if (majorType == "MAJOR_TYPE_ARCHIVE") {
-            val aid = major?.archive?.aid?.toLongOrNull()
-            com.android.purebilibili.core.util.Logger.d("DynamicVM", "视频动态: aid=$aid, type=1")
-            return if (aid != null) Pair(aid, 1) else null
-        }
-        
-        // MAJOR_TYPE_DRAW 是旧版图片动态（相簿）
-        if (majorType == "MAJOR_TYPE_DRAW") {
-            val drawId = major?.draw?.id
-            if (drawId != null && drawId > 0) {
-                com.android.purebilibili.core.util.Logger.d("DynamicVM", "图片动态: drawId=$drawId, type=11")
-                return Pair(drawId, 11)
-            }
-        }
-        
-        // 根据 item.type 判断（兼容旧逻辑）
-        val dynamicType = com.android.purebilibili.data.model.response.DynamicType.fromApiValue(item.type)
-        return when (dynamicType) {
-            com.android.purebilibili.data.model.response.DynamicType.VIDEO -> {
-                val aid = major?.archive?.aid?.toLongOrNull()
-                com.android.purebilibili.core.util.Logger.d("DynamicVM", "VIDEO 类型: aid=$aid")
-                if (aid != null) Pair(aid, 1) else null
-            }
-            com.android.purebilibili.data.model.response.DynamicType.DRAW -> {
-                // 图片动态: 优先用 draw.id，没有则用 id_str + type=17
-                val drawId = major?.draw?.id
-                if (drawId != null && drawId > 0) {
-                    com.android.purebilibili.core.util.Logger.d("DynamicVM", "DRAW 类型: drawId=$drawId, type=11")
-                    Pair(drawId, 11)
-                } else {
-                    // OPUS 或其他没有 draw.id 的情况
-                    val oid = item.id_str.toLongOrNull()
-                    com.android.purebilibili.core.util.Logger.d("DynamicVM", "DRAW fallback: oid=$oid, type=17")
-                    oid?.let { Pair(it, 17) }
-                }
-            }
-            com.android.purebilibili.data.model.response.DynamicType.WORD -> {
-                val oid = item.id_str.toLongOrNull()
-                com.android.purebilibili.core.util.Logger.d("DynamicVM", "WORD 类型: oid=$oid, type=17")
-                if (oid != null) Pair(oid, 17) else null
-            }
-            com.android.purebilibili.data.model.response.DynamicType.FORWARD -> {
-                com.android.purebilibili.core.util.Logger.d("DynamicVM", "FORWARD 类型: 递归获取原动态参数")
-                item.orig?.let { getCommentParams(it) }
-            }
-            else -> {
-                // 未知类型: 统一使用 type=17 (动态评论)
-                val oid = item.id_str.toLongOrNull()
-                com.android.purebilibili.core.util.Logger.w("DynamicVM", "未知动态类型: ${item.type}, oid=$oid, type=17")
-                oid?.let { Pair(it, 17) }
-            }
-        }
+        // FORWARD 优先尝试原动态，确保无 basic 场景下仍能拿到参数
+        return item.orig?.let { getCommentParams(it) }
     }
     
     /**
@@ -797,9 +725,19 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     onResult(false, "请先登录")
                     return@launch
                 }
-                val oid = dynamicId.toLongOrNull() ?: return@launch
+                val item = findDynamicById(dynamicId)
+                if (item == null) {
+                    onResult(false, "动态不存在")
+                    return@launch
+                }
+                val params = getCommentParams(item)
+                if (params == null) {
+                    onResult(false, "无法确定评论参数")
+                    return@launch
+                }
+                val (oid, type) = params
                 val response = com.android.purebilibili.core.network.NetworkModule.dynamicApi
-                    .addDynamicReply(oid = oid, type = 17, message = message, csrf = csrf)
+                    .addDynamicReply(oid = oid, type = type, message = message, csrf = csrf)
                 if (response.code == 0) {
                     onResult(true, "评论成功")
                     // 刷新评论列表

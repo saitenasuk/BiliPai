@@ -41,16 +41,16 @@ class FavoriteFolderSelectionPolicyTest {
     }
 
     @Test
-    fun `should prefer fid when resolving folder media id`() {
+    fun `should prefer id when resolving folder media id`() {
         val folder = FavFolder(id = 100L, fid = 200L)
 
-        assertEquals(200L, resolveFavoriteFolderMediaId(folder))
+        assertEquals(100L, resolveFavoriteFolderMediaId(folder))
     }
 
     @Test
-    fun `should fallback to id when fid is invalid`() {
+    fun `should fallback to fid when id is invalid`() {
         val folder = FavFolder(id = 321L, fid = 0L)
 
-        assertEquals(321L, resolveFavoriteFolderMediaId(folder))
+        assertEquals(321L, resolveFavoriteFolderMediaId(folder.copy(id = 0L, fid = 321L)))
     }
 }

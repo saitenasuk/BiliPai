@@ -20,7 +20,9 @@ import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -36,11 +38,15 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -48,6 +54,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.theme.BiliPink
+import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
+import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
+import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import com.android.purebilibili.core.util.VideoGridItemSkeleton
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
@@ -112,6 +121,24 @@ fun CommonListScreen(
     //  [修复] 分页支持：收藏 + 历史记录
     val favoriteViewModel = viewModel as? FavoriteViewModel
     val historyViewModel = viewModel as? HistoryViewModel
+    val historyDissolvingIds by historyViewModel?.dissolvingIds?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet()) }
+    var isHistoryBatchMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var selectedHistoryKeys by rememberSaveable { androidx.compose.runtime.mutableStateOf(setOf<String>()) }
+    var showHistoryBatchDeleteConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+
+    LaunchedEffect(state.items, historyViewModel, isHistoryBatchMode) {
+        if (historyViewModel == null) return@LaunchedEffect
+        val validKeys = state.items
+            .map(historyViewModel::resolveHistoryRenderKey)
+            .filter { it.isNotBlank() }
+            .toSet()
+        selectedHistoryKeys = selectedHistoryKeys.filter { it in validKeys }.toSet()
+        if (isHistoryBatchMode && state.items.isEmpty()) {
+            isHistoryBatchMode = false
+            selectedHistoryKeys = emptySet()
+        }
+    }
     
     // 收藏分页状态
     val isLoadingMoreFav by favoriteViewModel?.isLoadingMoreState?.collectAsState() 
@@ -360,6 +387,35 @@ fun CommonListScreen(
                         },
                         onUnfavorite = if (favoriteViewModel != null) { 
                             { favoriteViewModel.removeVideo(it) } 
+                        } else null,
+                        historyDissolvingIds = historyDissolvingIds,
+                        historyBatchMode = historyViewModel != null && isHistoryBatchMode,
+                        historySelectedKeys = selectedHistoryKeys,
+                        resolveHistoryItemKey = if (historyViewModel != null) {
+                            { video -> historyViewModel.resolveHistoryRenderKey(video) }
+                        } else {
+                            { video -> video.bvid.ifBlank { video.id.toString() } }
+                        },
+                        onHistoryLongDelete = if (historyViewModel != null) {
+                            { key ->
+                                if (!isHistoryBatchMode) {
+                                    historyViewModel.startVideoDissolve(key)
+                                }
+                            }
+                        } else null,
+                        onHistoryDissolveComplete = if (historyViewModel != null) {
+                            { key -> historyViewModel.completeVideoDissolve(key) }
+                        } else null,
+                        onHistoryToggleSelect = if (historyViewModel != null) {
+                            { key ->
+                                if (key.isNotBlank()) {
+                                    selectedHistoryKeys = if (key in selectedHistoryKeys) {
+                                        selectedHistoryKeys - key
+                                    } else {
+                                        selectedHistoryKeys + key
+                                    }
+                                }
+                            }
                         } else null
                     )
                 }
@@ -380,6 +436,47 @@ fun CommonListScreen(
                         navigationIcon = {
                             IconButton(onClick = onBack) {
                                 Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back")
+                            }
+                        },
+                        actions = {
+                            if (historyViewModel != null && state.items.isNotEmpty()) {
+                                if (isHistoryBatchMode) {
+                                    val allSelected = selectedHistoryKeys.size == state.items.size
+                                    TextButton(
+                                        onClick = {
+                                            selectedHistoryKeys = if (allSelected) {
+                                                emptySet()
+                                            } else {
+                                                state.items.map(historyViewModel::resolveHistoryRenderKey).toSet()
+                                            }
+                                        }
+                                    ) {
+                                        Text(if (allSelected) "取消全选" else "全选")
+                                    }
+                                    TextButton(
+                                        enabled = selectedHistoryKeys.isNotEmpty(),
+                                        onClick = { showHistoryBatchDeleteConfirm = true }
+                                    ) {
+                                        Text("删除(${selectedHistoryKeys.size})")
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            isHistoryBatchMode = false
+                                            selectedHistoryKeys = emptySet()
+                                        }
+                                    ) {
+                                        Text("完成")
+                                    }
+                                } else {
+                                    TextButton(
+                                        onClick = {
+                                            isHistoryBatchMode = true
+                                            selectedHistoryKeys = emptySet()
+                                        }
+                                    ) {
+                                        Text("批量删除")
+                                    }
+                                }
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
@@ -447,6 +544,31 @@ fun CommonListScreen(
             }
         }
     }
+
+    if (showHistoryBatchDeleteConfirm && historyViewModel != null) {
+        AlertDialog(
+            onDismissRequest = { showHistoryBatchDeleteConfirm = false },
+            title = { Text("批量删除历史") },
+            text = { Text("确认删除已选择的 ${selectedHistoryKeys.size} 条历史记录吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        historyViewModel.startBatchVideoDissolve(selectedHistoryKeys)
+                        selectedHistoryKeys = emptySet()
+                        isHistoryBatchMode = false
+                        showHistoryBatchDeleteConfirm = false
+                    }
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHistoryBatchDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 }
 
 // 提取通用列表内容组件
@@ -464,7 +586,16 @@ fun CommonListContent(
     cardMotionTier: MotionTier,
     onVideoClick: (String, Long) -> Unit,
     onLoadMore: () -> Unit,
-    onUnfavorite: ((com.android.purebilibili.data.model.response.VideoItem) -> Unit)?
+    onUnfavorite: ((com.android.purebilibili.data.model.response.VideoItem) -> Unit)?,
+    historyDissolvingIds: Set<String> = emptySet(),
+    historyBatchMode: Boolean = false,
+    historySelectedKeys: Set<String> = emptySet(),
+    resolveHistoryItemKey: (com.android.purebilibili.data.model.response.VideoItem) -> String = { video ->
+        video.bvid.ifBlank { video.id.toString() }
+    },
+    onHistoryLongDelete: ((String) -> Unit)? = null,
+    onHistoryDissolveComplete: ((String) -> Unit)? = null,
+    onHistoryToggleSelect: ((String) -> Unit)? = null
 ) {
     if (isLoading && items.isEmpty()) {
         LazyVerticalGrid(
@@ -535,17 +666,85 @@ fun CommonListContent(
             ) {
                  itemsIndexed(
                     items = filteredItems,
-                    key = { _, item -> item.bvid.ifEmpty { item.id.toString() } }
+                    key = { _, item -> resolveHistoryItemKey(item) }
                 ) { index, video ->
-                    ElegantVideoCard(
-                        video = video,
-                        index = index,
-                        animationEnabled = cardAnimationEnabled,
-                        motionTier = cardMotionTier,
-                        transitionEnabled = cardTransitionEnabled,
-                        onClick = { bvid, cid -> onVideoClick(bvid, cid) },
-                        onUnfavorite = if (onUnfavorite != null) { { onUnfavorite(video) } } else null
-                    )
+                    val historyKey = resolveHistoryItemKey(video)
+                    val supportsHistoryDissolve = onHistoryLongDelete != null && onHistoryDissolveComplete != null
+                    val isDissolving = supportsHistoryDissolve && historyKey in historyDissolvingIds
+                    val isSelected = historyBatchMode && historyKey in historySelectedKeys
+
+                    val cardContent: @Composable () -> Unit = {
+                        Box {
+                            ElegantVideoCard(
+                                video = video,
+                                index = index,
+                                animationEnabled = cardAnimationEnabled,
+                                motionTier = cardMotionTier,
+                                transitionEnabled = cardTransitionEnabled,
+                                onClick = { bvid, cid ->
+                                    if (historyBatchMode) {
+                                        onHistoryToggleSelect?.invoke(historyKey)
+                                    } else {
+                                        onVideoClick(bvid, cid)
+                                    }
+                                },
+                                onUnfavorite = if (onUnfavorite != null) { { onUnfavorite(video) } } else null,
+                                onLongClick = if (!historyBatchMode && supportsHistoryDissolve) {
+                                    { onHistoryLongDelete?.invoke(historyKey) }
+                                } else null
+                            )
+
+                            if (historyBatchMode) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .border(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                                            },
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .background(
+                                            if (isSelected) {
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                                            } else {
+                                                Color.Transparent
+                                            },
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                )
+                                Icon(
+                                    imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                                    contentDescription = if (isSelected) "已选择" else "未选择",
+                                    tint = if (isSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (supportsHistoryDissolve) {
+                        DissolvableVideoCard(
+                            isDissolving = isDissolving,
+                            onDissolveComplete = { onHistoryDissolveComplete?.invoke(historyKey) },
+                            cardId = historyKey,
+                            preset = DissolveAnimationPreset.TELEGRAM_FAST,
+                            modifier = Modifier.jiggleOnDissolve(historyKey)
+                        ) {
+                            cardContent()
+                        }
+                    } else {
+                        cardContent()
+                    }
                 }
             }
         }

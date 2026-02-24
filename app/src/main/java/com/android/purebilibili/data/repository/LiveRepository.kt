@@ -13,6 +13,15 @@ import kotlinx.coroutines.withContext
 object LiveRepository {
     private val api = NetworkModule.api
 
+    private suspend fun resolveRealRoomId(roomId: Long): Long {
+        return try {
+            val resp = api.getLiveRoomInit(roomId)
+            resp.data?.roomId?.takeIf { it > 0L } ?: roomId
+        } catch (_: Exception) {
+            roomId
+        }
+    }
+
     /**
      * 获取热门直播列表
      */
@@ -72,8 +81,9 @@ object LiveRepository {
      */
     suspend fun getLivePlayUrl(roomId: Long): Result<String> = withContext(Dispatchers.IO) {
         try {
-            com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Fetching live URL for roomId=$roomId")
-            val resp = api.getLivePlayUrl(roomId = roomId)
+            val realRoomId = resolveRealRoomId(roomId)
+            com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Fetching live URL for roomId=$roomId(real=$realRoomId)")
+            val resp = api.getLivePlayUrl(roomId = realRoomId)
             com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Live API response: code=${resp.code}, msg=${resp.message}")
             
             // 尝试从新 xlive API 结构获取 URL
@@ -119,11 +129,12 @@ object LiveRepository {
      */
     suspend fun getLivePlayUrlWithQuality(roomId: Long, qn: Int = 10000): Result<LivePlayUrlData> = withContext(Dispatchers.IO) {
         try {
-            com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Fetching live URL with quality for roomId=$roomId, qn=$qn")
+            val realRoomId = resolveRealRoomId(roomId)
+            com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Fetching live URL with quality for roomId=$roomId(real=$realRoomId), qn=$qn")
             
             // 使用旧版 API 获取画质列表（xlive API 不返回 quality_description）
             val legacyResp = try {
-                api.getLivePlayUrlLegacy(cid = roomId, qn = qn)
+                api.getLivePlayUrlLegacy(cid = realRoomId, qn = qn)
             } catch (e: Exception) {
                 android.util.Log.w("LiveRepo", "Legacy API failed: ${e.message}")
                 null
@@ -143,7 +154,7 @@ object LiveRepository {
             
             // 回退到新版 xlive API 获取播放地址，但保留画质列表
             com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Fallback to xlive API for stream URL...")
-            val resp = api.getLivePlayUrl(roomId = roomId, quality = qn)
+            val resp = api.getLivePlayUrl(roomId = realRoomId, quality = qn)
             
             if (resp.code == 0 && resp.data != null) {
                 // 合并旧版画质列表到新版响应数据
@@ -167,11 +178,12 @@ object LiveRepository {
      */
     suspend fun sendDanmaku(roomId: Long, msg: String): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
+            val realRoomId = resolveRealRoomId(roomId)
             val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
             if (csrf.isEmpty()) return@withContext Result.failure(Exception("请先登录"))
             
             val resp = api.sendLiveDanmaku(
-                roomId = roomId,
+                roomId = realRoomId,
                 msg = msg,
                 csrf = csrf,
                 csrfToken = csrf
@@ -193,10 +205,11 @@ object LiveRepository {
      */
     suspend fun clickLike(roomId: Long, uid: Long, anchorId: Long): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
+            val realRoomId = resolveRealRoomId(roomId)
             val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
             
             val resp = api.clickLikeLiveRoom(
-                roomId = roomId,
+                roomId = realRoomId,
                 uid = uid,
                 anchorId = anchorId,
                 csrf = csrf,
@@ -221,7 +234,8 @@ object LiveRepository {
      */
     suspend fun getEmoticons(roomId: Long): Result<Map<String, String>> = withContext(Dispatchers.IO) {
         try {
-            val resp = api.getLiveEmoticons(roomId = roomId)
+            val realRoomId = resolveRealRoomId(roomId)
+            val resp = api.getLiveEmoticons(roomId = realRoomId)
             if (resp.code == 0 && resp.data?.data != null) {
                 val emojiMap = mutableMapOf<String, String>()
                 resp.data.data.forEach { pkg ->
@@ -231,7 +245,7 @@ object LiveRepository {
                         }
                     }
                 }
-                com.android.purebilibili.core.util.Logger.d("LiveRepo", " Fetched ${emojiMap.size} emoticons for room $roomId")
+                com.android.purebilibili.core.util.Logger.d("LiveRepo", " Fetched ${emojiMap.size} emoticons for room $roomId(real=$realRoomId)")
                 Result.success(emojiMap)
             } else {
                 Result.failure(Exception(resp.msg))

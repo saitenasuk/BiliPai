@@ -266,7 +266,16 @@ class DanmakuManager private constructor(
         if (config.mergeDuplicates) {
             val (mergedStandard, mergedAdvanced) = DanmakuMerger.merge(filteredStandardList)
             cachedDanmakuList = mergedStandard
-            _advancedDanmakuFlow.value = filteredAdvancedList + mergedAdvanced
+            val settings = currentTypeFilterSettings()
+            val visibleMergedAdvanced = mergedAdvanced.filter { merged ->
+                shouldDisplayMergedAdvancedDanmaku(
+                    content = merged.content,
+                    color = merged.color,
+                    settings = settings,
+                    blockedMatchers = blockedRuleMatchers
+                )
+            }
+            _advancedDanmakuFlow.value = filteredAdvancedList + visibleMergedAdvanced
         } else {
             cachedDanmakuList = filteredStandardList
             _advancedDanmakuFlow.value = filteredAdvancedList

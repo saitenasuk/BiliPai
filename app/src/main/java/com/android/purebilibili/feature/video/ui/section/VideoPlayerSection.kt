@@ -171,6 +171,7 @@ fun VideoPlayerSection(
     onCoin: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
     onTriple: () -> Unit = {},  // [新增] 一键三连回调
+    onPageSelect: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -576,7 +577,13 @@ fun VideoPlayerSection(
                 }
             }
             //  点击/双击/长按手势在拖拽之后处理
-            .pointerInput(seekForwardSeconds, seekBackwardSeconds, longPressSpeed, isScreenLocked) {
+            .pointerInput(
+                seekForwardSeconds,
+                seekBackwardSeconds,
+                doubleTapSeekEnabled,
+                longPressSpeed,
+                isScreenLocked
+            ) {
                 detectTapGestures(
                     onTap = { 
                         // 🔒 锁定时点击只显示解锁按钮
@@ -1327,6 +1334,7 @@ fun VideoPlayerSection(
         }
 
         if (uiState is PlayerUiState.Success && !isInPipMode) {
+            val currentPageIndex = uiState.info.pages.indexOfFirst { it.cid == uiState.info.cid }.coerceAtLeast(0)
             VideoPlayerOverlay(
                 player = playerState.player,
                 title = uiState.info.title,
@@ -1586,7 +1594,10 @@ fun VideoPlayerSection(
                 onTriple = onTriple,
                 onDrawerVideoClick = { vid ->
                     onRelatedVideoClick(vid, null) 
-                }
+                },
+                pages = uiState.info.pages,
+                currentPageIndex = currentPageIndex,
+                onPageSelect = onPageSelect
             )
     }
 

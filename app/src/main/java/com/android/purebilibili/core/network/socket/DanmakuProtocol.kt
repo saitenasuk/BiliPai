@@ -110,8 +110,15 @@ object DanmakuProtocol {
             val version = buffer.short.toInt()
             val operation = buffer.int
             val sequence = buffer.int
+
+            if (headLength < HEAD_LENGTH || headLength > totalLength) {
+                break
+            }
             
             val bodyLength = totalLength - headLength
+            if (bodyLength < 0 || bodyLength > buffer.remaining()) {
+                break
+            }
             val body = ByteArray(bodyLength)
             buffer.get(body)
             

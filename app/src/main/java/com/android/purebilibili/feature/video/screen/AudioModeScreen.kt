@@ -515,7 +515,7 @@ fun AudioModeScreen(
                 onDismiss = { showCollectionSheet = false },
                 onEpisodeClick = { episode ->
                     showCollectionSheet = false
-                    viewModel.loadVideo(episode.bvid)
+                    viewModel.loadVideo(episode.bvid, cid = episode.cid)
                 }
             )
         }

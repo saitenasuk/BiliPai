@@ -3,6 +3,7 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.TokenManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -13,6 +14,10 @@ import kotlinx.coroutines.withContext
 object ActionRepository {
     private val api = NetworkModule.api
     private const val SPECIAL_FOLLOW_TAG_ID = -10L
+    private const val FOLLOW_GROUP_BATCH_SIZE = 20
+    private const val FOLLOW_GROUP_MAX_RETRIES = 3
+    private const val FOLLOW_GROUP_REQUEST_INTERVAL_MS = 220L
+    private const val FOLLOW_GROUP_RETRY_BASE_DELAY_MS = 900L
 
     private fun normalizeRelationTagIds(raw: Set<Long>): Set<Long> {
         return raw.asSequence().filter { it != 0L }.toSet()
@@ -31,6 +36,67 @@ object ActionRepository {
             )
         }
         return merged.sortedBy { it.tagid != SPECIAL_FOLLOW_TAG_ID }
+    }
+
+    internal fun chunkFollowGroupTargetMids(
+        targetMids: Set<Long>,
+        chunkSize: Int = FOLLOW_GROUP_BATCH_SIZE
+    ): List<List<Long>> {
+        if (targetMids.isEmpty()) return emptyList()
+        val effectiveChunkSize = chunkSize.coerceAtLeast(1)
+        return targetMids
+            .asSequence()
+            .filter { it > 0L }
+            .distinct()
+            .toList()
+            .chunked(effectiveChunkSize)
+    }
+
+    internal fun isFollowGroupRetryableError(code: Int, message: String): Boolean {
+        if (code in setOf(-412, -352, -509, 22015)) return true
+        if (message.isBlank()) return false
+        return message.contains("频繁") ||
+            message.contains("过快") ||
+            message.contains("风控") ||
+            message.contains("稍后") ||
+            message.contains("too many", ignoreCase = true) ||
+            message.contains("rate", ignoreCase = true)
+    }
+
+    private suspend fun addUsersToRelationTagsWithRetry(
+        fids: String,
+        tagIds: String,
+        csrf: String
+    ): Result<Unit> {
+        var lastCode = Int.MIN_VALUE
+        var lastMessage = ""
+
+        repeat(FOLLOW_GROUP_MAX_RETRIES) { attempt ->
+            val response = api.addUsersToRelationTags(
+                fids = fids,
+                tagIds = tagIds,
+                csrf = csrf
+            )
+            if (response.code == 0) {
+                return Result.success(Unit)
+            }
+
+            lastCode = response.code
+            lastMessage = response.message
+            val retryable = isFollowGroupRetryableError(response.code, response.message)
+            if (!retryable || attempt >= FOLLOW_GROUP_MAX_RETRIES - 1) {
+                return Result.failure(
+                    Exception(response.message.ifEmpty { "分组设置失败: ${response.code}" })
+                )
+            }
+
+            val backoffMs = FOLLOW_GROUP_RETRY_BASE_DELAY_MS * (attempt + 1)
+            delay(backoffMs)
+        }
+
+        return Result.failure(
+            Exception(if (lastMessage.isNotEmpty()) lastMessage else "分组设置失败: $lastCode")
+        )
     }
 
     /**
@@ -215,31 +281,41 @@ object ActionRepository {
                 if (csrf.isEmpty()) {
                     return@withContext Result.failure(Exception("请先登录"))
                 }
-                val fids = targetMids.joinToString(",")
                 val normalizedSelection = normalizeRelationTagIds(selectedTagIds)
+                val midChunks = chunkFollowGroupTargetMids(targetMids)
+                if (midChunks.isEmpty()) return@withContext Result.success(true)
+                val selectedTagIdsJoined = normalizedSelection.joinToString(",")
 
-                // 先移动到默认分组，确保“完全覆盖”生效。
-                val resetResponse = api.addUsersToRelationTags(
-                    fids = fids,
-                    tagIds = "0",
-                    csrf = csrf
-                )
-                if (resetResponse.code != 0) {
-                    return@withContext Result.failure(
-                        Exception(resetResponse.message.ifEmpty { "分组设置失败: ${resetResponse.code}" })
-                    )
-                }
+                midChunks.forEachIndexed { index, mids ->
+                    val fids = mids.joinToString(",")
 
-                if (normalizedSelection.isNotEmpty()) {
-                    val applyResponse = api.addUsersToRelationTags(
+                    // 先移动到默认分组，确保“完全覆盖”生效。
+                    val resetResult = addUsersToRelationTagsWithRetry(
                         fids = fids,
-                        tagIds = normalizedSelection.joinToString(","),
+                        tagIds = "0",
                         csrf = csrf
                     )
-                    if (applyResponse.code != 0) {
+                    if (resetResult.isFailure) {
                         return@withContext Result.failure(
-                            Exception(applyResponse.message.ifEmpty { "分组设置失败: ${applyResponse.code}" })
+                            resetResult.exceptionOrNull() ?: Exception("分组设置失败")
                         )
+                    }
+
+                    if (normalizedSelection.isNotEmpty()) {
+                        val applyResult = addUsersToRelationTagsWithRetry(
+                            fids = fids,
+                            tagIds = selectedTagIdsJoined,
+                            csrf = csrf
+                        )
+                        if (applyResult.isFailure) {
+                            return@withContext Result.failure(
+                                applyResult.exceptionOrNull() ?: Exception("分组设置失败")
+                            )
+                        }
+                    }
+
+                    if (index < midChunks.lastIndex) {
+                        delay(FOLLOW_GROUP_REQUEST_INTERVAL_MS)
                     }
                 }
 

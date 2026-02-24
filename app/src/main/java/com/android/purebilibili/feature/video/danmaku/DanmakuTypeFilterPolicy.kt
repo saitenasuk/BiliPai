@@ -44,6 +44,21 @@ fun shouldDisplayAdvancedDanmaku(
     return true
 }
 
+internal fun shouldDisplayMergedAdvancedDanmaku(
+    content: String,
+    color: Int,
+    settings: DanmakuTypeFilterSettings,
+    blockedMatchers: List<DanmakuBlockRuleMatcher>
+): Boolean {
+    if (!shouldDisplayAdvancedDanmaku(color = color, settings = settings)) {
+        return false
+    }
+    if (shouldBlockDanmakuByMatchers(content = content, matchers = blockedMatchers)) {
+        return false
+    }
+    return true
+}
+
 fun isColorfulDanmaku(color: Int): Boolean {
     val rgb = color and DANMAKU_WHITE_RGB
     return rgb != DANMAKU_WHITE_RGB

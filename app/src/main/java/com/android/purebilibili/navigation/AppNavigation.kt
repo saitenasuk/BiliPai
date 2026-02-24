@@ -517,7 +517,7 @@ fun AppNavigation(
                     if (!stillInVideoRoute && activity?.isChangingConfigurations != true && !isNavigatingToAudioMode) {
                         // [关键修复] 兜底处理：系统返回手势可能不会走 VideoDetailScreen.handleBack。
                         // 真正离开视频域时统一标记导航离开，避免后台播放状态残留。
-                        miniPlayerManager?.markLeavingByNavigation()
+                        miniPlayerManager?.markLeavingByNavigation(expectedBvid = bvid)
 
                         //  [修复] 只有在"应用内小窗"模式下才进入小窗
                         // 后台模式只播放音频，不显示小窗
@@ -546,7 +546,7 @@ fun AppNavigation(
                         //  标记正在返回，跳过首页卡片入场动画
                         CardPositionManager.markReturning()
                         // 🎯 [新增] 标记通过导航离开，让播放器暂停
-                        miniPlayerManager?.markLeavingByNavigation()
+                        miniPlayerManager?.markLeavingByNavigation(expectedBvid = bvid)
                         //  [修复] 不再在这里调用 enterMiniMode，由 onDispose 统一处理
                         navController.popBackStack() 
                     },
@@ -559,8 +559,11 @@ fun AppNavigation(
                         if (canNavigate()) navController.navigate(ScreenRoutes.Search.route)
                     },
                     // [修复] 传递视频点击导航回调
-                    onVideoClick = { vid, _ -> 
-                        navigateToVideo(vid, 0L, "")
+                    onVideoClick = { vid, options ->
+                        val targetCid = options?.getLong(
+                            com.android.purebilibili.feature.video.screen.VIDEO_NAV_TARGET_CID_KEY
+                        ) ?: 0L
+                        navigateToVideo(vid, targetCid, "")
                     },
                     onBgmClick = { bgm ->
                         // 获取当前视频的 cid（在闭包中捕获）
