@@ -782,6 +782,21 @@ interface DynamicApi {
         @Query("offset") offset: String = "",
         @Query("features") features: String = "itemOpusStyle"
     ): DynamicFeedResponse
+
+    //  [新增] 获取单条动态详情（桌面端详情接口）
+    @GET("x/polymer/web-dynamic/desktop/v1/detail")
+    suspend fun getDynamicDetail(
+        @Query("id") id: String,
+        @Query("features") features: String = "itemOpusStyle",
+        @Query("timezone_offset") timezoneOffset: Int = -480
+    ): DynamicDetailResponse
+
+    //  [降级] 旧版详情接口，某些动态类型在 desktop 接口会返回不支持
+    @GET("x/polymer/web-dynamic/v1/detail")
+    suspend fun getDynamicDetailFallback(
+        @Query("id") id: String,
+        @Query("features") features: String = "itemOpusStyle"
+    ): DynamicDetailResponse
     
     //  [新增] 获取动态评论列表 (type=17 表示动态)
     @GET("x/v2/reply")

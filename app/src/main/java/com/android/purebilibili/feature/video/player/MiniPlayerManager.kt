@@ -53,6 +53,7 @@ private const val NOTIFICATION_ID = 1002
 private const val CHANNEL_ID = "mini_player_channel"
 private const val THEME_COLOR = 0xFFFB7299.toInt()
 private const val FOREGROUND_START_DEBOUNCE_MS = 1500L
+private const val USER_LEAVE_HINT_WINDOW_MS = 1500L
 
 internal fun shouldShowInAppMiniPlayerByPolicy(
     mode: SettingsManager.MiniPlayerMode,
@@ -94,6 +95,16 @@ internal fun shouldClearPlaybackNotificationOnNavigationExit(
     if (stopPlaybackOnExit) return true
     return mode == SettingsManager.MiniPlayerMode.OFF ||
         mode == SettingsManager.MiniPlayerMode.SYSTEM_PIP
+}
+
+internal fun shouldContinuePlaybackDuringPause(
+    isMiniMode: Boolean,
+    isPip: Boolean,
+    isBackgroundAudio: Boolean,
+    hasRecentUserLeaveHint: Boolean
+): Boolean {
+    if (isMiniMode || isPip) return true
+    return isBackgroundAudio && hasRecentUserLeaveHint
 }
 
 internal fun resolveNotificationIsPlaying(
@@ -156,6 +167,7 @@ internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
         "icon_flat_material" -> R.mipmap.ic_launcher_flat_material
         "icon_anime" -> R.mipmap.ic_launcher_anime
         "icon_telegram_blue" -> R.mipmap.ic_launcher_telegram_blue
+        "icon_telegram_blue_coin" -> R.mipmap.ic_launcher_telegram_blue_coin
         "icon_telegram_green" -> R.mipmap.ic_launcher_telegram_green
         "icon_telegram_pink" -> R.mipmap.ic_launcher_telegram_pink
         "icon_telegram_purple" -> R.mipmap.ic_launcher_telegram_purple
@@ -342,6 +354,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
     // true = 用户通过返回按钮离开视频页面，应该停止播放
     // false = 用户按 Home 键离开应用，应该继续后台播放
     var isLeavingByNavigation by mutableStateOf(false)
+    @Volatile
+    private var lastUserLeaveHintAtMs: Long = 0L
 
     var isPlaying by mutableStateOf(false)
         private set
@@ -586,6 +600,21 @@ class MiniPlayerManager private constructor(private val context: Context) :
     fun resetNavigationFlag() {
         isLeavingByNavigation = false
         Logger.d(TAG, "🔄 resetNavigationFlag: isLeavingByNavigation=false")
+    }
+
+    fun markUserLeaveHint() {
+        lastUserLeaveHintAtMs = SystemClock.elapsedRealtime()
+    }
+
+    fun clearUserLeaveHint() {
+        lastUserLeaveHintAtMs = 0L
+    }
+
+    fun hasRecentUserLeaveHint(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Boolean {
+        val last = lastUserLeaveHintAtMs
+        if (last <= 0L) return false
+        val delta = nowElapsedMs - last
+        return delta in 0L..USER_LEAVE_HINT_WINDOW_MS
     }
     
     /**

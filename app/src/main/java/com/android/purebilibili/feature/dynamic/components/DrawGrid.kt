@@ -53,9 +53,13 @@ fun DrawGridV2(
         else -> 3
     }
     
-    //  [优化] 单图时保持原始比例，但限制最大高度
-    val singleImageRatio = if (displayItems.size == 1 && displayItems[0].width > 0 && displayItems[0].height > 0) {
-        (displayItems[0].width.toFloat() / displayItems[0].height.toFloat()).coerceIn(0.6f, 2f)
+    val isSingleImage = displayItems.size == 1
+    // 单图放宽比例边界，减少超长图/超宽图在列表中的裁切。
+    val singleImageRatio = if (isSingleImage) {
+        resolveSingleImageAspectRatio(
+            width = displayItems[0].width,
+            height = displayItems[0].height
+        )
     } else {
         1.33f  //  默认 4:3 比例
     }
@@ -80,15 +84,16 @@ fun DrawGridV2(
                         }
                     }
                     
-                    //  [优化] 单图使用原始比例，多图使用正方形
-                    val aspectRatio = if (displayItems.size == 1) singleImageRatio else 1f
+                    // 单图使用原始比例，多图使用正方形网格。
+                    val aspectRatio = if (isSingleImage) singleImageRatio else 1f
                     val isGif = imageUrl.endsWith(".gif", ignoreCase = true)
                     //  [优化] 单图占满宽度，多图均分
-                    val imageModifier = if (displayItems.size == 1) {
+                    val imageModifier = if (isSingleImage) {
                         Modifier.fillMaxWidth()
                     } else {
                         Modifier.weight(1f)
                     }
+                    val scaleMode = resolveDrawGridScaleMode(displayItems.size)
                     
                     //  [新增] 存储图片位置
                     var imageRect by remember { mutableStateOf<Rect?>(null) }
@@ -114,7 +119,10 @@ fun DrawGridV2(
                                 imageLoader = if (isGif) gifImageLoader else ImageLoader(context),
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                                contentScale = when (scaleMode) {
+                                    DrawGridScaleMode.FIT -> ContentScale.Fit
+                                    DrawGridScaleMode.CROP -> ContentScale.Crop
+                                }
                             )
                         } else {
                             Icon(
@@ -150,5 +158,4 @@ fun DrawGridV2(
         }
     }
 }
-
 

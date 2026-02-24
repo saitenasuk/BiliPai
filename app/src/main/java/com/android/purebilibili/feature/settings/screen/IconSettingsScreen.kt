@@ -78,6 +78,7 @@ fun getIconGroups(): List<IconGroup> {
             title = "Telegram 风格",
             icons = listOf(
                 IconOption("icon_telegram_blue", "纸飞机蓝", "Telegram 蓝", R.mipmap.ic_launcher_telegram_blue_round),
+                IconOption("icon_telegram_blue_coin", "蓝币电视", "Telegram 蓝币", R.mipmap.ic_launcher_telegram_blue_coin_round),
                 IconOption("icon_telegram_green", "薄荷绿", "Telegram 绿", R.mipmap.ic_launcher_telegram_green_round),
                 IconOption("icon_telegram_pink", "樱花粉", "Telegram 粉", R.mipmap.ic_launcher_telegram_pink_round),
                 IconOption("icon_telegram_purple", "香芋紫", "Telegram 紫", R.mipmap.ic_launcher_telegram_purple_round),

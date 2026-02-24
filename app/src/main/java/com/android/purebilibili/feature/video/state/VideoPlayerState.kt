@@ -431,17 +431,24 @@ fun rememberVideoPlayerState(
                     val isMiniMode = miniPlayerManager.isMiniMode
                     val isPip = miniPlayerManager.shouldEnterPip()
                     val isBackgroundAudio = miniPlayerManager.shouldContinueBackgroundAudio()
-                    val shouldContinuePlayback = isMiniMode || isPip || isBackgroundAudio
+                    val hasRecentUserLeaveHint = miniPlayerManager.hasRecentUserLeaveHint()
+                    val shouldContinuePlayback = com.android.purebilibili.feature.video.player
+                        .shouldContinuePlaybackDuringPause(
+                            isMiniMode = isMiniMode,
+                            isPip = isPip,
+                            isBackgroundAudio = isBackgroundAudio,
+                            hasRecentUserLeaveHint = hasRecentUserLeaveHint
+                        )
                     
                     //  [修复] 记录后台音频状态，恢复时不要 seek 回旧位置
-                    wasBackgroundAudio = isBackgroundAudio
+                    wasBackgroundAudio = isBackgroundAudio && hasRecentUserLeaveHint
                     
                     if (!shouldContinuePlayback) {
                         // 非小窗/PiP/后台模式下暂停
                         player.pause()
                         com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " ON_PAUSE: 暂停播放")
                     } else {
-                        com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "🎵 ON_PAUSE: 保持播放 (miniMode=$isMiniMode, pip=$isPip, bg=$isBackgroundAudio)")
+                        com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "🎵 ON_PAUSE: 保持播放 (miniMode=$isMiniMode, pip=$isPip, bg=$isBackgroundAudio, leaveHint=$hasRecentUserLeaveHint)")
                     }
                     com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " ON_PAUSE: pos=$savedPosition, wasPlaying=$wasPlaying, bgAudio=$wasBackgroundAudio")
                 }

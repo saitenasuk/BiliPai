@@ -32,6 +32,13 @@ sealed class ScreenRoutes(val route: String) {
     
     //  动态页面
     object Dynamic : ScreenRoutes("dynamic")
+
+    //  动态详情页面
+    object DynamicDetail : ScreenRoutes("dynamic_detail/{dynamicId}") {
+        fun createRoute(dynamicId: String): String {
+            return "dynamic_detail/${android.net.Uri.encode(dynamicId)}"
+        }
+    }
     
     //  [新增] 竖屏短视频 (故事模式)
     object Story : ScreenRoutes("story")

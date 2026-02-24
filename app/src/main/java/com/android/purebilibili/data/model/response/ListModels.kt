@@ -125,6 +125,7 @@ data class FollowingUser(
 data class VideoItem(
     val id: Long = 0,
     val bvid: String = "",
+    val dynamicId: String = "", // Home Follow 动态卡片跳转详情用
     val aid: Long = 0,   // [修复] 新增 aid 字段，移动端推荐流可能只返回 aid
     val cid: Long = 0,   //  明确的 CID 字段，用于播放
     val title: String = "",

@@ -60,7 +60,7 @@ fun SpaceScreen(
     mid: Long,
     onBack: () -> Unit,
     onVideoClick: (String) -> Unit,
-    onDynamicWebClick: (String) -> Unit = {},
+    onDynamicDetailClick: (String) -> Unit = {},
     onViewAllClick: (String, Long, Long, String) -> Unit = { _, _, _, _ -> }, // type, id, mid, title
     viewModel: SpaceViewModel = viewModel(),
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -180,7 +180,7 @@ fun SpaceScreen(
                     SpaceContent(
                         state = state,
                         onVideoClick = onVideoClick,
-                        onDynamicWebClick = onDynamicWebClick,
+                        onDynamicDetailClick = onDynamicDetailClick,
                         onLoadMore = { viewModel.loadMoreVideos() },
                         onCategoryClick = { viewModel.selectCategory(it) },
                         onSortOrderClick = { viewModel.selectSortOrder(it) },
@@ -327,7 +327,7 @@ fun SpaceScreen(
 private fun SpaceContent(
     state: SpaceUiState.Success,
     onVideoClick: (String) -> Unit,
-    onDynamicWebClick: (String) -> Unit,
+    onDynamicDetailClick: (String) -> Unit,
     onLoadMore: () -> Unit,
     onCategoryClick: (Int) -> Unit,  //  分类点击回调
     onSortOrderClick: (VideoSortOrder) -> Unit,  //  排序点击回调
@@ -749,7 +749,7 @@ private fun SpaceContent(
                             SpaceDynamicCard(
                                 dynamic = dynamic,
                                 onVideoClick = onVideoClick,
-                                onDynamicWebClick = onDynamicWebClick
+                                onDynamicDetailClick = onDynamicDetailClick
                             )
                             
                             // 触发加载更多
@@ -2197,7 +2197,7 @@ private fun SpaceHomeNotice(notice: String) {
 private fun SpaceDynamicCard(
     dynamic: SpaceDynamicItem,
     onVideoClick: (String) -> Unit,
-    onDynamicWebClick: (String) -> Unit
+    onDynamicDetailClick: (String) -> Unit
 ) {
     val author = dynamic.modules.module_author
     val content = dynamic.modules.module_dynamic
@@ -2213,7 +2213,7 @@ private fun SpaceDynamicCard(
             .clickable(enabled = clickAction != SpaceDynamicClickAction.None) {
                 when (clickAction) {
                     is SpaceDynamicClickAction.OpenVideo -> onVideoClick(clickAction.bvid)
-                    is SpaceDynamicClickAction.OpenWeb -> onDynamicWebClick(clickAction.url)
+                    is SpaceDynamicClickAction.OpenDynamicDetail -> onDynamicDetailClick(clickAction.dynamicId)
                     SpaceDynamicClickAction.None -> Unit
                 }
             }

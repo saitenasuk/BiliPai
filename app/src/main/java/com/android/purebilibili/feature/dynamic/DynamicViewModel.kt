@@ -14,6 +14,7 @@ import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.data.model.response.LiveRoom
+import com.android.purebilibili.data.repository.DynamicFeedScope
 import com.android.purebilibili.data.repository.DynamicRepository
 import com.android.purebilibili.data.repository.LiveRepository
 import kotlinx.coroutines.async
@@ -508,7 +509,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 return
             }
 
-            val result = DynamicRepository.getDynamicFeed(refresh)
+            val result = DynamicRepository.getDynamicFeed(
+                refresh = refresh,
+                scope = DynamicFeedScope.DYNAMIC_SCREEN
+            )
 
             result.fold(
                 onSuccess = { items ->
@@ -545,7 +549,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         items = mergedItems,
                         isLoading = false,
                         error = null,
-                        hasMore = DynamicRepository.hasMoreData(),
+                        hasMore = DynamicRepository.hasMoreData(DynamicFeedScope.DYNAMIC_SCREEN),
                         incrementalRefreshBoundaryKey = boundary.boundaryKey,
                         incrementalPrependedCount = boundary.prependedCount
                     )

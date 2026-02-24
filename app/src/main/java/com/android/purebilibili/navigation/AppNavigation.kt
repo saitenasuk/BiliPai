@@ -155,8 +155,14 @@ fun AppNavigation(
     }
 
     fun navigateToVideoFromHome(request: HomeVideoClickRequest) {
-        val route = resolveHomeVideoRoute(request) ?: return
-        navigateToVideoRoute(route)
+        when (val target = resolveHomeNavigationTarget(request)) {
+            is HomeNavigationTarget.Video -> navigateToVideoRoute(target.route)
+            is HomeNavigationTarget.DynamicDetail -> {
+                if (!canNavigate()) return
+                navController.navigate(ScreenRoutes.DynamicDetail.createRoute(target.dynamicId))
+            }
+            null -> Unit
+        }
     }
 
     //  [修复] 通用单例跳转（防止重复打开相同页面）
@@ -810,6 +816,9 @@ fun AppNavigation(
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 DynamicScreen(
                     onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onDynamicDetailClick = { dynamicId ->
+                        navController.navigate(ScreenRoutes.DynamicDetail.createRoute(dynamicId))
+                    },
                     onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
                     onLiveClick = { roomId, title, uname ->  //  直播点击
                         navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
@@ -820,6 +829,27 @@ fun AppNavigation(
                     globalHazeState = mainHazeState  // [新增] 全局底栏模糊状态
                 )
             }
+        }
+
+        // --- 6.1 动态详情页面 ---
+        composable(
+            route = ScreenRoutes.DynamicDetail.route,
+            arguments = listOf(
+                navArgument("dynamicId") { type = NavType.StringType }
+            ),
+            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(animDuration)) },
+            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(animDuration)) }
+        ) { backStackEntry ->
+            val dynamicId = android.net.Uri.decode(backStackEntry.arguments?.getString("dynamicId") ?: "")
+            com.android.purebilibili.feature.dynamic.DynamicDetailScreen(
+                dynamicId = dynamicId,
+                onBack = { navController.popBackStack() },
+                onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
+                onLiveClick = { roomId, title, uname ->
+                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                }
+            )
         }
         
         // --- 6.5  [新增] 竖屏短视频 (故事模式) ---
@@ -1098,8 +1128,8 @@ fun AppNavigation(
                     mid = mid,
                     onBack = { navController.popBackStack() },
                     onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
-                    onDynamicWebClick = { url ->
-                        navController.navigate(ScreenRoutes.Web.createRoute(url, "动态详情"))
+                    onDynamicDetailClick = { dynamicId ->
+                        navController.navigate(ScreenRoutes.DynamicDetail.createRoute(dynamicId))
                     },
                     onViewAllClick = { type, id, mid, title ->
                         navController.navigate(ScreenRoutes.SeasonSeriesDetail.createRoute(type, id, mid, title))

@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.Query
 
 class DynamicApiContractTest {
@@ -32,5 +33,27 @@ class DynamicApiContractTest {
 
         assertEquals("333.1369.0.0", request.spmid)
         assertEquals("333.999.0.0", request.from_spmid)
+    }
+
+    @Test
+    fun getDynamicDetail_usesDesktopDetailEndpointAndIdQuery() {
+        val method = DynamicApi::class.java.methods.first { it.name == "getDynamicDetail" }
+        val get = method.getAnnotation(GET::class.java)
+        assertEquals("x/polymer/web-dynamic/desktop/v1/detail", get?.value)
+
+        val firstParamAnnotations = method.parameterAnnotations[0].toList()
+        val idQuery = firstParamAnnotations.filterIsInstance<Query>().firstOrNull()
+        assertEquals("id", idQuery?.value)
+    }
+
+    @Test
+    fun getDynamicDetailFallback_usesLegacyDetailEndpointAndIdQuery() {
+        val method = DynamicApi::class.java.methods.first { it.name == "getDynamicDetailFallback" }
+        val get = method.getAnnotation(GET::class.java)
+        assertEquals("x/polymer/web-dynamic/v1/detail", get?.value)
+
+        val firstParamAnnotations = method.parameterAnnotations[0].toList()
+        val idQuery = firstParamAnnotations.filterIsInstance<Query>().firstOrNull()
+        assertEquals("id", idQuery?.value)
     }
 }

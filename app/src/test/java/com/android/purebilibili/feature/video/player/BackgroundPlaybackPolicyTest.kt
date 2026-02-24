@@ -128,6 +128,46 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun pausePolicyContinuesForMiniModeOrPipRegardlessOfLeaveHint() {
+        assertTrue(
+            shouldContinuePlaybackDuringPause(
+                isMiniMode = true,
+                isPip = false,
+                isBackgroundAudio = false,
+                hasRecentUserLeaveHint = false
+            )
+        )
+        assertTrue(
+            shouldContinuePlaybackDuringPause(
+                isMiniMode = false,
+                isPip = true,
+                isBackgroundAudio = false,
+                hasRecentUserLeaveHint = false
+            )
+        )
+    }
+
+    @Test
+    fun pausePolicyRequiresRecentLeaveHintForBackgroundAudio() {
+        assertFalse(
+            shouldContinuePlaybackDuringPause(
+                isMiniMode = false,
+                isPip = false,
+                isBackgroundAudio = true,
+                hasRecentUserLeaveHint = false
+            )
+        )
+        assertTrue(
+            shouldContinuePlaybackDuringPause(
+                isMiniMode = false,
+                isPip = false,
+                isBackgroundAudio = true,
+                hasRecentUserLeaveHint = true
+            )
+        )
+    }
+
+    @Test
     fun navigationExitShouldClearPlaybackNotificationForOffAndPip() {
         assertTrue(
             shouldClearPlaybackNotificationOnNavigationExit(

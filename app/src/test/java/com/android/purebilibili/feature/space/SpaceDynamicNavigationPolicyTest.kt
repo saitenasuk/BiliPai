@@ -31,13 +31,13 @@ class SpaceDynamicNavigationPolicyTest {
     }
 
     @Test
-    fun resolveSpaceDynamicClickAction_usesMobileDynamicDetailWhenNoVideo() {
+    fun resolveSpaceDynamicClickAction_usesDesktopDynamicDetailWhenNoVideo() {
         val dynamic = SpaceDynamicItem(id_str = "987654321")
 
         val action = resolveSpaceDynamicClickAction(dynamic)
 
-        assertTrue(action is SpaceDynamicClickAction.OpenWeb)
-        assertEquals("https://m.bilibili.com/dynamic/987654321", (action as SpaceDynamicClickAction.OpenWeb).url)
+        assertTrue(action is SpaceDynamicClickAction.OpenDynamicDetail)
+        assertEquals("987654321", (action as SpaceDynamicClickAction.OpenDynamicDetail).dynamicId)
     }
 
     @Test

@@ -1010,7 +1010,7 @@ fun VideoDetailScreen(
         val activity = context.findActivity()
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
-
+    
     // 🎯 [移除] 以下 BackHandler 会阻止 Compose Navigation 的预测性返回手势动画
     // CardPositionManager.markReturning() 已在 onDispose 中处理（见下方修改）
     // BackHandler(enabled = !isFullscreenMode && !isPortraitFullscreen, onBack = handleBack)

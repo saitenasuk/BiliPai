@@ -15,6 +15,7 @@ private val CANONICAL_APP_ICON_KEYS = setOf(
     "icon_telegram_pink",
     "icon_telegram_purple",
     "icon_telegram_dark",
+    "icon_telegram_blue_coin",
     "Yuki",
     "Headphone"
 )
@@ -32,6 +33,7 @@ private val LAUNCHER_ALIAS_SUFFIX_BY_KEY = mapOf(
     "icon_telegram_pink" to "MainActivityAliasPink",
     "icon_telegram_purple" to "MainActivityAliasPurple",
     "icon_telegram_dark" to "MainActivityAliasDark",
+    "icon_telegram_blue_coin" to "MainActivityAliasTelegramBlueCoin",
     "Yuki" to "MainActivityAliasYuki",
     "Headphone" to "MainActivityAliasHeadphone"
 )
@@ -53,6 +55,7 @@ fun normalizeAppIconKey(rawKey: String?): String {
         "Pink", "Telegram Pink" -> "icon_telegram_pink"
         "Purple", "Telegram Purple" -> "icon_telegram_purple"
         "Dark", "Telegram Dark" -> "icon_telegram_dark"
+        "Telegram Blue Coin", "Blue Coin" -> "icon_telegram_blue_coin"
         "icon_headphone" -> "Headphone"
         else -> if (CANONICAL_APP_ICON_KEYS.contains(key)) key else DEFAULT_APP_ICON_KEY
     }
