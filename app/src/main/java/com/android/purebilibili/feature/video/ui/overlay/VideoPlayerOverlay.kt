@@ -40,6 +40,7 @@ import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.AspectRatioMenu
 import com.android.purebilibili.feature.video.ui.components.VideoSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.ChapterListPanel
+import com.android.purebilibili.feature.video.ui.components.PagesSelector
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.data.repository.VideoRepository
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
@@ -88,6 +89,41 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
 
+internal fun shouldShowEpisodeEntryFromVideoData(
+    relatedVideosCount: Int,
+    hasSeasonEpisodes: Boolean,
+    pagesCount: Int
+): Boolean {
+    return pagesCount > 1 || relatedVideosCount > 0 || hasSeasonEpisodes
+}
+
+internal data class NextEpisodeTarget(
+    val nextPageIndex: Int? = null,
+    val nextBvid: String? = null
+)
+
+internal fun resolveNextEpisodeTarget(
+    pagesCount: Int,
+    currentPageIndex: Int,
+    seasonEpisodeBvids: List<String>,
+    currentBvid: String,
+    relatedBvids: List<String>
+): NextEpisodeTarget? {
+    if (pagesCount > 1 && currentPageIndex in 0 until (pagesCount - 1)) {
+        return NextEpisodeTarget(nextPageIndex = currentPageIndex + 1)
+    }
+    if (seasonEpisodeBvids.isNotEmpty()) {
+        val currentIndex = seasonEpisodeBvids.indexOf(currentBvid)
+        if (currentIndex in 0 until seasonEpisodeBvids.lastIndex) {
+            return NextEpisodeTarget(nextBvid = seasonEpisodeBvids[currentIndex + 1])
+        }
+    }
+    val nextRelated = relatedBvids.firstOrNull { it != currentBvid }
+    if (!nextRelated.isNullOrBlank()) {
+        return NextEpisodeTarget(nextBvid = nextRelated)
+    }
+    return null
+}
 
 @Composable
 fun VideoPlayerOverlay(
@@ -103,6 +139,7 @@ fun VideoPlayerOverlay(
     onQualitySelected: (Int) -> Unit,
 
     onBack: () -> Unit,
+    onHomeClick: () -> Unit = onBack,
     onToggleFullscreen: () -> Unit,
     // [New] Player Data for Download
     bvid: String = "",
@@ -229,6 +266,10 @@ fun VideoPlayerOverlay(
     onTriple: () -> Unit = {},  // [新增] 一键三连回调
     // 复用 onRelatedVideoClick 或 onVideoClick
     onDrawerVideoClick: (String) -> Unit = {},
+    // 分P
+    pages: List<com.android.purebilibili.data.model.response.Page> = emptyList(),
+    currentPageIndex: Int = 0,
+    onPageSelect: (Int) -> Unit = {},
 ) {
     var showQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
@@ -240,6 +281,7 @@ fun VideoPlayerOverlay(
     var showChapterList by remember { mutableStateOf(false) }  // 📖 章节列表
     var showCastDialog by remember { mutableStateOf(false) }   // 📺 投屏对话框
     var showPlaybackOrderSheet by remember { mutableStateOf(false) }
+    var showPageSelectorSheet by remember { mutableStateOf(false) }
     var currentSpeed by remember(player) { mutableFloatStateOf(player.playbackParameters.speed) }
     //  使用传入的比例状态
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
@@ -247,6 +289,33 @@ fun VideoPlayerOverlay(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
+    val hasEpisodeEntry = remember(relatedVideos, ugcSeason) {
+        shouldShowEpisodeEntryFromVideoData(
+            relatedVideosCount = relatedVideos.size,
+            hasSeasonEpisodes = ugcSeason?.sections?.any { section ->
+                section.episodes.isNotEmpty()
+            } == true,
+            pagesCount = pages.size
+        )
+    }
+    val nextEpisodeTarget = remember(
+        pages,
+        currentPageIndex,
+        ugcSeason,
+        bvid,
+        relatedVideos
+    ) {
+        resolveNextEpisodeTarget(
+            pagesCount = pages.size,
+            currentPageIndex = currentPageIndex,
+            seasonEpisodeBvids = ugcSeason?.sections
+                ?.flatMap { section -> section.episodes }
+                ?.map { episode -> episode.bvid }
+                .orEmpty(),
+            currentBvid = bvid,
+            relatedBvids = relatedVideos.map { it.bvid }
+        )
+    }
     val playbackCompletionBehavior by SettingsManager
         .getPlaybackCompletionBehavior(context)
         .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
@@ -466,6 +535,7 @@ fun VideoPlayerOverlay(
                     PortraitTopBar(
                         onlineCount = onlineCount,
                         onBack = onBack,
+                        onHome = onHomeClick,
                         onSettings = { showVideoSettings = true },
                         onShare = onShare ?: {
                             if (bvid.isNotEmpty()) {
@@ -494,6 +564,22 @@ fun VideoPlayerOverlay(
                     onSeekStart = onSeekStart,  //  拖动进度条开始时清除弹幕
                     onSpeedClick = { showSpeedMenu = true },
                     onRatioClick = { showRatioMenu = true },
+                    onNextEpisodeClick = {
+                        val target = nextEpisodeTarget
+                        when {
+                            target?.nextPageIndex != null -> onPageSelect(target.nextPageIndex)
+                            !target?.nextBvid.isNullOrBlank() -> onDrawerVideoClick(target?.nextBvid ?: "")
+                        }
+                    },
+                    hasNextEpisode = nextEpisodeTarget != null,
+                    onEpisodeClick = {
+                        if (pages.size > 1) {
+                            showPageSelectorSheet = true
+                        } else {
+                            showEndDrawer = true
+                        }
+                    },
+                    hasEpisodeEntry = hasEpisodeEntry,
                     onToggleFullscreen = onToggleFullscreen,
                     //  [新增] 竖屏模式弹幕和清晰度控制
                     danmakuEnabled = danmakuEnabled,
@@ -838,6 +924,48 @@ fun VideoPlayerOverlay(
                 onDismiss = { showChapterList = false }
             )
         }
+
+        if (showPageSelectorSheet && pages.size > 1) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        showPageSelectorSheet = false
+                    },
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) {}
+                    ) {
+                        PagesSelector(
+                            pages = pages,
+                            currentPageIndex = currentPageIndex,
+                            onPageSelect = { index ->
+                                onPageSelect(index)
+                                showPageSelectorSheet = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
         
         // --- 11. [新增] 侧边栏抽屉 ---
         LandscapeEndDrawer(
@@ -935,6 +1063,7 @@ fun VideoPlayerOverlay(
 private fun PortraitTopBar(
     onlineCount: String = "",
     onBack: () -> Unit,
+    onHome: () -> Unit,
     onSettings: () -> Unit,
     onShare: () -> Unit,
     onAudioMode: () -> Unit,
@@ -973,6 +1102,18 @@ private fun PortraitTopBar(
                 Icon(
                     imageVector = CupertinoIcons.Default.ChevronBackward,
                     contentDescription = "返回",
+                    tint = Color.White,
+                    modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
+                )
+            }
+
+            IconButton(
+                onClick = onHome,
+                modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
+            ) {
+                Icon(
+                    imageVector = CupertinoIcons.Default.House,
+                    contentDescription = "主界面",
                     tint = Color.White,
                     modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
                 )

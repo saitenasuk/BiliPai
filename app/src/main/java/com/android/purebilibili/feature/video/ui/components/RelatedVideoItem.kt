@@ -235,9 +235,7 @@ fun RelatedVideoItem(
 
                 Column {
                     // UP owner info row
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         // UP Name
                         var upNameBoxModifier = Modifier.weight(1f, fill = false)
 
@@ -255,6 +253,15 @@ fun RelatedVideoItem(
 
                         UpBadgeName(
                             name = video.owner.name,
+                            badgeTrailingContent = if (isFollowed) {
+                                {
+                                    Text(
+                                        text = "已关注",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                        color = iOSBlue
+                                    )
+                                }
+                            } else null,
                             leadingContent = if (video.owner.face.isNotEmpty()) {
                                 {
                                     var avatarModifier = Modifier
@@ -292,22 +299,6 @@ fun RelatedVideoItem(
                             badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                             modifier = upNameBoxModifier
                         )
-                        
-                        //  已关注标签
-                        if (isFollowed) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "已关注",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
                     }
                     
                     Spacer(modifier = Modifier.height(2.dp))

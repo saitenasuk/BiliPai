@@ -42,6 +42,10 @@ class PlaybackProgressManager {
     
     // Memory cache for fast access
     private val memoryCache = LinkedHashMap<String, Long>(MAX_CACHE_SIZE, 0.75f, true)
+
+    private fun buildProgressKey(bvid: String, cid: Long): String {
+        return if (cid > 0L) "$bvid#$cid" else bvid
+    }
     
     /**
      * Initialize with context (for SharedPreferences)
@@ -57,13 +61,14 @@ class PlaybackProgressManager {
     /**
      * Save playback position
      */
-    fun savePosition(bvid: String, positionMs: Long, durationMs: Long = 0L) {
+    fun savePosition(bvid: String, cid: Long, positionMs: Long, durationMs: Long = 0L) {
         if (bvid.isEmpty() || positionMs < MIN_PROGRESS_TO_SAVE) return
+        val key = buildProgressKey(bvid, cid)
         
         // 如果已播放超过95%，视为已看完，清除记录
         if (durationMs > 0 && positionMs.toFloat() / durationMs > MAX_PERCENT_TO_RESTORE) {
-            clearPosition(bvid)
-            Logger.d(TAG, "Video $bvid completed (${positionMs}ms / ${durationMs}ms), cleared progress")
+            clearPosition(bvid, cid)
+            Logger.d(TAG, "Video $key completed (${positionMs}ms / ${durationMs}ms), cleared progress")
             return
         }
         
@@ -76,46 +81,60 @@ class PlaybackProgressManager {
             }
         }
         
-        memoryCache[bvid] = positionMs
-        prefs?.edit()?.putLong(bvid, positionMs)?.apply()
-        Logger.d(TAG, "Saved position for $bvid: ${positionMs}ms")
+        memoryCache[key] = positionMs
+        prefs?.edit()?.putLong(key, positionMs)?.apply()
+        Logger.d(TAG, "Saved position for $key: ${positionMs}ms")
+    }
+
+    fun savePosition(bvid: String, positionMs: Long, durationMs: Long = 0L) {
+        savePosition(bvid, cid = 0L, positionMs = positionMs, durationMs = durationMs)
     }
     
     /**
      * Save position (without duration check)
      */
     fun savePosition(bvid: String, positionMs: Long) {
-        savePosition(bvid, positionMs, 0L)
+        savePosition(bvid, cid = 0L, positionMs = positionMs, durationMs = 0L)
     }
     
     /**
      * Get cached playback position
      */
-    fun getCachedPosition(bvid: String): Long {
+    fun getCachedPosition(bvid: String, cid: Long): Long {
+        val key = buildProgressKey(bvid, cid)
         // First check memory cache
-        var position = memoryCache[bvid]
+        var position = memoryCache[key]
         
         // If not in memory, check SharedPreferences
         if (position == null) {
-            position = prefs?.getLong(bvid, 0L) ?: 0L
+            position = prefs?.getLong(key, 0L) ?: 0L
             if (position > 0) {
-                memoryCache[bvid] = position
+                memoryCache[key] = position
             }
         }
         
         if (position != null && position > 0) {
-            Logger.d(TAG, "Retrieved position for $bvid: ${position}ms")
+            Logger.d(TAG, "Retrieved position for $key: ${position}ms")
         }
         return position ?: 0L
+    }
+
+    fun getCachedPosition(bvid: String): Long {
+        return getCachedPosition(bvid, cid = 0L)
     }
     
     /**
      * Clear position cache for a specific video
      */
+    fun clearPosition(bvid: String, cid: Long) {
+        val key = buildProgressKey(bvid, cid)
+        memoryCache.remove(key)
+        prefs?.edit()?.remove(key)?.apply()
+        Logger.d(TAG, "Cleared position for $key")
+    }
+
     fun clearPosition(bvid: String) {
-        memoryCache.remove(bvid)
-        prefs?.edit()?.remove(bvid)?.apply()
-        Logger.d(TAG, "Cleared position for $bvid")
+        clearPosition(bvid, cid = 0L)
     }
     
     /**
@@ -130,8 +149,12 @@ class PlaybackProgressManager {
     /**
      * Check if there is cached position for a video
      */
+    fun hasPosition(bvid: String, cid: Long): Boolean {
+        return getCachedPosition(bvid, cid) > 0
+    }
+
     fun hasPosition(bvid: String): Boolean {
-        return getCachedPosition(bvid) > 0
+        return hasPosition(bvid, cid = 0L)
     }
     
     /**

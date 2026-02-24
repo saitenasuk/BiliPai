@@ -298,8 +298,13 @@ data class LiveRcmdMajor(
 //  [新增] 合集/剧集 (MAJOR_TYPE_UGC_SEASON)
 @Serializable
 data class UgcSeasonMajor(
+    @Serializable(with = FlexibleLongSerializer::class)
+    val aid: Long = 0,
     val title: String = "",
     val cover: String = "",
+    val desc: String = "",
+    val duration_text: String = "",
+    val jump_url: String = "",
     val intro: String = "",
     val id: Long = 0, // season_id
     val sign_state: Int = 0,

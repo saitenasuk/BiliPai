@@ -1,5 +1,61 @@
 # Changelog
 
+## v6.2.0 (2026-02-24)
+
+### Tonight Release Summary
+- Version bump: `6.1.5` -> `6.2.0` (`versionCode 86`).
+- This release includes a full night batch of fixes and behavior polishing across Dynamic, Video, Home, Following, List, Live, Settings, and shared infrastructure.
+- Unit test coverage was expanded for newly extracted policies and key regression points.
+
+### Dynamic (重点修复)
+- Fixed subscribed collection/season cards in Dynamic feed that could not be opened.
+- Fixed Dynamic video link opening failures for aid-only targets by supporting `BV`/`av`/`aid` compatible lookup flow.
+- Added robust click target resolution for `archive`, `ugc_season`, `jump_url`, and fallback IDs.
+- Fixed comment parameter resolution to use API-returned targets first (`basic.comment_id_str`, `basic.comment_type`) with stronger fallback inference.
+- Fixed posting comments using resolved `(oid, type)` instead of hardcoded dynamic comment type.
+- Fixed Dynamic "视频" tab filtering to include `DYNAMIC_TYPE_PGC` and `DYNAMIC_TYPE_UGC_SEASON`.
+- Added `DynamicInteractionPolicy` and tests to lock behavior for comment targets and video-tab inclusion.
+
+### Video / Playback
+- Improved video detail loading policy and repository lookup path for mixed ID formats.
+- Added/updated navigation target CID resolution and related screen policies.
+- Refined player overlays and controls (bottom bar, fullscreen overlays, portrait fullscreen, live danmaku overlay).
+- Improved playback progress management and related player state/usecase handling.
+- Continued cleanup of player-side interaction policies and UI action routing.
+
+### Home / Following / List / Watch Later
+- Refined home pull-to-refresh UI policy and refresh behavior handling.
+- Improved card history progress policy behavior.
+- Added history-screen long-press delete and direct batch delete actions.
+- Reused the Watch Later "Thanos snap" dissolve animation for history deletions.
+- Updated following list selection/batch handling policy tests.
+- Refined list/history playback policy with additional tests.
+- Added watch-later delete behavior policy test coverage.
+
+### Live / Danmaku / Network & Repositories
+- Improved live danmaku protocol/client and repository handling.
+- Updated danmaku filters and merged advanced filter policy tests.
+- Refined action repository behavior (including follow-group related policy tests).
+
+### Settings / App Shell
+- Added app update auto-check process gate to avoid duplicate in-process auto checks.
+- Refined settings screens/tablet layout/settings sections behavior and UI consistency.
+- Updated `MainActivity` and navigation integration touchpoints for recent behavior changes.
+
+### Engineering Quality
+- Continued policy extraction for deterministic logic and testability (Dynamic, Home, Video, Settings, UI component policies).
+- Added/updated broad unit tests for newly extracted policies and previously fragile branches.
+
+### Verification
+- Ran:
+  - `./gradlew :app:testDebugUnitTest`
+- Result: `BUILD SUCCESSFUL`.
+
+### Tonight Version Track
+- `v6.1.3`: release bump and dynamic/detail integration fixes.
+- `v6.1.4`: release publish.
+- `v6.2.0`: this full-night stabilization and behavior fix batch.
+
 ## [6.1.4] - 2026-02-24
 
 ### ✨ New Features (新增功能)

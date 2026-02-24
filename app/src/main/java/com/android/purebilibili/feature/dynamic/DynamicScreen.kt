@@ -144,7 +144,7 @@ fun DynamicScreen(
         }
         var items = baseItems
         if (selectedTab == 1) {
-            items = items.filter { it.type == "DYNAMIC_TYPE_AV" }
+            items = items.filter(::shouldIncludeDynamicItemInVideoTab)
         }
         items.distinctBy { it.id_str }
     }

@@ -190,6 +190,38 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun navigationLeaveShouldBeIgnoredWhenExpectedBvidDiffersFromCurrent() {
+        assertFalse(
+            shouldHandleNavigationLeaveForBvid(
+                expectedBvid = "BV_OLD",
+                currentBvid = "BV_NEW"
+            )
+        )
+    }
+
+    @Test
+    fun navigationLeaveShouldProceedWhenBvidMatchesOrMissing() {
+        assertTrue(
+            shouldHandleNavigationLeaveForBvid(
+                expectedBvid = "BV_SAME",
+                currentBvid = "BV_SAME"
+            )
+        )
+        assertTrue(
+            shouldHandleNavigationLeaveForBvid(
+                expectedBvid = null,
+                currentBvid = "BV_ANY"
+            )
+        )
+        assertTrue(
+            shouldHandleNavigationLeaveForBvid(
+                expectedBvid = "BV_ANY",
+                currentBvid = null
+            )
+        )
+    }
+
+    @Test
     fun notificationIconShouldFollowSelectedAppIconKey() {
         assertEquals(R.mipmap.ic_launcher_telegram_blue, resolveNotificationSmallIconRes("icon_telegram_blue"))
         assertEquals(R.mipmap.ic_launcher_neon, resolveNotificationSmallIconRes("Neon"))

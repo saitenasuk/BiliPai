@@ -37,6 +37,7 @@ import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.iOSCornerRadius
@@ -52,6 +53,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.components.UpBadgeName
+import com.android.purebilibili.core.ui.components.resolveUpStatsText
 //  [预览播放] 相关引用已移除
 
 // 显式导入 collectAsState 以避免 ambiguity 或 missing reference
@@ -84,6 +86,8 @@ fun ElegantVideoCard(
     showPublishTime: Boolean = false,   //  是否显示发布时间（搜索结果用）
     isDataSaverActive: Boolean = false, // 🚀 [性能优化] 从父级传入，避免每个卡片重复计算
     compactStatsOnCover: Boolean = true, // 播放量/评论数是否贴在封面底部
+    upFollowerCount: Int? = null,
+    upVideoCount: Int? = null,
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
     onWatchLater: (() -> Unit)? = null,  //  [新增] 稍后再看回调
     onUnfavorite: (() -> Unit)? = null,  //  [新增] 取消收藏回调
@@ -100,6 +104,19 @@ fun ElegantVideoCard(
     val cardCornerRadius = 12.dp * cornerRadiusScale  // HIG 标准圆角
     val smallCornerRadius = iOSCornerRadius.Tiny * cornerRadiusScale  // 4.dp * scale
     val durationBadgeStyle = remember { resolveVideoCardDurationBadgeVisualStyle() }
+    val showHistoryProgressBar = remember(video.view_at, video.duration, video.progress) {
+        shouldShowVideoCardHistoryProgressBar(
+            viewAt = video.view_at,
+            durationSec = video.duration,
+            progressSec = video.progress
+        )
+    }
+    val historyProgressFraction = remember(video.progress, video.duration) {
+        resolveVideoCardHistoryProgressFraction(
+            progressSec = video.progress,
+            durationSec = video.duration
+        )
+    }
     
     //  [新增] 长按删除菜单状态
     var showDismissMenu by remember { mutableStateOf(false) }
@@ -293,6 +310,25 @@ fun ElegantVideoCard(
                         )
                     )
             )
+
+            if (showHistoryProgressBar) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(Color.White.copy(alpha = 0.24f))
+                )
+                if (historyProgressFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth(historyProgressFraction)
+                            .height(2.dp)
+                            .background(BiliPink)
+                    )
+                }
+            }
 
             if (compactStatsOnCover) {
                 Row(
@@ -497,16 +533,6 @@ fun ElegantVideoCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            //  已关注标签（红色文字，官方风格）
-            if (isFollowing) {
-                Text(
-                    text = "已关注",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary  // 主题色
-                )
-            }
-            
             //  [HIG] UP主名称 - 13sp footnote 标准
             //  共享元素过渡 - UP主名称
             var upNameModifier = Modifier.weight(1f, fill = false)
@@ -525,6 +551,20 @@ fun ElegantVideoCard(
 
             UpBadgeName(
                 name = video.owner.name,
+                metaText = resolveUpStatsText(
+                    followerCount = upFollowerCount,
+                    videoCount = upVideoCount
+                ),
+                badgeTrailingContent = if (isFollowing) {
+                    {
+                        Text(
+                            text = "已关注",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else null,
                 leadingContent = if (video.owner.face.isNotEmpty()) {
                     {
                         var avatarModifier = Modifier
@@ -563,6 +603,7 @@ fun ElegantVideoCard(
                     fontWeight = FontWeight.Normal
                 ),
                 nameColor = iOSSystemGray,
+                metaColor = MaterialTheme.colorScheme.primary,
                 badgeTextColor = iOSSystemGray.copy(alpha = 0.85f),
                 badgeBorderColor = iOSSystemGray.copy(alpha = 0.4f),
                 modifier = upNameModifier

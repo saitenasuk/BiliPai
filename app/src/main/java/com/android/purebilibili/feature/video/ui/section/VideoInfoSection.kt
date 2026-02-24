@@ -32,6 +32,7 @@ import com.android.purebilibili.data.model.response.VideoTag
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import androidx.compose.foundation.text.selection.SelectionContainer
 import com.android.purebilibili.core.ui.common.copyOnClick
+import com.android.purebilibili.core.ui.components.resolveUpStatsText
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.AiSummaryData
 import androidx.compose.ui.platform.LocalUriHandler
@@ -322,11 +323,18 @@ fun UpInfoSection(
     isFollowing: Boolean = false,
     onFollowClick: () -> Unit = {},
     onUpClick: (Long) -> Unit = {},
+    showOwnerAvatar: Boolean = true,
+    followerCount: Int? = null,
+    videoCount: Int? = null,
     transitionEnabled: Boolean = false  // 🔗 共享元素过渡开关
 ) {
     //  尝试获取共享元素作用域
     val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
+    val upStatsText = resolveUpStatsText(
+        followerCount = followerCount,
+        videoCount = videoCount
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -335,33 +343,51 @@ fun UpInfoSection(
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar
-        var avatarModifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            
-        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-            with(sharedTransitionScope) {
-                avatarModifier = avatarModifier.sharedBounds(
-                    sharedContentState = rememberSharedContentState(key = "video_avatar_${info.bvid}"),
-                    animatedVisibilityScope = animatedVisibilityScope,
-                    boundsTransform = { _, _ ->
-                        androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
-                    },
-                    clipInOverlayDuringTransition = OverlayClip(CircleShape)
-                )
+        if (showOwnerAvatar) {
+            var avatarModifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+
+            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    avatarModifier = avatarModifier.sharedBounds(
+                        sharedContentState = rememberSharedContentState(key = "video_avatar_${info.bvid}"),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        boundsTransform = { _, _ ->
+                            androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
+                        },
+                        clipInOverlayDuringTransition = OverlayClip(CircleShape)
+                    )
+                }
+            }
+
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(FormatUtils.fixImageUrl(info.owner.face))
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = avatarModifier
+            )
+        } else {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .height(28.dp)
+                    .widthIn(min = 38.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "UP",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
-
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(FormatUtils.fixImageUrl(info.owner.face))
-                .crossfade(true)
-                .build(),
-            contentDescription = null,
-            modifier = avatarModifier
-        )
         
         Spacer(Modifier.width(10.dp))
         
@@ -387,14 +413,30 @@ fun UpInfoSection(
                 //  添加交互修饰符 (放在 sharedBounds 之后，使其包含在 sharedBounds 内部)
                 upNameModifier = upNameModifier.copyOnLongPress(info.owner.name, "UP主名称")
 
-                Icon(
-                    imageVector = CupertinoIcons.Default.PersonCropCircle,
-                    contentDescription = "UP主标识",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(horizontal = 2.dp)
-                        .size(13.dp)
-                )
+                if (info.owner.face.isNotBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(FormatUtils.fixImageUrl(info.owner.face))
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "UP主头像",
+                        modifier = Modifier
+                            .padding(horizontal = 2.dp)
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.PersonCropCircle,
+                        contentDescription = "UP主标识",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(horizontal = 2.dp)
+                            .size(13.dp)
+                    )
+                }
                 Spacer(Modifier.width(4.dp))
                 Text(
                     text = info.owner.name,
@@ -404,6 +446,16 @@ fun UpInfoSection(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = upNameModifier
+                )
+            }
+            if (!upStatsText.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = upStatsText,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

@@ -79,6 +79,7 @@ fun TabletSettingsLayout(
     onCrashTrackingChange: (Boolean) -> Unit,
     onAnalyticsChange: (Boolean) -> Unit,
     onEasterEggChange: (Boolean) -> Unit,
+    onAutoCheckUpdateChange: (Boolean) -> Unit,
     
     // State
     privacyModeEnabled: Boolean,
@@ -93,6 +94,7 @@ fun TabletSettingsLayout(
     easterEggEnabled: Boolean,
     updateStatusText: String,
     isCheckingUpdate: Boolean,
+    autoCheckUpdateEnabled: Boolean,
     feedApiType: SettingsManager.FeedApiType,
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
@@ -429,6 +431,8 @@ fun TabletSettingsLayout(
                                         onLicenseClick = onLicenseClick,
                                         onGithubClick = onGithubClick,
                                         onCheckUpdateClick = onCheckUpdateClick,
+                                        autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+                                        onAutoCheckUpdateChange = onAutoCheckUpdateChange,
                                         onVersionClick = onVersionClick,
                                         onReplayOnboardingClick = onReplayOnboardingClick,
                                         onEasterEggChange = onEasterEggChange,

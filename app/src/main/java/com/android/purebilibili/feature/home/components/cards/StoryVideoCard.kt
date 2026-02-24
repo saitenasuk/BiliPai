@@ -44,6 +44,7 @@ import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.components.UpBadgeName
+import com.android.purebilibili.core.ui.components.resolveUpStatsText
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 
@@ -64,6 +65,8 @@ fun StoryVideoCard(
     animationEnabled: Boolean = true,  //  卡片动画开关
     motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
+    upFollowerCount: Int? = null,
+    upVideoCount: Int? = null,
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
     onLongClick: ((VideoItem) -> Unit)? = null, // [修复] 长按预览回调
     onClick: (String, Long) -> Unit
@@ -280,6 +283,10 @@ fun StoryVideoCard(
             
             UpBadgeName(
                 name = video.owner.name,
+                metaText = resolveUpStatsText(
+                    followerCount = upFollowerCount,
+                    videoCount = upVideoCount
+                ),
                 leadingContent = if (video.owner.face.isNotEmpty()) {
                     {
                         var avatarModifier = Modifier
@@ -315,6 +322,7 @@ fun StoryVideoCard(
                     fontWeight = FontWeight.Medium
                 ),
                 nameColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                metaColor = MaterialTheme.colorScheme.primary,
                 badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                 badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                 modifier = upNameModifier

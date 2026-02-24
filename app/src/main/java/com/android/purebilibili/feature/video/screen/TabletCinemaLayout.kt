@@ -469,7 +469,9 @@ private fun CinemaMetaPanel(
                             info = success.info,
                             isFollowing = success.isFollowing,
                             onFollowClick = onFollowClick,
-                            onUpClick = onUpClick
+                            onUpClick = onUpClick,
+                            followerCount = success.ownerFollowerCount,
+                            videoCount = success.ownerVideoCount
                         )
                     }
                     CinemaMetaPanelBlock.INTRO -> {

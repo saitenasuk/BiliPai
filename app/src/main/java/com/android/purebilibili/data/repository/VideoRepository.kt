@@ -39,6 +39,11 @@ internal fun shouldReportHomeDataReadyForSplash(
     return hasCompletedPreload || hasPreloadedData
 }
 
+data class CreatorCardStats(
+    val followerCount: Int,
+    val videoCount: Int
+)
+
 object VideoRepository {
     private val api = NetworkModule.api
     private val buvidApi = NetworkModule.buvidApi
@@ -425,23 +430,42 @@ object VideoRepository {
         }
     }
 
+    suspend fun getCreatorCardStats(mid: Long): Result<CreatorCardStats> = withContext(Dispatchers.IO) {
+        if (mid <= 0L) return@withContext Result.failure(IllegalArgumentException("Invalid mid"))
+        try {
+            val response = api.getUserCard(mid = mid, photo = false)
+            val data = response.data
+            if (response.code == 0 && data != null) {
+                Result.success(
+                    CreatorCardStats(
+                        followerCount = data.follower.coerceAtLeast(0),
+                        videoCount = data.archive_count.coerceAtLeast(0)
+                    )
+                )
+            } else {
+                Result.failure(Exception(response.message.ifBlank { "UP主信息加载失败(${response.code})" }))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // [修复] 添加 aid 参数支持，修复移动端推荐流视频播放失败问题
     suspend fun getVideoDetails(bvid: String, aid: Long = 0, targetQuality: Int? = null, audioLang: String? = null): Result<Pair<ViewInfo, PlayUrlData>> = withContext(Dispatchers.IO) {
         try {
-            // [修复] 优先使用 bvid，如果为空则使用 aid
-            val viewResp = if (bvid.isNotEmpty() && bvid.startsWith("BV")) {
-                com.android.purebilibili.core.util.Logger.d("VideoRepo", " getVideoDetails: using bvid=$bvid")
-                api.getVideoInfo(bvid)
-            } else if (aid > 0) {
-                com.android.purebilibili.core.util.Logger.d("VideoRepo", " getVideoDetails: bvid empty/invalid, using aid=$aid")
-                api.getVideoInfoByAid(aid)
+            val lookup = resolveVideoInfoLookupInput(rawBvid = bvid, aid = aid)
+                ?: throw Exception("无效的视频标识: bvid=$bvid, aid=$aid")
+            val viewResp = if (lookup.bvid.isNotEmpty()) {
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", " getVideoDetails: using bvid=${lookup.bvid}")
+                api.getVideoInfo(lookup.bvid)
             } else {
-                throw Exception("无效的视频标识: bvid=$bvid, aid=$aid")
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", " getVideoDetails: using aid=${lookup.aid}")
+                api.getVideoInfoByAid(lookup.aid)
             }
             
             val info = viewResp.data ?: throw Exception("视频详情为空: ${viewResp.code}")
             val cid = info.cid
-            val cacheBvid = info.bvid.ifBlank { bvid }
+            val cacheBvid = info.bvid.ifBlank { lookup.bvid.ifBlank { bvid } }
             
             //  [调试] 记录视频信息
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " getVideoDetails: bvid=${info.bvid}, aid=${info.aid}, cid=$cid, title=${info.title.take(20)}...")
@@ -491,11 +515,12 @@ object VideoRepository {
             } else {
                 com.android.purebilibili.core.util.Logger.d(
                     "VideoRepo",
-                    "🚀 Skip cache: bvid=$bvid, isAutoHighest=$isAutoHighestQuality, audioLang=${audioLang ?: "default"}"
+                    "🚀 Skip cache: bvid=$cacheBvid, isAutoHighest=$isAutoHighestQuality, audioLang=${audioLang ?: "default"}"
                 )
             }
 
-            val fetchResult = fetchPlayUrlRecursive(bvid, cid, startQuality, audioLang)
+            val playUrlBvid = cacheBvid.ifBlank { bvid }
+            val fetchResult = fetchPlayUrlRecursive(playUrlBvid, cid, startQuality, audioLang)
                 ?: throw Exception("无法获取任何画质的播放地址")
             val playData = fetchResult.data
 
@@ -705,7 +730,8 @@ object VideoRepository {
         
         val accessToken = TokenManager.accessTokenCache
         val now = System.currentTimeMillis()
-        if (shouldCallAccessTokenApi(now, appApiCooldownUntilMs, !accessToken.isNullOrEmpty())) {
+        val shouldTryAppApi = shouldTryAppApiForTargetQuality(targetQn)
+        if (shouldTryAppApi && shouldCallAccessTokenApi(now, appApiCooldownUntilMs, !accessToken.isNullOrEmpty())) {
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " [LoggedIn] Trying APP API first with access_token...")
             val appResult = fetchPlayUrlWithAccessToken(bvid, cid, targetQn, audioLang = audioLang)
             if (hasPlayableStreams(appResult)) {
@@ -713,11 +739,16 @@ object VideoRepository {
                 return appResult?.let { PlayUrlFetchResult(it, PlayUrlSource.APP) }
             }
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " [LoggedIn] APP API failed, trying DASH...")
-        } else if (!accessToken.isNullOrEmpty()) {
+        } else if (shouldTryAppApi && !accessToken.isNullOrEmpty()) {
             val remainMs = (appApiCooldownUntilMs - now).coerceAtLeast(0L)
             com.android.purebilibili.core.util.Logger.d(
                 "VideoRepo",
                 " [LoggedIn] Skip APP API due cooldown (${remainMs}ms left)"
+            )
+        } else if (!shouldTryAppApi) {
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoRepo",
+                " [LoggedIn] Skip APP API for standard quality qn=$targetQn"
             )
         }
         
@@ -744,10 +775,18 @@ object VideoRepository {
                         return data?.let { PlayUrlFetchResult(it, PlayUrlSource.DASH) }
                     }
                     android.util.Log.w("VideoRepo", " DASH qn=$dashQn attempt=${attempt + 1}: data is null or empty")
+                    if (attempt < retryDelays.lastIndex) {
+                        wbiKeysCache = null
+                        wbiKeysTimestamp = 0L
+                    }
                 } catch (e: Exception) {
                     android.util.Log.w("VideoRepo", "DASH qn=$dashQn attempt ${attempt + 1} failed: ${e.message}")
                     if (e.message?.contains("412") == true) {
                         last412Time = System.currentTimeMillis()
+                        if (attempt < retryDelays.lastIndex) {
+                            wbiKeysCache = null
+                            wbiKeysTimestamp = 0L
+                        }
                     }
                 }
             }

@@ -227,6 +227,8 @@ fun TabletVideoLayout(
                         isInWatchLater = success.isInWatchLater,
                         videoTags = success.videoTags,
                         relatedVideos = success.related,
+                        ownerFollowerCount = success.ownerFollowerCount,
+                        ownerVideoCount = success.ownerVideoCount,
                         onFollowClick = { viewModel.toggleFollow() },
                         onFavoriteClick = { viewModel.toggleFavorite() },
                         onLikeClick = { viewModel.toggleLike() },
@@ -625,6 +627,8 @@ private fun ScrollableVideoInfoSection(
     downloadProgress: Float?,
     isInWatchLater: Boolean,
     videoTags: List<com.android.purebilibili.data.model.response.VideoTag>,
+    ownerFollowerCount: Int?,
+    ownerVideoCount: Int?,
     onFollowClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onLikeClick: () -> Unit,
@@ -680,7 +684,9 @@ private fun ScrollableVideoInfoSection(
                 info = info,
                 isFollowing = isFollowing,
                 onFollowClick = onFollowClick,
-                onUpClick = onUpClick
+                onUpClick = onUpClick,
+                followerCount = ownerFollowerCount,
+                videoCount = ownerVideoCount
             )
             Spacer(modifier = Modifier.height(12.dp))
         }

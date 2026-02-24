@@ -14,6 +14,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -55,8 +56,9 @@ private fun SettingsCardGroup(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.45f
+    val darkTintBase = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     val containerColor = if (isDark) {
-        Color(0xFF141C28).copy(alpha = 0.92f)
+        darkTintBase.compositeOver(MaterialTheme.colorScheme.surface).copy(alpha = 0.96f)
     } else {
         MaterialTheme.colorScheme.surface
     }
@@ -501,6 +503,8 @@ fun AboutSection(
     onLicenseClick: () -> Unit,
     onGithubClick: () -> Unit,
     onCheckUpdateClick: () -> Unit,
+    autoCheckUpdateEnabled: Boolean,
+    onAutoCheckUpdateChange: (Boolean) -> Unit,
     onVersionClick: () -> Unit,
     onReplayOnboardingClick: () -> Unit,
     onEasterEggChange: (Boolean) -> Unit,
@@ -566,6 +570,15 @@ fun AboutSection(
             title = "检查更新",
             value = if (isCheckingUpdate) "检查中..." else updateStatusText,
             onClick = onCheckUpdateClick,
+            iconTint = iOSBlue
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingSwitchItem(
+            icon = CupertinoIcons.Default.BellBadge,
+            title = "自动检查更新",
+            subtitle = "进入设置页时自动检查新版本",
+            checked = autoCheckUpdateEnabled,
+            onCheckedChange = onAutoCheckUpdateChange,
             iconTint = iOSBlue
         )
         SettingsDivider(startIndent = 66.dp)

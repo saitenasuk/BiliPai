@@ -65,6 +65,14 @@ interface BilibiliApi {
         @Query("business") business: String = ""  // 空字符串=全部类型
     ): HistoryResponse
 
+    // [新增] 删除单条历史记录
+    @retrofit2.http.FormUrlEncoded
+    @POST("x/v2/history/delete")
+    suspend fun deleteHistoryItem(
+        @retrofit2.http.Field("kid") kid: String,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+
     @GET("x/v3/fav/folder/created/list-all")
     suspend fun getFavFolders(
         @Query("up_mid") mid: Long,

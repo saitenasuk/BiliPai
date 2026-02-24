@@ -46,6 +46,9 @@ import com.android.purebilibili.core.theme.PureBiliBiliTheme
 import com.android.purebilibili.core.ui.SharedTransitionProvider
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.feature.plugin.EyeProtectionOverlay
+import com.android.purebilibili.feature.settings.AppUpdateAutoCheckGate
+import com.android.purebilibili.feature.settings.AppUpdateCheckResult
+import com.android.purebilibili.feature.settings.AppUpdateChecker
 import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
@@ -535,7 +538,20 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val context = LocalContext.current
+            val uriHandler = LocalUriHandler.current
             val navController = androidx.navigation.compose.rememberNavController()
+            val autoCheckUpdateEnabled by SettingsManager.getAutoCheckAppUpdate(context).collectAsState(initial = true)
+            var startupUpdateCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
+
+            LaunchedEffect(autoCheckUpdateEnabled) {
+                if (autoCheckUpdateEnabled && AppUpdateAutoCheckGate.tryMarkChecked()) {
+                    AppUpdateChecker.check(BuildConfig.VERSION_NAME).onSuccess { info ->
+                        if (info.isUpdateAvailable) {
+                            startupUpdateCheckResult = info
+                        }
+                    }
+                }
+            }
             
             //  [新增] 监听 pendingVideoId 并导航到视频详情页
             LaunchedEffect(pendingVideoId) {
@@ -682,7 +698,6 @@ class MainActivity : ComponentActivity() {
                     }
                     //  小窗全屏状态
                     var showFullscreen by remember { mutableStateOf(false) }
-                    
                     //  小窗播放器覆盖层 (非 PiP 模式下显示)
                     if (!isInPipMode) {
                         MiniPlayerOverlay(
@@ -784,6 +799,33 @@ class MainActivity : ComponentActivity() {
                             // Optional: Skip button or Branding?
                             // For now, simple clear image.
                         }
+                    }
+
+                    startupUpdateCheckResult?.let { info ->
+                        val notesPreview = info.releaseNotes.trim().let { notes ->
+                            if (notes.isBlank()) "暂无更新说明" else notes.take(240)
+                        }
+                        com.android.purebilibili.core.ui.IOSAlertDialog(
+                            onDismissRequest = { startupUpdateCheckResult = null },
+                            title = { Text("发现新版本 v${info.latestVersion}") },
+                            text = {
+                                Text(
+                                    "当前版本 v${info.currentVersion}\n\n$notesPreview",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            },
+                            confirmButton = {
+                                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                                    startupUpdateCheckResult = null
+                                    uriHandler.openUri(info.releaseUrl)
+                                }) { Text("前往下载") }
+                            },
+                            dismissButton = {
+                                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                                    startupUpdateCheckResult = null
+                                }) { Text("稍后") }
+                            }
+                        )
                     }
 
                     }

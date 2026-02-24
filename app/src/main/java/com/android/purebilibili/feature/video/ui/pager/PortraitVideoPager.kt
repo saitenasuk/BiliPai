@@ -103,6 +103,7 @@ fun PortraitVideoPager(
     initialInfo: ViewInfo,
     recommendations: List<RelatedVideo>,
     onBack: () -> Unit,
+    onHomeClick: () -> Unit = onBack,
     onVideoChange: (String) -> Unit,
     viewModel: PlayerViewModel,
     commentViewModel: VideoCommentViewModel,
@@ -605,6 +606,7 @@ fun PortraitVideoPager(
                 item = item,
                 isCurrentPage = page == pagerState.currentPage,
                 onBack = onBack,
+                onHomeClick = onHomeClick,
                 viewModel = viewModel,
                 commentViewModel = commentViewModel,
                 exoPlayer = exoPlayer, // [核心] 传递共享播放器
@@ -652,6 +654,7 @@ private fun VideoPageItem(
     item: Any,
     isCurrentPage: Boolean,
     onBack: () -> Unit,
+    onHomeClick: () -> Unit,
     viewModel: PlayerViewModel,
     commentViewModel: VideoCommentViewModel,
     exoPlayer: ExoPlayer,
@@ -1194,6 +1197,10 @@ private fun VideoPageItem(
             onBack = {
                 onExitSnapshot(bvid, exoPlayer.currentPosition)
                 onBack()
+            },
+            onHomeClick = {
+                onExitSnapshot(bvid, exoPlayer.currentPosition)
+                onHomeClick()
             },
             onPlayPause = {
                 if (isCurrentPage) {

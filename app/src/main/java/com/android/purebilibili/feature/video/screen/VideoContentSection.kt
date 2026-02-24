@@ -139,6 +139,8 @@ fun VideoContentSection(
     aiSummary: AiSummaryData? = null,
     bgmInfo: BgmInfo? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
+    ownerFollowerCount: Int? = null,
+    ownerVideoCount: Int? = null,
     showInteractionActions: Boolean = true
 ) {
     val tabs = listOf("简介", "评论 $replyCount")
@@ -242,6 +244,8 @@ fun VideoContentSection(
                     onWatchLaterClick = onWatchLaterClick,
                     contentPadding = PaddingValues(bottom = bottomContentPadding),
                     transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
+                    ownerFollowerCount = ownerFollowerCount,
+                    ownerVideoCount = ownerVideoCount,
                     onFavoriteLongClick = onFavoriteLongClick,
                     aiSummary = aiSummary,
                     bgmInfo = bgmInfo,
@@ -321,6 +325,8 @@ private fun VideoIntroTab(
     onWatchLaterClick: () -> Unit,
     contentPadding: PaddingValues,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
+    ownerFollowerCount: Int? = null,
+    ownerVideoCount: Int? = null,
     onFavoriteLongClick: () -> Unit = {},
     aiSummary: AiSummaryData? = null,
     bgmInfo: BgmInfo? = null,
@@ -358,6 +364,8 @@ private fun VideoIntroTab(
 
                 onGloballyPositioned = { },
                 transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
+                ownerFollowerCount = ownerFollowerCount,
+                ownerVideoCount = ownerVideoCount,
                 onFavoriteLongClick = onFavoriteLongClick,
                 aiSummary = aiSummary,
                 bgmInfo = bgmInfo,
@@ -578,6 +586,8 @@ private fun VideoHeaderContent(
     onWatchLaterClick: () -> Unit,
     onGloballyPositioned: (Float) -> Unit,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
+    ownerFollowerCount: Int? = null,
+    ownerVideoCount: Int? = null,
     onFavoriteLongClick: () -> Unit = {},
     aiSummary: AiSummaryData? = null,
     bgmInfo: BgmInfo? = null,
@@ -598,6 +608,9 @@ private fun VideoHeaderContent(
             isFollowing = isFollowing,
             onFollowClick = onFollowClick,
             onUpClick = onUpClick,
+            showOwnerAvatar = false,
+            followerCount = ownerFollowerCount,
+            videoCount = ownerVideoCount,
             transitionEnabled = transitionEnabled  // 🔗 传递共享元素开关
         )
 

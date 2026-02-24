@@ -661,20 +661,40 @@ object DanmakuRepository {
     ): Result<com.android.purebilibili.core.network.socket.LiveDanmakuClient> = withContext(Dispatchers.IO) {
         try {
             com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "📡 Getting live danmaku info for room=$roomId...")
-            
-            // 1. 获取 Wbi 密钥并签名参数 (解决 -352 风控)
-            val wbiKeys = com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrNull()
-            val response = if (wbiKeys != null) {
-                com.android.purebilibili.core.util.Logger.d("DanmakuRepo", " Using Wbi signature for danmaku info")
+
+            // 1) 确保 buvid3 已初始化（getDanmuInfo 从 2025-06 起要求 buvid3）
+            VideoRepository.ensureBuvid3()
+
+            // 2) 统一解析真实房间号（避免短号导致弹幕 token 或房间参数不一致）
+            val realRoomId = runCatching { api.getLiveRoomInit(roomId) }
+                .getOrNull()
+                ?.data
+                ?.roomId
+                ?.takeIf { it > 0L }
+                ?: roomId
+
+            // 3) 强制使用 WBI 签名请求 getDanmuInfo，不再回退无签名
+            val initialWbiKeys = com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrNull()
+                ?: com.android.purebilibili.core.network.WbiKeyManager.refreshKeys().getOrNull()
+                ?: return@withContext Result.failure(Exception("获取 WBI 密钥失败，无法连接直播弹幕"))
+
+            fun buildSignedParams(keys: Pair<String, String>): Map<String, String> {
                 val params = mapOf(
-                    "id" to roomId.toString(),
-                    "type" to "0"
+                    "id" to realRoomId.toString(),
+                    "type" to "0",
+                    "web_location" to "444.8"
                 )
-                val signedParams = com.android.purebilibili.core.network.WbiUtils.sign(params, wbiKeys.first, wbiKeys.second)
-                api.getDanmuInfoWbi(signedParams)
-            } else {
-                com.android.purebilibili.core.util.Logger.w("DanmakuRepo", " Wbi keys missing, falling back to unsigned request")
-                api.getDanmuInfo(roomId)
+                return com.android.purebilibili.core.network.WbiUtils.sign(params, keys.first, keys.second)
+            }
+
+            var response = api.getDanmuInfoWbi(buildSignedParams(initialWbiKeys))
+            if (response.code != 0) {
+                // WBI 相关失败时，主动刷新密钥再重试一次
+                com.android.purebilibili.core.network.WbiKeyManager.invalidateCache()
+                val refreshedKeys = com.android.purebilibili.core.network.WbiKeyManager.refreshKeys().getOrNull()
+                if (refreshedKeys != null) {
+                    response = api.getDanmuInfoWbi(buildSignedParams(refreshedKeys))
+                }
             }
 
             if (response.code != 0 || response.data == null) {
@@ -703,11 +723,12 @@ object DanmakuRepository {
             if (webSocketUrl.isNotEmpty()) {
             val client = com.android.purebilibili.core.network.socket.LiveDanmakuClient(scope) // Removed onMessage and onPopularity as they are not defined in the original context
             
-            // 获取当前用户 UID (如果已登录)
-            val uid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
+            // uid 与 token 必须同一账号；账号状态不完整时退回游客 uid=0，避免认证后强制断连
+            val hasSess = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
+            val uid = if (hasSess) (com.android.purebilibili.core.store.TokenManager.midCache ?: 0L) else 0L
             com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "🔌 Connecting with UID: $uid")
             
-            client.connect(webSocketUrl, token, roomId, uid)
+            client.connect(webSocketUrl, token, realRoomId, uid)
             // liveDanmakuClient = client // liveDanmakuClient is not defined in the original context
             Result.success(client)
         } else {

@@ -97,6 +97,16 @@ internal fun shouldClearPlaybackNotificationOnNavigationExit(
         mode == SettingsManager.MiniPlayerMode.SYSTEM_PIP
 }
 
+internal fun shouldHandleNavigationLeaveForBvid(
+    expectedBvid: String?,
+    currentBvid: String?
+): Boolean {
+    val expected = expectedBvid?.trim().orEmpty()
+    val current = currentBvid?.trim().orEmpty()
+    if (expected.isBlank() || current.isBlank()) return true
+    return expected == current
+}
+
 internal fun shouldContinuePlaybackDuringPause(
     isMiniMode: Boolean,
     isPip: Boolean,
@@ -621,7 +631,14 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 🎯 标记通过导航离开（在返回按钮点击时调用）
      *  [修复] 在默认模式和画中画模式下立即暂停播放，解决生命周期时序问题
      */
-    fun markLeavingByNavigation() {
+    fun markLeavingByNavigation(expectedBvid: String? = null) {
+        if (!shouldHandleNavigationLeaveForBvid(expectedBvid = expectedBvid, currentBvid = currentBvid)) {
+            Logger.d(
+                TAG,
+                "⏭️ markLeavingByNavigation ignored: expected=$expectedBvid, current=$currentBvid"
+            )
+            return
+        }
         isLeavingByNavigation = true
         Logger.d(TAG, "🎯 markLeavingByNavigation: isLeavingByNavigation=true")
         
@@ -1033,7 +1050,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         }
         return handled
     }
-    
+
     /**
      *  切换播放模式
      */

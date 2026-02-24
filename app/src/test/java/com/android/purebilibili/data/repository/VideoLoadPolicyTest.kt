@@ -8,6 +8,27 @@ import kotlin.test.assertTrue
 class VideoLoadPolicyTest {
 
     @Test
+    fun `resolveVideoInfoLookup prefers bv id`() {
+        val input = resolveVideoInfoLookupInput(rawBvid = " BV1xx411c7mD ", aid = 0L)
+
+        assertEquals(VideoInfoLookupInput(bvid = "BV1xx411c7mD", aid = 0L), input)
+    }
+
+    @Test
+    fun `resolveVideoInfoLookup parses av id when aid missing`() {
+        val input = resolveVideoInfoLookupInput(rawBvid = "av1129813966", aid = 0L)
+
+        assertEquals(VideoInfoLookupInput(bvid = "", aid = 1129813966L), input)
+    }
+
+    @Test
+    fun `resolveVideoInfoLookup falls back to explicit aid`() {
+        val input = resolveVideoInfoLookupInput(rawBvid = "", aid = 1756441068L)
+
+        assertEquals(VideoInfoLookupInput(bvid = "", aid = 1756441068L), input)
+    }
+
+    @Test
     fun `resolveInitialStartQuality uses stable quality for non vip auto highest`() {
         val quality = resolveInitialStartQuality(
             targetQuality = 127,
@@ -58,9 +79,10 @@ class VideoLoadPolicyTest {
     }
 
     @Test
-    fun `resolveDashRetryDelays avoids retry for high quality attempts`() {
+    fun `resolveDashRetryDelays allows one retry for standard qualities`() {
         assertEquals(listOf(0L), resolveDashRetryDelays(120))
-        assertEquals(listOf(0L), resolveDashRetryDelays(80))
+        assertEquals(listOf(0L, 450L), resolveDashRetryDelays(80))
+        assertEquals(listOf(0L, 450L), resolveDashRetryDelays(64))
     }
 
     @Test
@@ -69,6 +91,14 @@ class VideoLoadPolicyTest {
         assertFalse(shouldCallAccessTokenApi(nowMs = now, cooldownUntilMs = 2_000L, hasAccessToken = true))
         assertTrue(shouldCallAccessTokenApi(nowMs = now, cooldownUntilMs = 500L, hasAccessToken = true))
         assertFalse(shouldCallAccessTokenApi(nowMs = now, cooldownUntilMs = 500L, hasAccessToken = false))
+    }
+
+    @Test
+    fun `shouldTryAppApiForTargetQuality only enables app api for high quality`() {
+        assertFalse(shouldTryAppApiForTargetQuality(80))
+        assertFalse(shouldTryAppApiForTargetQuality(64))
+        assertTrue(shouldTryAppApiForTargetQuality(112))
+        assertTrue(shouldTryAppApiForTargetQuality(120))
     }
 
     @Test

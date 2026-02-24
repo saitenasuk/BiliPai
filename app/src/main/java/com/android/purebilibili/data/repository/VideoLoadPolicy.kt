@@ -8,6 +8,32 @@ internal enum class PlayUrlSource {
     GUEST
 }
 
+internal data class VideoInfoLookupInput(
+    val bvid: String,
+    val aid: Long
+)
+
+internal fun resolveVideoInfoLookupInput(rawBvid: String, aid: Long): VideoInfoLookupInput? {
+    val normalizedBvid = rawBvid.trim()
+    if (normalizedBvid.startsWith("BV", ignoreCase = true)) {
+        return VideoInfoLookupInput(bvid = normalizedBvid, aid = 0L)
+    }
+
+    if (aid > 0L) {
+        return VideoInfoLookupInput(bvid = "", aid = aid)
+    }
+
+    val normalizedAv = normalizedBvid.lowercase()
+    if (normalizedAv.startsWith("av")) {
+        val parsedAid = normalizedAv.removePrefix("av").toLongOrNull()
+        if (parsedAid != null && parsedAid > 0L) {
+            return VideoInfoLookupInput(bvid = "", aid = parsedAid)
+        }
+    }
+
+    return null
+}
+
 internal fun resolveInitialStartQuality(
     targetQuality: Int?,
     isAutoHighestQuality: Boolean,
@@ -41,8 +67,8 @@ internal fun buildDashAttemptQualities(targetQn: Int): List<Int> {
 }
 
 internal fun resolveDashRetryDelays(targetQn: Int): List<Long> {
-    // 首帧优先：低画质冷启动不做二次重试，直接进入后备链路。
-    return if (targetQn >= 112) listOf(0L) else listOf(0L)
+    // 标准画质（80/64 等）偶发返回空流时，给一次短重试窗口，避免误降级到游客 720。
+    return if (targetQn <= 80) listOf(0L, 450L) else listOf(0L)
 }
 
 internal fun shouldCallAccessTokenApi(
@@ -51,6 +77,10 @@ internal fun shouldCallAccessTokenApi(
     hasAccessToken: Boolean
 ): Boolean {
     return hasAccessToken && nowMs >= cooldownUntilMs
+}
+
+internal fun shouldTryAppApiForTargetQuality(targetQn: Int): Boolean {
+    return targetQn >= 112
 }
 
 internal fun buildGuestFallbackQualities(): List<Int> {

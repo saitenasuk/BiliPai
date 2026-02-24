@@ -161,6 +161,10 @@ object TokenManager {
 
     suspend fun clear(context: Context) {
         sessDataCache = null
+        buvid3Cache = null
+        csrfCache = null
+        midCache = null
+        isVipCache = false
         accessTokenCache = null  //  [新增] 清除 access_token
         refreshTokenCache = null
         
@@ -168,6 +172,9 @@ object TokenManager {
         context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .edit()
             .remove(SP_KEY_SESS)
+            .remove(SP_KEY_BUVID)
+            .remove(SP_KEY_CSRF)
+            .remove(SP_KEY_MID)
             .remove(SP_KEY_ACCESS_TOKEN)
             .remove(SP_KEY_REFRESH_TOKEN)
             .apply()
@@ -175,6 +182,7 @@ object TokenManager {
         // 清除 DataStore
         context.dataStore.edit {
             it.remove(SESSDATA_KEY)
+            it.remove(BUVID3_KEY)
         }
     }
 

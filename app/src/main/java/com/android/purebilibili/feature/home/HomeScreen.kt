@@ -82,6 +82,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged  //  性能优化：防止重复触发
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import androidx.compose.animation.ExperimentalSharedTransitionApi  //  共享过渡实验API
 import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
 import com.android.purebilibili.core.ui.LocalBottomBarVisible
@@ -251,11 +252,18 @@ fun HomeScreen(
         }
     }
 
-    // [修复] 刷新时自动滚回顶部，防止下拉用力过猛导致内容偏移
-    LaunchedEffect(isRefreshing) {
-        if (isRefreshing) {
-            gridStates[state.currentCategory]?.animateScrollToItem(0)
+    // [修复] 刷新时仅在列表不在顶部时回顶，避免与下拉手势状态冲突导致“卡一下”
+    LaunchedEffect(isRefreshing, state.currentCategory) {
+        if (!isRefreshing) return@LaunchedEffect
+        val gridState = gridStates[state.currentCategory] ?: return@LaunchedEffect
+        if (!shouldResetToTopOnRefreshStart(
+                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset
+            )
+        ) {
+            return@LaunchedEffect
         }
+        gridState.animateScrollToItem(0)
     }
 
     //  [新增] JSON 插件过滤提示
@@ -310,15 +318,26 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(state.refreshNewItemsKey) {
+    LaunchedEffect(state.refreshNewItemsKey, isRefreshing, state.currentCategory) {
         val refreshKey = state.refreshNewItemsKey
         if (!shouldHandleRefreshNewItemsEvent(refreshKey, state.refreshNewItemsHandledKey)) {
             return@LaunchedEffect
         }
         val count = state.refreshNewItemsCount ?: return@LaunchedEffect
         if (state.currentCategory == HomeCategory.RECOMMEND && count > 0) {
-            // 增量刷新插入新内容后强制回到顶部，避免被锚定在刷新前位置。
-            gridStates[HomeCategory.RECOMMEND]?.scrollToItem(0)
+            val recommendGridState = gridStates[HomeCategory.RECOMMEND]
+            if (recommendGridState != null && shouldResetToTopAfterIncrementalRefresh(
+                    currentCategory = state.currentCategory,
+                    newItemsCount = count,
+                    isRefreshing = isRefreshing,
+                    firstVisibleItemIndex = recommendGridState.firstVisibleItemIndex,
+                    firstVisibleItemScrollOffset = recommendGridState.firstVisibleItemScrollOffset
+                )
+            ) {
+                // 等 PullToRefresh 释放手势后再回顶，避免在手势临界点抢占滚动。
+                yield()
+                recommendGridState.scrollToItem(0)
+            }
         }
         refreshDeltaTipText = if (count > 0) "新增 $count 条内容" else "暂无新内容"
         // 分割线需等待用户发生下滑后再展示
@@ -900,12 +919,14 @@ fun HomeScreen(
                         
                         //  独立的 PullToRefreshState，避免所有页面共享一个状态导致冲突
                         val pullRefreshState = rememberPullToRefreshState()
+                        val pullDistanceFraction = pullRefreshState.distanceFraction
+                        val isPageRefreshing = isRefreshing && state.currentCategory == category
 
                         //  [新增] 下拉回弹物理动画状态 (Moved from outer scope)
-                        val targetPullOffset = if (pullRefreshState.distanceFraction > 0) {
-                            val fraction = pullRefreshState.distanceFraction.coerceAtMost(2f)
-                            fraction * 0.5f 
-                        } else 0f
+                        val targetPullOffset = resolvePullContentOffsetFraction(
+                            distanceFraction = pullDistanceFraction,
+                            isRefreshing = isPageRefreshing
+                        )
                         
                         //  使用 animateFloatAsState 包装偏移量
                         val animatedDragOffsetFraction by androidx.compose.animation.core.animateFloatAsState(
@@ -947,11 +968,14 @@ fun HomeScreen(
                                          .padding(top = listTopPadding) 
                                          .graphicsLayer {
                                             val currentDragOffset = calculateDragOffset()
-                                            // [物理优化] 始终保持在 Header (listTopPadding) 和 内容顶部 (listTopPadding + currentDragOffset) 之间
-                                            // 公式： (currentDragOffset / 2) - (indicatorHeight / 2)
-                                            // 假设指示器高度约 40dp (icon + text spacing)
                                             val indicatorHeight = 40.dp.toPx()
-                                            translationY = (currentDragOffset / 2f) - (indicatorHeight / 2f)
+                                            val minGap = 8.dp.toPx()
+                                            translationY = resolvePullIndicatorTranslationY(
+                                                dragOffsetPx = currentDragOffset,
+                                                indicatorHeightPx = indicatorHeight,
+                                                minGapPx = minGap,
+                                                isRefreshing = isPageRefreshing
+                                            )
                                          }
                                          .fillMaxWidth()
                                  )

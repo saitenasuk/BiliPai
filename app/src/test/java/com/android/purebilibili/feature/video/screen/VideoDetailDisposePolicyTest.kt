@@ -7,6 +7,26 @@ import kotlin.test.assertTrue
 class VideoDetailDisposePolicyTest {
 
     @Test
+    fun videoSwitchFlagUsesLocalStateAsFallbackWhenManagerFlagIsResetEarly() {
+        assertTrue(
+            resolveIsNavigatingToVideoDuringDispose(
+                localNavigatingToVideo = true,
+                managerNavigatingToVideo = false
+            )
+        )
+    }
+
+    @Test
+    fun videoSwitchFlagUsesManagerStateWhenAvailable() {
+        assertTrue(
+            resolveIsNavigatingToVideoDuringDispose(
+                localNavigatingToVideo = false,
+                managerNavigatingToVideo = true
+            )
+        )
+    }
+
+    @Test
     fun disposeHandledAsNavigationExitWhenNoKeepAliveConditionMatches() {
         assertTrue(
             shouldHandleVideoDetailDisposeAsNavigationExit(

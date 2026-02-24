@@ -5,6 +5,7 @@ import com.android.purebilibili.core.network.NetworkModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -56,6 +57,14 @@ class LiveDanmakuClient(
     // 当前连接参数
     private var currentHostUrl: String = ""
     private var currentAuthBody: String = ""
+    private var suppressReconnect: Boolean = false
+
+    // 入站消息队列：串行解码，避免高频 onMessage 创建大量并发协程
+    private val incomingFrames = Channel<ByteArray>(
+        capacity = 128,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    private var decodeJob: Job? = null
     
     // 消息流 - 使用 ExtraBufferCapacity + DROP_OLDEST 防止爆内存 (Backpressure)
     // 当缓冲满时丢弃旧消息，保证 UI 不会因为积压而卡死
@@ -71,6 +80,7 @@ class LiveDanmakuClient(
             Log.d(TAG, "🟢 WebSocket Connected: $currentHostUrl")
             _isConnected.set(true)
             retryCount = 0 // 重置重连计数
+            suppressReconnect = false
             
             // 发送认证包
             sendAuthPacket()
@@ -80,25 +90,32 @@ class LiveDanmakuClient(
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-            handleMessage(bytes.toByteArray())
+            onIncomingMessage(bytes)
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             Log.d(TAG, "🔴 WebSocket Closed: $code - $reason")
             _isConnected.set(false)
             stopHeartbeat()
-            // 只有非正常关闭才重连
-            if (code != 1000) {
+            // 只有非正常关闭且未标记抑制重连才重连
+            if (code != 1000 && !suppressReconnect) {
                 scheduleReconnect()
             }
+            suppressReconnect = false
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             Log.e(TAG, "❌ WebSocket Failure: ${t.message}")
             _isConnected.set(false)
             stopHeartbeat()
-            scheduleReconnect()
+            if (!suppressReconnect) {
+                scheduleReconnect()
+            }
         }
+    }
+
+    init {
+        startDecodeLoop()
     }
     
     /**
@@ -145,6 +162,7 @@ class LiveDanmakuClient(
         Log.d(TAG, "🔌 Disconnecting...")
         stopHeartbeat()
         reconnectJob?.cancel()
+        suppressReconnect = true
         webSocket?.close(1000, "Normal Closure")
         webSocket = null
         _isConnected.set(false)
@@ -209,38 +227,66 @@ class LiveDanmakuClient(
         val bytes = DanmakuProtocol.encode(packet)
         webSocket?.send(ByteString.of(*bytes))
     }
+
+    private fun startDecodeLoop() {
+        decodeJob?.cancel()
+        decodeJob = scope.launch(Dispatchers.Default) {
+            while (isActive) {
+                val frame = incomingFrames.receive()
+                handleMessage(frame)
+            }
+        }
+    }
     
     /**
      * 处理接收到的二进制消息
      */
-    private fun handleMessage(data: ByteArray) {
-        scope.launch(Dispatchers.Default) {
-            try {
-                // 解码数据包 (可能包含 recursive decompression)
-                val packets = DanmakuProtocol.decode(data)
-                
-                packets.forEach { packet ->
-                    when (packet.operation) {
-                        DanmakuProtocol.OP_HEARTBEAT_REPLY -> {
-                            // 心跳回应，Body 前4字节为人气值
-                            if (packet.body.size >= 4) {
-                                val popularity = ByteBuffer.wrap(packet.body).order(java.nio.ByteOrder.BIG_ENDIAN).int
-                                Log.d(TAG, "🔥 Popularity: $popularity")
-                            }
-                        }
-                        DanmakuProtocol.OP_AUTH_REPLY -> {
-                            Log.d(TAG, "✅ Auth Success")
-                        }
-                        DanmakuProtocol.OP_MESSAGE -> {
-                            // 所有的业务消息通知 (弹幕、礼物等)
-                            // 尝试发射到 Flow，如果缓冲区满了则丢弃 (BufferOverflow.DROP_OLDEST)
-                            _messageFlow.emit(packet)
+    private suspend fun handleMessage(data: ByteArray) {
+        try {
+            // 解码数据包 (可能包含 recursive decompression)
+            val packets = DanmakuProtocol.decode(data)
+
+            packets.forEach { packet ->
+                when (packet.operation) {
+                    DanmakuProtocol.OP_HEARTBEAT_REPLY -> {
+                        // 心跳回应，Body 前4字节为人气值
+                        if (packet.body.size >= 4) {
+                            val popularity = ByteBuffer.wrap(packet.body).order(java.nio.ByteOrder.BIG_ENDIAN).int
+                            Log.d(TAG, "🔥 Popularity: $popularity")
                         }
                     }
+                    DanmakuProtocol.OP_AUTH_REPLY -> {
+                        val authCode = runCatching {
+                            JSONObject(String(packet.body, Charsets.UTF_8)).optInt("code", -1)
+                        }.getOrDefault(-1)
+                        if (authCode == 0) {
+                            Log.d(TAG, "✅ Auth Success")
+                        } else {
+                            Log.e(TAG, "❌ Auth Failed: code=$authCode")
+                            // 认证失败通常不是网络抖动，避免进入无效重连风暴
+                            suppressReconnect = true
+                            webSocket?.close(4001, "Auth Failed: $authCode")
+                        }
+                    }
+                    DanmakuProtocol.OP_MESSAGE -> {
+                        // 所有的业务消息通知 (弹幕、礼物等)
+                        // 缓冲区满时丢弃最旧消息，优先保留最新弹幕
+                        _messageFlow.tryEmit(packet)
+                    }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "⚠️ Message handling failed: ${e.message}")
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "⚠️ Message handling failed: ${e.message}")
         }
+    }
+
+    private fun enqueueMessageFrame(data: ByteArray) {
+        if (!incomingFrames.trySend(data).isSuccess) {
+            Log.w(TAG, "⚠️ Incoming frame dropped due to backpressure")
+        }
+    }
+
+    private fun onIncomingMessage(bytes: ByteString) {
+        enqueueMessageFrame(bytes.toByteArray())
     }
 }
