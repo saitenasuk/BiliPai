@@ -8,6 +8,7 @@ enum class HomeVideoClickSource {
 
 data class HomeVideoClickRequest(
     val bvid: String,
+    val dynamicId: String = "",
     val cid: Long = 0L,
     val coverUrl: String = "",
     val source: HomeVideoClickSource = HomeVideoClickSource.GRID

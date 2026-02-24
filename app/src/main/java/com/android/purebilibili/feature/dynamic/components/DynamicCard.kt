@@ -45,6 +45,7 @@ fun DynamicCardV2(
     onVideoClick: (String) -> Unit,
     onUserClick: (Long) -> Unit,
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> },
+    onDynamicDetailClick: ((dynamicId: String) -> Unit)? = null,
     gifImageLoader: ImageLoader,
     //  [新增] 评论/转发/点赞回调
     onCommentClick: (dynamicId: String) -> Unit = {},
@@ -56,13 +57,21 @@ fun DynamicCardV2(
     val content = item.modules.module_dynamic
     val stat = item.modules.module_stat
     val type = DynamicType.fromApiValue(item.type)
+    val cardClickAction = remember(item) { resolveDynamicCardClickAction(item) }
 
     //  [优化] 卡片式设计：圆角 + 微阴影 + 更好的间距
     //  [优化] 使用 GlassCard 替换 Surface
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .clickable(enabled = onDynamicDetailClick != null && cardClickAction != DynamicCardClickAction.None) {
+                when (cardClickAction) {
+                    is DynamicCardClickAction.OpenVideo -> onVideoClick(cardClickAction.bvid)
+                    is DynamicCardClickAction.OpenDynamicDetail -> onDynamicDetailClick?.invoke(cardClickAction.dynamicId)
+                    DynamicCardClickAction.None -> Unit
+                }
+            },
         backgroundColor = MaterialTheme.colorScheme.surface, // 纯白背景，减少割裂感
         shape = RoundedCornerShape(20.dp) // 更大的圆角
     ) {

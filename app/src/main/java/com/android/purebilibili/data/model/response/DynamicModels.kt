@@ -3,6 +3,19 @@ package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  *  动态页面数据模型
@@ -26,16 +39,144 @@ data class DynamicFeedData(
     val update_num: Int = 0
 )
 
+@Serializable
+data class DynamicDetailResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: DynamicDetailData? = null
+)
+
+@Serializable
+data class DynamicDetailData(
+    val item: DynamicItem? = null
+)
+
 // --- 动态卡片 ---
 @Serializable
 data class DynamicItem(
     val id_str: String = "",
     val type: String = "", // DYNAMIC_TYPE_AV, DYNAMIC_TYPE_DRAW, DYNAMIC_TYPE_WORD, DYNAMIC_TYPE_FORWARD
     val visible: Boolean = true,
+    @Serializable(with = DynamicModulesFlexibleSerializer::class)
     val modules: DynamicModules = DynamicModules(),
     val orig: DynamicItem? = null,  //  转发动态的原始内容
     val basic: DynamicBasic? = null  //  [新增] 评论区参数
 )
+
+object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
+    override val descriptor: SerialDescriptor = DynamicModules.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): DynamicModules {
+        val jsonDecoder = decoder as? JsonDecoder ?: return DynamicModules.serializer().deserialize(decoder)
+        val element = jsonDecoder.decodeJsonElement()
+
+        return when (element) {
+            is JsonObject -> jsonDecoder.json.decodeFromJsonElement(DynamicModules.serializer(), element)
+            is JsonArray -> {
+                var merged = DynamicModules()
+                var opusTitle: String? = null
+                val opusParagraphTexts = mutableListOf<String>()
+                val opusPics = mutableListOf<OpusPic>()
+                element.forEach { node ->
+                    val obj = node as? JsonObject ?: return@forEach
+                    val parsed = jsonDecoder.json.decodeFromJsonElement(DynamicModules.serializer(), obj)
+                    merged = merged.copy(
+                        module_author = parsed.module_author ?: merged.module_author,
+                        module_dynamic = parsed.module_dynamic ?: merged.module_dynamic,
+                        module_stat = parsed.module_stat ?: merged.module_stat
+                    )
+
+                    val moduleType = obj["module_type"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    if (moduleType == "MODULE_TYPE_TITLE" || obj["module_title"] != null) {
+                        opusTitle = obj["module_title"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
+                    }
+                    if (moduleType == "MODULE_TYPE_CONTENT" || obj["module_content"] != null) {
+                        val paragraphs = obj["module_content"]?.jsonObject?.get("paragraphs") as? JsonArray
+                        paragraphs?.forEach { paragraphNode ->
+                            val paragraph = paragraphNode as? JsonObject ?: return@forEach
+                            extractParagraphText(paragraph)?.let { opusParagraphTexts += it }
+                            opusPics += extractParagraphPics(paragraph)
+                        }
+                    }
+                }
+                merged.normalizeWithOpusModules(
+                    title = opusTitle,
+                    paragraphTexts = opusParagraphTexts,
+                    pics = opusPics
+                )
+            }
+            else -> DynamicModules()
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: DynamicModules) {
+        DynamicModules.serializer().serialize(encoder, value)
+    }
+
+    private fun extractParagraphText(paragraph: JsonObject): String? {
+        val nodes = paragraph["text"]?.jsonObject?.get("nodes") as? JsonArray ?: return null
+        val text = buildString {
+            nodes.forEach { node ->
+                val words = (node as? JsonObject)
+                    ?.get("word")
+                    ?.jsonObject
+                    ?.get("words")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?: return@forEach
+                append(words)
+            }
+        }.trim()
+        return text.takeIf { it.isNotBlank() }
+    }
+
+    private fun extractParagraphPics(paragraph: JsonObject): List<OpusPic> {
+        val pics = paragraph["pic"]?.jsonObject?.get("pics") as? JsonArray ?: return emptyList()
+        return pics.mapNotNull { picNode ->
+            val pic = picNode as? JsonObject ?: return@mapNotNull null
+            val url = pic["url"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+            if (url.isEmpty()) return@mapNotNull null
+            OpusPic(
+                url = url,
+                width = pic["width"]?.jsonPrimitive?.intOrNull ?: 0,
+                height = pic["height"]?.jsonPrimitive?.intOrNull ?: 0,
+                size = pic["size"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+            )
+        }
+    }
+
+    private fun DynamicModules.normalizeWithOpusModules(
+        title: String?,
+        paragraphTexts: List<String>,
+        pics: List<OpusPic>
+    ): DynamicModules {
+        val existing = module_dynamic
+        val hasExistingRenderable = existing?.desc?.text?.isNotBlank() == true || existing?.major != null
+        if (hasExistingRenderable) return this
+
+        val descText = paragraphTexts.joinToString(separator = "\n").trim()
+        val cleanTitle = title?.trim().takeUnless { it.isNullOrBlank() }
+        val hasDerivedContent = descText.isNotBlank() || pics.isNotEmpty() || cleanTitle != null
+        if (!hasDerivedContent) return this
+
+        val derivedDesc = if (descText.isNotBlank()) DynamicDesc(text = descText) else null
+        val derivedOpus = OpusMajor(
+            title = cleanTitle,
+            summary = if (descText.isNotBlank()) OpusSummary(text = descText) else null,
+            pics = pics
+        )
+        val derivedMajor = DynamicMajor(
+            type = "MAJOR_TYPE_OPUS",
+            opus = derivedOpus
+        )
+        return copy(
+            module_dynamic = DynamicContentModule(
+                desc = derivedDesc,
+                major = derivedMajor
+            )
+        )
+    }
+}
 
 //  [新增] 动态基础信息 - 包含评论区参数
 @Serializable

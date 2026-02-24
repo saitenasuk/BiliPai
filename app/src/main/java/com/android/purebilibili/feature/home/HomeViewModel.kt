@@ -918,23 +918,37 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         if (!isLoadMore) {
             fetchUserInfo()
-            com.android.purebilibili.data.repository.DynamicRepository.resetPagination()
+            com.android.purebilibili.data.repository.DynamicRepository.resetPagination(
+                com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+            )
         }
         
-        val result = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(!isLoadMore)
+        val result = com.android.purebilibili.data.repository.DynamicRepository.getDynamicFeed(
+            refresh = !isLoadMore,
+            scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+        )
         
         if (isLoadMore) delay(100)
         
         result.onSuccess { items ->
-            //  将 DynamicItem 转换为 VideoItem（只保留视频类型）
+            //  将 DynamicItem 转换为首页卡片：
+            // - 视频动态：保留视频跳转
+            // - 图文/文字动态：映射为动态详情卡片（点击进入动态详情页）
             val videos = items.mapNotNull { item ->
                 // Check if author is blocked
                 if ((item.modules.module_author?.mid ?: 0) in blockedMids) return@mapNotNull null
 
                 val archive = item.modules.module_dynamic?.major?.archive
                 if (archive != null && archive.bvid.isNotEmpty()) {
+                    val resolvedAid = resolveDynamicArchiveAid(
+                        archiveAid = archive.aid,
+                        fallbackId = 0L
+                    )
                     com.android.purebilibili.data.model.response.VideoItem(
+                        id = resolvedAid,
                         bvid = archive.bvid,
+                        dynamicId = item.id_str.trim(),
+                        aid = resolvedAid,
                         title = archive.title,
                         pic = archive.cover,
                         duration = parseDurationText(archive.duration_text),
@@ -948,7 +962,47 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             danmaku = parseStatText(archive.stat.danmaku)
                         )
                     )
-                } else null
+                } else {
+                    val supportedDynamicTypes = setOf("DYNAMIC_TYPE_WORD", "DYNAMIC_TYPE_DRAW", "DYNAMIC_TYPE_FORWARD")
+                    if (item.type !in supportedDynamicTypes) {
+                        return@mapNotNull null
+                    }
+                    val dynamicId = item.id_str.trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                    val author = item.modules.module_author
+                    val content = item.modules.module_dynamic
+                    val descText = content?.desc?.text?.trim().orEmpty()
+                    val opusText = content?.major?.opus?.summary?.text?.trim().orEmpty()
+                    val title = descText.ifEmpty { opusText }.ifEmpty { "动态内容" }
+                    val cover = content?.major?.draw?.items?.firstOrNull()?.src
+                        ?: content?.major?.opus?.pics?.firstOrNull()?.url
+                        ?: author?.face
+                        ?: return@mapNotNull null
+                    val stat = item.modules.module_stat
+                    val fallbackId = dynamicId.toLongOrNull() ?: 0L
+
+                    com.android.purebilibili.data.model.response.VideoItem(
+                        id = fallbackId,
+                        bvid = "DYN_$dynamicId",
+                        dynamicId = dynamicId,
+                        aid = 0L,
+                        cid = 0L,
+                        title = title,
+                        pic = cover,
+                        duration = 0,
+                        owner = com.android.purebilibili.data.model.response.Owner(
+                            mid = author?.mid ?: 0L,
+                            name = author?.name.orEmpty(),
+                            face = author?.face.orEmpty()
+                        ),
+                        stat = com.android.purebilibili.data.model.response.Stat(
+                            view = stat?.like?.count ?: 0,
+                            danmaku = stat?.comment?.count ?: 0,
+                            reply = stat?.comment?.count ?: 0,
+                            like = stat?.like?.count ?: 0,
+                            share = stat?.forward?.count ?: 0
+                        )
+                    )
+                }
             }
             
             updateCategoryState(HomeCategory.FOLLOW) { oldState ->
@@ -962,7 +1016,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     liveRooms = emptyList(),
                     isLoading = false,
                     error = if (!isLoadMore && mergedVideos.isEmpty()) "暂无关注动态，请先关注一些UP主" else null,
-                    hasMore = com.android.purebilibili.data.repository.DynamicRepository.hasMoreData()
+                    hasMore = com.android.purebilibili.data.repository.DynamicRepository.hasMoreData(
+                        com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW
+                    )
                 )
             }
         }.onFailure { error ->
@@ -976,6 +1032,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun videoItemKey(item: com.android.purebilibili.data.model.response.VideoItem): String {
+        if (item.dynamicId.isNotBlank()) return "dyn:${item.dynamicId}"
         if (item.bvid.isNotBlank()) return "bvid:${item.bvid}"
         if (item.aid > 0) return "aid:${item.aid}"
         if (item.id > 0) return "id:${item.id}"

@@ -238,6 +238,7 @@ internal fun HomeCategoryPageContent(
                     item(
                         key = if (video.bvid.isNotBlank()) video.bvid else "video_${video.id}_$index"
                     ) {
+                        val isDynamicDetailCard = video.dynamicId.isNotBlank() && !video.bvid.startsWith("BV", ignoreCase = true)
                         val isDissolving = video.bvid in dissolvingVideos
 
                         DissolvableVideoCard(
@@ -258,11 +259,12 @@ internal fun HomeCategoryPageContent(
                                         motionTier = cardMotionTier,
                                         transitionEnabled = cardTransitionEnabled,
                                         onDismiss = { onDismissVideo(video.bvid) },
-                                        onLongClick = { longPressCallback(video) },
+                                        onLongClick = if (isDynamicDetailCard) null else ({ longPressCallback(video) }),
                                         onClick = { bvid, cid ->
                                             onVideoClick(
                                                 HomeVideoClickRequest(
                                                     bvid = bvid,
+                                                    dynamicId = video.dynamicId,
                                                     cid = cid,
                                                     coverUrl = video.pic,
                                                     source = HomeVideoClickSource.GRID
@@ -283,12 +285,15 @@ internal fun HomeCategoryPageContent(
                                         isDataSaverActive = isDataSaverActive,
                                         compactStatsOnCover = compactStatsOnCover,
                                         onDismiss = { onDismissVideo(video.bvid) },
-                                        onWatchLater = { onWatchLater(video.bvid, video.id) },
-                                        onLongClick = { longPressCallback(video) },
+                                        onWatchLater = if (isDynamicDetailCard) null else ({
+                                            onWatchLater(video.bvid, resolveWatchLaterAid(video))
+                                        }),
+                                        onLongClick = if (isDynamicDetailCard) null else ({ longPressCallback(video) }),
                                         onClick = { bvid, cid ->
                                             onVideoClick(
                                                 HomeVideoClickRequest(
                                                     bvid = bvid,
+                                                    dynamicId = video.dynamicId,
                                                     cid = cid,
                                                     coverUrl = video.pic,
                                                     source = HomeVideoClickSource.GRID

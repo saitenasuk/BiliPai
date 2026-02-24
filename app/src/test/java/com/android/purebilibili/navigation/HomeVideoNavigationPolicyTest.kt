@@ -5,6 +5,7 @@ import com.android.purebilibili.feature.home.HomeVideoClickSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class HomeVideoNavigationPolicyTest {
 
@@ -64,6 +65,39 @@ class HomeVideoNavigationPolicyTest {
         assertEquals(
             "video/BV1route?cid=88&cover=https%3A%2F%2Fimg.test.com%2Fa+b.jpg",
             route
+        )
+    }
+
+    @Test
+    fun resolveHomeNavigationTarget_prefersDynamicDetailForNonBvPlaceholderCards() {
+        val request = HomeVideoClickRequest(
+            bvid = "DYN_987654321",
+            dynamicId = "987654321",
+            source = HomeVideoClickSource.GRID
+        )
+
+        val target = resolveHomeNavigationTarget(request)
+
+        assertTrue(target is HomeNavigationTarget.DynamicDetail)
+        assertEquals("987654321", (target as HomeNavigationTarget.DynamicDetail).dynamicId)
+    }
+
+    @Test
+    fun resolveHomeNavigationTarget_keepsVideoRouteWhenBvidIsRealVideo() {
+        val request = HomeVideoClickRequest(
+            bvid = "BV1route",
+            dynamicId = "987654321",
+            cid = 88L,
+            coverUrl = "https://img.test.com/a b.jpg",
+            source = HomeVideoClickSource.GRID
+        )
+
+        val target = resolveHomeNavigationTarget(request)
+
+        assertTrue(target is HomeNavigationTarget.Video)
+        assertEquals(
+            "video/BV1route?cid=88&cover=https%3A%2F%2Fimg.test.com%2Fa+b.jpg",
+            (target as HomeNavigationTarget.Video).route
         )
     }
 }

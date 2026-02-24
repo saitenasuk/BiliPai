@@ -544,6 +544,7 @@ fun AppearanceSettingsContent(
                             "Flat Material", "icon_flat_material" -> "扁平材质"
                             "Neon", "icon_neon" -> "霓虹"
                             "Telegram Blue", "icon_telegram_blue" -> "纸飞机蓝"
+                            "Telegram Blue Coin", "icon_telegram_blue_coin" -> "蓝币电视"
                             "Pink", "icon_telegram_pink" -> "樱花粉"
                             "Purple", "icon_telegram_purple" -> "香芋紫"
                             "Green", "icon_telegram_green" -> "薄荷绿"

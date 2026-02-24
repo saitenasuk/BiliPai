@@ -12,6 +12,11 @@ internal data class HomeVideoNavigationIntent(
     val source: HomeVideoClickSource
 )
 
+internal sealed interface HomeNavigationTarget {
+    data class Video(val route: String) : HomeNavigationTarget
+    data class DynamicDetail(val dynamicId: String) : HomeNavigationTarget
+}
+
 internal fun resolveHomeVideoNavigationIntent(
     request: HomeVideoClickRequest
 ): HomeVideoNavigationIntent? {
@@ -30,4 +35,27 @@ internal fun resolveHomeVideoRoute(request: HomeVideoClickRequest): String? {
     val intent = resolveHomeVideoNavigationIntent(request) ?: return null
     val encodedCover = URLEncoder.encode(intent.coverUrl, StandardCharsets.UTF_8.toString())
     return "${VideoRoute.base}/${intent.bvid}?cid=${intent.cid}&cover=$encodedCover"
+}
+
+internal fun resolveHomeNavigationTarget(
+    request: HomeVideoClickRequest
+): HomeNavigationTarget? {
+    val normalizedDynamicId = request.dynamicId.trim()
+    val normalizedBvid = request.bvid.trim()
+
+    // 非 BV 的占位 bvid（例如动态卡片）优先走动态详情
+    if (normalizedDynamicId.isNotEmpty() && !normalizedBvid.startsWith("BV", ignoreCase = true)) {
+        return HomeNavigationTarget.DynamicDetail(normalizedDynamicId)
+    }
+
+    val videoRoute = resolveHomeVideoRoute(request)
+    if (videoRoute != null) {
+        return HomeNavigationTarget.Video(videoRoute)
+    }
+
+    if (normalizedDynamicId.isNotEmpty()) {
+        return HomeNavigationTarget.DynamicDetail(normalizedDynamicId)
+    }
+
+    return null
 }

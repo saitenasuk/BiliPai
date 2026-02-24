@@ -4,7 +4,7 @@ import com.android.purebilibili.data.model.response.SpaceDynamicItem
 
 internal sealed interface SpaceDynamicClickAction {
     data class OpenVideo(val bvid: String) : SpaceDynamicClickAction
-    data class OpenWeb(val url: String) : SpaceDynamicClickAction
+    data class OpenDynamicDetail(val dynamicId: String) : SpaceDynamicClickAction
     data object None : SpaceDynamicClickAction
 }
 
@@ -17,5 +17,5 @@ internal fun resolveSpaceDynamicClickAction(dynamic: SpaceDynamicItem): SpaceDyn
     }
 
     val dynamicId = dynamic.id_str.trim().takeIf { it.isNotEmpty() } ?: return SpaceDynamicClickAction.None
-    return SpaceDynamicClickAction.OpenWeb("https://m.bilibili.com/dynamic/$dynamicId")
+    return SpaceDynamicClickAction.OpenDynamicDetail(dynamicId)
 }

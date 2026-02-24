@@ -805,6 +805,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        miniPlayerManager.clearUserLeaveHint()
         if (!hasCompletedInitialResume) {
             hasCompletedInitialResume = true
         }
@@ -815,6 +816,7 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         
         Logger.d(TAG, "👋 onUserLeaveHint 触发, isInVideoDetail=$isInVideoDetail, isMiniMode=${miniPlayerManager.isMiniMode}")
+        miniPlayerManager.markUserLeaveHint()
         miniPlayerManager.refreshMediaSessionBinding()
         
         val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(this)
