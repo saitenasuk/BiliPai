@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-02-23 · 文档已同步至 v6.1.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-02-25 · 文档已同步至 v6.3.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.1.1-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.3.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -494,7 +494,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-02-23（v6.1.1）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-02-25（v6.3.0）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -531,14 +531,15 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v6.1.1 · 2026-02-23)
+### 最近更新 (v6.3.0 · 2026-02-25)
 
-- 📺 **投屏链路优化**：新增 `x/tv/playurl` 投屏地址解析，失败自动回退本地代理，提升设备兼容性。
-- 💬 **输入框体验优化**：横屏评论框高度下调、竖屏弹幕发送框上移，减少遮挡并提升操作舒适度。
-- 🎛️ **手势可配置**：新增“启用横屏滑动步长快进/快退”开关，支持在固定步长与连续拖动间切换。
-- 🖼️ **通知封面稳定性增强**：修复暂停/播放切换时通知封面偶发丢失问题。
-- 🎬 **动画策略统一**：焦点抖动、回场过渡、共享元素后首页顶部标签显隐时序修复
-- 🧪 **自动化与基线**：完善移动端/平板 androidTest 与 benchmark 采样脚本，提升回归稳定性
+- 🎧 **听视频播放列表完善**：收藏夹/稍后再看新增听视频入口，补齐顺序播放、随机播放、单曲循环，并优化按钮布局与可点击时机。
+- 🧩 **播放上下文一致性修复**：修复首页进入听视频后封面与播放内容不一致问题，统一按当前播放项绑定封面与信息。
+- 🛰️ **动态稳定性增强**：修复快速切换多个 UP 主动态时偶发无数据问题，优化请求重试与异常态恢复链路（含 412 场景）。
+- 📺 **清晰度鉴权修复**：修复登录非大会员首次仅 720P、需重载才恢复的问题；登录态改为 Cookie + access_token 双通道判定。
+- ✨ **底栏视觉收敛**：去除底栏玻璃反光高光，边框改为轻量描边，减少“镜面反射”干扰。
+- 🖥️ **横屏控制栏增强（6.2.1）**：新增字幕与更多面板（下集/播放顺序/画面比例/回竖屏），优化高频操作触达。
+- 🎬 **返回首页动效优化（6.2.1）**：无共享过渡时返回更轻量，封面回收与顶部标签显隐时序更稳定，减少闪烁与等待感。
 
 ### 历史版本
 
