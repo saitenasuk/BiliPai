@@ -8,12 +8,13 @@ import kotlin.test.assertTrue
 class HomeTopTabRevealPolicyTest {
 
     @Test
-    fun returningFromVideo_withCardTransition_delaysTopTabsUntilCardSettles() {
+    fun returningFromVideo_withCardTransition_showsTopTabsImmediately() {
         assertEquals(
-            HOME_TOP_TABS_REVEAL_DELAY_MS,
+            0L,
             resolveHomeTopTabsRevealDelayMs(
                 isReturningFromDetail = true,
-                cardTransitionEnabled = true
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = false
             )
         )
     }
@@ -24,7 +25,8 @@ class HomeTopTabRevealPolicyTest {
             0L,
             resolveHomeTopTabsRevealDelayMs(
                 isReturningFromDetail = true,
-                cardTransitionEnabled = false
+                cardTransitionEnabled = false,
+                isQuickReturnFromDetail = false
             )
         )
     }
@@ -35,7 +37,20 @@ class HomeTopTabRevealPolicyTest {
             0L,
             resolveHomeTopTabsRevealDelayMs(
                 isReturningFromDetail = false,
-                cardTransitionEnabled = true
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = false
+            )
+        )
+    }
+
+    @Test
+    fun quickReturn_withCardTransition_alsoShowsTopTabsImmediately() {
+        assertEquals(
+            0L,
+            resolveHomeTopTabsRevealDelayMs(
+                isReturningFromDetail = true,
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = true
             )
         )
     }
@@ -45,7 +60,8 @@ class HomeTopTabRevealPolicyTest {
         assertFalse(
             resolveHomeTopTabsVisible(
                 isDelayedForCardSettle = false,
-                isForwardNavigatingToDetail = true
+                isForwardNavigatingToDetail = true,
+                isReturningFromDetail = false
             )
         )
     }
@@ -55,7 +71,8 @@ class HomeTopTabRevealPolicyTest {
         assertFalse(
             resolveHomeTopTabsVisible(
                 isDelayedForCardSettle = true,
-                isForwardNavigatingToDetail = false
+                isForwardNavigatingToDetail = false,
+                isReturningFromDetail = false
             )
         )
     }
@@ -65,7 +82,19 @@ class HomeTopTabRevealPolicyTest {
         assertTrue(
             resolveHomeTopTabsVisible(
                 isDelayedForCardSettle = false,
-                isForwardNavigatingToDetail = false
+                isForwardNavigatingToDetail = false,
+                isReturningFromDetail = false
+            )
+        )
+    }
+
+    @Test
+    fun returningFromDetail_forcesTopTabsVisibleEvenIfFlagsWereHidden() {
+        assertTrue(
+            resolveHomeTopTabsVisible(
+                isDelayedForCardSettle = true,
+                isForwardNavigatingToDetail = true,
+                isReturningFromDetail = true
             )
         )
     }

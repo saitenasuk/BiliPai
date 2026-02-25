@@ -1,7 +1,19 @@
 package com.android.purebilibili.core.util
 
+import android.os.SystemClock
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+
+private const val QUICK_RETURN_THRESHOLD_MS = 500L
+
+internal fun shouldUseQuickReturnSharedTransitionPolicy(
+    detailEnterUptimeMs: Long,
+    detailReturnUptimeMs: Long,
+    thresholdMs: Long = QUICK_RETURN_THRESHOLD_MS
+): Boolean {
+    if (detailEnterUptimeMs <= 0L || detailReturnUptimeMs < detailEnterUptimeMs) return false
+    return detailReturnUptimeMs - detailEnterUptimeMs <= thresholdMs
+}
 
 /**
  *  卡片位置管理器
@@ -29,6 +41,15 @@ object CardPositionManager {
      */
     var isReturningFromDetail: Boolean = false
         private set
+
+    /**
+     * 是否命中“极快返回”场景（点击进入后快速返回）。
+     * 用于在返回时降级非封面共享元素，优先保证封面连续可见和帧率。
+     */
+    var isQuickReturnFromDetail: Boolean = false
+        private set
+
+    private var lastDetailEnterUptimeMs: Long = 0L
     
     /**
      *  是否是单列卡片（故事卡片）
@@ -70,6 +91,7 @@ object CardPositionManager {
         lastClickedCardBounds = bounds
         lastScreenDensity = density
         isSingleColumnCard = isSingleColumn
+        lastDetailEnterUptimeMs = SystemClock.uptimeMillis()
         
         //  [修复] 计算可见区域的底边界（屏幕高度减去底部导航栏）
         val bottomBarHeightPx = bottomBarHeightDp * density
@@ -97,6 +119,10 @@ object CardPositionManager {
      */
     fun markReturning() {
         isReturningFromDetail = true
+        isQuickReturnFromDetail = shouldUseQuickReturnSharedTransitionPolicy(
+            detailEnterUptimeMs = lastDetailEnterUptimeMs,
+            detailReturnUptimeMs = SystemClock.uptimeMillis()
+        )
     }
     
     /**
@@ -104,6 +130,7 @@ object CardPositionManager {
      */
     fun clearReturning() {
         isReturningFromDetail = false
+        isQuickReturnFromDetail = false
     }
     
     /**
@@ -113,6 +140,12 @@ object CardPositionManager {
         lastClickedCardBounds = null
         lastClickedCardCenter = null
         isReturningFromDetail = false
+        isQuickReturnFromDetail = false
+        lastDetailEnterUptimeMs = 0L
+    }
+
+    fun shouldLimitSharedElementsForQuickReturn(): Boolean {
+        return isReturningFromDetail && isQuickReturnFromDetail
     }
     
     /**

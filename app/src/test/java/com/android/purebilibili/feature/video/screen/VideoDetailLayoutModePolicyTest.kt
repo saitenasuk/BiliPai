@@ -12,7 +12,8 @@ class VideoDetailLayoutModePolicyTest {
     fun expanded_usesTabletLayout() {
         assertTrue(
             shouldUseTabletVideoLayout(
-                isExpandedScreen = true
+                isExpandedScreen = true,
+                smallestScreenWidthDp = 700
             )
         )
     }
@@ -21,7 +22,18 @@ class VideoDetailLayoutModePolicyTest {
     fun compact_doesNotUseTabletLayout() {
         assertFalse(
             shouldUseTabletVideoLayout(
-                isExpandedScreen = false
+                isExpandedScreen = false,
+                smallestScreenWidthDp = 700
+            )
+        )
+    }
+
+    @Test
+    fun expandedPhoneLandscape_doesNotUseTabletLayout() {
+        assertFalse(
+            shouldUseTabletVideoLayout(
+                isExpandedScreen = true,
+                smallestScreenWidthDp = 411
             )
         )
     }

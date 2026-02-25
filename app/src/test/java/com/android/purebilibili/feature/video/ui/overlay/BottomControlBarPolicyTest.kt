@@ -1,29 +1,46 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BottomControlBarPolicyTest {
 
     @Test
-    fun aspectRatioButtonVisibleInFullscreen() {
-        assertTrue(shouldShowAspectRatioButtonInControlBar(isFullscreen = true))
+    fun subtitleButtonVisibleOnlyWhenFullscreenAndTrackExists() {
+        assertTrue(
+            shouldShowSubtitleButtonInControlBar(
+                isFullscreen = true,
+                subtitleTrackAvailable = true
+            )
+        )
+        assertFalse(
+            shouldShowSubtitleButtonInControlBar(
+                isFullscreen = true,
+                subtitleTrackAvailable = false
+            )
+        )
+        assertFalse(
+            shouldShowSubtitleButtonInControlBar(
+                isFullscreen = false,
+                subtitleTrackAvailable = true
+            )
+        )
     }
 
     @Test
-    fun aspectRatioButtonHiddenInPortraitMode() {
-        assertFalse(shouldShowAspectRatioButtonInControlBar(isFullscreen = false))
-    }
-
-    @Test
-    fun portraitSwitchButtonVisibleInFullscreen() {
-        assertTrue(shouldShowPortraitSwitchButtonInControlBar(isFullscreen = true))
-    }
-
-    @Test
-    fun portraitSwitchButtonHiddenInPortraitMode() {
-        assertFalse(shouldShowPortraitSwitchButtonInControlBar(isFullscreen = false))
+    fun portraitSwitchButtonShownInFullscreenOnly() {
+        assertTrue(
+            shouldShowPortraitSwitchButtonInControlBar(
+                isFullscreen = true
+            )
+        )
+        assertFalse(
+            shouldShowPortraitSwitchButtonInControlBar(
+                isFullscreen = false
+            )
+        )
     }
 
     @Test
@@ -49,39 +66,43 @@ class BottomControlBarPolicyTest {
     }
 
     @Test
-    fun playbackOrderLabelHiddenOnNarrowLandscape() {
+    fun playbackOrderLabelShownWhenFullscreenAndLabelPresent() {
         assertTrue(
             shouldShowPlaybackOrderLabelInControlBar(
                 isFullscreen = true,
-                widthDp = 900
+                playbackOrderLabel = "自动连播"
             )
         )
         assertFalse(
             shouldShowPlaybackOrderLabelInControlBar(
                 isFullscreen = true,
-                widthDp = 700
+                playbackOrderLabel = ""
+            )
+        )
+        assertFalse(
+            shouldShowPlaybackOrderLabelInControlBar(
+                isFullscreen = false,
+                playbackOrderLabel = "自动连播"
             )
         )
     }
 
     @Test
-    fun aspectRatioButtonHiddenOnNarrowLandscape() {
+    fun aspectRatioButtonShownInFullscreenOnly() {
         assertTrue(
             shouldShowAspectRatioButtonInControlBar(
-                isFullscreen = true,
-                widthDp = 900
+                isFullscreen = true
             )
         )
         assertFalse(
             shouldShowAspectRatioButtonInControlBar(
-                isFullscreen = true,
-                widthDp = 680
+                isFullscreen = false
             )
         )
     }
 
     @Test
-    fun nextEpisodeButtonVisibleOnlyWhenNextExists() {
+    fun nextEpisodeButtonDependsOnFullscreenAndAvailability() {
         assertTrue(
             shouldShowNextEpisodeButtonInControlBar(
                 isFullscreen = true,
@@ -94,5 +115,106 @@ class BottomControlBarPolicyTest {
                 hasNextEpisode = false
             )
         )
+        assertFalse(
+            shouldShowNextEpisodeButtonInControlBar(
+                isFullscreen = false,
+                hasNextEpisode = true
+            )
+        )
     }
+
+    @Test
+    fun moreActionsButtonVisibleWhenFullscreenAndAnyActionAvailable() {
+        assertTrue(
+            shouldShowMoreActionsButtonInControlBar(
+                isFullscreen = true,
+                showNextEpisodeButton = false,
+                showPlaybackOrderLabel = false,
+                showAspectRatioButton = false,
+                showPortraitSwitchButton = true
+            )
+        )
+        assertFalse(
+            shouldShowMoreActionsButtonInControlBar(
+                isFullscreen = true,
+                showNextEpisodeButton = false,
+                showPlaybackOrderLabel = false,
+                showAspectRatioButton = false,
+                showPortraitSwitchButton = false
+            )
+        )
+        assertFalse(
+            shouldShowMoreActionsButtonInControlBar(
+                isFullscreen = false,
+                showNextEpisodeButton = true,
+                showPlaybackOrderLabel = true,
+                showAspectRatioButton = true,
+                showPortraitSwitchButton = true
+            )
+        )
+    }
+
+    @Test
+    fun floatingPanelMinWidthScalesWithLandscapeWidth() {
+        assertEquals(176, resolveFloatingControlPanelMinWidthDp(widthDp = 560))
+        assertEquals(196, resolveFloatingControlPanelMinWidthDp(widthDp = 720))
+        assertEquals(216, resolveFloatingControlPanelMinWidthDp(widthDp = 1024))
+    }
+
+    @Test
+    fun moreActionItemMinWidthScalesWithLandscapeWidth() {
+        assertEquals(96, resolveMoreActionItemMinWidthDp(widthDp = 560))
+        assertEquals(104, resolveMoreActionItemMinWidthDp(widthDp = 720))
+        assertEquals(112, resolveMoreActionItemMinWidthDp(widthDp = 1024))
+    }
+
+    @Test
+    fun moreActionsButtonAnchorOffsetScalesWithLandscapeWidth() {
+        assertEquals(24, resolveMoreActionsButtonAnchorOffsetDp(widthDp = 560))
+        assertEquals(26, resolveMoreActionsButtonAnchorOffsetDp(widthDp = 720))
+        assertEquals(28, resolveMoreActionsButtonAnchorOffsetDp(widthDp = 1024))
+    }
+
+    @Test
+    fun moreActionsPanelEndPaddingAnchorsToMoreButtonZone() {
+        assertEquals(
+            76,
+            resolveMoreActionsPanelEndPaddingDp(
+                horizontalPaddingDp = 16,
+                fullscreenIconSizeDp = 20,
+                rightActionSpacingDp = 16,
+                moreButtonAnchorOffsetDp = 24
+            )
+        )
+        assertEquals(
+            86,
+            resolveMoreActionsPanelEndPaddingDp(
+                horizontalPaddingDp = 20,
+                fullscreenIconSizeDp = 22,
+                rightActionSpacingDp = 18,
+                moreButtonAnchorOffsetDp = 26
+            )
+        )
+    }
+
+    @Test
+    fun floatingPanelBottomOffsetClearsControlRowHeight() {
+        assertEquals(
+            78,
+            resolveFloatingPanelBottomOffsetDp(
+                bottomPaddingDp = 12,
+                controlRowHeightDp = 46,
+                gapDp = 20
+            )
+        )
+        assertEquals(
+            84,
+            resolveFloatingPanelBottomOffsetDp(
+                bottomPaddingDp = 14,
+                controlRowHeightDp = 50,
+                gapDp = 20
+            )
+        )
+    }
+
 }

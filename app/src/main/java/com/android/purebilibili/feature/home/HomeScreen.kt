@@ -155,6 +155,7 @@ fun HomeScreen(
     var headerOffsetHeightPx by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var delayTopTabsUntilCardSettled by remember { mutableStateOf(false) }
     var hideTopTabsForForwardDetailNav by remember { mutableStateOf(false) }
+    var returnAnimationStartElapsedMs by remember { mutableLongStateOf(0L) }
 
     // [新增] 监听全局回顶事件
     val scrollChannel = LocalHomeScrollChannel.current
@@ -490,12 +491,49 @@ fun HomeScreen(
     )
     val returnAnimationSuppressionDurationMs = resolveReturnAnimationSuppressionDurationMs(
         isTabletLayout = windowSizeClass.isTablet,
-        cardAnimationEnabled = cardAnimationEnabled
+        cardAnimationEnabled = cardAnimationEnabled,
+        cardTransitionEnabled = cardTransitionEnabled,
+        isQuickReturnFromDetail = CardPositionManager.isQuickReturnFromDetail
     )
     // 从详情页返回时延后清理“返回中”状态，避免卡片进场动画在共享转场期间抢跑造成闪屏。
-    LaunchedEffect(returnAnimationSuppressionDurationMs) {
+    LaunchedEffect(returnAnimationSuppressionDurationMs, CardPositionManager.isReturningFromDetail) {
         if (CardPositionManager.isReturningFromDetail) {
+            val startElapsedMs = if (returnAnimationStartElapsedMs > 0L) {
+                returnAnimationStartElapsedMs
+            } else {
+                SystemClock.elapsedRealtime()
+            }
             delay(returnAnimationSuppressionDurationMs)
+            val actualDurationMs = (SystemClock.elapsedRealtime() - startElapsedMs).coerceAtLeast(0L)
+            val builtinPluginEnabledCount = com.android.purebilibili.core.plugin.PluginManager.getEnabledCount()
+            val playerPluginEnabledCount = com.android.purebilibili.core.plugin.PluginManager.getEnabledPlayerPlugins().size
+            val feedPluginEnabledCount = com.android.purebilibili.core.plugin.PluginManager.getEnabledFeedPlugins().size
+            val danmakuPluginEnabledCount = com.android.purebilibili.core.plugin.PluginManager.getEnabledDanmakuPlugins().size
+            val jsonEnabledPlugins = com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.value
+                .count { it.enabled }
+            val jsonFeedPluginEnabledCount = com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.value
+                .count { it.enabled && it.plugin.type == "feed" }
+            val jsonDanmakuPluginEnabledCount = com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.value
+                .count { it.enabled && it.plugin.type == "danmaku" }
+            com.android.purebilibili.core.util.AnalyticsHelper.logHomeReturnAnimationPerformance(
+                actualDurationMs = actualDurationMs,
+                plannedSuppressionMs = returnAnimationSuppressionDurationMs,
+                sharedTransitionEnabled = cardTransitionEnabled,
+                sharedTransitionReady = cardTransitionEnabled &&
+                    CardPositionManager.lastClickedCardBounds != null &&
+                    CardPositionManager.isCardFullyVisible,
+                isQuickReturn = CardPositionManager.isQuickReturnFromDetail,
+                isTabletLayout = windowSizeClass.isTablet,
+                cardAnimationEnabled = cardAnimationEnabled,
+                builtinPluginEnabledCount = builtinPluginEnabledCount,
+                playerPluginEnabledCount = playerPluginEnabledCount,
+                feedPluginEnabledCount = feedPluginEnabledCount,
+                danmakuPluginEnabledCount = danmakuPluginEnabledCount,
+                jsonPluginEnabledCount = jsonEnabledPlugins,
+                jsonFeedPluginEnabledCount = jsonFeedPluginEnabledCount,
+                jsonDanmakuPluginEnabledCount = jsonDanmakuPluginEnabledCount
+            )
+            returnAnimationStartElapsedMs = 0L
             CardPositionManager.clearReturning()
         }
         if (CardPositionManager.isSwitchingCategory) {
@@ -1143,7 +1181,8 @@ fun HomeScreen(
             homeSettings = homeSettings,
             topTabsVisible = resolveHomeTopTabsVisible(
                 isDelayedForCardSettle = delayTopTabsUntilCardSettled,
-                isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav
+                isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav,
+                isReturningFromDetail = CardPositionManager.isReturningFromDetail
             )
         )
 
@@ -1281,10 +1320,14 @@ fun HomeScreen(
                     topTabsRevealJob?.cancel()
                     val returningFromDetail = CardPositionManager.isReturningFromDetail
                     if (hideTopTabsForForwardDetailNav || returningFromDetail) {
+                        if (returningFromDetail) {
+                            returnAnimationStartElapsedMs = SystemClock.elapsedRealtime()
+                        }
                         hideTopTabsForForwardDetailNav = false
                         val revealDelayMs = resolveHomeTopTabsRevealDelayMs(
                             isReturningFromDetail = returningFromDetail,
-                            cardTransitionEnabled = cardTransitionEnabled
+                            cardTransitionEnabled = cardTransitionEnabled,
+                            isQuickReturnFromDetail = CardPositionManager.isQuickReturnFromDetail
                         )
                         if (revealDelayMs > 0L) {
                             delayTopTabsUntilCardSettled = true
@@ -1298,13 +1341,15 @@ fun HomeScreen(
                     }
                     //  关键修复：只在底栏当前隐藏时才恢复可见
                     if (!bottomBarVisible && isVideoNavigating) {
-                        //  [同步动画] 延迟后再显示底栏，让进入动画与卡片返回动画同步
-                        //  [优化] 将延迟增加到 360ms (略大于转场动画 350ms)，防止在动画过程中修改 Padding 导致列表重排卡顿
+                        val bottomBarRestoreDelayMs = resolveBottomBarRestoreDelayMs(
+                            cardTransitionEnabled = cardTransitionEnabled,
+                            isQuickReturnFromDetail = CardPositionManager.isQuickReturnFromDetail
+                        )
+                        val resetNavigationDelayMs = if (cardTransitionEnabled) 200L else 80L
                         bottomBarRestoreJob = kotlinx.coroutines.MainScope().launch {
-                            kotlinx.coroutines.delay(360)  // 等待返回动画结束
+                            kotlinx.coroutines.delay(bottomBarRestoreDelayMs)
                             setBottomBarVisible(true)
-                            // 延迟重置导航状态，确保进入动画完成
-                            kotlinx.coroutines.delay(200)
+                            kotlinx.coroutines.delay(resetNavigationDelayMs)
                             isVideoNavigating = false
                         }
                     } else if (!bottomBarVisible && !isVideoNavigating) {
@@ -1482,8 +1527,26 @@ fun HomeScreen(
 
 internal fun resolveReturnAnimationSuppressionDurationMs(
     isTabletLayout: Boolean,
-    cardAnimationEnabled: Boolean
+    cardAnimationEnabled: Boolean,
+    cardTransitionEnabled: Boolean,
+    isQuickReturnFromDetail: Boolean
 ): Long {
+    if (cardTransitionEnabled && isQuickReturnFromDetail) {
+        return if (isTabletLayout) 500L else 360L
+    }
+    if (!cardTransitionEnabled) {
+        if (!cardAnimationEnabled) return 90L
+        return if (isTabletLayout) 220L else 150L
+    }
     if (!cardAnimationEnabled) return 120L
     return if (isTabletLayout) 420L else 260L
+}
+
+internal fun resolveBottomBarRestoreDelayMs(
+    cardTransitionEnabled: Boolean,
+    isQuickReturnFromDetail: Boolean
+): Long {
+    if (!cardTransitionEnabled) return 150L
+    if (isQuickReturnFromDetail) return 300L
+    return 360L
 }

@@ -650,8 +650,16 @@ class MiniPlayerManager private constructor(private val context: Context) :
         if (shouldClearPlaybackNotificationOnNavigationExit(mode, stopPlaybackOnExit)) {
             Logger.d(TAG, "🔇 ${mode.label}：通过导航离开，立即停止播放")
             // 停止所有播放器（外部和内部）
-            _externalPlayer?.pause()
-            _player?.pause()
+            _externalPlayer?.let { player ->
+                player.volume = 0f
+                player.playWhenReady = false
+                player.pause()
+            }
+            _player?.let { player ->
+                player.volume = 0f
+                player.playWhenReady = false
+                player.pause()
+            }
             
             // 🔧 [修复] 标记非活跃状态，允许 VideoPlayerState.onDispose 正确释放资源
             // 解决音频泄漏问题：返回首页后音频仍继续播放

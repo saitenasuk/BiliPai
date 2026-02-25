@@ -65,6 +65,8 @@ import com.android.purebilibili.data.model.response.AiSummaryData
 import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
 import kotlin.math.abs
 
+internal fun shouldShowDanmakuSendInput(isPlayerCollapsed: Boolean): Boolean = !isPlayerCollapsed
+
 /**
  * 视频详情内容区域
  * 从 VideoDetailScreen.kt 提取出来，提高代码可维护性
@@ -751,6 +753,8 @@ private fun VideoContentTabBar(
             
             // 发弹幕入口
             val danmakuToggleInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            val danmakuActiveColor = MaterialTheme.colorScheme.primary
+            val danmakuInactiveColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -758,9 +762,9 @@ private fun VideoContentTabBar(
                     .clip(RoundedCornerShape(14.dp))
                     .background(
                         if (danmakuEnabled) {
-                            Color(0xFF1B5E20).copy(alpha = 0.16f)
+                            danmakuActiveColor.copy(alpha = 0.16f)
                         } else {
-                            Color(0xFFB71C1C).copy(alpha = 0.16f)
+                            danmakuInactiveColor.copy(alpha = 0.12f)
                         }
                     )
                     .clickable(
@@ -773,7 +777,7 @@ private fun VideoContentTabBar(
                 Icon(
                     imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
                     contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
-                    tint = if (danmakuEnabled) Color(0xFF2E7D32) else Color(0xFFC62828),
+                    tint = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -781,40 +785,46 @@ private fun VideoContentTabBar(
                     text = if (danmakuEnabled) "开" else "关",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (danmakuEnabled) Color(0xFF2E7D32) else Color(0xFFC62828)
+                    color = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .clickable { 
-                        android.util.Log.d("VideoContentSection", "📤 点我发弹幕 clicked!")
-                        onDanmakuSendClick() 
-                    }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            AnimatedVisibility(
+                visible = shouldShowDanmakuSendInput(isPlayerCollapsed = isPlayerCollapsed),
+                enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
+                exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start)
             ) {
-                Text(
-                    text = "点我发弹幕",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Box(
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .size(20.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .clickable {
+                            android.util.Log.d("VideoContentSection", "📤 点我发弹幕 clicked!")
+                            onDanmakuSendClick()
+                        }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "弹",
-                        fontSize = 10.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        text = "点我发弹幕",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "弹",
+                            fontSize = 10.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

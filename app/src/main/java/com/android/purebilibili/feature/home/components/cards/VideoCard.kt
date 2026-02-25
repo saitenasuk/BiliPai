@@ -194,14 +194,19 @@ fun ElegantVideoCard(
         //  尝试获取共享元素作用域
         val sharedTransitionScope = LocalSharedTransitionScope.current
         val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+        val coverSharedEnabled = transitionEnabled &&
+            sharedTransitionScope != null &&
+            animatedVisibilityScope != null
+        val metadataSharedEnabled = coverSharedEnabled &&
+            !CardPositionManager.shouldLimitSharedElementsForQuickReturn()
         
         //  封面容器 - 官方 B 站风格，支持共享元素过渡（受开关控制）
-        val coverModifier = if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+        val coverModifier = if (coverSharedEnabled) {
             with(sharedTransitionScope) {
                 Modifier
                     .sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
-                        animatedVisibilityScope = animatedVisibilityScope,
+                        animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         //  添加回弹效果的 spring 动画
                         boundsTransform = { _, _ ->
                             com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
@@ -262,7 +267,7 @@ fun ElegantVideoCard(
         ) {
             // [新增] 监听共享元素归位（即封面重新可见时），触发轻微震动反馈
             // 注意：当从详情页返回时，sharedElement 动画结束，封面会从不可见变为可见
-            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            if (metadataSharedEnabled) {
                 with(sharedTransitionScope) {
                      // 使用 renderInSharedTransitionScopeOverlayOption 控制可见性
                      // 但此处我们可以利用 SideEffect 或 LaunchedEffect 监听
@@ -423,11 +428,11 @@ fun ElegantVideoCard(
                 .weight(1f)
                 .semantics { contentDescription = "视频标题: ${video.title}" }
             
-            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            if (metadataSharedEnabled) {
                 with(sharedTransitionScope) {
                     titleModifier = titleModifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_title_${video.bvid}"),
-                        animatedVisibilityScope = animatedVisibilityScope,
+                        animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ ->
                             com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
                         }
@@ -537,11 +542,11 @@ fun ElegantVideoCard(
             //  共享元素过渡 - UP主名称
             var upNameModifier = Modifier.weight(1f, fill = false)
             
-            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            if (metadataSharedEnabled) {
                 with(sharedTransitionScope) {
                     upNameModifier = upNameModifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_up_${video.bvid}"),
-                        animatedVisibilityScope = animatedVisibilityScope,
+                        animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ ->
                             com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
                         }
@@ -572,11 +577,11 @@ fun ElegantVideoCard(
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
 
-                        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        if (metadataSharedEnabled) {
                             with(sharedTransitionScope) {
                                 avatarModifier = avatarModifier.sharedBounds(
                                     sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                     boundsTransform = { _, _ ->
                                         com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec
                                     },

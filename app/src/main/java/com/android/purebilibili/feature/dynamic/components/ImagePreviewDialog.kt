@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -181,6 +182,8 @@ private fun ImagePreviewOverlayContent(
     // 0f = 关闭/初始状态 (at sourceRect), 1f = 打开状态 (Fullscreen)
     val animateTrigger = remember { androidx.compose.animation.core.Animatable(0f) }
     var isDismissing by remember { mutableStateOf(false) }
+    var currentImageDisplayRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var dismissImageDisplayRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     
     // 启动入场动画 - 使用轻阻尼弹簧，保留自然惯性
     LaunchedEffect(Unit) {
@@ -194,13 +197,20 @@ private fun ImagePreviewOverlayContent(
     // 触发退场动画
     fun triggerDismiss() {
         if (isDismissing) return
+        dismissImageDisplayRect = currentImageDisplayRect
         isDismissing = true
         scope.launch {
             val dismissMotion = imagePreviewDismissMotion()
-            val target = dismissMotion.settleTarget
             animateTrigger.animateTo(
-                targetValue = target,
-                animationSpec = tween(durationMillis = 280, easing = ImagePreviewCloseEasing)
+                targetValue = dismissMotion.overshootTarget,
+                animationSpec = tween(durationMillis = 240, easing = ImagePreviewCloseEasing)
+            )
+            animateTrigger.animateTo(
+                targetValue = dismissMotion.settleTarget,
+                animationSpec = spring(
+                    dampingRatio = 0.72f,
+                    stiffness = 520f
+                )
             )
             onDismiss()
         }
@@ -277,8 +287,18 @@ private fun ImagePreviewOverlayContent(
             )
             val visualFrame = resolveImagePreviewVisualFrame(
                 visualProgress = transitionFrame.visualProgress,
-                transitionEnabled = true,
+                transitionEnabled = !isDismissing,
                 maxBlurRadiusPx = maxBlurRadiusPx
+            )
+            val backdropAlpha = if (isDismissing) {
+                resolveImagePreviewDismissBackdropAlpha(transitionFrame.visualProgress)
+            } else {
+                visualFrame.backdropAlpha
+            }
+            val dismissTransform = resolveImagePreviewDismissTransform(
+                transitionProgress = transitionFrame.layoutProgress,
+                sourceRect = if (shouldUseRectAnim && isDismissing) sourceRect else null,
+                displayedImageRect = if (shouldUseRectAnim && isDismissing) dismissImageDisplayRect else null
             )
             
             val targetLeft = 0.dp
@@ -306,7 +326,7 @@ private fun ImagePreviewOverlayContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = visualFrame.backdropAlpha))
+                    .background(Color.Black.copy(alpha = backdropAlpha))
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { triggerDismiss() }
@@ -315,29 +335,59 @@ private fun ImagePreviewOverlayContent(
             )
             
             // 2. 内容层 (缩放位移)
+            val contentModifier = if (isDismissing && shouldUseRectAnim) {
+                val activeDisplayRect = dismissImageDisplayRect
+                    ?: androidx.compose.ui.geometry.Rect(
+                        left = 0f,
+                        top = 0f,
+                        right = with(density) { fullWidth.toPx() },
+                        bottom = with(density) { fullHeight.toPx() }
+                    )
+                Modifier
+                    .offset(
+                        x = with(density) { activeDisplayRect.left.toDp() },
+                        y = with(density) { activeDisplayRect.top.toDp() }
+                    )
+                    .size(
+                        width = with(density) { activeDisplayRect.width.toDp() },
+                        height = with(density) { activeDisplayRect.height.toDp() }
+                    )
+                    .graphicsLayer {
+                        alpha = visualFrame.contentAlpha
+                        renderEffect = null
+                        scaleX = dismissTransform.scale
+                        scaleY = dismissTransform.scale
+                        translationX = dismissTransform.translationXPx
+                        translationY = dismissTransform.translationYPx
+                        transformOrigin = TransformOrigin.Center
+                    }
+            } else {
+                Modifier
+                    .offset(x = currentLeft, y = currentTop)
+                    .size(width = currentWidth, height = currentHeight)
+                    .clip(RoundedCornerShape(transitionFrame.cornerRadiusDp.dp))
+                    .graphicsLayer {
+                        alpha = visualFrame.contentAlpha
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                            visualFrame.blurRadiusPx > 0.01f
+                        ) {
+                            renderEffect = RenderEffect.createBlurEffect(
+                                visualFrame.blurRadiusPx,
+                                visualFrame.blurRadiusPx,
+                                Shader.TileMode.CLAMP
+                            ).asComposeRenderEffect()
+                        } else {
+                            renderEffect = null
+                        }
+                        if (!shouldUseRectAnim) {
+                            scaleX = transitionFrame.fallbackScale
+                            scaleY = transitionFrame.fallbackScale
+                        }
+                    }
+            }
+
             Box(
-                 modifier = Modifier
-                     .offset(x = currentLeft, y = currentTop)
-                     .size(width = currentWidth, height = currentHeight)
-                     .clip(RoundedCornerShape(transitionFrame.cornerRadiusDp.dp))
-                     .graphicsLayer {
-                         alpha = visualFrame.contentAlpha
-                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                             visualFrame.blurRadiusPx > 0.01f
-                         ) {
-                             renderEffect = RenderEffect.createBlurEffect(
-                                 visualFrame.blurRadiusPx,
-                                 visualFrame.blurRadiusPx,
-                                 Shader.TileMode.CLAMP
-                             ).asComposeRenderEffect()
-                         } else {
-                             renderEffect = null
-                         }
-                         if (!shouldUseRectAnim) {
-                             scaleX = transitionFrame.fallbackScale
-                             scaleY = transitionFrame.fallbackScale
-                         }
-                     }
+                 modifier = contentModifier
             ) {
                 //  使用 HorizontalPager 实现滑动切换 + 3D立体动画
                 HorizontalPager(
@@ -391,10 +441,6 @@ private fun ImagePreviewOverlayContent(
                             normalizeImageUrl(images.getOrNull(page) ?: "")
                         }
                         
-                        //  [新增] 使用 ZoomableImage 替换 AsyncImage
-                        //  维护当前页面的缩放状态，用于控制 Pager 是否允许滑动
-                        var currentScale by remember { mutableFloatStateOf(1f) }
-                        
                         ZoomableImage(
                             model = ImageRequest.Builder(context)
                                 .data(imageUrl)
@@ -405,12 +451,13 @@ private fun ImagePreviewOverlayContent(
                             contentDescription = null,
                             imageLoader = gifImageLoader,  //  使用 GIF 加载器
                             modifier = Modifier.fillMaxSize(),
-                            onZoomChange = { scale ->
-                                currentScale = scale
-                                // 当放大时，我们希望禁止 Pager 滑动（但这需要提升状态到 Pager 层级）
-                                // 由于这是在 Item 内部，我们不能直接控制 Pager 的 userScrollEnabled
-                                // 但 ZoomableImage 内部的手势监听会消费触摸事件，从而自然阻止 Pager 滑动
-                                // 只要 pointerInput 的处理得当
+                            onZoomChange = {
+                                // 当放大时，ZoomableImage 内部会消费手势，HorizontalPager 将自然停止切页
+                            },
+                            onDisplayRectChange = { rect ->
+                                if (!isDismissing && page == pagerState.currentPage) {
+                                    currentImageDisplayRect = rect
+                                }
                             },
                             onClick = {
                                 // 点击图片关闭预览

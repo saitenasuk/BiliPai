@@ -53,6 +53,9 @@ import com.android.purebilibili.feature.video.interaction.applyInteractiveNative
 import com.android.purebilibili.feature.video.interaction.evaluateInteractiveChoiceCondition
 import com.android.purebilibili.feature.video.interaction.shouldTriggerInteractiveQuestion
 import com.android.purebilibili.feature.video.policy.resolveFavoriteFolderMediaId
+import com.android.purebilibili.feature.video.subtitle.SubtitleCue
+import com.android.purebilibili.feature.video.subtitle.SubtitleTrackMeta
+import com.android.purebilibili.feature.video.subtitle.resolveDefaultSubtitleLanguages
 
 // ========== UI State ==========
 sealed class PlayerUiState {
@@ -106,6 +109,11 @@ sealed class PlayerUiState {
         val aiAudio: AiAudioInfo? = null,
         val currentAudioLang: String? = null,
         val videoDurationMs: Long = 0L,
+        val subtitleEnabled: Boolean = false,
+        val subtitlePrimaryLanguage: String? = null,
+        val subtitleSecondaryLanguage: String? = null,
+        val subtitlePrimaryCues: List<SubtitleCue> = emptyList(),
+        val subtitleSecondaryCues: List<SubtitleCue> = emptyList(),
         val ownerFollowerCount: Int? = null,
         val ownerVideoCount: Int? = null
     ) : PlayerUiState() {
@@ -345,6 +353,7 @@ class PlayerViewModel : ViewModel() {
     private var isFollowingMidsLoading: Boolean = false
     private val followingMidsCacheTtlMs: Long = 10 * 60 * 1000L
     private var lastCreatorSignalPositionSec: Long = -1L
+    private var subtitleLoadToken: Long = 0L
     
     //  Public Player Accessor
     val currentPlayer: Player?
@@ -2461,7 +2470,14 @@ class PlayerViewModel : ViewModel() {
                         Logger.d("PlayerVM", "🎵 Loaded BGM: ${data.bgmInfo?.musicTitle}")
                     }
 
-                    // 3. 互动剧情图
+                    // 3. 字幕信息（优先中文主字幕 + 英文副字幕）
+                    loadSubtitleTracksFromPlayerInfo(
+                        bvid = bvid,
+                        cid = cid,
+                        subtitles = data.subtitle?.subtitles.orEmpty()
+                    )
+
+                    // 4. 互动剧情图
                     interactiveGraphVersion = data.interaction?.graphVersion ?: 0L
                     val current = _uiState.value as? PlayerUiState.Success
                     val shouldEnableInteractive = current != null &&
@@ -2477,10 +2493,120 @@ class PlayerViewModel : ViewModel() {
                 }.onFailure { e ->
                     Logger.d("PlayerVM", "📖 Failed to load player info: ${e.message}")
                     _viewPoints.value = emptyList()
+                    clearSubtitleTracksForCurrentVideo(bvid = bvid, cid = cid)
                 }
             } catch (e: Exception) {
                 Logger.d("PlayerVM", "📖 Exception loading player info: ${e.message}")
                 _viewPoints.value = emptyList()
+                clearSubtitleTracksForCurrentVideo(bvid = bvid, cid = cid)
+            }
+        }
+    }
+
+    private fun clearSubtitleTracksForCurrentVideo(bvid: String, cid: Long) {
+        subtitleLoadToken += 1
+        _uiState.update { current ->
+            if (current is PlayerUiState.Success &&
+                current.info.bvid == bvid &&
+                current.info.cid == cid
+            ) {
+                current.copy(
+                    subtitleEnabled = false,
+                    subtitlePrimaryLanguage = null,
+                    subtitleSecondaryLanguage = null,
+                    subtitlePrimaryCues = emptyList(),
+                    subtitleSecondaryCues = emptyList()
+                )
+            } else {
+                current
+            }
+        }
+    }
+
+    private fun loadSubtitleTracksFromPlayerInfo(
+        bvid: String,
+        cid: Long,
+        subtitles: List<SubtitleItem>
+    ) {
+        val current = _uiState.value as? PlayerUiState.Success ?: return
+        if (current.info.bvid != bvid || current.info.cid != cid) return
+
+        val trackMetas = subtitles.mapNotNull { item ->
+            val url = item.subtitleUrl.trim()
+            if (url.isBlank()) return@mapNotNull null
+            SubtitleTrackMeta(
+                lan = item.lan,
+                lanDoc = item.lanDoc,
+                subtitleUrl = url
+            )
+        }.distinctBy { meta -> "${meta.lan}|${meta.subtitleUrl}" }
+
+        if (trackMetas.isEmpty()) {
+            clearSubtitleTracksForCurrentVideo(bvid = bvid, cid = cid)
+            return
+        }
+
+        val selection = resolveDefaultSubtitleLanguages(trackMetas)
+        val primaryTrack = trackMetas.firstOrNull { it.lan == selection.primaryLanguage } ?: trackMetas.first()
+        val secondaryTrack = selection.secondaryLanguage
+            ?.let { targetLan ->
+                trackMetas.firstOrNull { it.lan == targetLan && it.lan != primaryTrack.lan }
+            }
+
+        subtitleLoadToken += 1
+        val currentToken = subtitleLoadToken
+
+        _uiState.update { state ->
+            if (state is PlayerUiState.Success &&
+                state.info.bvid == bvid &&
+                state.info.cid == cid
+            ) {
+                state.copy(
+                    subtitleEnabled = true,
+                    subtitlePrimaryLanguage = primaryTrack.lan,
+                    subtitleSecondaryLanguage = secondaryTrack?.lan,
+                    subtitlePrimaryCues = emptyList(),
+                    subtitleSecondaryCues = emptyList()
+                )
+            } else {
+                state
+            }
+        }
+
+        viewModelScope.launch {
+            val primaryResult = VideoRepository.getSubtitleCues(primaryTrack.subtitleUrl)
+            val secondaryResult = if (secondaryTrack != null) {
+                VideoRepository.getSubtitleCues(secondaryTrack.subtitleUrl)
+            } else {
+                Result.success(emptyList())
+            }
+
+            if (currentToken != subtitleLoadToken) return@launch
+
+            val primaryCues = primaryResult.getOrElse { error ->
+                Logger.d("PlayerVM", "📝 Primary subtitle load failed: ${error.message}")
+                emptyList()
+            }
+            val secondaryCues = secondaryResult.getOrElse { error ->
+                Logger.d("PlayerVM", "📝 Secondary subtitle load failed: ${error.message}")
+                emptyList()
+            }
+
+            _uiState.update { state ->
+                if (state is PlayerUiState.Success &&
+                    state.info.bvid == bvid &&
+                    state.info.cid == cid
+                ) {
+                    state.copy(
+                        subtitleEnabled = primaryCues.isNotEmpty() || secondaryCues.isNotEmpty(),
+                        subtitlePrimaryLanguage = primaryTrack.lan.takeIf { primaryCues.isNotEmpty() },
+                        subtitleSecondaryLanguage = secondaryTrack?.lan?.takeIf { secondaryCues.isNotEmpty() },
+                        subtitlePrimaryCues = primaryCues,
+                        subtitleSecondaryCues = secondaryCues
+                    )
+                } else {
+                    state
+                }
             }
         }
     }

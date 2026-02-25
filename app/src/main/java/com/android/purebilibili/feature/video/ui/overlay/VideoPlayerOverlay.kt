@@ -26,11 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import com.android.purebilibili.core.theme.BiliPink
+import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.util.FormatUtils
 // Import reusable components from standalone files
 import com.android.purebilibili.feature.video.ui.components.QualitySelectionMenu
@@ -81,6 +83,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -88,6 +91,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
+import dev.chrisbanes.haze.HazeState
 
 internal fun shouldShowEpisodeEntryFromVideoData(
     relatedVideosCount: Int,
@@ -123,6 +127,12 @@ internal fun resolveNextEpisodeTarget(
         return NextEpisodeTarget(nextBvid = nextRelated)
     }
     return null
+}
+
+internal fun shouldConsumeBackgroundGesturesForEndDrawer(
+    endDrawerVisible: Boolean
+): Boolean {
+    return endDrawerVisible
 }
 
 @Composable
@@ -188,6 +198,8 @@ fun VideoPlayerOverlay(
     onDanmakuAllowSpecialChange: (Boolean) -> Unit = {},
     onDanmakuBlockRulesRawChange: (String) -> Unit = {},
     onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
+    subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
+    subtitleControlCallbacks: SubtitleControlCallbacks = SubtitleControlCallbacks(),
     smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
     smartOcclusionDownloadProgress: Int? = null,
     onDanmakuSmartOcclusionDownloadClick: () -> Unit = {},
@@ -263,13 +275,13 @@ fun VideoPlayerOverlay(
     onToggleLike: () -> Unit = {},
     onCoin: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
-    onTriple: () -> Unit = {},  // [新增] 一键三连回调
     // 复用 onRelatedVideoClick 或 onVideoClick
     onDrawerVideoClick: (String) -> Unit = {},
     // 分P
     pages: List<com.android.purebilibili.data.model.response.Page> = emptyList(),
     currentPageIndex: Int = 0,
     onPageSelect: (Int) -> Unit = {},
+    drawerHazeState: HazeState? = null,
 ) {
     var showQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
@@ -586,6 +598,8 @@ fun VideoPlayerOverlay(
                     onDanmakuToggle = onDanmakuToggle,
                     onDanmakuInputClick = onDanmakuInputClick,
                     onDanmakuSettingsClick = { showDanmakuSettings = true },
+                    subtitleControlState = subtitleControlState,
+                    subtitleControlCallbacks = subtitleControlCallbacks,
                     currentQualityLabel = currentQualityLabel,
                     onQualityClick = { showQualityMenu = true },
                     // 🖼️ [新增] 视频预览图数据
@@ -966,6 +980,20 @@ fun VideoPlayerOverlay(
                 }
             }
         }
+
+        if (shouldConsumeBackgroundGesturesForEndDrawer(showEndDrawer)) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .pointerInput(showEndDrawer) {
+                        detectDragGestures(
+                            onDrag = { change, _ ->
+                                change.consume()
+                            }
+                        )
+                    }
+            )
+        }
         
         // --- 11. [新增] 侧边栏抽屉 ---
         LandscapeEndDrawer(
@@ -977,18 +1005,12 @@ fun VideoPlayerOverlay(
             ownerName = videoOwnerName,
             ownerFace = videoOwnerFace,
             isFollowed = isFollowed,
-            isLiked = isLiked,
-            isCoined = isCoined,
-            isFavorited = isFavorited,
             onToggleFollow = onToggleFollow,
-            onToggleLike = onToggleLike,
-            onCoin = onCoin,
-            onToggleFavorite = onToggleFavorite,
-            onTripleLike = onTriple,
             onVideoClick = { vid ->
                 onDrawerVideoClick(vid)
                 showEndDrawer = false
             },
+            hazeState = drawerHazeState,
             modifier = Modifier.align(Alignment.CenterEnd)
         )
         
@@ -1208,16 +1230,10 @@ fun LandscapeEndDrawer(
     ownerFace: String,
     // Interaction States
     isFollowed: Boolean,
-    isLiked: Boolean,
-    isCoined: Boolean,
-    isFavorited: Boolean,
     // Callbacks
     onToggleFollow: () -> Unit,
-    onToggleLike: () -> Unit,
-    onCoin: () -> Unit,
-    onToggleFavorite: () -> Unit,
-    onTripleLike: () -> Unit = {},  // [新增] 一键三连回调
     onVideoClick: (String) -> Unit,
+    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1246,12 +1262,17 @@ fun LandscapeEndDrawer(
             widthDp = configuration.screenWidthDp
         )
     }
-    val overlayVisualPolicy = remember(configuration.screenWidthDp) {
-        resolveVideoPlayerOverlayVisualPolicy(
-            widthDp = configuration.screenWidthDp
-        )
+    val useDarkDrawerOverlay = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val drawerOverlayColor = if (useDarkDrawerOverlay) {
+        Color(0xCC11141A)
+    } else {
+        Color(0xBFF6F8FC)
     }
-
+    val dividerColor = if (useDarkDrawerOverlay) {
+        Color.White.copy(alpha = 0.12f)
+    } else {
+        Color.Black.copy(alpha = 0.10f)
+    }
     AnimatedVisibility(
         visible = visible,
         enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
@@ -1276,13 +1297,25 @@ fun LandscapeEndDrawer(
                 modifier = Modifier
                     .width(layoutPolicy.drawerWidthDp.dp)
                     .fillMaxHeight(),
-                color = MaterialTheme.colorScheme.surface,
+                color = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onSurface
             ) {
-                Column(
-                    modifier = Modifier.fillMaxSize()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (hazeState != null) {
+                                Modifier.unifiedBlur(hazeState = hazeState)
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .background(drawerOverlayColor)
                 ) {
-                    // 1. 顶部交互区 (UP主信息 + 一键三连)
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                    // 1. 顶部信息区
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1338,30 +1371,9 @@ fun LandscapeEndDrawer(
                                 )
                             }
                         }
-                        
-                        Spacer(modifier = Modifier.height(layoutPolicy.sectionSpacingDp.dp))
-                        
-                        // Row 2: 一键三连按钮 (SpaceAround)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // 点赞 - 支持长按三连
-                            TripleLikeInteractionButton(
-                                isLiked = isLiked,
-                                isCoined = isCoined,
-                                isFavorited = isFavorited,
-                                onLikeClick = onToggleLike,
-                                onCoinClick = onCoin,
-                                onFavoriteClick = onToggleFavorite,
-                                onTripleComplete = onTripleLike,
-                                layoutPolicy = overlayVisualPolicy
-                            )
-                        }
                     }
                     
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(color = dividerColor)
                     
                     // 2. Tab Row
                     var selectedTab by remember { mutableIntStateOf(0) } // 0: 推荐, 1: 合集
@@ -1454,6 +1466,7 @@ fun LandscapeEndDrawer(
             }
         }
     }
+}
 }
 
 @Composable

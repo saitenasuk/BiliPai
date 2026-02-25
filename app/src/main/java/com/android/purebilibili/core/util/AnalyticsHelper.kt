@@ -31,6 +31,25 @@ object AnalyticsHelper {
     private var isEnabled: Boolean = true
     private var isInForeground: Boolean = false
     private var sessionStartMs: Long = 0L
+
+    private fun resolveDurationBucket(durationMs: Long): String {
+        return when {
+            durationMs < 220L -> "under_220ms"
+            durationMs < 320L -> "220_320ms"
+            durationMs < 420L -> "320_420ms"
+            durationMs < 600L -> "420_600ms"
+            else -> "over_600ms"
+        }
+    }
+
+    private fun resolvePluginPressureLevel(totalPluginCount: Int): String {
+        return when {
+            totalPluginCount <= 0 -> "none"
+            totalPluginCount <= 2 -> "light"
+            totalPluginCount <= 5 -> "medium"
+            else -> "heavy"
+        }
+    }
     
     /**
      * 初始化 Analytics (在 Application 中调用)
@@ -673,6 +692,52 @@ object AnalyticsHelper {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log video click", e)
+        }
+    }
+
+    /**
+     * 记录“视频详情返回首页”动画性能
+     */
+    fun logHomeReturnAnimationPerformance(
+        actualDurationMs: Long,
+        plannedSuppressionMs: Long,
+        sharedTransitionEnabled: Boolean,
+        sharedTransitionReady: Boolean,
+        isQuickReturn: Boolean,
+        isTabletLayout: Boolean,
+        cardAnimationEnabled: Boolean,
+        builtinPluginEnabledCount: Int,
+        playerPluginEnabledCount: Int,
+        feedPluginEnabledCount: Int,
+        danmakuPluginEnabledCount: Int,
+        jsonPluginEnabledCount: Int,
+        jsonFeedPluginEnabledCount: Int,
+        jsonDanmakuPluginEnabledCount: Int
+    ) {
+        if (!isEnabled) return
+        try {
+            val totalPluginCount = builtinPluginEnabledCount + jsonPluginEnabledCount
+            analytics?.logEvent("home_return_animation_perf") {
+                param("actual_duration_ms", actualDurationMs)
+                param("duration_bucket", resolveDurationBucket(actualDurationMs))
+                param("planned_suppression_ms", plannedSuppressionMs)
+                param("shared_transition_enabled", if (sharedTransitionEnabled) "true" else "false")
+                param("shared_transition_ready", if (sharedTransitionReady) "true" else "false")
+                param("quick_return", if (isQuickReturn) "true" else "false")
+                param("tablet_layout", if (isTabletLayout) "true" else "false")
+                param("card_animation_enabled", if (cardAnimationEnabled) "true" else "false")
+                param("plugin_total_enabled", totalPluginCount.toLong())
+                param("plugin_pressure_level", resolvePluginPressureLevel(totalPluginCount))
+                param("plugin_builtin_enabled", builtinPluginEnabledCount.toLong())
+                param("plugin_player_enabled", playerPluginEnabledCount.toLong())
+                param("plugin_feed_enabled", feedPluginEnabledCount.toLong())
+                param("plugin_danmaku_enabled", danmakuPluginEnabledCount.toLong())
+                param("plugin_json_enabled", jsonPluginEnabledCount.toLong())
+                param("plugin_json_feed_enabled", jsonFeedPluginEnabledCount.toLong())
+                param("plugin_json_danmaku_enabled", jsonDanmakuPluginEnabledCount.toLong())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log home return animation performance", e)
         }
     }
 }

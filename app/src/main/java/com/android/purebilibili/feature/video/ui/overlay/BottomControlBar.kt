@@ -13,8 +13,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.IntOffset
 //  Cupertino Icons
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
@@ -28,13 +30,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.draw.clip
+import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
+import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayOptions
 
 /**
  * Bottom Control Bar Component
@@ -49,12 +56,20 @@ data class PlayerProgress(
     val buffered: Long = 0L
 )
 
-internal fun shouldShowAspectRatioButtonInControlBar(isFullscreen: Boolean): Boolean = isFullscreen
-internal fun shouldShowPortraitSwitchButtonInControlBar(isFullscreen: Boolean): Boolean = isFullscreen
+internal fun shouldShowSubtitleButtonInControlBar(
+    isFullscreen: Boolean,
+    subtitleTrackAvailable: Boolean
+): Boolean = isFullscreen && subtitleTrackAvailable
+
+internal fun shouldShowPortraitSwitchButtonInControlBar(
+    isFullscreen: Boolean
+): Boolean = isFullscreen
+
 internal fun shouldShowNextEpisodeButtonInControlBar(
     isFullscreen: Boolean,
     hasNextEpisode: Boolean
 ): Boolean = isFullscreen && hasNextEpisode
+
 internal fun shouldShowEpisodeButtonInControlBar(
     isFullscreen: Boolean,
     hasEpisodeEntry: Boolean
@@ -62,13 +77,71 @@ internal fun shouldShowEpisodeButtonInControlBar(
 
 internal fun shouldShowPlaybackOrderLabelInControlBar(
     isFullscreen: Boolean,
-    widthDp: Int
-): Boolean = isFullscreen && widthDp >= 840
+    playbackOrderLabel: String
+): Boolean = isFullscreen && playbackOrderLabel.isNotBlank()
 
 internal fun shouldShowAspectRatioButtonInControlBar(
+    isFullscreen: Boolean
+): Boolean = isFullscreen
+
+internal fun shouldShowMoreActionsButtonInControlBar(
     isFullscreen: Boolean,
-    widthDp: Int
-): Boolean = isFullscreen && widthDp >= 700
+    showNextEpisodeButton: Boolean,
+    showPlaybackOrderLabel: Boolean,
+    showAspectRatioButton: Boolean,
+    showPortraitSwitchButton: Boolean
+): Boolean {
+    return isFullscreen && (
+        showNextEpisodeButton ||
+            showPlaybackOrderLabel ||
+            showAspectRatioButton ||
+            showPortraitSwitchButton
+        )
+}
+
+internal fun resolveFloatingControlPanelMinWidthDp(widthDp: Int): Int {
+    return when {
+        widthDp >= 840 -> 216
+        widthDp >= 600 -> 196
+        else -> 176
+    }
+}
+
+internal fun resolveMoreActionItemMinWidthDp(widthDp: Int): Int {
+    return when {
+        widthDp >= 840 -> 112
+        widthDp >= 600 -> 104
+        else -> 96
+    }
+}
+
+internal fun resolveMoreActionsButtonAnchorOffsetDp(widthDp: Int): Int {
+    return when {
+        widthDp >= 840 -> 28
+        widthDp >= 600 -> 26
+        else -> 24
+    }
+}
+
+internal fun resolveMoreActionsPanelEndPaddingDp(
+    horizontalPaddingDp: Int,
+    fullscreenIconSizeDp: Int,
+    rightActionSpacingDp: Int,
+    moreButtonAnchorOffsetDp: Int
+): Int {
+    return horizontalPaddingDp +
+        fullscreenIconSizeDp +
+        rightActionSpacingDp +
+        moreButtonAnchorOffsetDp
+}
+
+internal fun resolveFloatingPanelBottomOffsetDp(
+    bottomPaddingDp: Int,
+    controlRowHeightDp: Int,
+    gapDp: Int
+): Int {
+    return bottomPaddingDp + controlRowHeightDp + gapDp
+}
 
 private fun Modifier.consumeTap(onTap: () -> Unit): Modifier {
     return pointerInput(onTap) {
@@ -107,6 +180,8 @@ fun BottomControlBar(
     onDanmakuToggle: () -> Unit = {},
     onDanmakuInputClick: () -> Unit = {},
     onDanmakuSettingsClick: () -> Unit = {},
+    subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
+    subtitleControlCallbacks: SubtitleControlCallbacks = SubtitleControlCallbacks(),
     
     // Quality
     currentQualityLabel: String = "",
@@ -129,11 +204,59 @@ fun BottomControlBar(
     
     modifier: Modifier = Modifier
 ) {
+    val subtitleTrackAvailable = subtitleControlState.trackAvailable
+    val subtitlePrimaryAvailable = subtitleControlState.primaryAvailable
+    val subtitleSecondaryAvailable = subtitleControlState.secondaryAvailable
+    val subtitleEnabled = subtitleControlState.enabled
+    val subtitleDisplayMode = subtitleControlState.displayMode
+    val subtitlePrimaryLabel = subtitleControlState.primaryLabel
+    val subtitleSecondaryLabel = subtitleControlState.secondaryLabel
+    val subtitleLargeTextEnabled = subtitleControlState.largeTextEnabled
+    val onSubtitleDisplayModeChange = subtitleControlCallbacks.onDisplayModeChange
+    val onSubtitleEnabledChange = subtitleControlCallbacks.onEnabledChange
+    val onSubtitleLargeTextChange = subtitleControlCallbacks.onLargeTextChange
+
     val configuration = LocalConfiguration.current
     val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveBottomControlBarLayoutPolicy(
             widthDp = configuration.screenWidthDp
         )
+    }
+    val floatingPanelMinWidthDp = remember(configuration.screenWidthDp) {
+        resolveFloatingControlPanelMinWidthDp(widthDp = configuration.screenWidthDp)
+    }
+    val moreActionItemMinWidthDp = remember(configuration.screenWidthDp) {
+        resolveMoreActionItemMinWidthDp(widthDp = configuration.screenWidthDp)
+    }
+    val moreButtonAnchorOffsetDp = remember(configuration.screenWidthDp) {
+        resolveMoreActionsButtonAnchorOffsetDp(widthDp = configuration.screenWidthDp)
+    }
+    val moreActionsPanelEndPaddingDp = remember(
+        layoutPolicy.horizontalPaddingDp,
+        layoutPolicy.fullscreenIconSizeDp,
+        layoutPolicy.rightActionSpacingDp,
+        moreButtonAnchorOffsetDp
+    ) {
+        resolveMoreActionsPanelEndPaddingDp(
+            horizontalPaddingDp = layoutPolicy.horizontalPaddingDp,
+            fullscreenIconSizeDp = layoutPolicy.fullscreenIconSizeDp,
+            rightActionSpacingDp = layoutPolicy.rightActionSpacingDp,
+            moreButtonAnchorOffsetDp = moreButtonAnchorOffsetDp
+        )
+    }
+    val floatingPanelBottomOffsetDp = remember(
+        layoutPolicy.bottomPaddingDp,
+        layoutPolicy.playButtonSizeDp,
+        layoutPolicy.danmakuInputHeightDp
+    ) {
+        resolveFloatingPanelBottomOffsetDp(
+            bottomPaddingDp = layoutPolicy.bottomPaddingDp,
+            controlRowHeightDp = maxOf(layoutPolicy.playButtonSizeDp, layoutPolicy.danmakuInputHeightDp),
+            gapDp = 20
+        )
+    }
+    val floatingPanelBottomOffsetPx = with(LocalDensity.current) {
+        floatingPanelBottomOffsetDp.dp.roundToPx()
     }
     val progressLayoutPolicy = remember(configuration.screenWidthDp) {
         resolveVideoProgressBarLayoutPolicy(
@@ -146,23 +269,68 @@ fun BottomControlBar(
             hasEpisodeEntry = hasEpisodeEntry
         )
     }
-    val showPlaybackOrderLabel = remember(isFullscreen, configuration.screenWidthDp, playbackOrderLabel) {
-        playbackOrderLabel.isNotBlank() &&
-            shouldShowPlaybackOrderLabelInControlBar(
-                isFullscreen = isFullscreen,
-                widthDp = configuration.screenWidthDp
-            )
+    var showMoreActionsPanel by remember { mutableStateOf(false) }
+    var showSubtitlePanel by remember { mutableStateOf(false) }
+    LaunchedEffect(isFullscreen) {
+        if (!isFullscreen) {
+            showMoreActionsPanel = false
+            showSubtitlePanel = false
+        }
     }
-    val showAspectRatioButton = remember(isFullscreen, configuration.screenWidthDp) {
-        shouldShowAspectRatioButtonInControlBar(
+    val showPlaybackOrderLabel = remember(isFullscreen, playbackOrderLabel) {
+        shouldShowPlaybackOrderLabelInControlBar(
             isFullscreen = isFullscreen,
-            widthDp = configuration.screenWidthDp
+            playbackOrderLabel = playbackOrderLabel
+        )
+    }
+    val showAspectRatioButton = remember(isFullscreen) {
+        shouldShowAspectRatioButtonInControlBar(
+            isFullscreen = isFullscreen
         )
     }
     val showNextEpisodeButton = remember(isFullscreen, hasNextEpisode) {
         shouldShowNextEpisodeButtonInControlBar(
             isFullscreen = isFullscreen,
             hasNextEpisode = hasNextEpisode
+        )
+    }
+    val showSubtitleButton = remember(isFullscreen, subtitleTrackAvailable) {
+        shouldShowSubtitleButtonInControlBar(
+            isFullscreen = isFullscreen,
+            subtitleTrackAvailable = subtitleTrackAvailable
+        )
+    }
+    val showPortraitSwitchButton = remember(isFullscreen) {
+        shouldShowPortraitSwitchButtonInControlBar(
+            isFullscreen = isFullscreen
+        )
+    }
+    val showMoreActionsButton = remember(
+        isFullscreen,
+        showNextEpisodeButton,
+        showPlaybackOrderLabel,
+        showAspectRatioButton,
+        showPortraitSwitchButton
+    ) {
+        shouldShowMoreActionsButtonInControlBar(
+            isFullscreen = isFullscreen,
+            showNextEpisodeButton = showNextEpisodeButton,
+            showPlaybackOrderLabel = showPlaybackOrderLabel,
+            showAspectRatioButton = showAspectRatioButton,
+            showPortraitSwitchButton = showPortraitSwitchButton
+        )
+    }
+    val subtitleOptions = remember(
+        subtitlePrimaryLabel,
+        subtitleSecondaryLabel,
+        subtitlePrimaryAvailable,
+        subtitleSecondaryAvailable
+    ) {
+        resolveSubtitleDisplayOptions(
+            primaryLabel = subtitlePrimaryLabel.ifBlank { "中文" },
+            secondaryLabel = subtitleSecondaryLabel.ifBlank { "英文" },
+            hasPrimaryTrack = subtitlePrimaryAvailable,
+            hasSecondaryTrack = subtitleSecondaryAvailable
         )
     }
 
@@ -222,6 +390,8 @@ fun BottomControlBar(
 
             // Center area: Danmaku Controls (Switch + Input) - Only visible in Fullscreen/Landscape
             if (isFullscreen) {
+                val danmakuActiveColor = MaterialTheme.colorScheme.primary
+                val danmakuInactiveColor = Color.White.copy(alpha = 0.74f)
                 // Danmaku Switch
                 Row(
                     modifier = Modifier
@@ -229,9 +399,9 @@ fun BottomControlBar(
                         .clip(RoundedCornerShape(14.dp))
                         .background(
                             if (danmakuEnabled) {
-                                Color(0xFF1B5E20).copy(alpha = 0.22f)
+                                danmakuActiveColor.copy(alpha = 0.22f)
                             } else {
-                                Color(0xFFB71C1C).copy(alpha = 0.22f)
+                                danmakuInactiveColor.copy(alpha = 0.16f)
                             }
                         )
                         .consumeTap(onDanmakuToggle)
@@ -241,13 +411,13 @@ fun BottomControlBar(
                     Icon(
                         imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
                         contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
-                        tint = if (danmakuEnabled) Color(0xFF43A047) else Color(0xFFE57373),
+                        tint = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
                         modifier = Modifier.size(layoutPolicy.danmakuIconSizeDp.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = if (danmakuEnabled) "开" else "关",
-                        color = if (danmakuEnabled) Color(0xFF43A047) else Color(0xFFE57373),
+                        color = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -329,49 +499,51 @@ fun BottomControlBar(
                     modifier = Modifier.clickable(onClick = onSpeedClick)
                 )
 
-                if (showNextEpisodeButton) {
-                    Text(
-                        text = "下集",
-                        color = Color.White,
-                        fontSize = layoutPolicy.actionTextFontSp.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable(onClick = onNextEpisodeClick)
-                    )
+                if (showSubtitleButton) {
+                    Surface(
+                        color = if (subtitleEnabled) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                        } else {
+                            Color.White.copy(alpha = 0.18f)
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        onClick = {
+                            showSubtitlePanel = !showSubtitlePanel
+                            if (showSubtitlePanel) {
+                                showMoreActionsPanel = false
+                            }
+                        }
+                    ) {
+                        Text(
+                            text = "字幕",
+                            color = if (subtitleEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                            fontSize = layoutPolicy.actionTextFontSp.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
 
-                if (showPlaybackOrderLabel) {
+                if (showMoreActionsButton) {
                     Text(
-                        text = playbackOrderLabel,
-                        color = Color.White,
+                        text = "更多",
+                        color = if (showMoreActionsPanel) MaterialTheme.colorScheme.primary else Color.White,
                         fontSize = layoutPolicy.actionTextFontSp.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable(onClick = onPlaybackOrderClick)
-                    )
-                }
-
-                // 📺 横屏全屏模式下显示画面比例按钮
-                if (showAspectRatioButton) {
-                    Text(
-                        text = currentRatio.displayName,
-                        color = if (currentRatio == VideoAspectRatio.FIT) Color.White else MaterialTheme.colorScheme.primary,
-                        fontSize = layoutPolicy.actionTextFontSp.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable(onClick = onRatioClick)
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                showMoreActionsPanel = !showMoreActionsPanel
+                                if (showMoreActionsPanel) {
+                                    showSubtitlePanel = false
+                                }
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
                     )
                 }
 
                 // 📱 [修复] 竖屏全屏按钮 - 仅在非全屏模式下显示
                 if (!isFullscreen) {
-                    Text(
-                        text = "竖屏",
-                        color = Color.White,
-                        fontSize = layoutPolicy.actionTextFontSp.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable(onClick = onPortraitFullscreen)
-                    )
-                }
-
-                if (shouldShowPortraitSwitchButtonInControlBar(isFullscreen)) {
                     Text(
                         text = "竖屏",
                         color = Color.White,
@@ -393,6 +565,200 @@ fun BottomControlBar(
             }
         }
     }
+
+    if (showSubtitlePanel && showSubtitleButton) {
+        Popup(
+            alignment = Alignment.BottomEnd,
+            offset = IntOffset(x = 0, y = -floatingPanelBottomOffsetPx),
+            onDismissRequest = { showSubtitlePanel = false },
+            properties = PopupProperties(
+                focusable = true,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+                clippingEnabled = false
+            )
+        ) {
+            Box(modifier = Modifier.padding(end = layoutPolicy.horizontalPaddingDp.dp)) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.76f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.16f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(min = floatingPanelMinWidthDp.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "字幕语言",
+                            color = Color.White.copy(alpha = 0.92f),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        subtitleOptions.forEach { option ->
+                            SubtitlePanelOption(
+                                label = option.label,
+                                selected = subtitleDisplayMode == option.mode,
+                                enabled = option.enabled,
+                                minWidthDp = moreActionItemMinWidthDp,
+                                onClick = {
+                                    if (!option.enabled) return@SubtitlePanelOption
+                                    showSubtitlePanel = false
+                                    onSubtitleDisplayModeChange(option.mode)
+                                    onSubtitleEnabledChange(option.mode != SubtitleDisplayMode.OFF)
+                                }
+                            )
+                        }
+                        if (subtitleOptions.size > 1) {
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "字幕大字号",
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Switch(
+                                    checked = subtitleLargeTextEnabled,
+                                    onCheckedChange = onSubtitleLargeTextChange
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showMoreActionsPanel && showMoreActionsButton) {
+        Popup(
+            alignment = Alignment.BottomEnd,
+            offset = IntOffset(x = 0, y = -floatingPanelBottomOffsetPx),
+            onDismissRequest = { showMoreActionsPanel = false },
+            properties = PopupProperties(
+                focusable = true,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+                clippingEnabled = false
+            )
+        ) {
+            Box(modifier = Modifier.padding(end = moreActionsPanelEndPaddingDp.dp)) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.78f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.2f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(min = floatingPanelMinWidthDp.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (showNextEpisodeButton) {
+                            MoreActionTextButton(
+                                label = "下集",
+                                minWidthDp = moreActionItemMinWidthDp,
+                                onClick = {
+                                    showMoreActionsPanel = false
+                                    onNextEpisodeClick()
+                                }
+                            )
+                        }
+                        if (showPlaybackOrderLabel) {
+                            MoreActionTextButton(
+                                label = playbackOrderLabel,
+                                minWidthDp = moreActionItemMinWidthDp,
+                                onClick = {
+                                    showMoreActionsPanel = false
+                                    onPlaybackOrderClick()
+                                }
+                            )
+                        }
+                        if (showAspectRatioButton) {
+                            MoreActionTextButton(
+                                label = currentRatio.displayName,
+                                highlighted = currentRatio != VideoAspectRatio.FIT,
+                                minWidthDp = moreActionItemMinWidthDp,
+                                onClick = {
+                                    showMoreActionsPanel = false
+                                    onRatioClick()
+                                }
+                            )
+                        }
+                        if (showPortraitSwitchButton) {
+                            MoreActionTextButton(
+                                label = "竖屏",
+                                minWidthDp = moreActionItemMinWidthDp,
+                                onClick = {
+                                    showMoreActionsPanel = false
+                                    onPortraitFullscreen()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubtitlePanelOption(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    minWidthDp: Int,
+    onClick: () -> Unit
+) {
+    Text(
+        text = label,
+        color = when {
+            !enabled -> Color.White.copy(alpha = 0.42f)
+            selected -> MaterialTheme.colorScheme.primary
+            else -> Color.White
+        },
+        textAlign = TextAlign.Center,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .widthIn(min = minWidthDp.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    )
+}
+
+@Composable
+private fun MoreActionTextButton(
+    label: String,
+    highlighted: Boolean = false,
+    minWidthDp: Int,
+    onClick: () -> Unit
+) {
+    Text(
+        text = label,
+        color = if (highlighted) MaterialTheme.colorScheme.primary else Color.White,
+        textAlign = TextAlign.Center,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .widthIn(min = minWidthDp.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    )
 }
 
 /**

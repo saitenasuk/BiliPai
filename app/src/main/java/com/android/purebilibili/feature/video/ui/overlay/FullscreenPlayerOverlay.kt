@@ -693,14 +693,16 @@ fun FullscreenPlayerOverlay(
                         
                         //  [新增] 弹幕开关按钮
                         val danmakuToggleInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                        val danmakuActiveColor = MaterialTheme.colorScheme.primary
+                        val danmakuInactiveColor = Color.White.copy(alpha = 0.74f)
                         Row(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(
                                     if (danmakuEnabled) {
-                                        Color(0xFF1B5E20).copy(alpha = 0.22f)
+                                        danmakuActiveColor.copy(alpha = 0.22f)
                                     } else {
-                                        Color(0xFFB71C1C).copy(alpha = 0.22f)
+                                        danmakuInactiveColor.copy(alpha = 0.16f)
                                     }
                                 )
                                 .clickable(
@@ -719,13 +721,13 @@ fun FullscreenPlayerOverlay(
                             Icon(
                                 imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
                                 contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
-                                tint = if (danmakuEnabled) Color(0xFF4CAF50) else Color(0xFFE57373),
+                                tint = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = if (danmakuEnabled) "开" else "关",
-                                color = if (danmakuEnabled) Color(0xFF4CAF50) else Color(0xFFE57373),
+                                color = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold
                             )

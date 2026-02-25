@@ -121,7 +121,8 @@ fun TabletCinemaLayout(
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode =
         com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
-    onPlayModeClick: () -> Unit = {}
+    onPlayModeClick: () -> Unit = {},
+    forceCoverOnlyOnReturn: Boolean = false
 ) {
     val context = LocalContext.current
     val policy = remember(configuration.screenWidthDp) {
@@ -202,7 +203,8 @@ fun TabletCinemaLayout(
                     currentPlayMode = currentPlayMode,
                     onPlayModeClick = onPlayModeClick,
                     onRelatedVideoClick = onRelatedVideoClick,
-                    playerMaxWidth = policy.playerMaxWidthDp.dp
+                    playerMaxWidth = policy.playerMaxWidthDp.dp,
+                    forceCoverOnlyOnReturn = forceCoverOnlyOnReturn
                 )
 
                 if (success != null) {
@@ -295,7 +297,8 @@ private fun CinemaStagePlayer(
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode,
     onPlayModeClick: () -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
-    playerMaxWidth: Dp
+    playerMaxWidth: Dp,
+    forceCoverOnlyOnReturn: Boolean
 ) {
     val context = LocalContext.current
     val success = uiState as? PlayerUiState.Success
@@ -388,6 +391,7 @@ private fun CinemaStagePlayer(
                     onPlayModeClick = onPlayModeClick,
                     onRelatedVideoClick = onRelatedVideoClick,
                     relatedVideos = success?.related ?: emptyList(),
+                    forceCoverOnly = forceCoverOnlyOnReturn,
                     ugcSeason = success?.info?.ugc_season,
                     isFollowed = success?.isFollowing ?: false,
                     isLiked = success?.isLiked ?: false,

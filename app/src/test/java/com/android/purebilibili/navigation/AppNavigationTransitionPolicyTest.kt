@@ -53,4 +53,34 @@ class AppNavigationTransitionPolicyTest {
             )
         )
     }
+
+    @Test
+    fun leavingVideoToHome_shouldStopPlaybackEagerly() {
+        assertTrue(
+            shouldStopPlaybackEagerlyOnVideoRouteExit(
+                fromRoute = VideoRoute.route,
+                toRoute = ScreenRoutes.Home.route
+            )
+        )
+    }
+
+    @Test
+    fun leavingVideoToAudioMode_shouldNotStopPlaybackEagerly() {
+        assertFalse(
+            shouldStopPlaybackEagerlyOnVideoRouteExit(
+                fromRoute = VideoRoute.route,
+                toRoute = ScreenRoutes.AudioMode.route
+            )
+        )
+    }
+
+    @Test
+    fun switchingBetweenVideoRoutes_shouldNotStopPlaybackEagerly() {
+        assertFalse(
+            shouldStopPlaybackEagerlyOnVideoRouteExit(
+                fromRoute = VideoRoute.route,
+                toRoute = VideoRoute.route
+            )
+        )
+    }
 }

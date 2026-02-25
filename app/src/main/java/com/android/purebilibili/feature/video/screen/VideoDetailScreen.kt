@@ -408,7 +408,8 @@ fun VideoDetailScreen(
     // 📐 [大屏适配] 仅 Expanded 才启用平板分栏布局
     val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
     val useTabletLayout = shouldUseTabletVideoLayout(
-        isExpandedScreen = windowSizeClass.isExpandedScreen
+        isExpandedScreen = windowSizeClass.isExpandedScreen,
+        smallestScreenWidthDp = configuration.smallestScreenWidthDp
     )
     
     // 🔧 [修复] 追踪用户是否主动请求全屏（点击全屏按钮）
@@ -505,17 +506,23 @@ fun VideoDetailScreen(
     
     //  [修复] 包装的 onBack，在导航之前立即恢复状态栏并通知小窗管理器
     var isActuallyLeaving by remember { mutableStateOf(false) }
+    var forceCoverOnlyOnReturn by remember { mutableStateOf(false) }
 
     val handleBack = remember(onBack, miniPlayerManager) {
         {
             isActuallyLeaving = true // 标记确实是用户通过点击或返回键离开
             isScreenActive = false  // 标记页面正在退出
+            forceCoverOnlyOnReturn = true
             // 🎯 通知小窗管理器这是用户主动导航离开（用于控制后台音频）
             miniPlayerManager?.markLeavingByNavigation(expectedBvid = currentBvid)
             
             restoreStatusBar()      //  立即恢复状态栏（动画开始前）
             onBack()                // 执行实际的返回导航
         }
+    }
+
+    LaunchedEffect(bvid) {
+        forceCoverOnlyOnReturn = false
     }
     
     // 🔄 [新增] 自动横竖屏切换 - 跟随手机传感器方向
@@ -1239,7 +1246,8 @@ fun VideoDetailScreen(
                 onToggleFavorite = { viewModel.toggleFavorite() },
                 onTriple = { viewModel.doTripleAction() },
                 onRelatedVideoClick = navigateToRelatedVideo,
-                onPageSelect = { viewModel.switchPage(it) }
+                onPageSelect = { viewModel.switchPage(it) },
+                forceCoverOnly = forceCoverOnlyOnReturn
             )
         } else {
                 //  沉浸式布局：视频延伸到状态栏 + 内容区域
@@ -1314,7 +1322,8 @@ fun VideoDetailScreen(
                         onRelatedVideoClick = navigateToRelatedVideo,
                         // 🔁 [新增] 播放模式
                         currentPlayMode = currentPlayMode,
-                        onPlayModeClick = { com.android.purebilibili.feature.video.player.PlaylistManager.togglePlayMode() }
+                        onPlayModeClick = { com.android.purebilibili.feature.video.player.PlaylistManager.togglePlayMode() },
+                        forceCoverOnlyOnReturn = forceCoverOnlyOnReturn
                     )
                 } else {
                     // 📱 手机竖屏：原有单列布局
@@ -1510,7 +1519,8 @@ fun VideoDetailScreen(
                                 onAudioLangChange = { viewModel.changeAudioLanguage(it) },
                                 // [New Actions]
                                 onSaveCover = { viewModel.saveCover(context) },
-                                onDownloadAudio = { viewModel.downloadAudio(context) }
+                                onDownloadAudio = { viewModel.downloadAudio(context) },
+                                forceCoverOnly = forceCoverOnlyOnReturn
                                 //  空降助手 - 已由插件系统自动处理
                                 // sponsorSegment = sponsorSegment,
                                 // showSponsorSkipButton = showSponsorSkipButton,
@@ -2854,9 +2864,10 @@ internal fun shouldRotateToPortraitOnSplitBack(
 }
 
 internal fun shouldUseTabletVideoLayout(
-    isExpandedScreen: Boolean
+    isExpandedScreen: Boolean,
+    smallestScreenWidthDp: Int
 ): Boolean {
-    return isExpandedScreen 
+    return isExpandedScreen && smallestScreenWidthDp >= 600
 }
 
 internal fun shouldUseOrientationDrivenFullscreen(

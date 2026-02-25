@@ -3,7 +3,10 @@ package com.android.purebilibili.navigation
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -98,6 +101,8 @@ object VideoRoute {
         return "$base/$bvid?cid=$cid&cover=$encodedCover"
     }
 }
+
+private val IOS_RETURN_EASING = CubicBezierEasing(0.20f, 0.90f, 0.22f, 1.00f)
 
 @androidx.media3.common.util.UnstableApi
 // @OptIn(ExperimentalMaterial3WindowSizeClassApi::class) (Removed)
@@ -201,6 +206,18 @@ fun AppNavigation(
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
         val currentBottomNavItem = BottomNavItem.entries.find { it.route == currentRoute } ?: BottomNavItem.HOME
+        var previousRouteForStopPolicy by remember { mutableStateOf<String?>(null) }
+        var previousVideoBvidForStopPolicy by remember { mutableStateOf<String?>(null) }
+
+        LaunchedEffect(navBackStackEntry) {
+            if (shouldStopPlaybackEagerlyOnVideoRouteExit(previousRouteForStopPolicy, currentRoute)) {
+                if (miniPlayerManager?.isMiniMode != true) {
+                    miniPlayerManager?.markLeavingByNavigation(expectedBvid = previousVideoBvidForStopPolicy)
+                }
+            }
+            previousRouteForStopPolicy = currentRoute
+            previousVideoBvidForStopPolicy = navBackStackEntry?.arguments?.getString("bvid")
+        }
 
         val appNavigationSettings by SettingsManager.getAppNavigationSettings(context).collectAsState(
             initial = AppNavigationSettings()
@@ -338,6 +355,7 @@ fun AppNavigation(
             //  [修复] 从设置页返回时使用右滑动画
             popEnterTransition = { 
                 val fromRoute = initialState.destination.route
+                val fromVideoDetail = fromRoute?.startsWith("${VideoRoute.base}/") == true
                 val fromSettings = fromRoute == ScreenRoutes.Settings.route
                 val useSeamlessBackTransition = shouldUseTabletSeamlessBackTransition(
                     isTabletLayout = isTabletLayout,
@@ -347,13 +365,31 @@ fun AppNavigation(
                 )
                 if (fromSettings) {
                     slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else if (!cardTransitionEnabled && fromVideoDetail) {
+                    fadeIn(
+                        animationSpec = tween(durationMillis = 120, easing = IOS_RETURN_EASING),
+                        initialAlpha = 0.98f
+                    )
                 } else if (useSeamlessBackTransition) {
                     fadeIn(
-                        animationSpec = tween(navMotionSpec.mediumFadeDurationMillis),
+                        animationSpec = tween(
+                            durationMillis = navMotionSpec.mediumFadeDurationMillis,
+                            easing = IOS_RETURN_EASING
+                        ),
                         initialAlpha = 0.96f
                     )
+                } else if (cardTransitionEnabled && CardPositionManager.isQuickReturnFromDetail) {
+                    fadeIn(
+                        animationSpec = tween(durationMillis = 170, easing = IOS_RETURN_EASING),
+                        initialAlpha = 0.99f
+                    )
                 } else {
-                    fadeIn(animationSpec = tween(navMotionSpec.mediumFadeDurationMillis))
+                    fadeIn(
+                        animationSpec = tween(
+                            durationMillis = navMotionSpec.mediumFadeDurationMillis,
+                            easing = IOS_RETURN_EASING
+                        )
+                    )
                 }
             }
         ) {
@@ -427,15 +463,28 @@ fun AppNavigation(
                 )
                 if (useSeamlessBackTransition) {
                     fadeOut(
-                        animationSpec = tween(180),
+                        animationSpec = tween(durationMillis = 180, easing = IOS_RETURN_EASING),
                         targetAlpha = 0f
                     )
+                } else if (cardTransitionEnabled && CardPositionManager.isQuickReturnFromDetail) {
+                    // Quick return: keep route layers stable and let cover sharedBounds dominate.
+                    ExitTransition.None
                 } else if (cardTransitionEnabled) {
                     // 🔧 [修复] 使用简单淡出，避免与 sharedBounds 共享元素动画冲突
-                    fadeOut(animationSpec = tween(navMotionSpec.mediumFadeDurationMillis))
+                    fadeOut(
+                        animationSpec = tween(
+                            durationMillis = navMotionSpec.mediumFadeDurationMillis,
+                            easing = IOS_RETURN_EASING
+                        )
+                    )
                 } else {
                     //  位置感知滑出动画
-                    if (CardPositionManager.isSingleColumnCard) {
+                    if (targetState.destination.route == ScreenRoutes.Home.route) {
+                        slideOutOfContainer(
+                            AnimatedContentTransitionScope.SlideDirection.Right,
+                            tween(durationMillis = minOf(navMotionSpec.slideDurationMillis, 180), easing = IOS_RETURN_EASING)
+                        )
+                    } else if (CardPositionManager.isSingleColumnCard) {
                         //  单列卡片（故事卡片）：往下滑出
                         slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down, tween(navMotionSpec.slideDurationMillis))
                     } else {
@@ -452,7 +501,12 @@ fun AppNavigation(
             // [新增] 前进退出动画 (A -> B, A is exiting)
             exitTransition = {
                 if (cardTransitionEnabled) {
-                     fadeOut(animationSpec = tween(navMotionSpec.slowFadeDurationMillis))
+                     fadeOut(
+                         animationSpec = tween(
+                             durationMillis = navMotionSpec.slowFadeDurationMillis,
+                             easing = IOS_RETURN_EASING
+                         )
+                     )
                 } else {
                     slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
                 }
@@ -460,15 +514,17 @@ fun AppNavigation(
             // [新增] 返回进入动画 (B -> A, A is re-entering)
             popEnterTransition = {
                 if (cardTransitionEnabled) {
-                     fadeIn(animationSpec = tween(navMotionSpec.slowFadeDurationMillis))
+                     if (CardPositionManager.isQuickReturnFromDetail) {
+                         EnterTransition.None
+                     } else {
+                         fadeIn(
+                             animationSpec = tween(
+                                 durationMillis = navMotionSpec.slowFadeDurationMillis,
+                                 easing = IOS_RETURN_EASING
+                             )
+                         )
+                     }
                 } else {
-                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) // Reverse of slideOutLeft? Or usually Right?
-                    // Standard back nav usually slides from left to right (content entering from left) if we pushed from right.
-                    // But here we slid OUT to Left. So we slide IN from Left?
-                    // Actually standard Android is: Push: Enter Right, Exit Left. Pop: Enter Left, Exit Right.
-                    // So popEnter should be SlideDirection.Right (content moving towards Right? No, coming FROM Left).
-                    // SlideDirection.Right means "towards right".
-                    // slideIntoContainer(Right) -> moves from Left edge towards Right. Correct.
                     slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
                 }
             }

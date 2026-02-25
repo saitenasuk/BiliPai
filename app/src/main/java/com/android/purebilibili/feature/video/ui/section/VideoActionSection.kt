@@ -87,13 +87,15 @@ fun ActionButtonsRow(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
             .animateContentSize() // 🚀 [优化] 使布局变化更平滑
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+            .padding(horizontal = 4.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.Bottom
+        verticalAlignment = Alignment.CenterVertically
     ) {
         // Like - 支持长按触发三连
         Box(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 56.dp),
             contentAlignment = Alignment.Center
         ) {
             BiliActionButton(
@@ -108,12 +110,14 @@ fun ActionButtonsRow(
 
         // Coin
         Box(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 56.dp),
             contentAlignment = Alignment.Center
         ) {
             BiliActionButton(
                 icon = AppIcons.BiliCoin,
-                text = if (coinCount > 0) "已投币" else "投币",
+                text = FormatUtils.formatStat(info.stat.coin.toLong()),
                 isActive = coinCount > 0,
                 activeColor = Color(0xFFFFB300),
                 onClick = onCoinClick
@@ -122,7 +126,9 @@ fun ActionButtonsRow(
 
         // Favorite
         Box(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 56.dp),
             contentAlignment = Alignment.Center
         ) {
             BiliActionButton(
@@ -137,7 +143,9 @@ fun ActionButtonsRow(
         
         //  稍后再看
         Box(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 56.dp),
             contentAlignment = Alignment.Center
         ) {
             BiliActionButton(
@@ -158,7 +166,9 @@ fun ActionButtonsRow(
         val isDownloaded = downloadProgress >= 1f
         val isDownloading = downloadProgress in 0f..0.99f
         Box(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 56.dp),
             contentAlignment = Alignment.Center
         ) {
             BiliActionButton(
@@ -406,7 +416,10 @@ private fun BiliActionButton(
     
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
         modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
             .graphicsLayer {
                 scaleX = scale * pulseScale
                 scaleY = scale * pulseScale

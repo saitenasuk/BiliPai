@@ -144,6 +144,11 @@ fun CinematicVideoCard(
     // 共享元素
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val coverSharedEnabled = transitionEnabled &&
+        sharedTransitionScope != null &&
+        animatedVisibilityScope != null
+    val metadataSharedEnabled = coverSharedEnabled &&
+        !CardPositionManager.shouldLimitSharedElementsForQuickReturn()
 
     Box(
         modifier = Modifier
@@ -196,11 +201,11 @@ fun CinematicVideoCard(
                 .aspectRatio(1.6f) // 回归标准宽屏比例
             
             // 共享元素: 封面
-            val finalCoverModifier = if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            val finalCoverModifier = if (coverSharedEnabled) {
                 with(sharedTransitionScope) {
                     coverModifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
-                        animatedVisibilityScope = animatedVisibilityScope,
+                        animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ -> spring(dampingRatio = 0.8f, stiffness = 200f) },
                         clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(cardCornerRadius))
                     )
@@ -247,11 +252,11 @@ fun CinematicVideoCard(
             ) {
                 // 标题
                  var titleModifier = Modifier.fillMaxWidth().semantics { contentDescription = "视频标题: ${video.title}" }
-                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                if (metadataSharedEnabled) {
                     with(sharedTransitionScope) {
                         titleModifier = titleModifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "video_title_${video.bvid}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
+                            animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                             boundsTransform = { _, _ -> spring(dampingRatio = 0.8f, stiffness = 200f) }
                         )
                     }
@@ -281,11 +286,11 @@ fun CinematicVideoCard(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                      var upNameModifier = Modifier.wrapContentSize()
-                     if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                     if (metadataSharedEnabled) {
                          with(sharedTransitionScope) {
                              upNameModifier = upNameModifier.sharedBounds(
                                 sharedContentState = rememberSharedContentState(key = "video_up_${video.bvid}"),
-                                animatedVisibilityScope = animatedVisibilityScope,
+                                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                 boundsTransform = { _, _ -> spring(dampingRatio = 0.8f, stiffness = 200f) }
                              )
                          }
@@ -299,11 +304,11 @@ fun CinematicVideoCard(
                                      .clip(CircleShape)
                                      .background(Color.White.copy(alpha = 0.2f))
 
-                                 if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                 if (metadataSharedEnabled) {
                                      with(sharedTransitionScope) {
                                          avatarModifier = avatarModifier.sharedBounds(
                                              sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
-                                             animatedVisibilityScope = animatedVisibilityScope,
+                                             animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                              boundsTransform = { _, _ -> spring(dampingRatio = 0.8f, stiffness = 200f) },
                                              clipInOverlayDuringTransition = OverlayClip(CircleShape)
                                          )

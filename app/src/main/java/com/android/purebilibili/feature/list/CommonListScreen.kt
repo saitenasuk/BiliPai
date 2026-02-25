@@ -126,6 +126,7 @@ fun CommonListScreen(
     var isHistoryBatchMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var selectedHistoryKeys by rememberSaveable { androidx.compose.runtime.mutableStateOf(setOf<String>()) }
     var showHistoryBatchDeleteConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var pendingHistorySingleDeleteKey by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.items, historyViewModel, isHistoryBatchMode) {
         if (historyViewModel == null) return@LaunchedEffect
@@ -399,7 +400,7 @@ fun CommonListScreen(
                         onHistoryLongDelete = if (historyViewModel != null) {
                             { key ->
                                 if (!isHistoryBatchMode) {
-                                    historyViewModel.startVideoDissolve(key)
+                                    pendingHistorySingleDeleteKey = key.takeIf { it.isNotBlank() }
                                 }
                             }
                         } else null,
@@ -564,6 +565,29 @@ fun CommonListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showHistoryBatchDeleteConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (pendingHistorySingleDeleteKey != null && historyViewModel != null) {
+        AlertDialog(
+            onDismissRequest = { pendingHistorySingleDeleteKey = null },
+            title = { Text("删除历史记录") },
+            text = { Text("确认删除这条历史记录吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingHistorySingleDeleteKey?.let { historyViewModel.startVideoDissolve(it) }
+                        pendingHistorySingleDeleteKey = null
+                    }
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingHistorySingleDeleteKey = null }) {
                     Text("取消")
                 }
             }

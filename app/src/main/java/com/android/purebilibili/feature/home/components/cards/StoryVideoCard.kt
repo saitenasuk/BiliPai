@@ -109,13 +109,18 @@ fun StoryVideoCard(
     //  尝试获取共享元素作用域
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val coverSharedEnabled = transitionEnabled &&
+        sharedTransitionScope != null &&
+        animatedVisibilityScope != null
+    val metadataSharedEnabled = coverSharedEnabled &&
+        !CardPositionManager.shouldLimitSharedElementsForQuickReturn()
     
-    val cardModifier = if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+    val cardModifier = if (coverSharedEnabled) {
         with(sharedTransitionScope) {
             Modifier
                 .sharedBounds(
                     sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
-                    animatedVisibilityScope = animatedVisibilityScope,
+                    animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                     boundsTransform = { _, _ ->
                         spring(
                             dampingRatio = 0.8f,
@@ -236,11 +241,11 @@ fun StoryVideoCard(
         //  标题
         // 🔗 [共享元素] 标题
         var titleModifier = Modifier.fillMaxWidth()
-        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+        if (metadataSharedEnabled) {
             with(sharedTransitionScope) {
                 titleModifier = titleModifier.sharedBounds(
                     sharedContentState = rememberSharedContentState(key = "video_title_${video.bvid}"),
-                    animatedVisibilityScope = animatedVisibilityScope,
+                    animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                     boundsTransform = { _, _ ->
                         spring(dampingRatio = 0.8f, stiffness = 200f)
                     }
@@ -269,11 +274,11 @@ fun StoryVideoCard(
             // UP主名称
             // 🔗 [共享元素] UP主名称
             var upNameModifier = Modifier.wrapContentSize()
-            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            if (metadataSharedEnabled) {
                 with(sharedTransitionScope) {
                     upNameModifier = upNameModifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_up_${video.bvid}"),
-                        animatedVisibilityScope = animatedVisibilityScope,
+                        animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ ->
                             spring(dampingRatio = 0.8f, stiffness = 200f)
                         }
@@ -293,11 +298,11 @@ fun StoryVideoCard(
                             .size(24.dp)
                             .clip(CircleShape)
 
-                        if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        if (metadataSharedEnabled) {
                             with(sharedTransitionScope) {
                                 avatarModifier = avatarModifier.sharedBounds(
                                     sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
-                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                     boundsTransform = { _, _ ->
                                         spring(dampingRatio = 0.8f, stiffness = 200f)
                                     },
@@ -339,11 +344,11 @@ fun StoryVideoCard(
                 if (video.stat.view > 0) {
                      // 🔗 [共享元素] 播放量
                     var viewsModifier = Modifier.wrapContentSize()
-                    if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    if (metadataSharedEnabled) {
                         with(sharedTransitionScope) {
                             viewsModifier = viewsModifier.sharedBounds(
                                 sharedContentState = rememberSharedContentState(key = "video_views_${video.bvid}"),
-                                animatedVisibilityScope = animatedVisibilityScope,
+                                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                 boundsTransform = { _, _ ->
                                     spring(dampingRatio = 0.8f, stiffness = 200f)
                                 }
@@ -376,11 +381,11 @@ fun StoryVideoCard(
                 if (video.stat.view > 0 && video.stat.danmaku > 0) {
                      // 🔗 [共享元素] 弹幕数
                      var danmakuModifier = Modifier.wrapContentSize()
-                     if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                     if (metadataSharedEnabled) {
                          with(sharedTransitionScope) {
                              danmakuModifier = danmakuModifier.sharedBounds(
                                  sharedContentState = rememberSharedContentState(key = "video_danmaku_${video.bvid}"),
-                                 animatedVisibilityScope = animatedVisibilityScope,
+                                 animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                                  boundsTransform = { _, _ ->
                                      spring(dampingRatio = 0.8f, stiffness = 200f)
                                  }

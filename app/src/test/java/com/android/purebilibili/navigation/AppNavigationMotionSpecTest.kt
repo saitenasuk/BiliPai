@@ -12,10 +12,10 @@ class AppNavigationMotionSpecTest {
             cardTransitionEnabled = false
         )
 
-        assertEquals(260, spec.slideDurationMillis)
-        assertEquals(160, spec.fastFadeDurationMillis)
-        assertEquals(220, spec.backdropBlurDurationMillis)
-        assertEquals(10f, spec.maxBackdropBlurRadius)
+        assertEquals(220, spec.slideDurationMillis)
+        assertEquals(120, spec.fastFadeDurationMillis)
+        assertEquals(160, spec.backdropBlurDurationMillis)
+        assertEquals(8f, spec.maxBackdropBlurRadius)
     }
 
     @Test

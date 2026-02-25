@@ -250,7 +250,10 @@ fun VideoSettingsPanel(
                         icon = CupertinoIcons.Default.ArrowLeftArrowRight,
                         label = "左右翻转",
                         isActive = isFlippedHorizontal,
-                        onClick = onFlipHorizontal,
+                        onClick = {
+                            onFlipHorizontal()
+                            onDismiss()
+                        },
                         policy = actionPolicy
                     )
                     
@@ -259,7 +262,10 @@ fun VideoSettingsPanel(
                         icon = CupertinoIcons.Default.ArrowUpArrowDown,
                         label = "上下翻转",
                         isActive = isFlippedVertical,
-                        onClick = onFlipVertical,
+                        onClick = {
+                            onFlipVertical()
+                            onDismiss()
+                        },
                         policy = actionPolicy
                     )
                     
@@ -268,7 +274,10 @@ fun VideoSettingsPanel(
                         icon = CupertinoIcons.Default.Headphones,
                         label = "听视频",
                         isActive = isAudioOnly,
-                        onClick = onAudioOnlyToggle,
+                        onClick = {
+                            onAudioOnlyToggle()
+                            onDismiss()
+                        },
                         policy = actionPolicy
                     )
                 }

@@ -1,7 +1,7 @@
 package com.android.purebilibili.core.theme
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.geometry.Rect
 
 /**
@@ -18,8 +18,8 @@ object AnimationSpecs {
      * - 高刚度 (Stiffness ~400f): 响应迅速，跟手感强
      * - 低阻尼 (Damping ~0.78f): 带有微小的过冲 (Overshoot)，富有弹性但不过分晃动
      */
-    val BiliPaiSpringSpec = spring<Rect>(
-        dampingRatio = 0.78f,
-        stiffness = 380f
+    val BiliPaiSpringSpec = tween<Rect>(
+        durationMillis = 320,
+        easing = CubicBezierEasing(0.20f, 0.90f, 0.22f, 1.00f)
     )
 }

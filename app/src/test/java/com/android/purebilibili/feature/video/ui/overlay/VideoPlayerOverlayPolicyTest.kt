@@ -96,4 +96,22 @@ class VideoPlayerOverlayPolicyTest {
                 == null
         )
     }
+
+    @Test
+    fun drawerVisibleShouldConsumeBackgroundGestures() {
+        assertTrue(
+            shouldConsumeBackgroundGesturesForEndDrawer(
+                endDrawerVisible = true
+            )
+        )
+    }
+
+    @Test
+    fun drawerHiddenShouldNotConsumeBackgroundGestures() {
+        assertFalse(
+            shouldConsumeBackgroundGesturesForEndDrawer(
+                endDrawerVisible = false
+            )
+        )
+    }
 }

@@ -14,6 +14,8 @@ import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlay
+import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlCallbacks
+import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlUiState
 import com.android.purebilibili.feature.video.ui.components.SponsorSkipButton
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.data.model.response.ViewPoint
@@ -21,6 +23,7 @@ import com.android.purebilibili.data.model.response.ViewPoint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.view.LayoutInflater
 import android.media.AudioManager
 import android.provider.Settings
 import android.widget.Toast
@@ -46,6 +49,7 @@ import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -56,6 +60,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,7 +71,17 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
+import com.android.purebilibili.feature.video.subtitle.normalizeSubtitleDisplayMode
+import com.android.purebilibili.feature.video.subtitle.resolveDefaultSubtitleDisplayMode
+import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTextAt
+import com.android.purebilibili.feature.video.subtitle.shouldRenderPrimarySubtitle
+import com.android.purebilibili.feature.video.subtitle.shouldRenderSecondarySubtitle
 import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -88,6 +103,46 @@ internal fun resolveHorizontalSeekDeltaMs(
         return stepCount * fullscreenSwipeSeekSeconds * 1000L
     }
     return (totalDragDistanceX * 200f * gestureSensitivity).toLong()
+}
+
+internal fun shouldUseTextureSurfaceForFlip(
+    isFlippedHorizontal: Boolean,
+    isFlippedVertical: Boolean
+): Boolean {
+    return isFlippedHorizontal || isFlippedVertical
+}
+
+internal fun resolveSubtitleLanguageLabel(
+    languageCode: String?,
+    fallbackLabel: String
+): String {
+    val normalized = languageCode?.lowercase().orEmpty()
+    return when {
+        normalized.contains("zh") -> "中文"
+        normalized.contains("en") -> "英文"
+        languageCode.isNullOrBlank() -> fallbackLabel
+        else -> languageCode
+    }
+}
+
+internal fun shouldForceCoverDuringReturnAnimation(
+    forceCoverOnly: Boolean,
+    isReturningFromDetail: Boolean
+): Boolean {
+    return forceCoverOnly || isReturningFromDetail
+}
+
+internal fun shouldShowCoverImage(
+    isFirstFrameRendered: Boolean,
+    forceCoverDuringReturnAnimation: Boolean
+): Boolean {
+    return forceCoverDuringReturnAnimation || !isFirstFrameRendered
+}
+
+internal fun shouldDisableCoverFadeAnimation(
+    forceCoverDuringReturnAnimation: Boolean
+): Boolean {
+    return forceCoverDuringReturnAnimation
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -172,6 +227,7 @@ fun VideoPlayerSection(
     onToggleFavorite: () -> Unit = {},
     onTriple: () -> Unit = {},  // [新增] 一键三连回调
     onPageSelect: (Int) -> Unit = {},
+    forceCoverOnly: Boolean = false,
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -316,11 +372,13 @@ fun VideoPlayerSection(
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     //  共享弹幕管理器（用于所有 seek 路径的一致同步）
     val danmakuManager = rememberDanmakuManager()
+    val overlayDrawerHazeState = remember { HazeState() }
 
     var rootModifier = Modifier
         .fillMaxSize()
         .clipToBounds()
         .background(Color.Black)
+        .hazeSource(overlayDrawerHazeState)
 
     // 应用共享元素
     if (bvid.isNotEmpty() && sharedTransitionScope != null && animatedVisibilityScope != null) {
@@ -937,7 +995,17 @@ fun VideoPlayerSection(
         key(isFlippedHorizontal, isFlippedVertical, isPortraitFullscreen) {
             AndroidView(
                 factory = { ctx ->
-                    PlayerView(ctx).apply {
+                    val useTextureSurface = shouldUseTextureSurfaceForFlip(
+                        isFlippedHorizontal = isFlippedHorizontal,
+                        isFlippedVertical = isFlippedVertical
+                    )
+                    val basePlayerView = if (useTextureSurface) {
+                        LayoutInflater.from(ctx)
+                            .inflate(com.android.purebilibili.R.layout.view_player_texture, null, false) as PlayerView
+                    } else {
+                        PlayerView(ctx)
+                    }
+                    basePlayerView.apply {
                         playerViewRef = this
                         player = if (isPortraitFullscreen) null else playerState.player
                         setKeepContentOnPlayerReset(true)
@@ -1022,10 +1090,15 @@ fun VideoPlayerSection(
     // [Fix] 使用 FormatUtils 统一处理 URL (支持无协议头 URL)
     val currentCoverUrl = FormatUtils.fixImageUrl(rawCoverUrl)
     
-    // [修改] 只要第一帧未渲染，就显示封面
-    // 增加额外检查：如果 buffering 且位置 > 1000ms，说明是中途缓冲，不需要显示封面(保持最后一帧)
-    val isInitialBuffering = isBuffering && playerState.player.currentPosition < 1000
-    val showCover = !isFirstFrameRendered || (isInitialBuffering && !isFirstFrameRendered)
+    val forceCoverDuringReturnAnimation = shouldForceCoverDuringReturnAnimation(
+        forceCoverOnly = forceCoverOnly,
+        isReturningFromDetail = CardPositionManager.isReturningFromDetail
+    )
+    val showCover = shouldShowCoverImage(
+        isFirstFrameRendered = isFirstFrameRendered,
+        forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
+    )
+    val disableCoverFadeAnimation = shouldDisableCoverFadeAnimation(forceCoverDuringReturnAnimation)
     
     // [Debug] Logging
     LaunchedEffect(showCover, currentCoverUrl, isFirstFrameRendered, uiState) {
@@ -1034,9 +1107,9 @@ fun VideoPlayerSection(
 
     AnimatedVisibility(
         visible = showCover && currentCoverUrl.isNotEmpty(),
-        enter = fadeIn(animationSpec = tween(200)),
-        exit = fadeOut(animationSpec = tween(300)), // 稍微慢一点消失，平滑过渡
-        modifier = Modifier.zIndex(10f) // [Fix] 强制提升层级，确保在 VideoSurface 之上
+        enter = if (disableCoverFadeAnimation) EnterTransition.None else fadeIn(animationSpec = tween(200)),
+        exit = if (disableCoverFadeAnimation) ExitTransition.None else fadeOut(animationSpec = tween(300)),
+        modifier = Modifier.zIndex(100f) // 返回中强制封面时，确保封面压住所有播放器层
     ) {
         AsyncImage(
             model = coil.request.ImageRequest.Builder(LocalContext.current)
@@ -1143,6 +1216,133 @@ fun VideoPlayerSection(
                     player = playerState.player,
                     modifier = Modifier.fillMaxSize()
                 )
+            }
+        }
+
+        // 4. B站字幕叠加层（支持中英双语）
+        val subtitlePrimaryAvailable = remember(uiState) {
+            val success = uiState as? PlayerUiState.Success ?: return@remember false
+            success.subtitlePrimaryCues.isNotEmpty()
+        }
+        val subtitleSecondaryAvailable = remember(uiState) {
+            val success = uiState as? PlayerUiState.Success ?: return@remember false
+            success.subtitleSecondaryCues.isNotEmpty()
+        }
+        val subtitleTrackAvailable = subtitlePrimaryAvailable || subtitleSecondaryAvailable
+        val subtitleToggleKey = remember(uiState, bvid) {
+            val success = uiState as? PlayerUiState.Success
+            if (success == null) {
+                "no-subtitle"
+            } else {
+                "${bvid}_${success.info.cid}_${success.subtitlePrimaryLanguage}_${success.subtitleSecondaryLanguage}"
+            }
+        }
+        var subtitleDisplayModePreference by rememberSaveable("${subtitleToggleKey}_mode") {
+            mutableStateOf(
+                resolveDefaultSubtitleDisplayMode(
+                    hasPrimaryTrack = subtitlePrimaryAvailable,
+                    hasSecondaryTrack = subtitleSecondaryAvailable
+                )
+            )
+        }
+        var subtitleLargeTextByUser by rememberSaveable("${subtitleToggleKey}_large") {
+            mutableStateOf(false)
+        }
+        val subtitleDisplayMode = remember(
+            subtitleDisplayModePreference,
+            subtitlePrimaryAvailable,
+            subtitleSecondaryAvailable
+        ) {
+            normalizeSubtitleDisplayMode(
+                preferredMode = subtitleDisplayModePreference,
+                hasPrimaryTrack = subtitlePrimaryAvailable,
+                hasSecondaryTrack = subtitleSecondaryAvailable
+            )
+        }
+        val subtitleOverlayEnabled = subtitleDisplayMode != SubtitleDisplayMode.OFF
+        val subtitlePrimaryLabel = remember(uiState) {
+            val success = uiState as? PlayerUiState.Success
+            resolveSubtitleLanguageLabel(
+                languageCode = success?.subtitlePrimaryLanguage,
+                fallbackLabel = "中文"
+            )
+        }
+        val subtitleSecondaryLabel = remember(uiState) {
+            val success = uiState as? PlayerUiState.Success
+            resolveSubtitleLanguageLabel(
+                languageCode = success?.subtitleSecondaryLanguage,
+                fallbackLabel = "英文"
+            )
+        }
+
+        val subtitlePositionMs by produceState(initialValue = 0L, key1 = playerState.player, key2 = uiState) {
+            while (isActive) {
+                value = playerState.player.currentPosition.coerceAtLeast(0L)
+                delay(if (playerState.player.isPlaying) 120L else 260L)
+            }
+        }
+        val subtitlePrimaryText = remember(uiState, subtitlePositionMs, subtitleDisplayMode) {
+            val success = uiState as? PlayerUiState.Success ?: return@remember null
+            if (!shouldRenderPrimarySubtitle(subtitleDisplayMode)) return@remember null
+            resolveSubtitleTextAt(success.subtitlePrimaryCues, subtitlePositionMs)
+        }
+        val subtitleSecondaryText = remember(uiState, subtitlePositionMs, subtitleDisplayMode) {
+            val success = uiState as? PlayerUiState.Success ?: return@remember null
+            if (!shouldRenderSecondarySubtitle(subtitleDisplayMode)) return@remember null
+            resolveSubtitleTextAt(success.subtitleSecondaryCues, subtitlePositionMs)
+        }
+        if (!isInPipMode &&
+            !isAudioOnly &&
+            uiState is PlayerUiState.Success &&
+            subtitleOverlayEnabled &&
+            (subtitlePrimaryText != null || subtitleSecondaryText != null)
+        ) {
+            val subtitleBottomPadding = when {
+                showControls && isFullscreen -> 132.dp
+                showControls -> 108.dp
+                else -> 42.dp
+            }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(0.9f)
+                    .padding(horizontal = 10.dp)
+                    .padding(bottom = subtitleBottomPadding)
+                    .background(
+                        Color.Black.copy(alpha = 0.42f),
+                        RoundedCornerShape(10.dp)
+                    )
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val showPrimaryLine = !subtitlePrimaryText.isNullOrBlank()
+                val showSecondaryLine = !subtitleSecondaryText.isNullOrBlank()
+                val secondaryAsPrimaryLine = showSecondaryLine && !showPrimaryLine
+                if (!subtitleSecondaryText.isNullOrBlank()) {
+                    Text(
+                        text = subtitleSecondaryText,
+                        color = Color.White.copy(alpha = 0.88f),
+                        fontSize = when {
+                            secondaryAsPrimaryLine && subtitleLargeTextByUser -> 18.sp
+                            secondaryAsPrimaryLine -> 16.sp
+                            subtitleLargeTextByUser -> 16.sp
+                            else -> 14.sp
+                        },
+                        fontWeight = if (secondaryAsPrimaryLine) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                if (!subtitlePrimaryText.isNullOrBlank()) {
+                    Text(
+                        text = subtitlePrimaryText,
+                        color = Color.White,
+                        fontSize = if (subtitleLargeTextByUser) 18.sp else 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
 
@@ -1515,6 +1715,34 @@ fun VideoPlayerSection(
                 //  [新增] 音频模式
                 isAudioOnly = isAudioOnly,
                 onAudioOnlyToggle = onAudioOnlyToggle,
+                subtitleControlState = SubtitleControlUiState(
+                    trackAvailable = subtitleTrackAvailable,
+                    primaryAvailable = subtitlePrimaryAvailable,
+                    secondaryAvailable = subtitleSecondaryAvailable,
+                    enabled = subtitleOverlayEnabled,
+                    displayMode = subtitleDisplayMode,
+                    primaryLabel = subtitlePrimaryLabel,
+                    secondaryLabel = subtitleSecondaryLabel,
+                    largeTextEnabled = subtitleLargeTextByUser
+                ),
+                subtitleControlCallbacks = SubtitleControlCallbacks(
+                    onDisplayModeChange = { mode ->
+                        subtitleDisplayModePreference = mode
+                    },
+                    onEnabledChange = { enabled ->
+                        subtitleDisplayModePreference = if (enabled) {
+                            resolveDefaultSubtitleDisplayMode(
+                                hasPrimaryTrack = subtitlePrimaryAvailable,
+                                hasSecondaryTrack = subtitleSecondaryAvailable
+                            )
+                        } else {
+                            SubtitleDisplayMode.OFF
+                        }
+                    },
+                    onLargeTextChange = { enabled ->
+                        subtitleLargeTextByUser = enabled
+                    }
+                ),
                 
                 //  [新增] 定时关闭
                 sleepTimerMinutes = sleepTimerMinutes,
@@ -1591,13 +1819,13 @@ fun VideoPlayerSection(
                 onToggleLike = onToggleLike,
                 onCoin = onCoin,
                 onToggleFavorite = onToggleFavorite,
-                onTriple = onTriple,
                 onDrawerVideoClick = { vid ->
                     onRelatedVideoClick(vid, null) 
                 },
                 pages = uiState.info.pages,
                 currentPageIndex = currentPageIndex,
-                onPageSelect = onPageSelect
+                onPageSelect = onPageSelect,
+                drawerHazeState = overlayDrawerHazeState
             )
     }
 

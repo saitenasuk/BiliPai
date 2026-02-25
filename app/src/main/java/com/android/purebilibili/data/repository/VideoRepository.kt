@@ -9,10 +9,14 @@ import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.*
+import com.android.purebilibili.feature.video.subtitle.SubtitleCue
+import com.android.purebilibili.feature.video.subtitle.normalizeBilibiliSubtitleUrl
+import com.android.purebilibili.feature.video.subtitle.parseBiliSubtitleBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Request
 import retrofit2.HttpException
 import java.io.InputStream
 import java.util.TreeMap
@@ -1183,6 +1187,35 @@ object VideoRepository {
                 Result.success(response.data)
             } else {
                 Result.failure(Exception("PlayerInfo error: ${response.code}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getSubtitleCues(subtitleUrl: String): Result<List<SubtitleCue>> = withContext(Dispatchers.IO) {
+        try {
+            val normalizedUrl = normalizeBilibiliSubtitleUrl(subtitleUrl)
+            if (normalizedUrl.isBlank()) {
+                return@withContext Result.failure(IllegalArgumentException("字幕 URL 为空"))
+            }
+
+            val request = Request.Builder()
+                .url(normalizedUrl)
+                .get()
+                .header("Referer", "https://www.bilibili.com")
+                .build()
+
+            val response = NetworkModule.okHttpClient.newCall(request).execute()
+            response.use { call ->
+                if (!call.isSuccessful) {
+                    return@withContext Result.failure(
+                        IllegalStateException("字幕请求失败: HTTP ${call.code}")
+                    )
+                }
+                val rawJson = call.body?.string().orEmpty()
+                val cues = parseBiliSubtitleBody(rawJson)
+                Result.success(cues)
             }
         } catch (e: Exception) {
             Result.failure(e)

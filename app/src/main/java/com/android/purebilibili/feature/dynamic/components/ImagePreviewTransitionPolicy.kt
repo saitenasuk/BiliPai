@@ -1,8 +1,13 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import androidx.compose.ui.geometry.Rect
+import kotlin.math.min
+import kotlin.math.pow
+
 private const val LAYOUT_PROGRESS_MIN = -0.08f
 private const val LAYOUT_PROGRESS_MAX = 1.02f
 private const val FALLBACK_START_SCALE = 0.96f
+private const val DISMISS_OVERSHOOT_FACTOR = 0.03f
 
 internal data class ImagePreviewTransitionFrame(
     val layoutProgress: Float,
@@ -20,6 +25,12 @@ internal data class ImagePreviewVisualFrame(
 internal data class ImagePreviewDismissMotion(
     val overshootTarget: Float,
     val settleTarget: Float
+)
+
+internal data class ImagePreviewDismissTransform(
+    val scale: Float,
+    val translationXPx: Float,
+    val translationYPx: Float
 )
 
 internal fun resolveImagePreviewTransitionFrame(
@@ -66,9 +77,54 @@ internal fun resolveImagePreviewVisualFrame(
 
 internal fun imagePreviewDismissMotion(): ImagePreviewDismissMotion {
     return ImagePreviewDismissMotion(
-        overshootTarget = 0f,
+        overshootTarget = -0.06f,
         settleTarget = 0f
     )
+}
+
+internal fun resolveImagePreviewDismissTransform(
+    transitionProgress: Float,
+    sourceRect: Rect?,
+    displayedImageRect: Rect?
+): ImagePreviewDismissTransform {
+    if (sourceRect == null || displayedImageRect == null) {
+        return ImagePreviewDismissTransform(
+            scale = 1f,
+            translationXPx = 0f,
+            translationYPx = 0f
+        )
+    }
+
+    val clampedProgress = transitionProgress.coerceIn(LAYOUT_PROGRESS_MIN, 1f)
+    val baseDismiss = (1f - clampedProgress.coerceIn(0f, 1f)).pow(1.6f)
+    val overshoot = if (clampedProgress < 0f) {
+        ((-clampedProgress) / (-LAYOUT_PROGRESS_MIN)) * DISMISS_OVERSHOOT_FACTOR
+    } else {
+        0f
+    }
+    val dismissFraction = baseDismiss + overshoot
+    val targetScale = min(
+        sourceRect.width / displayedImageRect.width,
+        sourceRect.height / displayedImageRect.height
+    ).coerceIn(0f, 1f)
+    val containerCenterX = (displayedImageRect.left + displayedImageRect.right) / 2f
+    val containerCenterY = (displayedImageRect.top + displayedImageRect.bottom) / 2f
+    val sourceCenterX = (sourceRect.left + sourceRect.right) / 2f
+    val sourceCenterY = (sourceRect.top + sourceRect.bottom) / 2f
+    val targetTranslationX = sourceCenterX - containerCenterX
+    val targetTranslationY = sourceCenterY - containerCenterY
+
+    return ImagePreviewDismissTransform(
+        scale = lerpFloat(1f, targetScale, dismissFraction).coerceAtLeast(0.01f),
+        translationXPx = lerpFloat(0f, targetTranslationX, dismissFraction),
+        translationYPx = lerpFloat(0f, targetTranslationY, dismissFraction)
+    )
+}
+
+internal fun resolveImagePreviewDismissBackdropAlpha(
+    visualProgress: Float
+): Float {
+    return visualProgress.coerceIn(0f, 1f).pow(0.45f)
 }
 
 internal fun resolvePredictiveBackAnimationProgress(backGestureProgress: Float): Float {

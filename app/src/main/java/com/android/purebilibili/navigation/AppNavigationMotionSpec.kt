@@ -15,12 +15,12 @@ internal fun resolveAppNavigationMotionSpec(
 ): AppNavigationMotionSpec {
     if (!cardTransitionEnabled) {
         return AppNavigationMotionSpec(
-            slideDurationMillis = 260,
-            fastFadeDurationMillis = 160,
-            mediumFadeDurationMillis = 200,
-            slowFadeDurationMillis = 240,
-            backdropBlurDurationMillis = 220,
-            maxBackdropBlurRadius = 10f
+            slideDurationMillis = 220,
+            fastFadeDurationMillis = 120,
+            mediumFadeDurationMillis = 160,
+            slowFadeDurationMillis = 190,
+            backdropBlurDurationMillis = 160,
+            maxBackdropBlurRadius = 8f
         )
     }
 

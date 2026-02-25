@@ -36,6 +36,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+internal fun shouldShowDislikeInTopControlBar(widthDp: Int): Boolean = widthDp >= 980
+
 /**
  * Top Control Bar Component
  * 
@@ -66,6 +68,9 @@ fun TopControlBar(
         resolveTopControlBarLayoutPolicy(
             widthDp = configuration.screenWidthDp
         )
+    }
+    val showDislikeAction = remember(configuration.screenWidthDp) {
+        shouldShowDislikeInTopControlBar(widthDp = configuration.screenWidthDp)
     }
     val currentTimeText by produceState(initialValue = formatCurrentTime()) {
         while (true) {
@@ -154,15 +159,17 @@ fun TopControlBar(
                     iconSizeDp = layoutPolicy.iconSizeDp
                 )
                 
-                // Dislike
-                ActionIcon(
-                    icon = Icons.Outlined.ThumbDown,
-                    contentDescription = "不喜欢",
-                    isActive = false,
-                    onClick = onDislikeClick,
-                    buttonSizeDp = layoutPolicy.buttonSizeDp,
-                    iconSizeDp = layoutPolicy.iconSizeDp
-                )
+                if (showDislikeAction) {
+                    // Dislike
+                    ActionIcon(
+                        icon = Icons.Outlined.ThumbDown,
+                        contentDescription = "不喜欢",
+                        isActive = false,
+                        onClick = onDislikeClick,
+                        buttonSizeDp = layoutPolicy.buttonSizeDp,
+                        iconSizeDp = layoutPolicy.iconSizeDp
+                    )
+                }
                 
                 // Coin
                 ActionIcon(

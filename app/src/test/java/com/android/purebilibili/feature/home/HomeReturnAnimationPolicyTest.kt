@@ -2,32 +2,93 @@ package com.android.purebilibili.feature.home
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class HomeReturnAnimationPolicyTest {
 
     @Test
-    fun tabletWithCardAnimation_usesLongerSuppressionWindow() {
-        val tabletDelay = resolveReturnAnimationSuppressionDurationMs(
-            isTabletLayout = true,
-            cardAnimationEnabled = true
+    fun quickReturn_withTransition_usesLongerSuppressionOnPhone() {
+        assertEquals(
+            360L,
+            resolveReturnAnimationSuppressionDurationMs(
+                isTabletLayout = false,
+                cardAnimationEnabled = true,
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = true
+            )
         )
-        val phoneDelay = resolveReturnAnimationSuppressionDurationMs(
-            isTabletLayout = false,
-            cardAnimationEnabled = true
-        )
-
-        assertTrue(tabletDelay > phoneDelay)
-        assertEquals(420L, tabletDelay)
     }
 
     @Test
-    fun whenCardAnimationDisabled_keepsShortSuppressionWindow() {
+    fun quickReturn_withTransition_usesLongerSuppressionOnTablet() {
         assertEquals(
-            120L,
+            500L,
             resolveReturnAnimationSuppressionDurationMs(
                 isTabletLayout = true,
-                cardAnimationEnabled = false
+                cardAnimationEnabled = true,
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = true
+            )
+        )
+    }
+
+    @Test
+    fun normalReturn_usesOriginalDurations() {
+        assertEquals(
+            260L,
+            resolveReturnAnimationSuppressionDurationMs(
+                isTabletLayout = false,
+                cardAnimationEnabled = true,
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = false
+            )
+        )
+        assertEquals(
+            90L,
+            resolveReturnAnimationSuppressionDurationMs(
+                isTabletLayout = false,
+                cardAnimationEnabled = false,
+                cardTransitionEnabled = false,
+                isQuickReturnFromDetail = false
+            )
+        )
+    }
+
+    @Test
+    fun nonSharedReturn_usesShorterSuppressionDurations() {
+        assertEquals(
+            150L,
+            resolveReturnAnimationSuppressionDurationMs(
+                isTabletLayout = false,
+                cardAnimationEnabled = true,
+                cardTransitionEnabled = false,
+                isQuickReturnFromDetail = false
+            )
+        )
+        assertEquals(
+            220L,
+            resolveReturnAnimationSuppressionDurationMs(
+                isTabletLayout = true,
+                cardAnimationEnabled = true,
+                cardTransitionEnabled = false,
+                isQuickReturnFromDetail = false
+            )
+        )
+    }
+
+    @Test
+    fun bottomBarRestoreDelay_respectsTransitionMode() {
+        assertEquals(
+            150L,
+            resolveBottomBarRestoreDelayMs(
+                cardTransitionEnabled = false,
+                isQuickReturnFromDetail = false
+            )
+        )
+        assertEquals(
+            300L,
+            resolveBottomBarRestoreDelayMs(
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = true
             )
         )
     }

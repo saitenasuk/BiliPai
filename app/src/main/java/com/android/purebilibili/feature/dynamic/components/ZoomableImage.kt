@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -45,6 +46,7 @@ fun ZoomableImage(
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     onZoomChange: (Float) -> Unit = {},
+    onDisplayRectChange: (Rect?) -> Unit = {},
     onClick: () -> Unit = {}
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
@@ -61,6 +63,29 @@ fun ZoomableImage(
     var isLongImage by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
+
+    fun resolveDisplayedRectOrNull(): Rect? {
+        if (containerSize == IntSize.Zero || imageSize == IntSize.Zero) return null
+
+        val fitScale = min(
+            containerSize.width.toFloat() / imageSize.width,
+            containerSize.height.toFloat() / imageSize.height
+        )
+        val displayWidth = imageSize.width * fitScale * scale
+        val displayHeight = imageSize.height * fitScale * scale
+        val centerX = containerSize.width / 2f + offsetX
+        val centerY = containerSize.height / 2f + offsetY
+        return Rect(
+            left = centerX - displayWidth / 2f,
+            top = centerY - displayHeight / 2f,
+            right = centerX + displayWidth / 2f,
+            bottom = centerY + displayHeight / 2f
+        )
+    }
+
+    LaunchedEffect(containerSize, imageSize, scale, offsetX, offsetY) {
+        onDisplayRectChange(resolveDisplayedRectOrNull())
+    }
     
     // 双击放大逻辑
     fun onDoubleTap(tapOffset: Offset) {
