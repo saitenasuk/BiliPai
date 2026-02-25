@@ -1,0 +1,30 @@
+name: Upstream Sync
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 每天 UTC 时间 0:00 (北京时间早上 8:00) 自动运行
+  workflow_dispatch: # 允许你手动点击按钮触发同步
+
+jobs:
+  sync_latest_from_upstream:
+    name: Sync latest commits from upstream repo
+    runs-on: ubuntu-latest
+
+    steps:
+      # 第一步：检出你的代码
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+
+      # 第二步：使用现成的 Action 进行同步
+      - name: Sync upstream changes
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
+        with:
+          target_sync_branch: main
+          # 这里填原作者的分支地址
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+          upstream_sync_repo: jay3-yy/BiliPai
+          upstream_sync_branch: main
+          test_mode: false
