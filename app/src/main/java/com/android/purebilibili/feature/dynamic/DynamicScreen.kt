@@ -320,6 +320,7 @@ fun DynamicScreen(
                             Box(modifier = Modifier.fillMaxSize()) {
                                 DynamicList(
                                     state = state,
+                                    hasMore = currentHasMore,
                                     filteredItems = filteredItems,
                                     listState = listState,
                                     statusBarHeight = statusBarHeight,
@@ -357,7 +358,13 @@ fun DynamicScreen(
                             }
                             
                             // 错误提示
-                            ErrorOverlay(state, onLoginClick, { viewModel.refresh() }, Modifier.align(Alignment.Center))
+                            ErrorOverlay(
+                                error = state.error,
+                                activeItemsCount = filteredItems.size,
+                                onLoginClick = onLoginClick,
+                                onRetry = { viewModel.refresh() },
+                                modifier = Modifier.align(Alignment.Center)
+                            )
                         }
                     }
                 }
@@ -374,6 +381,7 @@ fun DynamicScreen(
                         Box {
                              DynamicList(
                                  state = state,
+                                 hasMore = currentHasMore,
                                  filteredItems = filteredItems,
                                  listState = listState,
                                  statusBarHeight = statusBarHeight,
@@ -438,7 +446,13 @@ fun DynamicScreen(
                              }
                         }
                         
-                        ErrorOverlay(state, onLoginClick, { viewModel.refresh() }, Modifier.align(Alignment.Center))
+                        ErrorOverlay(
+                            error = state.error,
+                            activeItemsCount = filteredItems.size,
+                            onLoginClick = onLoginClick,
+                            onRetry = { viewModel.refresh() },
+                            modifier = Modifier.align(Alignment.Center)
+                        )
                     }
                 }
             }
@@ -489,6 +503,7 @@ fun DynamicScreen(
 @Composable
 private fun DynamicList(
     state: DynamicUiState,
+    hasMore: Boolean,
     filteredItems: List<com.android.purebilibili.data.model.response.DynamicItem>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     statusBarHeight: androidx.compose.ui.unit.Dp,
@@ -549,7 +564,7 @@ private fun DynamicList(
         }
         
         // 加载中
-        if (state.isLoading && state.items.isNotEmpty()) {
+        if (shouldShowDynamicLoadingFooter(isLoading = state.isLoading, activeItemsCount = filteredItems.size)) {
             item {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -561,7 +576,7 @@ private fun DynamicList(
         }
         
         // 没有更多
-        if (!state.hasMore && filteredItems.isNotEmpty()) {
+        if (shouldShowDynamicNoMoreFooter(hasMore = hasMore, activeItemsCount = filteredItems.size)) {
             item {
                 Text(
                     "没有更多了",
@@ -760,19 +775,20 @@ private fun HorizontalUserList(
  */
 @Composable
 private fun ErrorOverlay(
-    state: DynamicUiState,
+    error: String?,
+    activeItemsCount: Int,
     onLoginClick: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (state.error != null && state.items.isEmpty()) {
+    if (shouldShowDynamicErrorOverlay(error = error, activeItemsCount = activeItemsCount)) {
         Column(
             modifier = modifier,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(state.error ?: "", color = MaterialTheme.colorScheme.error)
+            Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
             Spacer(modifier = Modifier.height(16.dp))
-            if (state.error?.contains("未登录") == true) {
+            if (error?.contains("未登录") == true) {
                 BiliGradientButton(text = "去登录", onClick = onLoginClick)
             } else {
                 BiliGradientButton(text = "重试", onClick = onRetry)

@@ -5,6 +5,7 @@ import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.DynamicFeedResponse
 import com.android.purebilibili.data.model.response.DynamicItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -14,11 +15,7 @@ import kotlinx.coroutines.withContext
  */
 object DynamicRepository {
     private val feedPagination = DynamicFeedPaginationRegistry()
-    
-    //  [新增] 用户动态的独立分页状态
-    private var userLastOffset: String = ""
-    private var userHasMore: Boolean = true
-    private var currentUserMid: Long? = null
+    private val userFeedPagination = DynamicUserPaginationRegistry()
     
     /**
      * 获取动态列表
@@ -36,24 +33,45 @@ object DynamicRepository {
             if (!feedPagination.hasMore(scope) && !refresh) {
                 return@withContext Result.success(emptyList())
             }
-            
-            val response = NetworkModule.dynamicApi.getDynamicFeed(
-                type = "all",
-                offset = feedPagination.offset(scope)
-            )
-            
-            if (response.code != 0) {
-                return@withContext Result.failure(Exception("API error: ${response.message}"))
+
+            val visibleItems = mutableListOf<DynamicItem>()
+            var pagesFetched = 0
+            while (true) {
+                val previousOffset = feedPagination.offset(scope)
+                val response = fetchDynamicFeedPageWithRetry {
+                    NetworkModule.dynamicApi.getDynamicFeed(
+                        type = "all",
+                        offset = previousOffset
+                    )
+                }.getOrElse { error ->
+                    return@withContext Result.failure(error)
+                }
+
+                val data = response.data
+                if (data == null) {
+                    feedPagination.update(scope = scope, offset = previousOffset, hasMore = false)
+                    break
+                }
+
+                // 更新分页状态
+                feedPagination.update(scope = scope, offset = data.offset, hasMore = data.has_more)
+
+                // 过滤不可见的动态
+                visibleItems += data.items.filter { it.visible }
+                pagesFetched += 1
+
+                if (!shouldContinueDynamicFetchAfterFilter(
+                        accumulatedVisibleCount = visibleItems.size,
+                        hasMore = data.has_more,
+                        previousOffset = previousOffset,
+                        nextOffset = data.offset,
+                        pagesFetched = pagesFetched
+                    )
+                ) {
+                    break
+                }
             }
-            
-            val data = response.data ?: return@withContext Result.success(emptyList())
-            
-            // 更新分页状态
-            feedPagination.update(scope = scope, offset = data.offset, hasMore = data.has_more)
-            
-            // 过滤不可见的动态
-            val visibleItems = data.items.filter { it.visible }
-            
+
             Result.success(visibleItems)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -68,35 +86,60 @@ object DynamicRepository {
      */
     suspend fun getUserDynamicFeed(hostMid: Long, refresh: Boolean = false): Result<List<DynamicItem>> = withContext(Dispatchers.IO) {
         try {
-            // 如果切换了用户或刷新，重置分页
-            if (refresh || currentUserMid != hostMid) {
-                userLastOffset = ""
-                userHasMore = true
-                currentUserMid = hostMid
+            if (refresh) {
+                userFeedPagination.reset(hostMid)
             }
             
-            if (!userHasMore && !refresh) {
+            if (!userFeedPagination.hasMore(hostMid) && !refresh) {
                 return@withContext Result.success(emptyList())
             }
-            
-            val response = NetworkModule.dynamicApi.getUserDynamicFeed(
-                hostMid = hostMid,
-                offset = userLastOffset
-            )
-            
-            if (response.code != 0) {
-                return@withContext Result.failure(Exception("API error: ${response.message}"))
+
+            val visibleItems = mutableListOf<DynamicItem>()
+            var pagesFetched = 0
+            while (true) {
+                val previousOffset = userFeedPagination.offset(hostMid)
+                val response = fetchDynamicFeedPageWithRetry {
+                    NetworkModule.dynamicApi.getUserDynamicFeed(
+                        hostMid = hostMid,
+                        offset = previousOffset
+                    )
+                }.getOrElse { error ->
+                    return@withContext Result.failure(error)
+                }
+
+                val data = response.data
+                if (data == null) {
+                    userFeedPagination.update(
+                        hostMid = hostMid,
+                        offset = previousOffset,
+                        hasMore = false
+                    )
+                    break
+                }
+
+                // 更新分页状态
+                userFeedPagination.update(
+                    hostMid = hostMid,
+                    offset = data.offset,
+                    hasMore = data.has_more
+                )
+
+                // 过滤不可见的动态
+                visibleItems += data.items.filter { it.visible }
+                pagesFetched += 1
+
+                if (!shouldContinueDynamicFetchAfterFilter(
+                        accumulatedVisibleCount = visibleItems.size,
+                        hasMore = data.has_more,
+                        previousOffset = previousOffset,
+                        nextOffset = data.offset,
+                        pagesFetched = pagesFetched
+                    )
+                ) {
+                    break
+                }
             }
-            
-            val data = response.data ?: return@withContext Result.success(emptyList())
-            
-            // 更新分页状态
-            userLastOffset = data.offset
-            userHasMore = data.has_more
-            
-            // 过滤不可见的动态
-            val visibleItems = data.items.filter { it.visible }
-            
+
             Result.success(visibleItems)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -163,7 +206,10 @@ object DynamicRepository {
     /**
      *  [新增] 用户动态是否还有更多
      */
-    fun userHasMoreData(): Boolean = userHasMore
+    fun userHasMoreData(hostMid: Long?): Boolean {
+        if (hostMid == null || hostMid <= 0L) return true
+        return userFeedPagination.hasMore(hostMid)
+    }
     
     /**
      * 重置分页状态
@@ -175,10 +221,46 @@ object DynamicRepository {
     /**
      *  [新增] 重置用户动态分页状态
      */
-    fun resetUserPagination() {
-        userLastOffset = ""
-        userHasMore = true
-        currentUserMid = null
+    fun resetUserPagination(hostMid: Long? = null) {
+        if (hostMid == null || hostMid <= 0L) {
+            userFeedPagination.resetAll()
+        } else {
+            userFeedPagination.reset(hostMid)
+        }
+    }
+
+    private suspend fun fetchDynamicFeedPageWithRetry(
+        request: suspend () -> DynamicFeedResponse
+    ): Result<DynamicFeedResponse> {
+        var lastError: Throwable? = null
+        for (attempt in 1..DYNAMIC_FETCH_MAX_ATTEMPTS) {
+            try {
+                val response = request()
+                if (response.code == 0) {
+                    return Result.success(response)
+                }
+                val shouldRetry = attempt < DYNAMIC_FETCH_MAX_ATTEMPTS &&
+                    isRetryableDynamicApiError(response.code, response.message)
+                if (shouldRetry) {
+                    delay(resolveDynamicRetryDelayMs(attempt))
+                    continue
+                }
+                val message = resolveDynamicFriendlyErrorMessage(response.code, response.message)
+                return Result.failure(Exception(message))
+            } catch (error: Exception) {
+                lastError = error
+                val shouldRetry = attempt < DYNAMIC_FETCH_MAX_ATTEMPTS &&
+                    isRetryableDynamicException(error)
+                if (shouldRetry) {
+                    delay(resolveDynamicRetryDelayMs(attempt))
+                    continue
+                }
+                val message = resolveDynamicFriendlyErrorMessage(code = -1, message = error.message.orEmpty())
+                return Result.failure(Exception(message, error))
+            }
+        }
+        val message = resolveDynamicFriendlyErrorMessage(code = -1, message = lastError?.message.orEmpty())
+        return Result.failure(Exception(message, lastError))
     }
 }
 
@@ -209,5 +291,29 @@ internal class DynamicFeedPaginationRegistry {
 
     fun hasMore(scope: DynamicFeedScope): Boolean {
         return stateByScope[scope]?.hasMore ?: true
+    }
+}
+
+internal class DynamicUserPaginationRegistry {
+    private val stateByUser = mutableMapOf<Long, DynamicPaginationState>()
+
+    fun reset(hostMid: Long) {
+        stateByUser[hostMid] = DynamicPaginationState()
+    }
+
+    fun resetAll() {
+        stateByUser.clear()
+    }
+
+    fun update(hostMid: Long, offset: String, hasMore: Boolean) {
+        stateByUser[hostMid] = DynamicPaginationState(offset = offset, hasMore = hasMore)
+    }
+
+    fun offset(hostMid: Long): String {
+        return stateByUser[hostMid]?.offset.orEmpty()
+    }
+
+    fun hasMore(hostMid: Long): Boolean {
+        return stateByUser[hostMid]?.hasMore ?: true
     }
 }

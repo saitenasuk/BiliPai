@@ -1,6 +1,9 @@
 package com.android.purebilibili.core.util
 
 import android.os.SystemClock
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 
@@ -39,14 +42,14 @@ object CardPositionManager {
      *  是否正在从视频详情页返回
      * 用于跳过首页卡片的入场动画
      */
-    var isReturningFromDetail: Boolean = false
+    var isReturningFromDetail: Boolean by mutableStateOf(false)
         private set
 
     /**
      * 是否命中“极快返回”场景（点击进入后快速返回）。
      * 用于在返回时降级非封面共享元素，优先保证封面连续可见和帧率。
      */
-    var isQuickReturnFromDetail: Boolean = false
+    var isQuickReturnFromDetail: Boolean by mutableStateOf(false)
         private set
 
     private var lastDetailEnterUptimeMs: Long = 0L

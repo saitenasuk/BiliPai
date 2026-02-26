@@ -396,7 +396,11 @@ private fun VideoIntroTab(
                 val options = activity?.let {
                     android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle()
                 }
-                onRelatedVideoClick(video.bvid, options)
+                val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
+                if (video.cid > 0L) {
+                    navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, video.cid)
+                }
+                onRelatedVideoClick(video.bvid, navOptions)
             }
 
             Box(

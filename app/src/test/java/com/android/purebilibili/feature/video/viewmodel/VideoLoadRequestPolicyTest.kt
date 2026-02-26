@@ -1,0 +1,361 @@
+package com.android.purebilibili.feature.video.viewmodel
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class VideoLoadRequestPolicyTest {
+
+    @Test
+    fun `accepts result when request token and bvid both match current`() {
+        assertTrue(
+            shouldApplyVideoLoadResult(
+                activeRequestToken = 5L,
+                resultRequestToken = 5L,
+                expectedBvid = "BV1abc",
+                currentBvid = "BV1abc"
+            )
+        )
+    }
+
+    @Test
+    fun `rejects stale result when token mismatches`() {
+        assertFalse(
+            shouldApplyVideoLoadResult(
+                activeRequestToken = 6L,
+                resultRequestToken = 5L,
+                expectedBvid = "BV1abc",
+                currentBvid = "BV1abc"
+            )
+        )
+    }
+
+    @Test
+    fun `rejects stale result when current bvid already switched`() {
+        assertFalse(
+            shouldApplyVideoLoadResult(
+                activeRequestToken = 7L,
+                resultRequestToken = 7L,
+                expectedBvid = "BV1old",
+                currentBvid = "BV1new"
+            )
+        )
+    }
+
+    @Test
+    fun `player info result requires token and exact video context`() {
+        assertTrue(
+            shouldApplyPlayerInfoResult(
+                activeRequestToken = 11L,
+                resultRequestToken = 11L,
+                expectedBvid = "BV1ok",
+                expectedCid = 2233L,
+                currentBvid = "BV1ok",
+                currentCid = 2233L
+            )
+        )
+
+        assertFalse(
+            shouldApplyPlayerInfoResult(
+                activeRequestToken = 12L,
+                resultRequestToken = 11L,
+                expectedBvid = "BV1ok",
+                expectedCid = 2233L,
+                currentBvid = "BV1ok",
+                currentCid = 2233L
+            )
+        )
+
+        assertFalse(
+            shouldApplyPlayerInfoResult(
+                activeRequestToken = 11L,
+                resultRequestToken = 11L,
+                expectedBvid = "BV1old",
+                expectedCid = 2233L,
+                currentBvid = "BV1new",
+                currentCid = 2233L
+            )
+        )
+
+        assertFalse(
+            shouldApplyPlayerInfoResult(
+                activeRequestToken = 11L,
+                resultRequestToken = 11L,
+                expectedBvid = "BV1ok",
+                expectedCid = 2233L,
+                currentBvid = "BV1ok",
+                currentCid = 3344L
+            )
+        )
+    }
+
+    @Test
+    fun `subtitle load result requires subtitle token and exact bvid cid`() {
+        assertTrue(
+            shouldApplySubtitleLoadResult(
+                activeSubtitleToken = 5L,
+                resultSubtitleToken = 5L,
+                expectedBvid = "BV1sub",
+                expectedCid = 100L,
+                currentBvid = "BV1sub",
+                currentCid = 100L
+            )
+        )
+
+        assertFalse(
+            shouldApplySubtitleLoadResult(
+                activeSubtitleToken = 6L,
+                resultSubtitleToken = 5L,
+                expectedBvid = "BV1sub",
+                expectedCid = 100L,
+                currentBvid = "BV1sub",
+                currentCid = 100L
+            )
+        )
+
+        assertFalse(
+            shouldApplySubtitleLoadResult(
+                activeSubtitleToken = 5L,
+                resultSubtitleToken = 5L,
+                expectedBvid = "BV1sub",
+                expectedCid = 100L,
+                currentBvid = "BV1other",
+                currentCid = 100L
+            )
+        )
+
+        assertFalse(
+            shouldApplySubtitleLoadResult(
+                activeSubtitleToken = 5L,
+                resultSubtitleToken = 5L,
+                expectedBvid = "BV1sub",
+                expectedCid = 100L,
+                currentBvid = "BV1sub",
+                currentCid = 101L
+            )
+        )
+    }
+
+    @Test
+    fun `treats request as same playback only when bvid and cid both match`() {
+        assertTrue(
+            shouldTreatAsSamePlaybackRequest(
+                requestBvid = "BV1abc",
+                requestCid = 1001L,
+                currentBvid = "BV1abc",
+                currentCid = 1001L,
+                uiBvid = null,
+                uiCid = 0L,
+                miniPlayerBvid = null,
+                miniPlayerCid = 0L,
+                miniPlayerActive = false
+            )
+        )
+
+        assertFalse(
+            shouldTreatAsSamePlaybackRequest(
+                requestBvid = "BV1abc",
+                requestCid = 1002L,
+                currentBvid = "BV1abc",
+                currentCid = 1001L,
+                uiBvid = null,
+                uiCid = 0L,
+                miniPlayerBvid = null,
+                miniPlayerCid = 0L,
+                miniPlayerActive = false
+            )
+        )
+    }
+
+    @Test
+    fun `does not treat unknown currently playing bvid as same request`() {
+        assertFalse(
+            shouldTreatAsSamePlaybackRequest(
+                requestBvid = "BV1abc",
+                requestCid = 0L,
+                currentBvid = "",
+                currentCid = 0L,
+                uiBvid = null,
+                uiCid = 0L,
+                miniPlayerBvid = null,
+                miniPlayerCid = 0L,
+                miniPlayerActive = false
+            )
+        )
+    }
+
+    @Test
+    fun `does not treat unknown request cid as same playback even when bvid matches`() {
+        assertFalse(
+            shouldTreatAsSamePlaybackRequest(
+                requestBvid = "BV1same",
+                requestCid = 0L,
+                currentBvid = "BV1same",
+                currentCid = 445566L,
+                uiBvid = null,
+                uiCid = 0L,
+                miniPlayerBvid = null,
+                miniPlayerCid = 0L,
+                miniPlayerActive = false
+            )
+        )
+    }
+
+    @Test
+    fun `can recover same playback detection from active mini player metadata`() {
+        assertTrue(
+            shouldTreatAsSamePlaybackRequest(
+                requestBvid = "BV1mini",
+                requestCid = 3344L,
+                currentBvid = "",
+                currentCid = 0L,
+                uiBvid = null,
+                uiCid = 0L,
+                miniPlayerBvid = "BV1mini",
+                miniPlayerCid = 3344L,
+                miniPlayerActive = true
+            )
+        )
+
+        assertFalse(
+            shouldTreatAsSamePlaybackRequest(
+                requestBvid = "BV1mini",
+                requestCid = 4455L,
+                currentBvid = "",
+                currentCid = 0L,
+                uiBvid = null,
+                uiCid = 0L,
+                miniPlayerBvid = "BV1mini",
+                miniPlayerCid = 3344L,
+                miniPlayerActive = true
+            )
+        )
+    }
+
+    @Test
+    fun `clearSubtitleFields removes all subtitle data from success state`() {
+        val state = PlayerUiState.Success(
+            info = com.android.purebilibili.data.model.response.ViewInfo(
+                bvid = "BV1test",
+                cid = 2233L
+            ),
+            playUrl = "https://example.com/video.mp4",
+            subtitleEnabled = true,
+            subtitlePrimaryLanguage = "zh-CN",
+            subtitleSecondaryLanguage = "en-US",
+            subtitlePrimaryCues = listOf(
+                com.android.purebilibili.feature.video.subtitle.SubtitleCue(
+                    startMs = 0L,
+                    endMs = 1000L,
+                    content = "你好"
+                )
+            ),
+            subtitleSecondaryCues = listOf(
+                com.android.purebilibili.feature.video.subtitle.SubtitleCue(
+                    startMs = 0L,
+                    endMs = 1000L,
+                    content = "hello"
+                )
+            )
+        )
+
+        val cleared = clearSubtitleFields(state)
+        assertFalse(cleared.subtitleEnabled)
+        assertNull(cleared.subtitlePrimaryLanguage)
+        assertNull(cleared.subtitleSecondaryLanguage)
+        assertTrue(cleared.subtitlePrimaryCues.isEmpty())
+        assertTrue(cleared.subtitleSecondaryCues.isEmpty())
+    }
+
+    @Test
+    fun `subtitle decision promotes secondary when primary is low quality sparse track`() {
+        val primary = listOf(
+            com.android.purebilibili.feature.video.subtitle.SubtitleCue(
+                startMs = 0L,
+                endMs = 27_000L,
+                content = "敲重点 ↓↓↓敲重点 投降 包村 拥 威信 扫"
+            )
+        )
+        val secondary = (1..20).map { i ->
+            com.android.purebilibili.feature.video.subtitle.SubtitleCue(
+                startMs = i * 1000L,
+                endMs = i * 1000L + 800L,
+                content = "line-$i"
+            )
+        }
+
+        val decision = resolveSubtitleTrackLoadDecision(
+            primaryLanguage = "zh-Hans",
+            primaryCues = primary,
+            secondaryLanguage = "ai-zh",
+            secondaryCues = secondary
+        )
+
+        assertEquals("ai-zh", decision.primaryLanguage)
+        assertNull(decision.secondaryLanguage)
+        assertEquals(secondary.size, decision.primaryCues.size)
+        assertTrue(decision.secondaryCues.isEmpty())
+    }
+
+    @Test
+    fun `subtitle decision keeps bilingual when both tracks look healthy`() {
+        val primary = (1..12).map { i ->
+            com.android.purebilibili.feature.video.subtitle.SubtitleCue(
+                startMs = i * 1200L,
+                endMs = i * 1200L + 900L,
+                content = "zh-$i"
+            )
+        }
+        val secondary = (1..12).map { i ->
+            com.android.purebilibili.feature.video.subtitle.SubtitleCue(
+                startMs = i * 1200L,
+                endMs = i * 1200L + 900L,
+                content = "en-$i"
+            )
+        }
+
+        val decision = resolveSubtitleTrackLoadDecision(
+            primaryLanguage = "zh-Hans",
+            primaryCues = primary,
+            secondaryLanguage = "en-US",
+            secondaryCues = secondary
+        )
+
+        assertEquals("zh-Hans", decision.primaryLanguage)
+        assertEquals("en-US", decision.secondaryLanguage)
+        assertEquals(primary.size, decision.primaryCues.size)
+        assertEquals(secondary.size, decision.secondaryCues.size)
+    }
+
+    @Test
+    fun `subtitle decision removes low quality secondary track`() {
+        val primary = (1..14).map { i ->
+            com.android.purebilibili.feature.video.subtitle.SubtitleCue(
+                startMs = i * 1000L,
+                endMs = i * 1000L + 700L,
+                content = "zh-$i"
+            )
+        }
+        val secondary = listOf(
+            com.android.purebilibili.feature.video.subtitle.SubtitleCue(
+                startMs = 0L,
+                endMs = 30_000L,
+                content = "广告联系方式"
+            )
+        )
+
+        val decision = resolveSubtitleTrackLoadDecision(
+            primaryLanguage = "zh-Hans",
+            primaryCues = primary,
+            secondaryLanguage = "ai-zh",
+            secondaryCues = secondary
+        )
+
+        assertEquals("zh-Hans", decision.primaryLanguage)
+        assertNull(decision.secondaryLanguage)
+        assertEquals(primary.size, decision.primaryCues.size)
+        assertTrue(decision.secondaryCues.isEmpty())
+    }
+}

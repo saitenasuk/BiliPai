@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +51,9 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import kotlinx.coroutines.delay
+
+private const val COMMENT_INPUT_FOCUS_RETRY_COUNT = 3
+private const val COMMENT_INPUT_FOCUS_RETRY_DELAY_MS = 80L
 
 internal data class CommentInputDialogLayoutPolicy(
     val inputBoxMinHeightDp: Int,
@@ -73,6 +77,14 @@ internal fun resolveCommentInputDialogLayoutPolicy(
             emojiPanelHeightDp = 280
         )
     }
+}
+
+internal fun shouldAutoShowCommentKeyboard(
+    visible: Boolean,
+    canInputComment: Boolean,
+    showEmojiPanel: Boolean
+): Boolean {
+    return visible && canInputComment && !showEmojiPanel
 }
 
 /**
@@ -108,7 +120,15 @@ fun CommentInputDialog(
     var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     
     val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissDialog = remember(onDismiss, keyboardController, focusManager) {
+        {
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+            onDismiss()
+        }
+    }
     val imagePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(maxItems = 9)
     ) { uris ->
@@ -118,31 +138,41 @@ fun CommentInputDialog(
                 .take(9)
         }
     }
+
+    suspend fun requestInputFocusWithRetry() {
+        repeat(COMMENT_INPUT_FOCUS_RETRY_COUNT) { index ->
+            delay(COMMENT_INPUT_FOCUS_RETRY_DELAY_MS + index * 40L)
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
     
     // 重置状态
-    LaunchedEffect(visible) {
+    LaunchedEffect(visible, canInputComment) {
         if (visible) {
             text = ""
             isForwardToDynamic = false
             showEmojiPanel = false
             selectedImageUris = emptyList()
-            delay(100)
-            if (canInputComment) {
-                focusRequester.requestFocus()
-                keyboardController?.show()
-            }
         }
     }
     
     // 监听 emoji 面板开关，控制键盘
-    LaunchedEffect(showEmojiPanel, canInputComment) {
+    LaunchedEffect(showEmojiPanel, visible, canInputComment) {
         if (!canInputComment) return@LaunchedEffect
         if (showEmojiPanel) {
             keyboardController?.hide()
-        } else if (visible) {
-            // 切回键盘
-            focusRequester.requestFocus()
-            keyboardController?.show()
+        } else if (shouldAutoShowCommentKeyboard(visible, canInputComment, showEmojiPanel)) {
+            requestInputFocusWithRetry()
+        }
+    }
+
+    DisposableEffect(visible) {
+        onDispose {
+            if (visible) {
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+            }
         }
     }
     
@@ -152,7 +182,7 @@ fun CommentInputDialog(
         exit = fadeOut() + slideOutVertically { it }
     ) {
         Dialog(
-            onDismissRequest = onDismiss,
+            onDismissRequest = dismissDialog,
             properties = DialogProperties(
                 dismissOnBackPress = true,
                 dismissOnClickOutside = true,
@@ -174,7 +204,7 @@ fun CommentInputDialog(
                         .clickable(
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() },
-                            onClick = { onDismiss() }
+                            onClick = dismissDialog
                         )
                 )
                 
@@ -393,6 +423,8 @@ fun CommentInputDialog(
                             Button(
                                 onClick = {
                                     if (text.isNotBlank() && !isSending && canInputComment) {
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus(force = true)
                                         android.util.Log.d("CommentInputDialog", "📤 Sending comment: $text")
                                         onSend(text.trim(), selectedImageUris)
                                     }

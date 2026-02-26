@@ -735,15 +735,31 @@ object SettingsManager {
             }
         }
 
+    private fun normalizeBottomBarColorItemId(rawId: String): String {
+        val id = rawId.trim()
+        if (id.isBlank()) return ""
+        return when (id.lowercase()) {
+            "home" -> "HOME"
+            "dynamic" -> "DYNAMIC"
+            "story", "shortvideo", "short_video" -> "STORY"
+            "history" -> "HISTORY"
+            "profile", "mine", "my" -> "PROFILE"
+            "favorite", "favourite" -> "FAVORITE"
+            "live" -> "LIVE"
+            "watchlater", "watch_later" -> "WATCHLATER"
+            "settings" -> "SETTINGS"
+            else -> id.uppercase()
+        }
+    }
+
     private fun parseBottomBarItemColors(colorString: String): Map<String, Int> {
         if (colorString.isBlank()) return emptyMap()
         return colorString.split(",").mapNotNull { entry ->
             val parts = entry.split(":")
-            if (parts.size == 2) {
-                parts[0] to (parts[1].toIntOrNull() ?: 0)
-            } else {
-                null
-            }
+            if (parts.size != 2) return@mapNotNull null
+            val itemId = normalizeBottomBarColorItemId(parts[0])
+            if (itemId.isBlank()) return@mapNotNull null
+            itemId to (parts[1].trim().toIntOrNull() ?: 0)
         }.toMap()
     }
 
@@ -1659,7 +1675,9 @@ object SettingsManager {
                         id to (index.toIntOrNull() ?: 0)
                     }.toMutableMap()
             }
-            colorMap[itemId] = colorIndex
+            val normalizedItemId = normalizeBottomBarColorItemId(itemId)
+            if (normalizedItemId.isBlank()) return@edit
+            colorMap[normalizedItemId] = colorIndex
             prefs[KEY_BOTTOM_BAR_ITEM_COLORS] = colorMap.entries.joinToString(",") { "${it.key}:${it.value}" }
         }
     }

@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.key
@@ -43,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
@@ -109,8 +111,8 @@ fun PortraitVideoPager(
     commentViewModel: VideoCommentViewModel,
     sharedPlayer: ExoPlayer? = null,
     initialStartPositionMs: Long = 0L,
-    onProgressUpdate: (String, Long) -> Unit = { _, _ -> },
-    onExitSnapshot: (String, Long) -> Unit = { _, _ -> },
+    onProgressUpdate: (String, Long, Long) -> Unit = { _, _, _ -> },
+    onExitSnapshot: (String, Long, Long) -> Unit = { _, _, _ -> },
     onSearchClick: () -> Unit = {},
     onUserClick: (Long) -> Unit,
     onRotateToLandscape: () -> Unit
@@ -298,6 +300,8 @@ fun PortraitVideoPager(
         mutableIntStateOf(if (sharedPlayerHasFrameAtEntry) 0 else -1)
     }
     var lastAutoAdvancedBvid by remember { mutableStateOf<String?>(null) }
+    var pendingUserSpaceNavigation by rememberSaveable { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(exoPlayer) {
         danmakuManager.attachPlayer(exoPlayer)
@@ -339,6 +343,61 @@ fun PortraitVideoPager(
             if (!exoPlayer.isPlaying) {
                 exoPlayer.play()
             }
+        }
+    }
+
+    LaunchedEffect(pendingUserSpaceNavigation, pagerState.currentPage, pageItems.size) {
+        if (!pendingUserSpaceNavigation) return@LaunchedEffect
+        val item = pageItems.getOrNull(pagerState.currentPage)
+        val expectedBvid = when (item) {
+            is ViewInfo -> item.bvid
+            is RelatedVideo -> item.bvid
+            else -> ""
+        }
+        val shouldResync = shouldResyncPortraitPagerOnUserSpaceReturn(
+            pendingUserSpaceNavigation = pendingUserSpaceNavigation,
+            expectedBvid = expectedBvid,
+            currentPlayingBvid = currentPlayingBvid,
+            currentPlayerMediaId = exoPlayer.currentMediaItem?.mediaId
+        )
+        pendingUserSpaceNavigation = false
+        if (!shouldResync) return@LaunchedEffect
+
+        currentPlayingBvid = null
+        currentPlayingCid = 0L
+        currentPlayingAid = 0L
+        lastCommittedPage = -1
+        isLoading = true
+    }
+
+    DisposableEffect(lifecycleOwner, pagerState, pageItems, exoPlayer) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event != androidx.lifecycle.Lifecycle.Event.ON_RESUME) return@LifecycleEventObserver
+
+            val item = pageItems.getOrNull(pagerState.currentPage)
+            val expectedBvid = when (item) {
+                is ViewInfo -> item.bvid
+                is RelatedVideo -> item.bvid
+                else -> ""
+            }
+            val shouldResync = shouldResyncPortraitPagerOnUserSpaceReturn(
+                pendingUserSpaceNavigation = pendingUserSpaceNavigation,
+                expectedBvid = expectedBvid,
+                currentPlayingBvid = currentPlayingBvid,
+                currentPlayerMediaId = exoPlayer.currentMediaItem?.mediaId
+            )
+            pendingUserSpaceNavigation = false
+            if (!shouldResync) return@LifecycleEventObserver
+
+            currentPlayingBvid = null
+            currentPlayingCid = 0L
+            currentPlayingAid = 0L
+            lastCommittedPage = -1
+            isLoading = true
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -425,7 +484,8 @@ fun PortraitVideoPager(
 
                 onVideoChange(bvid)
 
-                if (currentPlayingBvid == bvid) {
+                val currentMediaId = exoPlayer.currentMediaItem?.mediaId?.trim().orEmpty()
+                if (currentPlayingBvid == bvid && currentMediaId == bvid) {
                     isLoading = false
                     return@collect
                 }
@@ -481,9 +541,17 @@ fun PortraitVideoPager(
                                 val mediaSourceFactory = DefaultMediaSourceFactory(context)
                                     .setDataSourceFactory(dataSourceFactory)
 
-                                val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(videoUrl))
+                                val videoItem = MediaItem.Builder()
+                                    .setUri(videoUrl)
+                                    .setMediaId(bvid)
+                                    .build()
+                                val videoSource = mediaSourceFactory.createMediaSource(videoItem)
                                 val finalSource = if (!audioUrl.isNullOrEmpty()) {
-                                    val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(audioUrl))
+                                    val audioItem = MediaItem.Builder()
+                                        .setUri(audioUrl)
+                                        .setMediaId("audio_$bvid")
+                                        .build()
+                                    val audioSource = mediaSourceFactory.createMediaSource(audioItem)
                                     MergingMediaSource(videoSource, audioSource)
                                 } else {
                                     videoSource
@@ -600,6 +668,10 @@ fun PortraitVideoPager(
             .background(Color.Black)
     ) { page ->
         val item = pageItems.getOrNull(page)
+        val handleUserClick: (Long) -> Unit = { mid ->
+            pendingUserSpaceNavigation = true
+            onUserClick(mid)
+        }
         
         if (item != null) {
             VideoPageItem(
@@ -611,6 +683,7 @@ fun PortraitVideoPager(
                 commentViewModel = commentViewModel,
                 exoPlayer = exoPlayer, // [核心] 传递共享播放器
                 currentPlayingBvid = currentPlayingBvid, // [修复] 传递当前播放的 BVID 用于校验
+                currentPlayingCid = currentPlayingCid,
                 isLoading = if (page == pagerState.currentPage) isLoading else false, // 只有当前页显示 Loading
                 danmakuManager = danmakuManager,
                 danmakuEnabled = danmakuEnabled,
@@ -619,7 +692,7 @@ fun PortraitVideoPager(
                 smartOcclusionModuleState = smartOcclusionModuleState,
                 onExitSnapshot = onExitSnapshot,
                 onSearchClick = onSearchClick,
-                onUserClick = onUserClick,
+                onUserClick = handleUserClick,
                 onRotateToLandscape = onRotateToLandscape,
                 onProgressUpdate = onProgressUpdate,
                 watchLaterVideos = watchLaterVideos,
@@ -659,17 +732,18 @@ private fun VideoPageItem(
     commentViewModel: VideoCommentViewModel,
     exoPlayer: ExoPlayer,
     currentPlayingBvid: String?, // [新增]
+    currentPlayingCid: Long,
     isLoading: Boolean,
     danmakuManager: DanmakuManager,
     danmakuEnabled: Boolean,
     danmakuSmartOcclusion: Boolean,
     faceDetector: com.google.mlkit.vision.face.FaceDetector,
     smartOcclusionModuleState: FaceOcclusionModuleState,
-    onExitSnapshot: (String, Long) -> Unit,
+    onExitSnapshot: (String, Long, Long) -> Unit,
     onSearchClick: () -> Unit,
     onUserClick: (Long) -> Unit,
     onRotateToLandscape: () -> Unit,
-    onProgressUpdate: (String, Long) -> Unit,
+    onProgressUpdate: (String, Long, Long) -> Unit,
     watchLaterVideos: List<RelatedVideo>,
     recommendationVideos: List<RelatedVideo>,
     hasRenderedFirstFrame: Boolean,
@@ -719,6 +793,11 @@ private fun VideoPageItem(
     val aid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid.toLong()
     // [逻辑] 只有当播放器正在播放当前视频时，才显示 PlayerView
     val isPlayerReadyForThisVideo = bvid == currentPlayingBvid
+    val snapshotCid = if (isPlayerReadyForThisVideo && currentPlayingCid > 0L) {
+        currentPlayingCid
+    } else {
+        0L
+    }
     val title = if (item is ViewInfo) item.title else (item as RelatedVideo).title
     val cover = if (item is ViewInfo) item.pic else (item as RelatedVideo).pic
     val authorName = if (item is ViewInfo) item.owner.name else (item as RelatedVideo).owner.name
@@ -773,7 +852,7 @@ private fun VideoPageItem(
                         buffered = exoPlayer.bufferedPosition
                     )
                     if (exoPlayer.isPlaying || effectivePosition > 0L) {
-                        onProgressUpdate(bvid, effectivePosition)
+                        onProgressUpdate(bvid, effectivePosition, snapshotCid)
                     }
                 }
                 delay(200)
@@ -1195,11 +1274,11 @@ private fun VideoPageItem(
             isStatusBarHidden = true,
             
             onBack = {
-                onExitSnapshot(bvid, exoPlayer.currentPosition)
+                onExitSnapshot(bvid, exoPlayer.currentPosition, snapshotCid)
                 onBack()
             },
             onHomeClick = {
-                onExitSnapshot(bvid, exoPlayer.currentPosition)
+                onExitSnapshot(bvid, exoPlayer.currentPosition, snapshotCid)
                 onHomeClick()
             },
             onPlayPause = {
@@ -1225,14 +1304,14 @@ private fun VideoPageItem(
             },
             onToggleStatusBar = { },
             onSearchClick = {
-                onExitSnapshot(bvid, exoPlayer.currentPosition)
+                onExitSnapshot(bvid, exoPlayer.currentPosition, snapshotCid)
                 onSearchClick()
             },
             onMoreClick = {
                 showDetailSheet = true
             },
             onRotateToLandscape = {
-                onExitSnapshot(bvid, exoPlayer.currentPosition)
+                onExitSnapshot(bvid, exoPlayer.currentPosition, snapshotCid)
                 onRotateToLandscape()
             },
             
@@ -1265,7 +1344,7 @@ private fun VideoPageItem(
             onAuthorClick = { mid ->
                 showDetailSheet = false
                 detailSheetUpOnlyMode = false
-                onExitSnapshot(bvid, exoPlayer.currentPosition)
+                onExitSnapshot(bvid, exoPlayer.currentPosition, snapshotCid)
                 onUserClick(mid)
             },
             danmakuEnabled = danmakuEnabled,

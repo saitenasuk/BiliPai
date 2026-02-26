@@ -21,24 +21,35 @@ class StartupSplashPolicyTest {
     fun enablesSplashFlyoutOnlyAfterStartupPrivacyFlowCompleted() {
         assertFalse(
             shouldEnableSplashFlyoutAnimation(
+                sdkInt = 30,
                 hasCompletedOnboarding = false,
                 hasAcceptedReleaseDisclaimer = false
             )
         )
         assertFalse(
             shouldEnableSplashFlyoutAnimation(
+                sdkInt = 30,
                 hasCompletedOnboarding = false,
                 hasAcceptedReleaseDisclaimer = true
             )
         )
         assertFalse(
             shouldEnableSplashFlyoutAnimation(
+                sdkInt = 30,
                 hasCompletedOnboarding = true,
                 hasAcceptedReleaseDisclaimer = false
             )
         )
+        assertFalse(
+            shouldEnableSplashFlyoutAnimation(
+                sdkInt = 30,
+                hasCompletedOnboarding = true,
+                hasAcceptedReleaseDisclaimer = true
+            )
+        )
         assertTrue(
             shouldEnableSplashFlyoutAnimation(
+                sdkInt = 31,
                 hasCompletedOnboarding = true,
                 hasAcceptedReleaseDisclaimer = true
             )

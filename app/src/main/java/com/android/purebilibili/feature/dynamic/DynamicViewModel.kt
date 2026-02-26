@@ -21,6 +21,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,8 +58,11 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
     
-    //  [修复] 加载锁，防止并发加载请求
-    private var isLoadingLocked = false
+    //  [修复] 分离时间线和用户页加载锁，避免互相阻塞
+    private var isTimelineLoadingLocked = false
+    private var isUserLoadingLocked = false
+    private var userDynamicsJob: Job? = null
+    private var activeUserDynamicsRequestToken: Long = 0L
 
     //  侧边栏相关状态
     private val _followedUsers = MutableStateFlow<List<SidebarUser>>(emptyList())
@@ -345,24 +349,50 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         val previousUid = _selectedUserId.value
         _selectedUserId.value = uid
         
-        if (uid != null && uid != previousUid) {
-            // 加载该用户的动态
-            viewModelScope.launch {
-                DynamicRepository.resetUserPagination()
-                loadUserDynamics(uid, refresh = true)
+        if (uid != null) {
+            val shouldReload = uid != previousUid ||
+                _uiState.value.userItems.isEmpty() ||
+                _uiState.value.error != null
+            if (!shouldReload) return
+
+            // 切换用户时立即清空旧数据，并废弃旧请求
+            userDynamicsJob?.cancel()
+            activeUserDynamicsRequestToken += 1L
+            val requestToken = activeUserDynamicsRequestToken
+            _uiState.value = _uiState.value.copy(
+                userItems = emptyList(),
+                hasUserMore = true,
+                isLoading = true,
+                error = null
+            )
+            userDynamicsJob = viewModelScope.launch {
+                delay(USER_SELECTION_DEBOUNCE_MS)
+                DynamicRepository.resetUserPagination(uid)
+                loadUserDynamics(uid = uid, refresh = true, requestToken = requestToken)
             }
-        } else if (uid == null) {
+        } else {
             // 清空用户动态
-            _uiState.value = _uiState.value.copy(userItems = emptyList(), hasUserMore = true)
+            userDynamicsJob?.cancel()
+            activeUserDynamicsRequestToken += 1L
+            _uiState.value = _uiState.value.copy(
+                userItems = emptyList(),
+                hasUserMore = true,
+                isLoading = false,
+                error = null
+            )
         }
     }
     
     /**
      *  [新增] 加载指定用户的动态
      */
-    private suspend fun loadUserDynamics(uid: Long, refresh: Boolean = false) {
-        if (isLoadingLocked && !refresh) return
-        isLoadingLocked = true
+    private suspend fun loadUserDynamics(
+        uid: Long,
+        refresh: Boolean = false,
+        requestToken: Long = activeUserDynamicsRequestToken
+    ) {
+        if (isUserLoadingLocked && !refresh) return
+        isUserLoadingLocked = true
         
         try {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
@@ -371,6 +401,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             
             result.fold(
                 onSuccess = { items ->
+                    if (!shouldApplyUserDynamicsResult(
+                            selectedUid = _selectedUserId.value,
+                            requestUid = uid,
+                            activeRequestToken = activeUserDynamicsRequestToken,
+                            requestToken = requestToken
+                        )
+                    ) {
+                        return@fold
+                    }
                     val currentState = _uiState.value
                     val currentItems = if (refresh) emptyList() else currentState.userItems
                     val mergedItems = currentItems + items
@@ -378,10 +417,19 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         userItems = mergedItems,
                         isLoading = false,
                         error = null,
-                        hasUserMore = DynamicRepository.userHasMoreData()
+                        hasUserMore = DynamicRepository.userHasMoreData(uid)
                     )
                 },
                 onFailure = { error ->
+                    if (!shouldApplyUserDynamicsResult(
+                            selectedUid = _selectedUserId.value,
+                            requestUid = uid,
+                            activeRequestToken = activeUserDynamicsRequestToken,
+                            requestToken = requestToken
+                        )
+                    ) {
+                        return@fold
+                    }
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = error.message ?: "加载失败"
@@ -389,7 +437,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 }
             )
         } finally {
-            isLoadingLocked = false
+            isUserLoadingLocked = false
         }
     }
     
@@ -398,9 +446,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
      */
     fun loadMoreUserDynamics() {
         val uid = _selectedUserId.value ?: return
-        if (!_uiState.value.hasUserMore || _uiState.value.isLoading || isLoadingLocked) return
+        if (!_uiState.value.hasUserMore || _uiState.value.isLoading || isUserLoadingLocked) return
         viewModelScope.launch {
-            loadUserDynamics(uid, refresh = false)
+            loadUserDynamics(
+                uid = uid,
+                refresh = false,
+                requestToken = activeUserDynamicsRequestToken
+            )
         }
     }
     
@@ -471,7 +523,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
      * 加载动态列表
      */
     fun loadDynamicFeed(refresh: Boolean = false) {
-        if (!refresh && (_uiState.value.isLoading || _isRefreshing.value || isLoadingLocked)) return
+        if (!refresh && (_uiState.value.isLoading || _isRefreshing.value || isTimelineLoadingLocked)) return
         viewModelScope.launch {
             loadDynamicFeedInternal(
                 refresh = refresh,
@@ -485,8 +537,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         showLoading: Boolean = false
     ) {
         //  [修复] 使用加载锁防止并发请求
-        if (isLoadingLocked && !refresh) return
-        isLoadingLocked = true
+        if (isTimelineLoadingLocked && !refresh) return
+        isTimelineLoadingLocked = true
         
         try {
             if (refresh) {
@@ -564,17 +616,17 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 }
             )
         } finally {
-            isLoadingLocked = false
+            isTimelineLoadingLocked = false
         }
     }
     
     fun refresh() {
-        if (!shouldStartDynamicRefresh(_isRefreshing.value, isLoadingLocked)) return
+        if (!shouldStartDynamicRefresh(_isRefreshing.value, isTimelineLoadingLocked)) return
         viewModelScope.launch { refreshData(showRefreshIndicator = true) }
     }
     
     fun loadMore() {
-        if (!_uiState.value.hasMore || _uiState.value.isLoading || _isRefreshing.value || isLoadingLocked) return
+        if (!_uiState.value.hasMore || _uiState.value.isLoading || _isRefreshing.value || isTimelineLoadingLocked) return
         loadDynamicFeed(refresh = false)
     }
 
@@ -584,6 +636,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         cacheSaveJob?.cancel()
+        userDynamicsJob?.cancel()
         super.onCleared()
     }
     
@@ -831,6 +884,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
 
     companion object {
+        private const val USER_SELECTION_DEBOUNCE_MS = 120L
         private const val PREFS_DYNAMIC_CACHE = "dynamic_cache"
         private const val PREFS_DYNAMIC_USERS = "dynamic_user_prefs"
         private const val KEY_DYNAMIC_CACHE = "dynamic_items_cache"

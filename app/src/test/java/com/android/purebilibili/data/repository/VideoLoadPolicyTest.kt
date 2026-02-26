@@ -1,5 +1,6 @@
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.data.model.response.Page
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -94,11 +95,52 @@ class VideoLoadPolicyTest {
     }
 
     @Test
-    fun `shouldTryAppApiForTargetQuality only enables app api for high quality`() {
-        assertFalse(shouldTryAppApiForTargetQuality(80))
+    fun `shouldTryAppApiForTargetQuality enables app api for 1080P when session cookie missing`() {
+        assertTrue(shouldTryAppApiForTargetQuality(targetQn = 80, hasSessionCookie = false))
+        assertFalse(shouldTryAppApiForTargetQuality(targetQn = 80, hasSessionCookie = true))
         assertFalse(shouldTryAppApiForTargetQuality(64))
         assertTrue(shouldTryAppApiForTargetQuality(112))
         assertTrue(shouldTryAppApiForTargetQuality(120))
+    }
+
+    @Test
+    fun `resolveVideoPlaybackAuthState treats access token as authenticated`() {
+        assertTrue(resolveVideoPlaybackAuthState(hasSessionCookie = true, hasAccessToken = false))
+        assertTrue(resolveVideoPlaybackAuthState(hasSessionCookie = false, hasAccessToken = true))
+        assertFalse(resolveVideoPlaybackAuthState(hasSessionCookie = false, hasAccessToken = false))
+    }
+
+    @Test
+    fun `resolveRequestedVideoCid prefers valid request cid`() {
+        val cid = resolveRequestedVideoCid(
+            requestCid = 22L,
+            infoCid = 11L,
+            pages = listOf(Page(cid = 11L), Page(cid = 22L))
+        )
+
+        assertEquals(22L, cid)
+    }
+
+    @Test
+    fun `resolveRequestedVideoCid falls back to info cid when request cid missing in pages`() {
+        val cid = resolveRequestedVideoCid(
+            requestCid = 33L,
+            infoCid = 11L,
+            pages = listOf(Page(cid = 11L), Page(cid = 22L))
+        )
+
+        assertEquals(11L, cid)
+    }
+
+    @Test
+    fun `resolveRequestedVideoCid accepts request cid when pages absent`() {
+        val cid = resolveRequestedVideoCid(
+            requestCid = 33L,
+            infoCid = 11L,
+            pages = emptyList()
+        )
+
+        assertEquals(33L, cid)
     }
 
     @Test

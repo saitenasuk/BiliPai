@@ -51,6 +51,7 @@ import com.android.purebilibili.feature.settings.AppUpdateCheckResult
 import com.android.purebilibili.feature.settings.AppUpdateChecker
 import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
+import com.android.purebilibili.feature.settings.resolveUpdateReleaseNotesText
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenPlayerOverlay
 import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
@@ -173,9 +174,11 @@ internal fun shouldReadCustomSplashPreferences(splashFlyoutEnabled: Boolean): Bo
 internal fun shouldStartLocalProxyOnAppLaunch(): Boolean = false
 
 internal fun shouldEnableSplashFlyoutAnimation(
+    sdkInt: Int,
     hasCompletedOnboarding: Boolean,
     hasAcceptedReleaseDisclaimer: Boolean
 ): Boolean {
+    if (sdkInt < Build.VERSION_CODES.S) return false
     return hasCompletedOnboarding && hasAcceptedReleaseDisclaimer
 }
 
@@ -279,6 +282,7 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         val welcomePrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val splashFlyoutEnabled = shouldEnableSplashFlyoutAnimation(
+            sdkInt = Build.VERSION.SDK_INT,
             hasCompletedOnboarding = welcomePrefs.getBoolean(KEY_FIRST_LAUNCH, false),
             hasAcceptedReleaseDisclaimer = welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false)
         )
@@ -802,17 +806,29 @@ class MainActivity : ComponentActivity() {
                     }
 
                     startupUpdateCheckResult?.let { info ->
-                        val notesPreview = info.releaseNotes.trim().let { notes ->
-                            if (notes.isBlank()) "暂无更新说明" else notes.take(240)
+                        val resolvedReleaseNotes = remember(info.releaseNotes) {
+                            resolveUpdateReleaseNotesText(info.releaseNotes)
                         }
+                        val releaseNotesScrollState = rememberScrollState()
                         com.android.purebilibili.core.ui.IOSAlertDialog(
                             onDismissRequest = { startupUpdateCheckResult = null },
                             title = { Text("发现新版本 v${info.latestVersion}") },
                             text = {
-                                Text(
-                                    "当前版本 v${info.currentVersion}\n\n$notesPreview",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = "当前版本 v${info.currentVersion}",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = resolvedReleaseNotes,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 280.dp)
+                                            .verticalScroll(releaseNotesScrollState)
+                                    )
+                                }
                             },
                             confirmButton = {
                                 com.android.purebilibili.core.ui.IOSDialogAction(onClick = {

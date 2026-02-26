@@ -7,11 +7,10 @@ import kotlin.test.assertTrue
 class VideoPlayerCoverPolicyTest {
 
     @Test
-    fun `returning from detail should force cover visible`() {
-        assertTrue(
+    fun `without explicit force cover should not be forced`() {
+        assertFalse(
             shouldForceCoverDuringReturnAnimation(
-                forceCoverOnly = false,
-                isReturningFromDetail = true
+                forceCoverOnly = false
             )
         )
     }
@@ -20,8 +19,7 @@ class VideoPlayerCoverPolicyTest {
     fun `explicit force cover should win even when not returning`() {
         assertTrue(
             shouldForceCoverDuringReturnAnimation(
-                forceCoverOnly = true,
-                isReturningFromDetail = false
+                forceCoverOnly = true
             )
         )
     }
@@ -50,5 +48,35 @@ class VideoPlayerCoverPolicyTest {
     fun `forced return cover should disable fade animation`() {
         assertTrue(shouldDisableCoverFadeAnimation(forceCoverDuringReturnAnimation = true))
         assertFalse(shouldDisableCoverFadeAnimation(forceCoverDuringReturnAnimation = false))
+    }
+
+    @Test
+    fun `playback fallback promotes first frame when ready and progressing`() {
+        assertTrue(
+            shouldPromoteFirstFrameByPlaybackFallback(
+                isFirstFrameRendered = false,
+                forceCoverDuringReturnAnimation = false,
+                playbackState = androidx.media3.common.Player.STATE_READY,
+                playWhenReady = true,
+                currentPositionMs = 1500L,
+                videoWidth = 1920,
+                videoHeight = 1080
+            )
+        )
+    }
+
+    @Test
+    fun `playback fallback does not override forced return cover`() {
+        assertFalse(
+            shouldPromoteFirstFrameByPlaybackFallback(
+                isFirstFrameRendered = false,
+                forceCoverDuringReturnAnimation = true,
+                playbackState = androidx.media3.common.Player.STATE_READY,
+                playWhenReady = true,
+                currentPositionMs = 1500L,
+                videoWidth = 1920,
+                videoHeight = 1080
+            )
+        )
     }
 }

@@ -1,6 +1,7 @@
 package com.android.purebilibili.navigation
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -80,6 +81,42 @@ class AppNavigationTransitionPolicyTest {
             shouldStopPlaybackEagerlyOnVideoRouteExit(
                 fromRoute = VideoRoute.route,
                 toRoute = VideoRoute.route
+            )
+        )
+    }
+
+    @Test
+    fun nonSharedReturnToHome_leftCard_slidesRightToLeft() {
+        assertEquals(
+            VideoPopExitDirection.LEFT,
+            resolveVideoPopExitDirection(
+                targetRoute = ScreenRoutes.Home.route,
+                isSingleColumnCard = false,
+                lastClickedCardCenterX = 0.2f
+            )
+        )
+    }
+
+    @Test
+    fun nonSharedReturnToHome_rightCard_slidesLeftToRight() {
+        assertEquals(
+            VideoPopExitDirection.RIGHT,
+            resolveVideoPopExitDirection(
+                targetRoute = ScreenRoutes.Home.route,
+                isSingleColumnCard = false,
+                lastClickedCardCenterX = 0.8f
+            )
+        )
+    }
+
+    @Test
+    fun nonSharedReturnToNonHome_singleColumn_slidesDown() {
+        assertEquals(
+            VideoPopExitDirection.DOWN,
+            resolveVideoPopExitDirection(
+                targetRoute = ScreenRoutes.Search.route,
+                isSingleColumnCard = true,
+                lastClickedCardCenterX = 0.2f
             )
         )
     }

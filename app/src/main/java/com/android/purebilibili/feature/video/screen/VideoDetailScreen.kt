@@ -135,6 +135,7 @@ import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.ui.components.BottomInputBar // [New] Bottom Input Bar
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.IOSModalBottomSheet
+import com.android.purebilibili.core.util.CardPositionManager
 import coil.compose.AsyncImage
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
@@ -163,6 +164,18 @@ internal fun resolveIsNavigatingToVideoDuringDispose(
     managerNavigatingToVideo: Boolean
 ): Boolean {
     return localNavigatingToVideo || managerNavigatingToVideo
+}
+
+internal fun shouldMarkReturningStateOnVideoDetailDispose(
+    shouldHandleAsNavigationExit: Boolean
+): Boolean {
+    return shouldHandleAsNavigationExit
+}
+
+internal fun shouldClearStaleReturningStateOnVideoDetailEnter(
+    isReturningFromDetail: Boolean
+): Boolean {
+    return isReturningFromDetail
 }
 
 internal fun shouldShowWatchLaterQueueBarByPolicy(
@@ -255,6 +268,27 @@ internal fun resolveVideoDetailEntryVisualFrame(
     )
 }
 
+internal fun shouldApplyPipParamsUpdate(
+    pipModeEnabled: Boolean,
+    modeChanged: Boolean,
+    boundsChanged: Boolean,
+    elapsedSinceLastUpdateMs: Long,
+    minUpdateIntervalMs: Long = 400L
+): Boolean {
+    if (!pipModeEnabled) return false
+    if (modeChanged) return true
+    if (!boundsChanged) return false
+    return elapsedSinceLastUpdateMs >= minUpdateIntervalMs
+}
+
+internal fun shouldAutoEnterAudioModeFromRoute(
+    startAudioFromRoute: Boolean,
+    hasAutoEnteredAudioMode: Boolean,
+    isVideoLoadSuccess: Boolean
+): Boolean {
+    return startAudioFromRoute && !hasAutoEnteredAudioMode && isVideoLoadSuccess
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -264,6 +298,7 @@ fun VideoDetailScreen(
     cid: Long = 0L,
     coverUrl: String = "",
     startInFullscreen: Boolean = false,
+    startAudioFromRoute: Boolean = false,
     transitionEnabled: Boolean = false,
     transitionEnterDurationMillis: Int = 320,
     transitionMaxBlurRadiusPx: Float = 20f,
@@ -287,6 +322,7 @@ fun VideoDetailScreen(
     var isNavigatingToVideo by remember { mutableStateOf(false) }
     var isNavigatingToAudioMode by remember { mutableStateOf(false) }
     var isNavigatingToMiniMode by remember { mutableStateOf(false) }
+    var hasAutoEnteredAudioMode by rememberSaveable { mutableStateOf(false) }
 
     val navigateToRelatedVideo = remember(onVideoClick, miniPlayerManager, uiState) {
         { targetBvid: String, options: android.os.Bundle? ->
@@ -297,7 +333,12 @@ fun VideoDetailScreen(
             val resolvedCid = resolveNavigationTargetCid(
                 targetBvid = targetBvid,
                 explicitCid = explicitCid,
+                relatedVideos = success?.related.orEmpty(),
                 ugcSeason = success?.info?.ugc_season
+            )
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoDetailScreen",
+                "navigateToRelatedVideo: current=${success?.info?.bvid ?: "unknown"} target=$targetBvid explicitCid=$explicitCid resolvedCid=$resolvedCid"
             )
             val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
             if (resolvedCid > 0L) {
@@ -305,6 +346,13 @@ fun VideoDetailScreen(
             }
             onVideoClick(targetBvid, navOptions)
         }
+    }
+
+    LaunchedEffect(bvid, cid) {
+        com.android.purebilibili.core.util.Logger.d(
+            "VideoDetailScreen",
+            "SUB_DBG screen entry args: bvid=$bvid, cid=$cid"
+        )
     }
 
     val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
@@ -368,7 +416,7 @@ fun VideoDetailScreen(
     }
     
     // 🔄 [Seamless Playback] Internal BVID state to support seamless switching in portrait mode
-    var currentBvid by remember(bvid) { mutableStateOf(bvid) }
+    var currentBvid by rememberSaveable(bvid) { mutableStateOf(bvid) }
     
     //  监听评论状态
     val commentState by commentViewModel.commentState.collectAsState()
@@ -466,6 +514,20 @@ fun VideoDetailScreen(
             showWatchLaterQueueSheet = false
         }
     }
+
+    LaunchedEffect(startAudioFromRoute, hasAutoEnteredAudioMode, uiState) {
+        if (shouldAutoEnterAudioModeFromRoute(
+                startAudioFromRoute = startAudioFromRoute,
+                hasAutoEnteredAudioMode = hasAutoEnteredAudioMode,
+                isVideoLoadSuccess = uiState is PlayerUiState.Success
+            )
+        ) {
+            hasAutoEnteredAudioMode = true
+            isNavigatingToAudioMode = true
+            viewModel.setAudioMode(true)
+            onNavigateToAudioMode()
+        }
+    }
     
     //  从小窗展开时自动进入全屏
     LaunchedEffect(startInFullscreen) {
@@ -521,8 +583,27 @@ fun VideoDetailScreen(
         }
     }
 
-    LaunchedEffect(bvid) {
+    LaunchedEffect(currentBvid) {
         forceCoverOnlyOnReturn = false
+        if (shouldClearStaleReturningStateOnVideoDetailEnter(CardPositionManager.isReturningFromDetail)) {
+            CardPositionManager.clearReturning()
+        }
+    }
+
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, currentBvid) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
+                forceCoverOnlyOnReturn = false
+                if (shouldClearStaleReturningStateOnVideoDetailEnter(CardPositionManager.isReturningFromDetail)) {
+                    CardPositionManager.clearReturning()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
     
     // 🔄 [新增] 自动横竖屏切换 - 跟随手机传感器方向
@@ -619,10 +700,6 @@ fun VideoDetailScreen(
             //    miniPlayerManager?.markLeavingByNavigation()
             // }
             
-            // 🎯 [新增] 标记正在返回，跳过首页卡片入场动画
-            // 这确保共享元素返回动画正常播放（不被卡片入场动画干扰）
-            com.android.purebilibili.core.util.CardPositionManager.markReturning()
-            
             val layoutParams = window?.attributes
             layoutParams?.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             window?.attributes = layoutParams
@@ -659,6 +736,11 @@ fun VideoDetailScreen(
                     managerNavigatingToVideo = miniPlayerManager?.isNavigatingToVideo == true
                 )
             )
+            if (shouldMarkReturningStateOnVideoDetailDispose(shouldHandleAsNavigationExit)) {
+                CardPositionManager.markReturning()
+            } else {
+                CardPositionManager.clearReturning()
+            }
 
             // 🔕 [修复] 仅在真正离开视频域时才取消媒体通知，避免通知回流/视频内跳转误清理
             if (shouldHandleAsNavigationExit) {
@@ -740,54 +822,56 @@ fun VideoDetailScreen(
     }
     
     LaunchedEffect(videoPlayerBounds, pipModeEnabled) {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val modeChanged = lastPipModeEnabled == null || lastPipModeEnabled != pipModeEnabled
-            val boundsChanged = hasMeaningfulBoundsChange(lastPipBounds, videoPlayerBounds)
-            if (!modeChanged) {
-                // OFF 模式只在切换当下更新一次，不跟随布局抖动反复设置
-                if (!pipModeEnabled) return@LaunchedEffect
-                if (!boundsChanged) return@LaunchedEffect
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return@LaunchedEffect
 
-                // 对布局连续变化节流，避免每帧 setPictureInPictureParams
-                val now = android.os.SystemClock.elapsedRealtime()
-                if (now - lastPipUpdateElapsedMs < 400L) return@LaunchedEffect
-                lastPipUpdateElapsedMs = now
-            } else {
-                lastPipUpdateElapsedMs = android.os.SystemClock.elapsedRealtime()
+        val modeChanged = lastPipModeEnabled == null || lastPipModeEnabled != pipModeEnabled
+        val boundsChanged = hasMeaningfulBoundsChange(lastPipBounds, videoPlayerBounds)
+        val now = android.os.SystemClock.elapsedRealtime()
+        val elapsedSinceLastUpdate = now - lastPipUpdateElapsedMs
+        val shouldUpdate = shouldApplyPipParamsUpdate(
+            pipModeEnabled = pipModeEnabled,
+            modeChanged = modeChanged,
+            boundsChanged = boundsChanged,
+            elapsedSinceLastUpdateMs = elapsedSinceLastUpdate
+        )
+        if (!shouldUpdate) return@LaunchedEffect
+
+        lastPipBounds = videoPlayerBounds?.let { android.graphics.Rect(it) }
+        lastPipModeEnabled = pipModeEnabled
+        lastPipUpdateElapsedMs = now
+
+        activity?.let { act ->
+            val pipParamsBuilder = android.app.PictureInPictureParams.Builder()
+                .setAspectRatio(android.util.Rational(16, 9))
+
+            //  设置源矩形区域 - PiP只显示视频播放器区域
+            videoPlayerBounds?.let { bounds ->
+                pipParamsBuilder.setSourceRectHint(bounds)
             }
 
-            lastPipBounds = videoPlayerBounds?.let { android.graphics.Rect(it) }
-            lastPipModeEnabled = pipModeEnabled
-            
-            activity?.let { act ->
-                val pipParamsBuilder = android.app.PictureInPictureParams.Builder()
-                    .setAspectRatio(android.util.Rational(16, 9))
-                
-                //  设置源矩形区域 - PiP只显示视频播放器区域
-                videoPlayerBounds?.let { bounds ->
-                    pipParamsBuilder.setSourceRectHint(bounds)
-                }
-                
-                // Android 12+ 支持手势自动进入 PiP -  只有 SYSTEM_PIP 模式才启用
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    pipParamsBuilder.setAutoEnterEnabled(pipModeEnabled)  //  受设置控制
-                    pipParamsBuilder.setSeamlessResizeEnabled(pipModeEnabled)
-                }
-                
-                act.setPictureInPictureParams(pipParamsBuilder.build())
-                com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", 
-                    " PiP参数更新: autoEnterEnabled=$pipModeEnabled, modeChanged=$modeChanged, boundsChanged=$boundsChanged")
+            // Android 12+ 支持手势自动进入 PiP -  只有 SYSTEM_PIP 模式才启用
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                pipParamsBuilder.setAutoEnterEnabled(pipModeEnabled)  //  受设置控制
+                pipParamsBuilder.setSeamlessResizeEnabled(pipModeEnabled)
             }
+
+            act.setPictureInPictureParams(pipParamsBuilder.build())
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoDetailScreen",
+                " PiP参数更新: autoEnterEnabled=$pipModeEnabled, modeChanged=$modeChanged, boundsChanged=$boundsChanged"
+            )
         }
     }
 
     // 📱 [修复] 提升竖屏全屏状态到 Screen 级别，防止 VideoPlayerState 重建时状态丢失
     var isPortraitFullscreen by rememberSaveable { mutableStateOf(false) }
     val useSharedPortraitPlayer = true
-    var portraitSyncSnapshotBvid by remember { mutableStateOf<String?>(null) }
+    var portraitSyncSnapshotBvid by rememberSaveable { mutableStateOf<String?>(null) }
+    var portraitSyncSnapshotCid by remember { mutableLongStateOf(0L) }
     var portraitSyncSnapshotPositionMs by remember { mutableLongStateOf(0L) }
     var hasPendingPortraitSync by remember { mutableStateOf(false) }
-    var pendingMainReloadBvidAfterPortrait by remember { mutableStateOf<String?>(null) }
+    var pendingMainReloadBvidAfterPortrait by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentBvidCid by rememberSaveable { mutableLongStateOf(0L) }
 
     // 初始化播放器状态
     val playerState = rememberVideoPlayerState(
@@ -857,6 +941,7 @@ fun VideoDetailScreen(
     val enterPortraitFullscreen = {
         if (portraitExperienceEnabled) {
             portraitSyncSnapshotBvid = (uiState as? PlayerUiState.Success)?.info?.bvid
+            portraitSyncSnapshotCid = (uiState as? PlayerUiState.Success)?.info?.cid ?: 0L
             portraitSyncSnapshotPositionMs = playerState.player.currentPosition.coerceAtLeast(0L)
             hasPendingPortraitSync = false
             isPortraitFullscreen = true
@@ -896,6 +981,7 @@ fun VideoDetailScreen(
                 playerState.player.playWhenReady = false
             }
             portraitSyncSnapshotBvid = (uiState as? PlayerUiState.Success)?.info?.bvid
+            portraitSyncSnapshotCid = (uiState as? PlayerUiState.Success)?.info?.cid ?: 0L
             portraitSyncSnapshotPositionMs = playerState.player.currentPosition.coerceAtLeast(0L)
             hasPendingPortraitSync = shouldPauseMainPlayer
         } else {
@@ -903,14 +989,22 @@ fun VideoDetailScreen(
                  // 退出时恢复音量 (不自动播放，等待用户操作或 onResume)
                  playerState.player.volume = 1f
              }
-            val currentUiBvid = (viewModel.uiState.value as? PlayerUiState.Success)?.info?.bvid
+            val currentUiSuccess = viewModel.uiState.value as? PlayerUiState.Success
+            val currentUiBvid = currentUiSuccess?.info?.bvid
+            val currentUiCid = currentUiSuccess?.info?.cid ?: 0L
             val targetBvid = pendingMainReloadBvidAfterPortrait ?: portraitSyncSnapshotBvid
             if (com.android.purebilibili.feature.video.ui.pager.shouldReloadMainPlayerAfterPortraitExit(
                     snapshotBvid = targetBvid,
-                    currentBvid = currentUiBvid
+                    snapshotCid = portraitSyncSnapshotCid,
+                    currentBvid = currentUiBvid,
+                    currentCid = currentUiCid
                 )
             ) {
-                viewModel.loadVideo(targetBvid!!, autoPlay = true)
+                viewModel.loadVideo(
+                    bvid = targetBvid!!,
+                    autoPlay = true,
+                    cid = portraitSyncSnapshotCid
+                )
             }
             pendingMainReloadBvidAfterPortrait = null
         }
@@ -935,6 +1029,17 @@ fun VideoDetailScreen(
         ) {
             hasPendingPortraitSync = false
         }
+    }
+
+    LaunchedEffect(uiState, currentBvid, currentBvidCid, isPortraitFullscreen) {
+        if (isPortraitFullscreen) return@LaunchedEffect
+        val success = uiState as? PlayerUiState.Success ?: return@LaunchedEffect
+        if (success.info.bvid == currentBvid) return@LaunchedEffect
+        viewModel.loadVideo(
+            bvid = currentBvid,
+            cid = currentBvidCid.takeIf { it > 0L } ?: 0L,
+            autoPlay = true
+        )
     }
 
     // 📲 小窗模式（手机/平板统一逻辑）
@@ -1155,6 +1260,15 @@ fun VideoDetailScreen(
         }
     }
 
+    val uiSuccessState = uiState as? PlayerUiState.Success
+    val shouldSuppressSubtitleOverlay = useSharedPortraitPlayer &&
+        !isPortraitFullscreen &&
+        pendingMainReloadBvidAfterPortrait != null &&
+        (
+            pendingMainReloadBvidAfterPortrait != uiSuccessState?.info?.bvid ||
+                (portraitSyncSnapshotCid > 0L && portraitSyncSnapshotCid != (uiSuccessState?.info?.cid ?: 0L))
+            )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1247,7 +1361,8 @@ fun VideoDetailScreen(
                 onTriple = { viewModel.doTripleAction() },
                 onRelatedVideoClick = navigateToRelatedVideo,
                 onPageSelect = { viewModel.switchPage(it) },
-                forceCoverOnly = forceCoverOnlyOnReturn
+                forceCoverOnly = forceCoverOnlyOnReturn,
+                suppressSubtitleOverlay = shouldSuppressSubtitleOverlay
             )
         } else {
                 //  沉浸式布局：视频延伸到状态栏 + 内容区域
@@ -1443,12 +1558,16 @@ fun VideoDetailScreen(
                             .onGloballyPositioned { layoutCoordinates ->
                                 val position = layoutCoordinates.positionInWindow()
                                 val size = layoutCoordinates.size
-                                videoPlayerBounds = android.graphics.Rect(
+                                val nextBounds = android.graphics.Rect(
                                     position.x.toInt(),
                                     position.y.toInt(),
                                     position.x.toInt() + size.width,
                                     position.y.toInt() + size.height
                                 )
+                                if (!hasMeaningfulBoundsChange(videoPlayerBounds, nextBounds)) {
+                                    return@onGloballyPositioned
+                                }
+                                videoPlayerBounds = nextBounds
                             }
                     ) {
                         //  播放器内部使用 padding 避开状态栏
@@ -1520,7 +1639,8 @@ fun VideoDetailScreen(
                                 // [New Actions]
                                 onSaveCover = { viewModel.saveCover(context) },
                                 onDownloadAudio = { viewModel.downloadAudio(context) },
-                                forceCoverOnly = forceCoverOnlyOnReturn
+                                forceCoverOnly = forceCoverOnlyOnReturn,
+                                suppressSubtitleOverlay = shouldSuppressSubtitleOverlay
                                 //  空降助手 - 已由插件系统自动处理
                                 // sponsorSegment = sponsorSegment,
                                 // showSponsorSkipButton = showSponsorSkipButton,
@@ -1909,6 +2029,8 @@ fun VideoDetailScreen(
                 onVideoChange = { newBvid ->
                     // 高频滑动期间不重载主播放器，避免与竖屏播放器抢焦点导致暂停。
                     // 退出竖屏时再同步到主播放器。
+                    currentBvid = newBvid
+                    currentBvidCid = 0L
                     pendingMainReloadBvidAfterPortrait = newBvid
                 },
                 viewModel = viewModel,
@@ -1916,8 +2038,9 @@ fun VideoDetailScreen(
                 sharedPlayer = if (useSharedPortraitPlayer) playerState.player else null,
                 // [新增] 进度同步
                 initialStartPositionMs = portraitSyncSnapshotPositionMs,
-                onProgressUpdate = { bvid, pos ->
+                onProgressUpdate = { bvid, pos, cidSnapshot ->
                     portraitSyncSnapshotBvid = bvid
+                    portraitSyncSnapshotCid = cidSnapshot
                     portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
                     if (shouldMirrorPortraitProgressToMainPlayer) {
                         hasPendingPortraitSync = true
@@ -1926,8 +2049,11 @@ fun VideoDetailScreen(
                         }
                     }
                 },
-                onExitSnapshot = { bvid, pos ->
+                onExitSnapshot = { bvid, pos, cidSnapshot ->
+                    currentBvid = bvid
+                    currentBvidCid = cidSnapshot
                     portraitSyncSnapshotBvid = bvid
+                    portraitSyncSnapshotCid = cidSnapshot
                     portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
                     pendingMainReloadBvidAfterPortrait = bvid
                     if (shouldMirrorPortraitProgressToMainPlayer) {
@@ -1946,6 +2072,14 @@ fun VideoDetailScreen(
                     onNavigateToSearch()
                 },
                 onUserClick = { mid ->
+                    val anchorBvid = pendingMainReloadBvidAfterPortrait
+                        ?: portraitSyncSnapshotBvid
+                        ?: (uiState as? PlayerUiState.Success)?.info?.bvid
+                    if (!anchorBvid.isNullOrBlank()) {
+                        currentBvid = anchorBvid
+                        currentBvidCid = portraitSyncSnapshotCid
+                        pendingMainReloadBvidAfterPortrait = anchorBvid
+                    }
                     if (com.android.purebilibili.feature.video.ui.pager
                             .shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen)
                     ) {
@@ -2889,7 +3023,10 @@ internal fun resolvePhoneVideoRequestedOrientation(
     isFullscreenMode: Boolean
 ): Int? {
     if (!shouldApplyPhoneAutoRotatePolicy(useTabletLayout)) return null
-    if (autoRotateEnabled) return ActivityInfo.SCREEN_ORIENTATION_SENSOR
+    if (autoRotateEnabled) {
+        // Keep sensor-driven orientation so rotating back to portrait can auto-exit fullscreen.
+        return ActivityInfo.SCREEN_ORIENTATION_SENSOR
+    }
     return if (isOrientationDrivenFullscreen && isFullscreenMode) {
         ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     } else {

@@ -375,7 +375,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val secondPage = HistoryRepository.getHistoryList(
                 ps = 50,
                 max = cursor.max,
-                viewAt = cursor.view_at
+                viewAt = cursor.view_at,
+                business = cursor.business
             ).getOrNull()
             if (secondPage != null) {
                 merged += secondPage.list.map { it.toVideoItem() }

@@ -35,6 +35,10 @@ fun buildExternalPlaylistFromSpaceVideos(
     )
 }
 
+fun resolveSpacePlayAllStartTarget(videos: List<SpaceVideoItem>): String? {
+    return videos.firstOrNull()?.bvid
+}
+
 internal fun parseSpaceVideoLengthToSeconds(length: String): Long {
     val normalized = length.trim()
     if (normalized.isEmpty()) return 0L

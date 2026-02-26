@@ -145,6 +145,122 @@ enum class BottomNavItem(
     )
 }
 
+internal data class BottomBarLayoutPolicy(
+    val horizontalPadding: Dp,
+    val rowPadding: Dp,
+    val maxBarWidth: Dp
+)
+
+internal data class BottomBarIndicatorPolicy(
+    val widthMultiplier: Float,
+    val minWidthDp: Float,
+    val maxWidthDp: Float,
+    val maxWidthToItemRatio: Float,
+    val clampToBounds: Boolean,
+    val edgeInsetDp: Float
+)
+
+internal fun resolveBottomBarIndicatorPolicy(itemCount: Int): BottomBarIndicatorPolicy {
+    return if (itemCount >= 5) {
+        BottomBarIndicatorPolicy(
+            widthMultiplier = 1.34f,
+            minWidthDp = 90f,
+            maxWidthDp = 126f,
+            maxWidthToItemRatio = 1.34f,
+            clampToBounds = true,
+            edgeInsetDp = 2f
+        )
+    } else {
+        BottomBarIndicatorPolicy(
+            widthMultiplier = 1.42f,
+            minWidthDp = 104f,
+            maxWidthDp = 136f,
+            maxWidthToItemRatio = Float.POSITIVE_INFINITY,
+            clampToBounds = true,
+            edgeInsetDp = 2f
+        )
+    }
+}
+
+internal fun resolveBottomIndicatorHeightDp(
+    labelMode: Int,
+    isTablet: Boolean,
+    itemCount: Int
+): Float {
+    return when {
+        labelMode == 0 && isTablet && itemCount >= 5 -> 56f
+        labelMode == 0 && isTablet -> 60f
+        labelMode == 0 && itemCount >= 5 -> 50f
+        labelMode == 0 -> 58f
+        else -> 54f
+    }
+}
+
+internal fun resolveBottomBarLayoutPolicy(
+    containerWidth: Dp,
+    itemCount: Int,
+    isTablet: Boolean,
+    labelMode: Int,
+    isFloating: Boolean
+): BottomBarLayoutPolicy {
+    if (!isFloating) {
+        return BottomBarLayoutPolicy(
+            horizontalPadding = 0.dp,
+            rowPadding = 20.dp,
+            maxBarWidth = containerWidth
+        )
+    }
+
+    val safeItemCount = itemCount.coerceAtLeast(1)
+    val rowPadding = when {
+        isTablet && safeItemCount >= 6 -> 18.dp
+        isTablet -> 20.dp
+        safeItemCount >= 5 -> 14.dp
+        else -> 18.dp
+    }
+    val normalizedLabelMode = when (labelMode) {
+        0, 1, 2 -> labelMode
+        else -> 0
+    }
+    val minItemWidth = when (normalizedLabelMode) {
+        0 -> if (isTablet) 62.dp else 52.dp
+        2 -> if (isTablet) 60.dp else 52.dp
+        else -> if (isTablet) 58.dp else 50.dp
+    }
+    val preferredItemWidth = when (normalizedLabelMode) {
+        0 -> if (isTablet) 84.dp else 78.dp
+        2 -> if (isTablet) 80.dp else 74.dp
+        else -> if (isTablet) 76.dp else 72.dp
+    }
+    val minBarWidth = (rowPadding * 2) + (minItemWidth * safeItemCount)
+    val preferredBarWidth = (rowPadding * 2) + (preferredItemWidth * safeItemCount)
+
+    val phoneRatio = when {
+        safeItemCount >= 6 -> 0.80f
+        safeItemCount == 5 -> 0.84f
+        safeItemCount == 4 -> 0.88f
+        else -> 0.90f
+    }
+    val widthRatio = if (isTablet) 0.86f else phoneRatio
+    val visualCap = containerWidth * widthRatio
+    val hardCap = if (isTablet) 640.dp else 420.dp
+    val minEdgePadding = if (isTablet) 16.dp else 10.dp
+    val containerCap = (containerWidth - (minEdgePadding * 2)).coerceAtLeast(0.dp)
+    val maxAllowed = minOf(hardCap, visualCap, containerCap)
+
+    val resolvedBarWidth = maxOf(
+        minBarWidth,
+        minOf(preferredBarWidth, maxAllowed)
+    ).coerceAtMost(containerWidth)
+
+    val horizontalPadding = ((containerWidth - resolvedBarWidth) / 2).coerceAtLeast(0.dp)
+    return BottomBarLayoutPolicy(
+        horizontalPadding = horizontalPadding,
+        rowPadding = rowPadding,
+        maxBarWidth = resolvedBarWidth
+    )
+}
+
 /**
  *  iOS 风格磨砂玻璃底部导航栏
  * 
@@ -233,7 +349,20 @@ fun FrostedBottomBar(
         val totalWidth = maxWidth
         // 📐 下边距
         val barBottomPadding = if (isFloating) (if (isTablet) 20.dp else 16.dp) else 0.dp
-        val barHorizontalPadding = if (isFloating) (if (isTablet) 40.dp else 24.dp) else 0.dp
+        
+        // [平板适配] 侧边栏按钮也算作一个 Item，确保指示器宽度与内容一致。
+        val sidebarCount = if (isTablet && onToggleSidebar != null) 1 else 0
+        val itemCount = visibleItems.size + sidebarCount
+        val layoutPolicy = resolveBottomBarLayoutPolicy(
+            containerWidth = totalWidth,
+            itemCount = itemCount,
+            isTablet = isTablet,
+            labelMode = labelMode,
+            isFloating = isFloating
+        )
+        val barHorizontalPadding = layoutPolicy.horizontalPadding
+        val rowPadding = layoutPolicy.rowPadding
+        val targetMaxWidth = layoutPolicy.maxBarWidth
         
         // 内容宽度需减去 padding
         // 注意：isFloating 时 padding 在 Box 上，docked 时无 padding
@@ -248,22 +377,6 @@ fun FrostedBottomBar(
         } else {
              totalWidth
         }
-        
-        val rowPadding = 20.dp
-        
-        // [平板适配] 侧边栏按钮也算作一个 Item，确保指示器宽度的计算与实际渲染一致
-        // 否则会导致指示器计算出的宽度偏大，从而产生偏移
-        val sidebarCount = if (isTablet && onToggleSidebar != null) 1 else 0
-        val itemCount = visibleItems.size + sidebarCount
-        
-        // itemWidth calculation
-        // [修复] 使用“实际渲染宽度”计算 itemWidth，避免少于 4 个图标时指示器和图标错位。
-        // 内层容器用了 widthIn(max = targetMaxWidth)，所以可用宽度应与其保持一致。
-        val optimalWidth = (itemCount * 88).dp
-
-        // 限制最大宽度 (平板适配)
-        // 使用 min(640.dp, optimalWidth) 确保不超宽也不过窄
-        val targetMaxWidth = if (optimalWidth < 640.dp) optimalWidth else 640.dp
         val renderedBarWidth = if (isFloating) minOf(availableWidth, targetMaxWidth) else availableWidth
         val contentWidth = (renderedBarWidth - (rowPadding * 2)).coerceAtLeast(0.dp)
         val itemWidth = if (itemCount > 0) contentWidth / itemCount else 0.dp
@@ -366,11 +479,11 @@ fun FrostedBottomBar(
     // 当底栏停靠时，强制禁用液态玻璃（Liquid Glass），仅使用标准磨砂（Frosted Glass）
     val showGlassEffect = homeSettings.isLiquidGlassEnabled && isFloating
     // [Refraction] 图标+文字模式下，提高镜片高度并轻微下移，让标签文字稳定进入折射区域
-    val bottomIndicatorHeight = when {
-        labelMode == 0 && isTablet -> 60.dp
-        labelMode == 0 -> 58.dp
-        else -> 54.dp
-    }
+    val bottomIndicatorHeight = resolveBottomIndicatorHeightDp(
+        labelMode = labelMode,
+        isTablet = isTablet,
+        itemCount = itemCount
+    ).dp
     // Keep indicator vertically centered; avoid extra offset that breaks top/bottom spacing.
     val bottomIndicatorYOffset = 0.dp
     
@@ -399,34 +512,6 @@ fun FrostedBottomBar(
                 )
                 .fillMaxWidth()
                 .clip(barShape)
-                // [Visual] Add white border for better visibility as requested by user
-                // [Visual] Add glass lighting border effect
-                .then(
-                    if (isFloating) {
-                        Modifier.border(
-                            width = 0.8.dp, // Thinner for elegance
-                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                colors = if (isSystemInDarkTheme()) {
-                                    // Dark Mode: Bright top highlight, subtle fade
-                                    listOf(
-                                        androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
-                                        androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f),
-                                        androidx.compose.ui.graphics.Color.White.copy(alpha = 0.05f)
-                                    )
-                                } else {
-                                    // Light Mode: Subtle white highlight (against potentially light blurry background)
-                                    // Since background interacts, we keep it white but softer
-                                    listOf(
-                                        androidx.compose.ui.graphics.Color.White.copy(alpha = 0.9f),
-                                        androidx.compose.ui.graphics.Color.White.copy(alpha = 0.4f),
-                                        androidx.compose.ui.graphics.Color.White.copy(alpha = 0.1f)
-                                    )
-                                }
-                            ),
-                            shape = barShape
-                        )
-                    } else Modifier
-                )
                 // [Refactor] Removed background modifiers from here to separate layers
         ) {
             // [Layer 1] Glass Background Layer
@@ -529,15 +614,13 @@ fun FrostedBottomBar(
                 color = Color.Transparent,
                 shape = barShape,
                 shadowElevation = 0.dp,
-                border = if (hazeState != null) {
-                    if (!isFloating) {
-                        // [Visual] No border when docked to prevent "surrounding white edge"
-                        null
-                    } else {
-                        androidx.compose.foundation.BorderStroke(0.5.dp, androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.35f), MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))))
-                    }
+                border = if (!isFloating) {
+                    null
                 } else {
-                    if (!isFloating) null else androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    androidx.compose.foundation.BorderStroke(
+                        0.5.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+                    )
                 }
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -566,6 +649,9 @@ fun FrostedBottomBar(
                         val indicatorInMotion =
                             dampedDragState.isDragging || indicatorFractional || abs(dampedDragState.velocity) > 45f
                         val indicatorBackdrop = if (indicatorInMotion) iconBackdrop else null
+                        val indicatorPolicy = remember(itemCount) {
+                            resolveBottomBarIndicatorPolicy(itemCount = itemCount)
+                        }
 
                         LiquidIndicator(
                             position = indicatorPosition,
@@ -579,6 +665,12 @@ fun FrostedBottomBar(
                                 .fillMaxSize()
                                 .offset(y = bottomIndicatorYOffset)
                                 .alpha(indicatorAlpha),
+                            clampToBounds = indicatorPolicy.clampToBounds,
+                            edgeInset = indicatorPolicy.edgeInsetDp.dp,
+                            indicatorWidthMultiplier = indicatorPolicy.widthMultiplier,
+                            indicatorMinWidth = indicatorPolicy.minWidthDp.dp,
+                            indicatorMaxWidth = indicatorPolicy.maxWidthDp.dp,
+                            maxWidthToItemRatio = indicatorPolicy.maxWidthToItemRatio,
                             indicatorHeight = bottomIndicatorHeight,
                             isLiquidGlassEnabled = showGlassEffect,
                             lensIntensityBoost = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) 1.35f else 1.85f,
@@ -667,6 +759,39 @@ internal fun shouldUseBottomReselectCombinedClickable(
     return isSelected && (item == BottomNavItem.HOME || item == BottomNavItem.DYNAMIC)
 }
 
+internal data class BottomBarItemColorBinding(
+    val colorIndex: Int,
+    val hasCustomAccent: Boolean
+)
+
+internal fun resolveBottomBarItemColorBinding(
+    item: BottomNavItem,
+    itemColorIndices: Map<String, Int>
+): BottomBarItemColorBinding {
+    if (itemColorIndices.isEmpty()) {
+        return BottomBarItemColorBinding(colorIndex = 0, hasCustomAccent = false)
+    }
+
+    val candidates = linkedSetOf(
+        item.name,
+        item.name.lowercase(),
+        item.name.uppercase(),
+        item.route,
+        item.route.lowercase(),
+        item.route.uppercase(),
+        item.label,
+        item.label.lowercase()
+    )
+    val match = candidates.firstNotNullOfOrNull { key ->
+        itemColorIndices[key]
+    }
+    return if (match != null) {
+        BottomBarItemColorBinding(colorIndex = match, hasCustomAccent = true)
+    } else {
+        BottomBarItemColorBinding(colorIndex = 0, hasCustomAccent = false)
+    }
+}
+
 @Composable
 private fun BottomBarContent(
     visibleItems: List<BottomNavItem>,
@@ -708,8 +833,10 @@ private fun BottomBarContent(
         // ... (平板按钮代码) 
         visibleItems.forEachIndexed { index, item ->
             val isSelected = selectedIndex == index
-            val itemColorIndex = itemColorIndices[item.name] ?: 0
-            val hasCustomAccent = itemColorIndices.containsKey(item.name)
+            val colorBinding = resolveBottomBarItemColorBinding(
+                item = item,
+                itemColorIndices = itemColorIndices
+            )
             
             // [核心逻辑] 计算每个 Item 的选中分数 (0f..1f)
             // 根据当前位置 currentPosition 和 item index 的距离计算
@@ -723,8 +850,8 @@ private fun BottomBarContent(
                 selectionFraction = selectionFraction, // [新增] 用于驱动样式
                 onClick = { if (isInteractive) onItemClick(item) },
                 labelMode = labelMode,
-                colorIndex = itemColorIndex,
-                hasCustomAccent = hasCustomAccent,
+                colorIndex = colorBinding.colorIndex,
+                hasCustomAccent = colorBinding.hasCustomAccent,
                 iconSize = if (labelMode == 0) 20.dp else 24.dp,
                 contentVerticalOffset = contentVerticalOffset,
                 modifier = Modifier.weight(1f),

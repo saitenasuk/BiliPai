@@ -1237,7 +1237,7 @@ fun HomeScreen(
                      wrappedOnVideoClick(
                          HomeVideoClickRequest(
                              bvid = item.bvid,
-                             cid = item.id,
+                             cid = item.cid,
                              coverUrl = item.pic,
                              source = HomeVideoClickSource.PREVIEW
                          )

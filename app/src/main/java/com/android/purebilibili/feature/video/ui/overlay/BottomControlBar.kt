@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -16,7 +17,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.unit.IntOffset
 //  Cupertino Icons
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
@@ -30,12 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import androidx.compose.animation.AnimatedVisibility
@@ -143,6 +142,15 @@ internal fun resolveFloatingPanelBottomOffsetDp(
     return bottomPaddingDp + controlRowHeightDp + gapDp
 }
 
+internal fun resolveFullscreenToggleTouchTargetDp(iconSizeDp: Int): Int {
+    return maxOf(40, iconSizeDp + 16)
+}
+
+internal fun shouldConsumeBackgroundGesturesForFloatingPanels(
+    showSubtitlePanel: Boolean,
+    showMoreActionsPanel: Boolean
+): Boolean = showSubtitlePanel || showMoreActionsPanel
+
 private fun Modifier.consumeTap(onTap: () -> Unit): Modifier {
     return pointerInput(onTap) {
         awaitEachGesture {
@@ -167,6 +175,7 @@ fun BottomControlBar(
     onPlayPauseClick: () -> Unit,
     onSeek: (Long) -> Unit,
     onSeekStart: () -> Unit = {},
+    onScrubbingChanged: (Boolean) -> Unit = {},
     onSpeedClick: () -> Unit = {},
     onRatioClick: () -> Unit = {},
     onNextEpisodeClick: () -> Unit = {},
@@ -255,13 +264,13 @@ fun BottomControlBar(
             gapDp = 20
         )
     }
-    val floatingPanelBottomOffsetPx = with(LocalDensity.current) {
-        floatingPanelBottomOffsetDp.dp.roundToPx()
-    }
     val progressLayoutPolicy = remember(configuration.screenWidthDp) {
         resolveVideoProgressBarLayoutPolicy(
             widthDp = configuration.screenWidthDp
         )
+    }
+    val fullscreenToggleTouchTargetDp = remember(layoutPolicy.fullscreenIconSizeDp) {
+        resolveFullscreenToggleTouchTargetDp(iconSizeDp = layoutPolicy.fullscreenIconSizeDp)
     }
     val showEpisodeButton = remember(isFullscreen, hasEpisodeEntry) {
         shouldShowEpisodeButtonInControlBar(
@@ -320,6 +329,12 @@ fun BottomControlBar(
             showPortraitSwitchButton = showPortraitSwitchButton
         )
     }
+    val shouldConsumeFloatingPanelBackground = remember(showSubtitlePanel, showMoreActionsPanel) {
+        shouldConsumeBackgroundGesturesForFloatingPanels(
+            showSubtitlePanel = showSubtitlePanel,
+            showMoreActionsPanel = showMoreActionsPanel
+        )
+    }
     val subtitleOptions = remember(
         subtitlePrimaryLabel,
         subtitleSecondaryLabel,
@@ -348,6 +363,7 @@ fun BottomControlBar(
             layoutPolicy = progressLayoutPolicy,
             onSeek = onSeek,
             onSeekStart = onSeekStart,
+            onScrubbingChanged = onScrubbingChanged,
             videoshotData = videoshotData,
             viewPoints = viewPoints,
             currentChapter = currentChapter,
@@ -508,8 +524,13 @@ fun BottomControlBar(
                         },
                         shape = RoundedCornerShape(10.dp),
                         onClick = {
-                            showSubtitlePanel = !showSubtitlePanel
-                            if (showSubtitlePanel) {
+                            val nextShowSubtitlePanel = !showSubtitlePanel
+                            com.android.purebilibili.core.util.Logger.d(
+                                "BottomControlBar",
+                                "字幕按钮点击: nextShow=$nextShowSubtitlePanel, fullscreen=$isFullscreen, showMore=$showMoreActionsPanel, subtitleEnabled=$subtitleEnabled"
+                            )
+                            showSubtitlePanel = nextShowSubtitlePanel
+                            if (nextShowSubtitlePanel) {
                                 showMoreActionsPanel = false
                             }
                         }
@@ -554,83 +575,87 @@ fun BottomControlBar(
                 }
 
                 // Fullscreen
-                Icon(
-                    imageVector = if (isFullscreen) CupertinoIcons.Default.ArrowDownRightAndArrowUpLeft else CupertinoIcons.Default.ArrowUpLeftAndArrowDownRight,
-                    contentDescription = if (isFullscreen) "退出横屏" else "横屏",
-                    tint = Color.White,
+                Box(
                     modifier = Modifier
-                        .size(layoutPolicy.fullscreenIconSizeDp.dp)
-                        .clickable(onClick = onToggleFullscreen)
-                )
+                        .size(fullscreenToggleTouchTargetDp.dp)
+                        .consumeTap(onToggleFullscreen),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isFullscreen) CupertinoIcons.Default.ArrowDownRightAndArrowUpLeft else CupertinoIcons.Default.ArrowUpLeftAndArrowDownRight,
+                        contentDescription = if (isFullscreen) "退出横屏" else "横屏",
+                        tint = Color.White,
+                        modifier = Modifier.size(layoutPolicy.fullscreenIconSizeDp.dp)
+                    )
+                }
             }
         }
     }
 
-    if (showSubtitlePanel && showSubtitleButton) {
-        Popup(
-            alignment = Alignment.BottomEnd,
-            offset = IntOffset(x = 0, y = -floatingPanelBottomOffsetPx),
+    if (showSubtitlePanel && showSubtitleButton && shouldConsumeFloatingPanelBackground) {
+        FloatingControlPanelDialog(
             onDismissRequest = { showSubtitlePanel = false },
-            properties = PopupProperties(
-                focusable = true,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true,
-                clippingEnabled = false
-            )
+            panelModifier = Modifier
+                .padding(
+                    end = layoutPolicy.horizontalPaddingDp.dp,
+                    bottom = floatingPanelBottomOffsetDp.dp
+                )
         ) {
-            Box(modifier = Modifier.padding(end = layoutPolicy.horizontalPaddingDp.dp)) {
-                Surface(
-                    color = Color.Black.copy(alpha = 0.76f),
-                    shape = RoundedCornerShape(16.dp),
-                    border = androidx.compose.foundation.BorderStroke(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.16f)
-                    )
+            Surface(
+                color = Color.Black.copy(alpha = 0.76f),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.16f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(min = floatingPanelMinWidthDp.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .widthIn(min = floatingPanelMinWidthDp.dp)
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "字幕语言",
-                            color = Color.White.copy(alpha = 0.92f),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        subtitleOptions.forEach { option ->
-                            SubtitlePanelOption(
-                                label = option.label,
-                                selected = subtitleDisplayMode == option.mode,
-                                enabled = option.enabled,
-                                minWidthDp = moreActionItemMinWidthDp,
-                                onClick = {
-                                    if (!option.enabled) return@SubtitlePanelOption
-                                    showSubtitlePanel = false
-                                    onSubtitleDisplayModeChange(option.mode)
-                                    onSubtitleEnabledChange(option.mode != SubtitleDisplayMode.OFF)
-                                }
-                            )
-                        }
-                        if (subtitleOptions.size > 1) {
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "字幕大字号",
-                                    color = Color.White.copy(alpha = 0.9f),
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium
+                    Text(
+                        text = "字幕语言",
+                        color = Color.White.copy(alpha = 0.92f),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    subtitleOptions.forEach { option ->
+                        SubtitlePanelOption(
+                            label = option.label,
+                            selected = subtitleDisplayMode == option.mode,
+                            enabled = option.enabled,
+                            minWidthDp = moreActionItemMinWidthDp,
+                            onClick = {
+                                if (!option.enabled) return@SubtitlePanelOption
+                                com.android.purebilibili.core.util.Logger.d(
+                                    "BottomControlBar",
+                                    "字幕选项点击: mode=${option.mode}, label=${option.label}"
                                 )
-                                Switch(
-                                    checked = subtitleLargeTextEnabled,
-                                    onCheckedChange = onSubtitleLargeTextChange
-                                )
+                                showSubtitlePanel = false
+                                onSubtitleDisplayModeChange(option.mode)
+                                onSubtitleEnabledChange(option.mode != SubtitleDisplayMode.OFF)
                             }
+                        )
+                    }
+                    if (subtitleOptions.size > 1) {
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "字幕大字号",
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Switch(
+                                checked = subtitleLargeTextEnabled,
+                                onCheckedChange = onSubtitleLargeTextChange
+                            )
                         }
                     }
                 }
@@ -638,77 +663,112 @@ fun BottomControlBar(
         }
     }
 
-    if (showMoreActionsPanel && showMoreActionsButton) {
-        Popup(
-            alignment = Alignment.BottomEnd,
-            offset = IntOffset(x = 0, y = -floatingPanelBottomOffsetPx),
+    if (showMoreActionsPanel && showMoreActionsButton && shouldConsumeFloatingPanelBackground) {
+        FloatingControlPanelDialog(
             onDismissRequest = { showMoreActionsPanel = false },
-            properties = PopupProperties(
-                focusable = true,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true,
-                clippingEnabled = false
-            )
+            panelModifier = Modifier
+                .padding(
+                    end = moreActionsPanelEndPaddingDp.dp,
+                    bottom = floatingPanelBottomOffsetDp.dp
+                )
         ) {
-            Box(modifier = Modifier.padding(end = moreActionsPanelEndPaddingDp.dp)) {
-                Surface(
-                    color = Color.Black.copy(alpha = 0.78f),
-                    shape = RoundedCornerShape(16.dp),
-                    border = androidx.compose.foundation.BorderStroke(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.2f)
-                    )
+            Surface(
+                color = Color.Black.copy(alpha = 0.78f),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.2f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(min = floatingPanelMinWidthDp.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .widthIn(min = floatingPanelMinWidthDp.dp)
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (showNextEpisodeButton) {
-                            MoreActionTextButton(
-                                label = "下集",
-                                minWidthDp = moreActionItemMinWidthDp,
-                                onClick = {
-                                    showMoreActionsPanel = false
-                                    onNextEpisodeClick()
-                                }
-                            )
-                        }
-                        if (showPlaybackOrderLabel) {
-                            MoreActionTextButton(
-                                label = playbackOrderLabel,
-                                minWidthDp = moreActionItemMinWidthDp,
-                                onClick = {
-                                    showMoreActionsPanel = false
-                                    onPlaybackOrderClick()
-                                }
-                            )
-                        }
-                        if (showAspectRatioButton) {
-                            MoreActionTextButton(
-                                label = currentRatio.displayName,
-                                highlighted = currentRatio != VideoAspectRatio.FIT,
-                                minWidthDp = moreActionItemMinWidthDp,
-                                onClick = {
-                                    showMoreActionsPanel = false
-                                    onRatioClick()
-                                }
-                            )
-                        }
-                        if (showPortraitSwitchButton) {
-                            MoreActionTextButton(
-                                label = "竖屏",
-                                minWidthDp = moreActionItemMinWidthDp,
-                                onClick = {
-                                    showMoreActionsPanel = false
-                                    onPortraitFullscreen()
-                                }
-                            )
-                        }
+                    if (showNextEpisodeButton) {
+                        MoreActionTextButton(
+                            label = "下集",
+                            minWidthDp = moreActionItemMinWidthDp,
+                            onClick = {
+                                showMoreActionsPanel = false
+                                onNextEpisodeClick()
+                            }
+                        )
+                    }
+                    if (showPlaybackOrderLabel) {
+                        MoreActionTextButton(
+                            label = playbackOrderLabel,
+                            minWidthDp = moreActionItemMinWidthDp,
+                            onClick = {
+                                showMoreActionsPanel = false
+                                onPlaybackOrderClick()
+                            }
+                        )
+                    }
+                    if (showAspectRatioButton) {
+                        MoreActionTextButton(
+                            label = currentRatio.displayName,
+                            highlighted = currentRatio != VideoAspectRatio.FIT,
+                            minWidthDp = moreActionItemMinWidthDp,
+                            onClick = {
+                                showMoreActionsPanel = false
+                                onRatioClick()
+                            }
+                        )
+                    }
+                    if (showPortraitSwitchButton) {
+                        MoreActionTextButton(
+                            label = "竖屏",
+                            minWidthDp = moreActionItemMinWidthDp,
+                            onClick = {
+                                showMoreActionsPanel = false
+                                onPortraitFullscreen()
+                            }
+                        )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingControlPanelDialog(
+    onDismissRequest: () -> Unit,
+    panelModifier: Modifier,
+    panelAlignment: Alignment = Alignment.BottomEnd,
+    content: @Composable () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismissRequest
+                )
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(panelAlignment)
+                    .then(panelModifier)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {}
+            ) {
+                content()
             }
         }
     }
@@ -772,6 +832,7 @@ fun VideoProgressBar(
     layoutPolicy: VideoProgressBarLayoutPolicy,
     onSeek: (Long) -> Unit,
     onSeekStart: () -> Unit = {},
+    onScrubbingChanged: (Boolean) -> Unit = {},
     videoshotData: com.android.purebilibili.data.model.response.VideoshotData? = null,
     viewPoints: List<com.android.purebilibili.data.model.response.ViewPoint> = emptyList(),
     currentChapter: String? = null,
@@ -822,6 +883,7 @@ fun VideoProgressBar(
                         isDragging = true
                         tempProgress = (offset.x / size.width).coerceIn(0f, 1f)
                         dragOffsetX = offset.x
+                        onScrubbingChanged(true)
                         onSeekStart()
                     },
                     onDrag = { change, _ ->
@@ -831,10 +893,12 @@ fun VideoProgressBar(
                     },
                     onDragEnd = {
                         isDragging = false
+                        onScrubbingChanged(false)
                         onSeek((tempProgress * duration).toLong())
                     },
                     onDragCancel = {
                         isDragging = false
+                        onScrubbingChanged(false)
                         tempProgress = progress
                     }
                 )

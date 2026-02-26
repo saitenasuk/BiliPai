@@ -60,6 +60,7 @@ fun SpaceScreen(
     mid: Long,
     onBack: () -> Unit,
     onVideoClick: (String) -> Unit,
+    onPlayAllAudioClick: ((String) -> Unit)? = null,
     onDynamicDetailClick: (String) -> Unit = {},
     onViewAllClick: (String, Long, Long, String) -> Unit = { _, _, _, _ -> }, // type, id, mid, title
     viewModel: SpaceViewModel = viewModel(),
@@ -180,6 +181,7 @@ fun SpaceScreen(
                     SpaceContent(
                         state = state,
                         onVideoClick = onVideoClick,
+                        onPlayAllAudioClick = onPlayAllAudioClick,
                         onDynamicDetailClick = onDynamicDetailClick,
                         onLoadMore = { viewModel.loadMoreVideos() },
                         onCategoryClick = { viewModel.selectCategory(it) },
@@ -327,6 +329,7 @@ fun SpaceScreen(
 private fun SpaceContent(
     state: SpaceUiState.Success,
     onVideoClick: (String) -> Unit,
+    onPlayAllAudioClick: ((String) -> Unit)?,
     onDynamicDetailClick: (String) -> Unit,
     onLoadMore: () -> Unit,
     onCategoryClick: (Int) -> Unit,  //  分类点击回调
@@ -351,10 +354,28 @@ private fun SpaceContent(
         if (externalPlaylist != null) {
             com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
                 externalPlaylist.playlistItems,
-                externalPlaylist.startIndex
+                externalPlaylist.startIndex,
+                source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.SPACE
             )
         }
         onVideoClick(clickedBvid)
+    }
+    val playAllSpaceAudio: () -> Unit = playAll@{
+        val startBvid = resolveSpacePlayAllStartTarget(state.videos) ?: return@playAll
+        val externalPlaylist = buildExternalPlaylistFromSpaceVideos(
+            videos = state.videos,
+            clickedBvid = startBvid
+        ) ?: return@playAll
+
+        com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
+            externalPlaylist.playlistItems,
+            externalPlaylist.startIndex,
+            source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.SPACE
+        )
+        com.android.purebilibili.feature.video.player.PlaylistManager
+            .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
+
+        onPlayAllAudioClick?.invoke(startBvid) ?: onVideoClick(startBvid)
     }
     //  当前选中的 Tab（目前只实现投稿页）
     var selectedTab by remember { mutableIntStateOf(2) }  // 默认投稿
@@ -456,6 +477,28 @@ private fun SpaceContent(
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .clickable { playAllSpaceAudio() }
+                                        .padding(end = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        CupertinoIcons.Outlined.Headphones,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "全部听",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                                 

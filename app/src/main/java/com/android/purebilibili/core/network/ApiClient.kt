@@ -60,9 +60,9 @@ interface BilibiliApi {
     @GET("x/web-interface/history/cursor")
     suspend fun getHistoryList(
         @Query("ps") ps: Int = 30,
-        @Query("max") max: Long = 0,         //  游标: 上一页最后一条的 oid
-        @Query("view_at") viewAt: Long = 0,  //  游标: 上一页最后一条的 view_at
-        @Query("business") business: String = ""  // 空字符串=全部类型
+        @Query("max") max: Long? = null,            //  游标: 上一页最后一条的 oid
+        @Query("view_at") viewAt: Long? = null,     //  游标: 上一页最后一条的 view_at
+        @Query("business") business: String? = null //  null=省略该参数
     ): HistoryResponse
 
     // [新增] 删除单条历史记录
@@ -773,6 +773,9 @@ data class DynamicThumbRequest(
     val from_spmid: String = "333.999.0.0"
 )
 
+private const val DYNAMIC_FEED_FEATURES =
+    "itemOpusStyle,listOnlyfans"
+
 interface DynamicApi {
     //  添加 features 参数以获取 rich_text_nodes 表情数据
     @GET("x/polymer/web-dynamic/v1/feed/all")
@@ -780,7 +783,7 @@ interface DynamicApi {
         @Query("type") type: String = "all",
         @Query("offset") offset: String = "",
         @Query("page") page: Int = 1,
-        @Query("features") features: String = "itemOpusStyle"  // 获取富文本样式（含表情）
+        @Query("features") features: String = DYNAMIC_FEED_FEATURES
     ): DynamicFeedResponse
     
     //  [新增] 获取指定用户的动态列表
@@ -788,7 +791,7 @@ interface DynamicApi {
     suspend fun getUserDynamicFeed(
         @Query("host_mid") hostMid: Long,           // UP主 mid
         @Query("offset") offset: String = "",
-        @Query("features") features: String = "itemOpusStyle"
+        @Query("features") features: String = DYNAMIC_FEED_FEATURES
     ): DynamicFeedResponse
 
     //  [新增] 获取单条动态详情（桌面端详情接口）
@@ -1386,9 +1389,19 @@ object NetworkModule {
                     referer = "https://www.bilibili.com/video/"
                 }
 
+                //  [修复] 动态接口使用动态页 Referer/Origin，降低 412 触发概率
+                val isDynamicEndpoint = url.encodedPath.contains("/x/polymer/web-dynamic/") ||
+                    url.encodedPath.contains("/x/dynamic/")
+                if (isDynamicEndpoint) {
+                    referer = "https://t.bilibili.com/"
+                }
+
                 var origin = "https://www.bilibili.com"
                 if (url.host == "api.live.bilibili.com") {
                     origin = "https://live.bilibili.com"
+                }
+                if (isDynamicEndpoint) {
+                    origin = "https://t.bilibili.com"
                 }
 
                 val builder = original.newBuilder()

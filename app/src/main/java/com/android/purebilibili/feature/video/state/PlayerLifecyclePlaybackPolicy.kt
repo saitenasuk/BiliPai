@@ -23,3 +23,10 @@ internal fun shouldResumeAfterLifecyclePause(
     )
     return wasPlaybackActive && !currentlyActive
 }
+
+internal fun shouldRestorePlayerVolumeOnResume(
+    shouldResume: Boolean,
+    currentVolume: Float
+): Boolean {
+    return shouldResume && currentVolume <= 0f
+}

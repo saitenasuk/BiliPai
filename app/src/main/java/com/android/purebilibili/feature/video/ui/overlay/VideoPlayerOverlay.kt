@@ -135,6 +135,37 @@ internal fun shouldConsumeBackgroundGesturesForEndDrawer(
     return endDrawerVisible
 }
 
+internal fun shouldShowCenterPlayButton(
+    isVisible: Boolean,
+    isPlaying: Boolean,
+    isQualitySwitching: Boolean,
+    isFullscreen: Boolean,
+    isBuffering: Boolean,
+    isScrubbing: Boolean
+): Boolean {
+    return isVisible &&
+        !isPlaying &&
+        !isQualitySwitching &&
+        isFullscreen &&
+        !isBuffering &&
+        !isScrubbing
+}
+
+internal fun shouldShowBufferingIndicator(
+    isBuffering: Boolean,
+    isQualitySwitching: Boolean,
+    isVisible: Boolean,
+    isScrubbing: Boolean
+): Boolean {
+    return isBuffering && !isQualitySwitching && (!isVisible || isScrubbing)
+}
+
+internal fun resolvePageSelectorSheetOuterBottomPaddingDp(
+    isFullscreen: Boolean
+): Int {
+    return if (isFullscreen) 0 else 8
+}
+
 @Composable
 fun VideoPlayerOverlay(
     player: Player,
@@ -297,6 +328,7 @@ fun VideoPlayerOverlay(
     var currentSpeed by remember(player) { mutableFloatStateOf(player.playbackParameters.speed) }
     //  使用传入的比例状态
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
+    var isProgressScrubbing by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -574,6 +606,9 @@ fun VideoPlayerOverlay(
                     },
                     onSeek = { position -> onSeekTo?.invoke(position) ?: player.seekTo(position) },
                     onSeekStart = onSeekStart,  //  拖动进度条开始时清除弹幕
+                    onScrubbingChanged = { scrubbing ->
+                        isProgressScrubbing = scrubbing
+                    },
                     onSpeedClick = { showSpeedMenu = true },
                     onRatioClick = { showRatioMenu = true },
                     onNextEpisodeClick = {
@@ -685,7 +720,14 @@ fun VideoPlayerOverlay(
 
         // --- 5. 中央播放/暂停大图标 (仅全屏模式显示) ---
         AnimatedVisibility(
-            visible = isVisible && !isPlaying && !isQualitySwitching && isFullscreen,
+            visible = shouldShowCenterPlayButton(
+                isVisible = isVisible,
+                isPlaying = isPlaying,
+                isQualitySwitching = isQualitySwitching,
+                isFullscreen = isFullscreen,
+                isBuffering = isBuffering,
+                isScrubbing = isProgressScrubbing
+            ),
             modifier = Modifier.align(Alignment.Center),
             enter = scaleIn(tween(250)) + fadeIn(tween(200)),
             exit = scaleOut(tween(200)) + fadeOut(tween(200))
@@ -709,7 +751,12 @@ fun VideoPlayerOverlay(
 
         // --- 5.4  缓冲加载指示器 ---
         AnimatedVisibility(
-            visible = isBuffering && !isQualitySwitching && !isVisible,
+            visible = shouldShowBufferingIndicator(
+                isBuffering = isBuffering,
+                isQualitySwitching = isQualitySwitching,
+                isVisible = isVisible,
+                isScrubbing = isProgressScrubbing
+            ),
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(tween(200)),
             exit = fadeOut(tween(200))
@@ -957,7 +1004,12 @@ fun VideoPlayerOverlay(
                     color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                        .padding(
+                            start = 8.dp,
+                            top = 8.dp,
+                            end = 8.dp,
+                            bottom = resolvePageSelectorSheetOuterBottomPaddingDp(isFullscreen).dp
+                        )
                 ) {
                     Box(
                         modifier = Modifier
@@ -971,6 +1023,8 @@ fun VideoPlayerOverlay(
                         PagesSelector(
                             pages = pages,
                             currentPageIndex = currentPageIndex,
+                            forceGridMode = true,
+                            onDismissRequest = { showPageSelectorSheet = false },
                             onPageSelect = { index ->
                                 onPageSelect(index)
                                 showPageSelectorSheet = false

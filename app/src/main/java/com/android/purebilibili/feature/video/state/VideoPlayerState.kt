@@ -79,6 +79,31 @@ internal fun resolvePlayerBufferPolicy(isOnWifi: Boolean): PlayerBufferPolicy {
     }
 }
 
+internal fun shouldReuseMiniPlayerAtEntry(
+    isMiniPlayerActive: Boolean,
+    miniPlayerBvid: String?,
+    miniPlayerCid: Long,
+    hasMiniPlayerInstance: Boolean,
+    requestBvid: String,
+    requestCid: Long
+): Boolean {
+    if (!isMiniPlayerActive || !hasMiniPlayerInstance) return false
+    if (miniPlayerBvid != requestBvid) return false
+    if (requestCid <= 0L) return false
+    return miniPlayerCid > 0L && miniPlayerCid == requestCid
+}
+
+internal fun shouldRestoreCachedUiState(
+    cachedBvid: String?,
+    cachedCid: Long,
+    requestBvid: String,
+    requestCid: Long
+): Boolean {
+    if (cachedBvid != requestBvid) return false
+    if (requestCid <= 0L) return false
+    return cachedCid > 0L && cachedCid == requestCid
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class VideoPlayerState(
     val context: Context,
@@ -244,10 +269,21 @@ fun rememberVideoPlayerState(
     //  尝试复用 MiniPlayerManager 中已加载的 player
     val miniPlayerManager = MiniPlayerManager.getInstance(context)
     // 仅在页面进入时判断一次，避免 setVideoInfo 更新状态后触发“同页重建 player”
-    val reuseFromMiniPlayerAtEntry = remember(bvid) {
-        miniPlayerManager.isActive &&
-            miniPlayerManager.currentBvid == bvid &&
-            miniPlayerManager.player != null
+    val reuseFromMiniPlayerAtEntry = remember(bvid, cid) {
+        shouldReuseMiniPlayerAtEntry(
+            isMiniPlayerActive = miniPlayerManager.isActive,
+            miniPlayerBvid = miniPlayerManager.currentBvid,
+            miniPlayerCid = miniPlayerManager.currentCid,
+            hasMiniPlayerInstance = miniPlayerManager.player != null,
+            requestBvid = bvid,
+            requestCid = cid
+        )
+    }
+    LaunchedEffect(bvid, cid, reuseFromMiniPlayerAtEntry) {
+        Logger.d(
+            "VideoPlayerState",
+            "SUB_DBG remember entry: request=$bvid/$cid, miniActive=${miniPlayerManager.isActive}, mini=${miniPlayerManager.currentBvid}/${miniPlayerManager.currentCid}, reuse=$reuseFromMiniPlayerAtEntry"
+        )
     }
     
     //  [修复] 添加唯一 key 强制在每次进入时重新创建 player
@@ -466,6 +502,13 @@ fun rememberVideoPlayerState(
                     )
                     
                     if (shouldResume) {
+                        if (shouldRestorePlayerVolumeOnResume(shouldResume = true, currentVolume = player.volume)) {
+                            player.volume = 1.0f
+                            com.android.purebilibili.core.util.Logger.d(
+                                "VideoPlayerState",
+                                "🔊 ON_RESUME: Restored player volume to avoid silent playback"
+                            )
+                        }
                         // 只有当完全暂停时才检查是否需要恢复
                         // 移除 seekTo(savedPosition)，因为 player.currentPosition 才是最新的（即使暂停了也还在该位置）
                         // 且 seekTo 会导致 PiP 返回时回退到进入 PiP 前的旧位置
@@ -602,22 +645,41 @@ fun rememberVideoPlayerState(
     LaunchedEffect(player, bvid, cid, reuseFromMiniPlayerAtEntry) {
         // 1️⃣ 首先绑定 player
         viewModel.attachPlayer(player)
+        Logger.d(
+            "VideoPlayerState",
+            "SUB_DBG attach player + decide restore/load: request=$bvid/$cid, reuse=$reuseFromMiniPlayerAtEntry"
+        )
         
         // 2️⃣ 尝试从缓存恢复 UI 状态 (仅当复用播放器时)
         // 解决从小窗/后台返回时的网络请求错误问题
         var restored = false
         if (reuseFromMiniPlayerAtEntry) {
             val cachedState = miniPlayerManager.consumeCachedUiState()
-            if (cachedState != null && cachedState.info.bvid == bvid) {
+            Logger.d(
+                "VideoPlayerState",
+                "SUB_DBG cached state peek: cached=${cachedState?.info?.bvid}/${cachedState?.info?.cid}"
+            )
+            if (cachedState != null && shouldRestoreCachedUiState(
+                    cachedBvid = cachedState.info.bvid,
+                    cachedCid = cachedState.info.cid,
+                    requestBvid = bvid,
+                    requestCid = cid
+                )
+            ) {
                 com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "♻️ Restoring cached UI state for $bvid")
                 viewModel.restoreUiState(cachedState)
                 restored = true
+            } else if (cachedState != null) {
+                Logger.d(
+                    "VideoPlayerState",
+                    "SUB_DBG skip cached restore by policy: request=$bvid/$cid, cached=${cachedState.info.bvid}/${cachedState.info.cid}"
+                )
             }
         }
         
         // 3️⃣ 如果没有恢复成功，则调用 loadVideo
         if (!restored) {
-            com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " Calling loadVideo: $bvid")
+            com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "SUB_DBG call loadVideo: request=$bvid/$cid")
             viewModel.loadVideo(bvid, cid = cid)
         }
     }

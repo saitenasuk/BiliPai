@@ -35,6 +35,7 @@ import coil.request.ImageRequest
 import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.ui.components.CoinDialog
+import com.android.purebilibili.feature.video.player.PlayMode
 import com.android.purebilibili.feature.video.player.PlaylistManager
 import com.android.purebilibili.feature.video.ui.components.CollectionSheet  // 📂 [新增] 合集弹窗
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
@@ -45,6 +46,14 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
+
+internal fun resolveAudioPlayModeLabel(mode: PlayMode): String {
+    return when (mode) {
+        PlayMode.SEQUENTIAL -> "顺序播放"
+        PlayMode.SHUFFLE -> "随机播放"
+        PlayMode.REPEAT_ONE -> "单曲循环"
+    }
+}
 
 @Composable
 fun AudioModeScreen(
@@ -105,6 +114,7 @@ fun AudioModeScreen(
                 val context = LocalContext.current
                 val playlist by PlaylistManager.playlist.collectAsState()
                 val currentIndex by PlaylistManager.currentIndex.collectAsState()
+                val currentPlayMode by PlaylistManager.playMode.collectAsState()
                 
                 // 预加载相邻封面 - 使用 Coil 单例
                 val imageLoader = coil.Coil.imageLoader(context)
@@ -150,22 +160,28 @@ fun AudioModeScreen(
                 // ==================== 共享 UI 组件 (控制栏) ====================
                 val controlsContent: @Composable () -> Unit = {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        Spacer(modifier = Modifier.height(30.dp))
+
                         // 1. 按钮行 - 视频模式 + 封面模式切换
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            // 视频模式按钮
-                            Surface(
-                                onClick = { onVideoModeClick(info.bvid) },
-                                shape = RoundedCornerShape(20.dp),
-                                color = Color.White.copy(alpha = 0.15f)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // 视频模式按钮
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .clickable { onVideoModeClick(info.bvid) }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
@@ -182,17 +198,14 @@ fun AudioModeScreen(
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
-                            }
-                            
-                            // 封面模式切换按钮
-                            Surface(
-                                onClick = { isFullScreenCover = !isFullScreenCover },
-                                shape = RoundedCornerShape(20.dp),
-                                color = Color.White.copy(alpha = 0.15f)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+
+                                // 封面模式切换按钮
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .clickable { isFullScreenCover = !isFullScreenCover }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         if (isFullScreenCover) CupertinoIcons.Default.ArrowDownRightAndArrowUpLeft
@@ -330,7 +343,9 @@ fun AudioModeScreen(
                                 },
                                 onPrevious = { viewModel.playPreviousRecommended() },
                                 // 🎵 [修复] 使用分P优先播放方法
-                                onNext = { viewModel.playNextPageOrRecommended() }
+                                onNext = { viewModel.playNextPageOrRecommended() },
+                                currentPlayMode = currentPlayMode,
+                                onSelectPlayMode = { PlaylistManager.setPlayMode(it) }
                             )
                         } else {
                             Text("Connecting to player...", color = Color.White)
@@ -579,7 +594,9 @@ private fun PlayerControls(
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onPrevious: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    currentPlayMode: PlayMode,
+    onSelectPlayMode: (PlayMode) -> Unit
 ) {
     var isDragging by remember { mutableStateOf(false) }
     var draggingProgress by remember { mutableFloatStateOf(0f) }
@@ -677,6 +694,35 @@ private fun PlayerControls(
         }
         
         Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            listOf(PlayMode.SEQUENTIAL, PlayMode.SHUFFLE, PlayMode.REPEAT_ONE).forEach { mode ->
+                val isSelected = currentPlayMode == mode
+                Surface(
+                    onClick = { onSelectPlayMode(mode) },
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+                    } else {
+                        Color.White.copy(alpha = 0.15f)
+                    }
+                ) {
+                    Text(
+                        text = resolveAudioPlayModeLabel(mode),
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
         
         // 播放控制按钮
         Row(

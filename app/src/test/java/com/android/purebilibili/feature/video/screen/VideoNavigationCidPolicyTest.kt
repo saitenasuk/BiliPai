@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.UgcEpisode
 import com.android.purebilibili.data.model.response.UgcSeason
 import com.android.purebilibili.data.model.response.UgcSection
@@ -48,6 +49,53 @@ class VideoNavigationCidPolicyTest {
         )
 
         assertEquals(3003L, resolved)
+    }
+
+    @Test
+    fun `falls back to related video cid when explicit cid missing`() {
+        val related = listOf(
+            RelatedVideo(
+                bvid = "BV2B",
+                cid = 7788L
+            )
+        )
+
+        val resolved = resolveNavigationTargetCid(
+            targetBvid = "BV2B",
+            explicitCid = 0L,
+            relatedVideos = related,
+            ugcSeason = null
+        )
+
+        assertEquals(7788L, resolved)
+    }
+
+    @Test
+    fun `related video cid has priority over season cid when both exist`() {
+        val related = listOf(
+            RelatedVideo(
+                bvid = "BV2B",
+                cid = 7788L
+            )
+        )
+        val season = UgcSeason(
+            sections = listOf(
+                UgcSection(
+                    episodes = listOf(
+                        UgcEpisode(bvid = "BV2B", cid = 3003L)
+                    )
+                )
+            )
+        )
+
+        val resolved = resolveNavigationTargetCid(
+            targetBvid = "BV2B",
+            explicitCid = 0L,
+            relatedVideos = related,
+            ugcSeason = season
+        )
+
+        assertEquals(7788L, resolved)
     }
 
     @Test

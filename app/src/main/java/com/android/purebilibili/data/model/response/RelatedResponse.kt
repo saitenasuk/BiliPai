@@ -11,6 +11,7 @@ data class RelatedResponse(
 data class RelatedVideo(
     val aid: Long = 0,
     val bvid: String = "",
+    val cid: Long = 0,
     val title: String = "",
     val pic: String = "",
     val owner: Owner = Owner(),

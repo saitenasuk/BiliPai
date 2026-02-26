@@ -55,4 +55,15 @@ class SpacePlaybackPolicyTest {
     fun buildExternalPlaylistFromSpaceVideos_returnsNullForEmptyVideos() {
         assertNull(buildExternalPlaylistFromSpaceVideos(emptyList(), clickedBvid = "BV1"))
     }
+
+    @Test
+    fun resolveSpacePlayAllStartTarget_returnsFirstVideoBvid() {
+        val videos = listOf(
+            item(bvid = "BV1", title = "first", length = "00:10"),
+            item(bvid = "BV2", title = "second", length = "00:20")
+        )
+
+        assertEquals("BV1", resolveSpacePlayAllStartTarget(videos))
+        assertNull(resolveSpacePlayAllStartTarget(emptyList()))
+    }
 }

@@ -1,5 +1,7 @@
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.data.model.response.Page
+
 internal enum class PlayUrlSource {
     APP,
     DASH,
@@ -34,6 +36,23 @@ internal fun resolveVideoInfoLookupInput(rawBvid: String, aid: Long): VideoInfoL
     return null
 }
 
+internal fun resolveRequestedVideoCid(
+    requestCid: Long,
+    infoCid: Long,
+    pages: List<Page>
+): Long {
+    val normalizedRequestCid = requestCid.takeIf { it > 0L }
+    val normalizedInfoCid = infoCid.takeIf { it > 0L }
+
+    if (normalizedRequestCid != null) {
+        if (pages.isEmpty() || pages.any { it.cid == normalizedRequestCid }) {
+            return normalizedRequestCid
+        }
+    }
+
+    return normalizedInfoCid ?: normalizedRequestCid ?: 0L
+}
+
 internal fun resolveInitialStartQuality(
     targetQuality: Int?,
     isAutoHighestQuality: Boolean,
@@ -51,6 +70,13 @@ internal fun resolveInitialStartQuality(
         isLogin -> 64
         else -> 32
     }
+}
+
+internal fun resolveVideoPlaybackAuthState(
+    hasSessionCookie: Boolean,
+    hasAccessToken: Boolean
+): Boolean {
+    return hasSessionCookie || hasAccessToken
 }
 
 internal fun shouldSkipPlayUrlCache(
@@ -79,8 +105,12 @@ internal fun shouldCallAccessTokenApi(
     return hasAccessToken && nowMs >= cooldownUntilMs
 }
 
-internal fun shouldTryAppApiForTargetQuality(targetQn: Int): Boolean {
-    return targetQn >= 112
+internal fun shouldTryAppApiForTargetQuality(
+    targetQn: Int,
+    hasSessionCookie: Boolean = true
+): Boolean {
+    // 标准策略：高画质走 APP API；兜底策略：无 Cookie 但有 APP token 时，1080P(80) 也走 APP API。
+    return targetQn >= 112 || (!hasSessionCookie && targetQn >= 80)
 }
 
 internal fun buildGuestFallbackQualities(): List<Int> {

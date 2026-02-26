@@ -93,12 +93,31 @@ import androidx.compose.runtime.setValue
 // 定义路由参数结构
 object VideoRoute {
     const val base = "video"
-    const val route = "$base/{bvid}?cid={cid}&cover={cover}"
+    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}"
+
+    internal fun resolveVideoRoutePath(
+        bvid: String,
+        cid: Long,
+        encodedCover: String,
+        startAudio: Boolean
+    ): String {
+        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio"
+    }
 
     // 构建 helper
-    fun createRoute(bvid: String, cid: Long, coverUrl: String): String {
+    fun createRoute(
+        bvid: String,
+        cid: Long,
+        coverUrl: String,
+        startAudio: Boolean = false
+    ): String {
         val encodedCover = Uri.encode(coverUrl)
-        return "$base/$bvid?cid=$cid&cover=$encodedCover"
+        return resolveVideoRoutePath(
+            bvid = bvid,
+            cid = cid,
+            encodedCover = encodedCover,
+            startAudio = startAudio
+        )
     }
 }
 
@@ -155,14 +174,33 @@ fun AppNavigation(
     }
 
     // 统一跳转逻辑
-    fun navigateToVideo(bvid: String, cid: Long = 0L, coverUrl: String = "") {
-        navigateToVideoRoute(VideoRoute.createRoute(bvid, cid, coverUrl))
+    fun navigateToVideo(
+        bvid: String,
+        cid: Long = 0L,
+        coverUrl: String = "",
+        startAudio: Boolean = false
+    ) {
+        navigateToVideoRoute(VideoRoute.createRoute(bvid, cid, coverUrl, startAudio = startAudio))
     }
 
     fun navigateToVideoFromHome(request: HomeVideoClickRequest) {
+        com.android.purebilibili.core.util.Logger.d(
+            "AppNavigation",
+            "SUB_DBG home click: source=${request.source}, bvid=${request.bvid}, cid=${request.cid}, dynamicId=${request.dynamicId}"
+        )
         when (val target = resolveHomeNavigationTarget(request)) {
-            is HomeNavigationTarget.Video -> navigateToVideoRoute(target.route)
+            is HomeNavigationTarget.Video -> {
+                com.android.purebilibili.core.util.Logger.d(
+                    "AppNavigation",
+                    "SUB_DBG home click resolved video route: ${target.route}"
+                )
+                navigateToVideoRoute(target.route)
+            }
             is HomeNavigationTarget.DynamicDetail -> {
+                com.android.purebilibili.core.util.Logger.d(
+                    "AppNavigation",
+                    "SUB_DBG home click resolved dynamic route: ${target.dynamicId}"
+                )
                 if (!canNavigate()) return
                 navController.navigate(ScreenRoutes.DynamicDetail.createRoute(target.dynamicId))
             }
@@ -436,6 +474,7 @@ fun AppNavigation(
                 navArgument("bvid") { type = NavType.StringType },
                 navArgument("cid") { type = NavType.LongType; defaultValue = 0L },
                 navArgument("cover") { type = NavType.StringType; defaultValue = "" },
+                navArgument("startAudio") { type = NavType.BoolType; defaultValue = false },
                 navArgument("fullscreen") { type = NavType.BoolType; defaultValue = false }
             ),
             //  进入动画：当卡片过渡开启时用淡入（配合共享元素），关闭时用滑入
@@ -478,23 +517,25 @@ fun AppNavigation(
                         )
                     )
                 } else {
-                    //  位置感知滑出动画
-                    if (targetState.destination.route == ScreenRoutes.Home.route) {
+                    val direction = when (
+                        resolveVideoPopExitDirection(
+                            targetRoute = targetState.destination.route,
+                            isSingleColumnCard = CardPositionManager.isSingleColumnCard,
+                            lastClickedCardCenterX = CardPositionManager.lastClickedCardCenter?.x
+                        )
+                    ) {
+                        VideoPopExitDirection.LEFT -> AnimatedContentTransitionScope.SlideDirection.Left
+                        VideoPopExitDirection.RIGHT -> AnimatedContentTransitionScope.SlideDirection.Right
+                        VideoPopExitDirection.DOWN -> AnimatedContentTransitionScope.SlideDirection.Down
+                    }
+                    val targetIsHome = targetState.destination.route == ScreenRoutes.Home.route
+                    if (targetIsHome) {
                         slideOutOfContainer(
-                            AnimatedContentTransitionScope.SlideDirection.Right,
+                            direction,
                             tween(durationMillis = minOf(navMotionSpec.slideDurationMillis, 180), easing = IOS_RETURN_EASING)
                         )
-                    } else if (CardPositionManager.isSingleColumnCard) {
-                        //  单列卡片（故事卡片）：往下滑出
-                        slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down, tween(navMotionSpec.slideDurationMillis))
                     } else {
-                        //  双列卡片：返回到原来卡片的方向
-                        val isCardOnLeft = (CardPositionManager.lastClickedCardCenter?.x ?: 0.5f) < 0.5f
-                        if (isCardOnLeft) {
-                            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
-                        } else {
-                            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
-                        }
+                        slideOutOfContainer(direction, tween(navMotionSpec.slideDurationMillis))
                     }
                 }
             },
@@ -531,6 +572,7 @@ fun AppNavigation(
         ) { backStackEntry ->
             val bvid = backStackEntry.arguments?.getString("bvid") ?: ""
             val coverUrl = android.net.Uri.decode(backStackEntry.arguments?.getString("cover") ?: "")
+            val startAudio = backStackEntry.arguments?.getBoolean("startAudio") ?: false
             val startFullscreen = backStackEntry.arguments?.getBoolean("fullscreen") ?: false
             
             //  使用顶层定义的 cardTransitionEnabled（已在 line 68 定义）
@@ -595,6 +637,7 @@ fun AppNavigation(
                     isInPipMode = isInPipMode,
                     isVisible = true,
                     startInFullscreen = startFullscreen,  //  传递全屏参数
+                    startAudioFromRoute = startAudio,
                     transitionEnabled = cardTransitionEnabled,  //  传递过渡动画开关
                     transitionEnterDurationMillis = navMotionSpec.slowFadeDurationMillis,
                     transitionMaxBlurRadiusPx = navMotionSpec.maxBackdropBlurRadius,
@@ -784,7 +827,10 @@ fun AppNavigation(
                     viewModel = favoriteViewModel,
                     onBack = { navController.popBackStack() },
                     globalHazeState = mainHazeState, // [新增] 传入全局 HazeState
-                    onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") }
+                    onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") },
+                    onPlayAllAudioClick = { bvid, cid ->
+                        navigateToVideo(bvid, cid, "", startAudio = true)
+                    }
                 )
             }
         }
@@ -799,6 +845,9 @@ fun AppNavigation(
                 com.android.purebilibili.feature.watchlater.WatchLaterScreen(
                     onBack = { navController.popBackStack() },
                     onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") },
+                    onPlayAllAudioClick = { bvid, cid ->
+                        navigateToVideo(bvid, cid, "", startAudio = true)
+                    },
                     globalHazeState = mainHazeState // [新增] 传入全局 HazeState (WatchLaterScreen 需支持)
                 )
             }
@@ -1192,6 +1241,9 @@ fun AppNavigation(
                     mid = mid,
                     onBack = { navController.popBackStack() },
                     onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onPlayAllAudioClick = { bvid ->
+                        navigateToVideo(bvid, 0L, "", startAudio = true)
+                    },
                     onDynamicDetailClick = { dynamicId ->
                         navController.navigate(ScreenRoutes.DynamicDetail.createRoute(dynamicId))
                     },
