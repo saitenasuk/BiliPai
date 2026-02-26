@@ -76,6 +76,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.RelatedVideoItem
@@ -699,6 +700,7 @@ private fun CinemaCommentsPane(
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
     var sourceRect by remember { mutableStateOf<Rect?>(null) }
+    var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
     val shouldLoadMore by remember {
         derivedStateOf {
             val totalItems = listState.layoutInfo.totalItemsCount
@@ -718,7 +720,11 @@ private fun CinemaCommentsPane(
             images = previewImages,
             initialIndex = previewInitialIndex,
             sourceRect = sourceRect,
-            onDismiss = { showImagePreview = false }
+            textContent = previewTextContent,
+            onDismiss = {
+                showImagePreview = false
+                previewTextContent = null
+            }
         )
     }
 
@@ -776,10 +782,11 @@ private fun CinemaCommentsPane(
                         playerState.player.seekTo(positionMs)
                         playerState.player.play()
                     },
-                    onImagePreview = { images, index, rect ->
+                    onImagePreview = { images, index, rect, textContent ->
                         previewImages = images
                         previewInitialIndex = index
                         sourceRect = rect
+                        previewTextContent = textContent
                         showImagePreview = true
                     },
                     onLikeClick = { commentViewModel.likeComment(reply.rpid) },

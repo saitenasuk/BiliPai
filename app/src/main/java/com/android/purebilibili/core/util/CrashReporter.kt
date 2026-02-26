@@ -31,6 +31,10 @@ internal fun liveSessionDurationMs(nowElapsedMs: Long, sessionStartElapsedMs: Lo
     return (nowElapsedMs - sessionStartElapsedMs).coerceAtLeast(0L)
 }
 
+internal fun shouldWriteCrashCustomKey(previousValue: Any?, nextValue: Any): Boolean {
+    return previousValue != nextValue
+}
+
 /**
  * 崩溃报告工具类
  *
@@ -44,6 +48,7 @@ object CrashReporter {
     private const val TAG = "CrashReporter"
     private const val RATE_LIMIT_WINDOW_MS = 60_000L
     private const val RATE_LIMIT_MAX_KEYS = 300
+    private const val CUSTOM_KEY_CACHE_MAX_KEYS = 256
 
     @Volatile
     private var isEnabled: Boolean = true
@@ -53,6 +58,10 @@ object CrashReporter {
 
     private var previousUncaughtHandler: Thread.UncaughtExceptionHandler? = null
     private val nonFatalRateLimiter = ConcurrentHashMap<String, Long>()
+    private val lastCustomKeyValues = ConcurrentHashMap<String, Any>()
+
+    @Volatile
+    private var lastAppForegroundState: Boolean? = null
 
     @Volatile
     private var liveSessionActive: Boolean = false
@@ -151,8 +160,10 @@ object CrashReporter {
      */
     fun setAppForegroundState(inForeground: Boolean) {
         if (!isEnabled) return
+        if (lastAppForegroundState == inForeground) return
+        lastAppForegroundState = inForeground
         try {
-            Firebase.crashlytics.setCustomKey("app_in_foreground", inForeground)
+            setCustomKey("app_in_foreground", inForeground)
             Firebase.crashlytics.log("App ${if (inForeground) "foreground" else "background"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set app foreground state", e)
@@ -165,7 +176,7 @@ object CrashReporter {
     fun setLastScreen(screenName: String) {
         if (!isEnabled) return
         try {
-            Firebase.crashlytics.setCustomKey("last_screen", screenName.take(100))
+            setCustomKey("last_screen", screenName.take(100))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set last screen", e)
         }
@@ -177,7 +188,7 @@ object CrashReporter {
     fun setLastEvent(eventName: String) {
         if (!isEnabled) return
         try {
-            Firebase.crashlytics.setCustomKey("last_event", eventName.take(100))
+            setCustomKey("last_event", eventName.take(100))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set last event", e)
         }
@@ -253,6 +264,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: String) {
         if (!isEnabled) return
+        if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
@@ -265,6 +277,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: Boolean) {
         if (!isEnabled) return
+        if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
@@ -277,6 +290,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: Int) {
         if (!isEnabled) return
+        if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
@@ -289,6 +303,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: Long) {
         if (!isEnabled) return
+        if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
@@ -491,6 +506,19 @@ object CrashReporter {
             nonFatalRateLimiter.entries.removeIf { it.value < expireBefore }
         }
         return false
+    }
+
+    private fun shouldCacheAndWriteCustomKey(key: String, value: Any): Boolean {
+        if (key.isBlank()) return false
+        val previous = lastCustomKeyValues.put(key, value)
+        if (lastCustomKeyValues.size > CUSTOM_KEY_CACHE_MAX_KEYS) {
+            val keepEntries = lastCustomKeyValues.entries.take(CUSTOM_KEY_CACHE_MAX_KEYS / 2)
+            lastCustomKeyValues.clear()
+            keepEntries.forEach { entry ->
+                lastCustomKeyValues[entry.key] = entry.value
+            }
+        }
+        return shouldWriteCrashCustomKey(previousValue = previous, nextValue = value)
     }
 }
 

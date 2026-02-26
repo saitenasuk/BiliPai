@@ -24,8 +24,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.data.model.response.ReplyItem
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,7 +38,7 @@ fun SubReplySheet(
     onDismiss: () -> Unit,
     onLoadMore: () -> Unit,
     onTimestampClick: ((Long) -> Unit)? = null,
-    onImagePreview: ((List<String>, Int, androidx.compose.ui.geometry.Rect?) -> Unit)? = null,
+    onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)? = null,
     onReplyClick: ((ReplyItem) -> Unit)? = null,
     // [新增] 删除评论相关
     currentMid: Long = 0,
@@ -87,7 +89,7 @@ fun SubReplyList(
     onLoadMore: () -> Unit,
     onTimestampClick: ((Long) -> Unit)? = null,
     upMid: Long = 0,
-    onImagePreview: ((List<String>, Int, androidx.compose.ui.geometry.Rect?) -> Unit)? = null,
+    onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)? = null,
     onReplyClick: ((ReplyItem) -> Unit)? = null,
     // [新增] 消散动画相关
     dissolvingIds: Set<Long> = emptySet(),

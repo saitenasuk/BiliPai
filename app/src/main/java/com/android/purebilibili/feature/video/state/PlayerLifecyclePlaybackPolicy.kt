@@ -26,7 +26,8 @@ internal fun shouldResumeAfterLifecyclePause(
 
 internal fun shouldRestorePlayerVolumeOnResume(
     shouldResume: Boolean,
-    currentVolume: Float
+    currentVolume: Float,
+    shouldEnsureAudible: Boolean = false
 ): Boolean {
-    return shouldResume && currentVolume <= 0f
+    return currentVolume <= 0f && (shouldResume || shouldEnsureAudible)
 }

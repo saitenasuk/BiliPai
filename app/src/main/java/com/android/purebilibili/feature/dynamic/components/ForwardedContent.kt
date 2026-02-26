@@ -75,6 +75,14 @@ fun ForwardedContent(
     val content = orig.modules.module_dynamic
     var previewState by remember { mutableStateOf<ForwardedImagePreviewState?>(null) }
     var previewSourceRect by remember { mutableStateOf<Rect?>(null) }
+    val previewTextContent = remember(author?.name, content?.desc?.text, content?.major?.opus?.summary?.text) {
+        val bodyText = content?.desc?.text.takeUnless { it.isNullOrBlank() }
+            ?: content?.major?.opus?.summary?.text.orEmpty()
+        ImagePreviewTextContent(
+            headline = author?.name.orEmpty(),
+            body = bodyText
+        )
+    }
     
     Column(
         modifier = Modifier
@@ -180,6 +188,7 @@ fun ForwardedContent(
             images = state.images,
             initialIndex = state.initialIndex,
             sourceRect = previewSourceRect,
+            textContent = previewTextContent,
             onDismiss = {
                 previewState = null
                 previewSourceRect = null

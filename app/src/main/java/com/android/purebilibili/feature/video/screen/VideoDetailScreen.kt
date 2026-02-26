@@ -109,6 +109,7 @@ import com.android.purebilibili.feature.video.ui.components.LikeBurstAnimation
 import com.android.purebilibili.feature.video.ui.components.TripleSuccessAnimation
 import com.android.purebilibili.feature.video.ui.components.VideoDetailSkeleton
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog  //  评论图片预览
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -2542,6 +2543,7 @@ fun VideoDetailScreen(
         var subReplyPreviewImages by remember { mutableStateOf<List<String>>(emptyList()) }
         var subReplyPreviewIndex by remember { mutableIntStateOf(0) }
         var subReplySourceRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+        var subReplyPreviewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
         
         // [#14修复] 评论详情图片预览对话框
         if (subReplyShowImagePreview && subReplyPreviewImages.isNotEmpty()) {
@@ -2549,7 +2551,11 @@ fun VideoDetailScreen(
                 images = subReplyPreviewImages,
                 initialIndex = subReplyPreviewIndex,
                 sourceRect = subReplySourceRect,
-                onDismiss = { subReplyShowImagePreview = false }
+                textContent = subReplyPreviewTextContent,
+                onDismiss = {
+                    subReplyShowImagePreview = false
+                    subReplyPreviewTextContent = null
+                }
             )
         }
         
@@ -2570,10 +2576,11 @@ fun VideoDetailScreen(
                     commentViewModel.closeSubReply()  // 关闭弹窗以便看视频
                 },
                 // [#14修复] 图片预览回调
-                onImagePreview = { images, index, rect ->
+                onImagePreview = { images, index, rect, textContent ->
                     subReplyPreviewImages = images
                     subReplyPreviewIndex = index
                     subReplySourceRect = rect
+                    subReplyPreviewTextContent = textContent
                     subReplyShowImagePreview = true
                 },
                 //  [修复] 点击评论回复

@@ -39,7 +39,10 @@ import android.os.Build
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyPicture
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextPlacement
 import androidx.compose.ui.layout.ContentScale
+import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import androidx.compose.foundation.text.selection.SelectionContainer
 import java.text.SimpleDateFormat
@@ -63,6 +66,14 @@ internal fun shouldEnableRichCommentSelection(
     hasInteractiveAnnotations: Boolean
 ): Boolean {
     return !hasRenderableEmotes && !hasInteractiveAnnotations
+}
+
+internal fun resolveReplyPreviewTextContent(item: ReplyItem): ImagePreviewTextContent {
+    return ImagePreviewTextContent(
+        headline = item.member.uname,
+        body = item.content.message,
+        placement = ImagePreviewTextPlacement.TOP_BAR
+    )
 }
 
 //  优化后的颜色常量 (使用 MaterialTheme 替代硬编码)
@@ -102,7 +113,7 @@ fun ReplyItemView(
     onClick: () -> Unit,
     onSubClick: (ReplyItem) -> Unit,
     onTimestampClick: ((Long) -> Unit)? = null,
-    onImagePreview: ((List<String>, Int, Rect?) -> Unit)? = null,
+    onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)? = null,
     isLiked: Boolean = item.action == 1,
     onLikeClick: (() -> Unit)? = null,
     onReplyClick: (() -> Unit)? = null,
@@ -204,7 +215,12 @@ fun ReplyItemView(
                     CommentPictures(
                         pictures = item.content.pictures,
                         onImageClick = { images, index, rect ->
-                            onImagePreview?.invoke(images, index, rect)
+                            onImagePreview?.invoke(
+                                images,
+                                index,
+                                rect,
+                                resolveReplyPreviewTextContent(item)
+                            )
                         }
                     )
                 }
@@ -519,10 +535,59 @@ fun RichCommentText(
             hasInteractiveAnnotations = hasInteractiveAnnotations
         )
     }
+    val copyText = remember(text) { text.trim() }
+    var showCopySelectionDialog by remember(copyText) { mutableStateOf(false) }
 
     val content: @Composable () -> Unit = {
         //  使用 Text + pointerInput 实现带表情的可点击文本
         var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+        val textModifier = when {
+            hasInteractiveAnnotations -> Modifier.pointerInput(annotatedString, text) {
+                detectTapGestures(
+                    onLongPress = {
+                        if (copyText.isNotEmpty()) {
+                            showCopySelectionDialog = true
+                        }
+                    },
+                    onTap = { offset ->
+                        textLayoutResult?.let { layoutResult ->
+                            val position = layoutResult.getOffsetForPosition(offset)
+                            val searchStart = maxOf(0, position - 1)
+                            val searchEnd = minOf(annotatedString.length, position + 1)
+
+                            annotatedString.getStringAnnotations(
+                                tag = "URL",
+                                start = searchStart,
+                                end = searchEnd
+                            ).firstOrNull()?.let { annotation ->
+                                onUrlClick?.invoke(annotation.item)
+                                return@detectTapGestures
+                            }
+
+                            annotatedString.getStringAnnotations(
+                                tag = "TIMESTAMP",
+                                start = searchStart,
+                                end = searchEnd
+                            )
+                                .firstOrNull()?.let { annotation ->
+                                    val secondsValue = annotation.item.toLongOrNull() ?: 0L
+                                    onTimestampClick?.invoke(secondsValue * 1000)
+                                }
+                        }
+                    }
+                )
+            }
+            !selectionEnabled -> Modifier.pointerInput(copyText) {
+                detectTapGestures(
+                    onLongPress = {
+                        if (copyText.isNotEmpty()) {
+                            showCopySelectionDialog = true
+                        }
+                    }
+                )
+            }
+            else -> Modifier
+        }
 
         Text(
             text = annotatedString,
@@ -532,38 +597,7 @@ fun RichCommentText(
             lineHeight = (fontSize.value * 1.5).sp,
             maxLines = maxLines,
             onTextLayout = { textLayoutResult = it },
-            modifier = Modifier.then(
-                if (hasInteractiveAnnotations) {
-                    Modifier.pointerInput(annotatedString) {
-                        detectTapGestures { offset ->
-                            textLayoutResult?.let { layoutResult ->
-                                val position = layoutResult.getOffsetForPosition(offset)
-                                val searchStart = maxOf(0, position - 1)
-                                val searchEnd = minOf(annotatedString.length, position + 1)
-
-                                annotatedString.getStringAnnotations(
-                                    tag = "URL",
-                                    start = searchStart,
-                                    end = searchEnd
-                                ).firstOrNull()?.let { annotation ->
-                                    onUrlClick?.invoke(annotation.item)
-                                    return@detectTapGestures
-                                }
-
-                                annotatedString.getStringAnnotations(
-                                    tag = "TIMESTAMP",
-                                    start = searchStart,
-                                    end = searchEnd
-                                )
-                                    .firstOrNull()?.let { annotation ->
-                                        val secondsValue = annotation.item.toLongOrNull() ?: 0L
-                                        onTimestampClick?.invoke(secondsValue * 1000)
-                                    }
-                            }
-                        }
-                    }
-                } else Modifier
-            )
+            modifier = textModifier
         )
     }
 
@@ -573,6 +607,14 @@ fun RichCommentText(
         }
     } else {
         content()
+    }
+
+    if (showCopySelectionDialog) {
+        CopySelectionDialog(
+            text = copyText,
+            title = "选择评论内容",
+            onDismiss = { showCopySelectionDialog = false }
+        )
     }
 }
 

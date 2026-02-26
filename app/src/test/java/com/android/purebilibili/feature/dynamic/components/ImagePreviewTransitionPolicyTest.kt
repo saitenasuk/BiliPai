@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.dynamic.components
 import androidx.compose.ui.geometry.Rect
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ImagePreviewTransitionPolicyTest {
@@ -151,5 +152,45 @@ class ImagePreviewTransitionPolicyTest {
         assertEquals(1f, start, 0.0001f)
         assertEquals(0.7320428f, middle, 0.0001f)
         assertEquals(0f, end, 0.0001f)
+    }
+
+    @Test
+    fun resolveImagePreviewText_usesPerImageCaptionWhenAvailable() {
+        val resolved = resolveImagePreviewText(
+            textContent = ImagePreviewTextContent(
+                headline = "作者A",
+                body = "这是正文",
+                perImageCaptions = listOf("图1文案", "图2文案")
+            ),
+            currentPage = 1,
+            totalPages = 3
+        )
+
+        assertEquals("作者A", resolved?.headline)
+        assertEquals("图2文案", resolved?.body)
+        assertEquals("2 / 3", resolved?.pageIndicator)
+    }
+
+    @Test
+    fun resolveImagePreviewText_returnsNullWhenEverythingIsBlank() {
+        val resolved = resolveImagePreviewText(
+            textContent = ImagePreviewTextContent(),
+            currentPage = 0,
+            totalPages = 1
+        )
+
+        assertNull(resolved)
+    }
+
+    @Test
+    fun resolveImagePreviewTextTransform_adds3dFeelDuringPagerSwipe() {
+        val centered = resolveImagePreviewTextTransform(0f)
+        val swiping = resolveImagePreviewTextTransform(0.55f)
+
+        assertEquals(0f, centered.rotationX, 0.0001f)
+        assertEquals(1f, centered.alpha, 0.0001f)
+        assertTrue(swiping.rotationX > 10f)
+        assertTrue(swiping.alpha < 1f)
+        assertTrue(swiping.translateYDp > 0f)
     }
 }

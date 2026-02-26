@@ -57,6 +57,7 @@ import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
@@ -156,6 +157,7 @@ fun VideoContentSection(
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
     var sourceRect by remember { mutableStateOf<Rect?>(null) }
+    var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
     
     // 合集展开状态
     var showCollectionSheet by remember { mutableStateOf(false) }
@@ -166,7 +168,11 @@ fun VideoContentSection(
             images = previewImages,
             initialIndex = previewInitialIndex,
             sourceRect = sourceRect,
-            onDismiss = { showImagePreview = false }
+            textContent = previewTextContent,
+            onDismiss = {
+                showImagePreview = false
+                previewTextContent = null
+            }
         )
     }
     
@@ -284,10 +290,11 @@ fun VideoContentSection(
                     likedComments = likedComments,
                     onCommentUrlClick = onCommentUrlClick,
 
-                    onImagePreview = { images, index, rect ->
+                    onImagePreview = { images, index, rect, textContent ->
                         previewImages = images
                         previewInitialIndex = index
                         sourceRect = rect
+                        previewTextContent = textContent
                         showImagePreview = true
                     },
                     onTimestampClick = onTimestampClick,
@@ -437,7 +444,7 @@ private fun VideoCommentTab(
     onSubReplyClick: (ReplyItem) -> Unit,
     onRootCommentClick: () -> Unit,
     onLoadMoreReplies: () -> Unit,
-    onImagePreview: (List<String>, Int, Rect?) -> Unit,
+    onImagePreview: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit,
     onTimestampClick: ((Long) -> Unit)?,
     contentPadding: PaddingValues,
     // [新增] 参数
@@ -516,8 +523,8 @@ private fun VideoCommentTab(
                             onClick = {},
                             onSubClick = { onSubReplyClick(reply) },
                             onTimestampClick = onTimestampClick,
-                            onImagePreview = { images, index, rect ->
-                                onImagePreview(images, index, rect)
+                            onImagePreview = { images, index, rect, textContent ->
+                                onImagePreview(images, index, rect, textContent)
                             },
                             // [新增] 点赞事件
                             onLikeClick = { onCommentLike(reply.rpid) },

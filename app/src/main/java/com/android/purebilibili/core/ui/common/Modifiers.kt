@@ -1,8 +1,5 @@
 package com.android.purebilibili.core.ui.common
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,6 +15,28 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.clickable
 
+@Composable
+fun rememberClipboardCopyHandler(): (String, String?) -> Unit {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val clipboardManager = LocalClipboardManager.current
+    return remember(context, haptic, clipboardManager) {
+        { rawText: String, label: String? ->
+            val text = rawText.trim()
+            if (text.isNotEmpty()) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                clipboardManager.setText(AnnotatedString(text))
+                val toastMsg = if (label != null) "已复制 $label" else "已复制到剪贴板"
+                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
+                    Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
+                } else if (label != null) {
+                    Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+}
+
 /**
  *  长按复制文本修饰符
  * 
@@ -28,24 +47,13 @@ fun Modifier.copyOnLongPress(
     text: String,
     label: String? = null
 ): Modifier = composed {
-    val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
-    val clipboardManager = LocalClipboardManager.current
+    val copyToClipboard = rememberClipboardCopyHandler()
+    if (text.isBlank()) return@composed this
     
     pointerInput(text) {
         detectTapGestures(
             onLongPress = {
-                // 1. 震动反馈
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                
-                // 2. 写入剪贴板
-                clipboardManager.setText(AnnotatedString(text))
-                
-                // 3. 兼容旧版剪贴板提示 (Android 13+ 系统自带提示，12及以下需要手动提示)
-                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
-                    val toastMsg = if (label != null) "已复制 $label" else "已复制到剪贴板"
-                    Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
-                }
+                copyToClipboard(text, label)
             }
         )
     }
@@ -61,25 +69,10 @@ fun Modifier.copyOnClick(
     text: String,
     label: String? = null
 ): Modifier = composed {
-    val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
-    val clipboardManager = LocalClipboardManager.current
+    val copyToClipboard = rememberClipboardCopyHandler()
+    if (text.isBlank()) return@composed this
 
     clickable {
-        // 1. 震动反馈
-        haptic.performHapticFeedback(HapticFeedbackType.LongPress) // 使用长按震动感增加确认感
-
-        // 2. 写入剪贴板
-        clipboardManager.setText(AnnotatedString(text))
-
-        // 3. 提示
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
-            val toastMsg = if (label != null) "已复制 $label" else "已复制到剪贴板"
-            Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
-        } else {
-            // Android 13+ 也可以显示一个简短提示确认
-             val toastMsg = if (label != null) "已复制 $label" else "已复制"
-             Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
-        }
+        copyToClipboard(text, label)
     }
 }

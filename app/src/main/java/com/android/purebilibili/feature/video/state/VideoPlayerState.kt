@@ -500,19 +500,27 @@ fun rememberVideoPlayerState(
                         playWhenReady = player.playWhenReady,
                         playbackState = player.playbackState
                     )
+                    val shouldEnsureAudibleOnForeground =
+                        !miniPlayerManager.isMiniMode && !miniPlayerManager.shouldEnterPip()
+
+                    if (shouldRestorePlayerVolumeOnResume(
+                            shouldResume = shouldResume,
+                            currentVolume = player.volume,
+                            shouldEnsureAudible = shouldEnsureAudibleOnForeground
+                        )
+                    ) {
+                        player.volume = 1.0f
+                        com.android.purebilibili.core.util.Logger.d(
+                            "VideoPlayerState",
+                            "🔊 ON_RESUME: Restored player volume to avoid silent playback"
+                        )
+                    }
                     
                     if (shouldResume) {
-                        if (shouldRestorePlayerVolumeOnResume(shouldResume = true, currentVolume = player.volume)) {
-                            player.volume = 1.0f
-                            com.android.purebilibili.core.util.Logger.d(
-                                "VideoPlayerState",
-                                "🔊 ON_RESUME: Restored player volume to avoid silent playback"
-                            )
-                        }
                         // 只有当完全暂停时才检查是否需要恢复
                         // 移除 seekTo(savedPosition)，因为 player.currentPosition 才是最新的（即使暂停了也还在该位置）
                         // 且 seekTo 会导致 PiP 返回时回退到进入 PiP 前的旧位置
-                        if (!miniPlayerManager.isMiniMode && !miniPlayerManager.shouldEnterPip()) {
+                        if (shouldEnsureAudibleOnForeground) {
                              player.play()
                              com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " ON_RESUME: Resuming playback")
                         }
