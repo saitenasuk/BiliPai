@@ -56,6 +56,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     // 游标分页状态
     private var cursorMax: Long = 0
     private var cursorViewAt: Long = 0
+    private var cursorBusiness: String = ""
     private var hasMore = true
     private var isLoadingMore = false
     
@@ -140,6 +141,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         // 重置游标
         cursorMax = 0
         cursorViewAt = 0
+        cursorBusiness = ""
         _historyItemsMap.clear()
         _historyItemsByRenderKey.clear()
         _dissolvingIds.value = emptySet()
@@ -161,6 +163,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         historyResult.cursor?.let { cursor ->
             cursorMax = cursor.max
             cursorViewAt = cursor.view_at
+            cursorBusiness = cursor.business
         }
         
         // 判断是否还有更多
@@ -171,7 +174,10 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         val historyItems = enrichHistoryProgress(historyResult.list.map { it.toHistoryItem() })
         cacheHistoryItems(historyItems)
         
-        com.android.purebilibili.core.util.Logger.d("HistoryVM", " First page: ${historyResult.list.size} items, hasMore=$hasMore, nextMax=$cursorMax")
+        com.android.purebilibili.core.util.Logger.d(
+            "HistoryVM",
+            " First page: ${historyResult.list.size} items, hasMore=$hasMore, nextMax=$cursorMax, nextViewAt=$cursorViewAt, nextBusiness=$cursorBusiness"
+        )
         
         return historyItems.map { it.videoItem }
     }
@@ -185,12 +191,16 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
             _isLoadingMoreState.value = true
             
             try {
-                com.android.purebilibili.core.util.Logger.d("HistoryVM", " loadMore: max=$cursorMax, viewAt=$cursorViewAt")
+                com.android.purebilibili.core.util.Logger.d(
+                    "HistoryVM",
+                    " loadMore: max=$cursorMax, viewAt=$cursorViewAt, business=$cursorBusiness"
+                )
                 
                 val result = com.android.purebilibili.data.repository.HistoryRepository.getHistoryList(
                     ps = 30,
                     max = cursorMax,
-                    viewAt = cursorViewAt
+                    viewAt = cursorViewAt,
+                    business = cursorBusiness
                 )
                 
                 val historyResult = result.getOrNull()
@@ -204,6 +214,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
                 historyResult.cursor?.let { cursor ->
                     cursorMax = cursor.max
                     cursorViewAt = cursor.view_at
+                    cursorBusiness = cursor.business
                 }
                 
                 // 判断是否还有更多

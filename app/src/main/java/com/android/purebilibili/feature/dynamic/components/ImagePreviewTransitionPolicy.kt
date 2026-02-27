@@ -33,6 +33,30 @@ internal data class ImagePreviewDismissTransform(
     val translationYPx: Float
 )
 
+enum class ImagePreviewTextPlacement {
+    OVERLAY_BOTTOM,
+    TOP_BAR
+}
+
+data class ImagePreviewTextContent(
+    val headline: String = "",
+    val body: String = "",
+    val perImageCaptions: List<String> = emptyList(),
+    val placement: ImagePreviewTextPlacement = ImagePreviewTextPlacement.OVERLAY_BOTTOM
+)
+
+internal data class ImagePreviewResolvedText(
+    val headline: String,
+    val body: String,
+    val pageIndicator: String
+)
+
+internal data class ImagePreviewTextTransform(
+    val rotationX: Float,
+    val alpha: Float,
+    val translateYDp: Float
+)
+
 internal fun resolveImagePreviewTransitionFrame(
     rawProgress: Float,
     hasSourceRect: Boolean,
@@ -130,6 +154,45 @@ internal fun resolveImagePreviewDismissBackdropAlpha(
 internal fun resolvePredictiveBackAnimationProgress(backGestureProgress: Float): Float {
     val clamped = backGestureProgress.coerceIn(0f, 1f)
     return 1f - clamped
+}
+
+internal fun resolveImagePreviewText(
+    textContent: ImagePreviewTextContent?,
+    currentPage: Int,
+    totalPages: Int
+): ImagePreviewResolvedText? {
+    if (textContent == null) return null
+    val headline = textContent.headline.trim().take(48)
+    val pageCaption = textContent.perImageCaptions
+        .getOrNull(currentPage)
+        ?.trim()
+        .orEmpty()
+    val body = if (pageCaption.isNotEmpty()) {
+        pageCaption.take(150)
+    } else {
+        textContent.body.trim().take(150)
+    }
+    val indicator = if (totalPages > 1 && currentPage >= 0) {
+        "${currentPage + 1} / $totalPages"
+    } else {
+        ""
+    }
+    if (headline.isEmpty() && body.isEmpty() && indicator.isEmpty()) return null
+    return ImagePreviewResolvedText(
+        headline = headline,
+        body = body,
+        pageIndicator = indicator
+    )
+}
+
+internal fun resolveImagePreviewTextTransform(pageOffsetFraction: Float): ImagePreviewTextTransform {
+    val clampedOffset = pageOffsetFraction.coerceIn(-1f, 1f)
+    val absOffset = kotlin.math.abs(clampedOffset)
+    return ImagePreviewTextTransform(
+        rotationX = absOffset * 22f,
+        alpha = (1f - absOffset * 0.38f).coerceIn(0.62f, 1f),
+        translateYDp = absOffset * 8f
+    )
 }
 
 private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {

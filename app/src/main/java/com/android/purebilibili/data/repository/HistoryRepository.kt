@@ -14,6 +14,33 @@ data class HistoryResult(
     val cursor: HistoryCursor?
 )
 
+internal data class HistoryCursorQuery(
+    val max: Long?,
+    val viewAt: Long?,
+    val business: String?
+)
+
+internal fun resolveHistoryCursorQuery(
+    max: Long,
+    viewAt: Long,
+    business: String?
+): HistoryCursorQuery {
+    val normalizedBusiness = business?.trim()?.takeIf { it.isNotEmpty() }
+    val hasCursor = max > 0L || viewAt > 0L || normalizedBusiness != null
+    if (!hasCursor) {
+        return HistoryCursorQuery(
+            max = null,
+            viewAt = null,
+            business = null
+        )
+    }
+    return HistoryCursorQuery(
+        max = max.takeIf { it > 0L },
+        viewAt = viewAt.takeIf { it > 0L },
+        business = normalizedBusiness
+    )
+}
+
 object HistoryRepository {
     private val api = NetworkModule.api
 
@@ -26,18 +53,35 @@ object HistoryRepository {
     suspend fun getHistoryList(
         ps: Int = 30,
         max: Long = 0,
-        viewAt: Long = 0
+        viewAt: Long = 0,
+        business: String? = null
     ): Result<HistoryResult> {
         return withContext(Dispatchers.IO) {
             try {
-                com.android.purebilibili.core.util.Logger.d("HistoryRepo", "🔴 Fetching history: ps=$ps, max=$max, viewAt=$viewAt")
-                val response = api.getHistoryList(ps = ps, max = max, viewAt = viewAt)
+                val cursorQuery = resolveHistoryCursorQuery(
+                    max = max,
+                    viewAt = viewAt,
+                    business = business
+                )
+                com.android.purebilibili.core.util.Logger.d(
+                    "HistoryRepo",
+                    "🔴 Fetching history: ps=$ps, max=${cursorQuery.max}, viewAt=${cursorQuery.viewAt}, business=${cursorQuery.business}"
+                )
+                val response = api.getHistoryList(
+                    ps = ps,
+                    max = cursorQuery.max,
+                    viewAt = cursorQuery.viewAt,
+                    business = cursorQuery.business
+                )
                 com.android.purebilibili.core.util.Logger.d("HistoryRepo", "🔴 Response code=${response.code}, items=${response.data?.list?.size ?: 0}")
                 
                 if (response.code == 0) {
                     val list = response.data?.list ?: emptyList()
                     val cursor = response.data?.cursor
-                    com.android.purebilibili.core.util.Logger.d("HistoryRepo", "🔴 Cursor: max=${cursor?.max}, view_at=${cursor?.view_at}")
+                    com.android.purebilibili.core.util.Logger.d(
+                        "HistoryRepo",
+                        "🔴 Cursor: max=${cursor?.max}, view_at=${cursor?.view_at}, business=${cursor?.business}"
+                    )
                     Result.success(HistoryResult(list, cursor))
                 } else {
                     Result.failure(Exception(response.message))

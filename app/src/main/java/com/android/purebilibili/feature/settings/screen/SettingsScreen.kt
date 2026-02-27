@@ -14,6 +14,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable // [New]
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
@@ -346,17 +348,29 @@ fun SettingsScreen(
     }
 
     updateCheckResult?.let { info ->
-        val notesPreview = info.releaseNotes.trim().let { notes ->
-            if (notes.isBlank()) "暂无更新说明" else notes.take(240)
+        val resolvedReleaseNotes = remember(info.releaseNotes) {
+            resolveUpdateReleaseNotesText(info.releaseNotes)
         }
+        val releaseNotesScrollState = rememberScrollState()
         com.android.purebilibili.core.ui.IOSAlertDialog(
             onDismissRequest = { updateCheckResult = null },
             title = { Text("发现新版本 v${info.latestVersion}") },
             text = {
-                Text(
-                    "当前版本 v${info.currentVersion}\n\n$notesPreview",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "当前版本 v${info.currentVersion}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = resolvedReleaseNotes,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                            .verticalScroll(releaseNotesScrollState)
+                    )
+                }
             },
             confirmButton = {
                 com.android.purebilibili.core.ui.IOSDialogAction(onClick = {

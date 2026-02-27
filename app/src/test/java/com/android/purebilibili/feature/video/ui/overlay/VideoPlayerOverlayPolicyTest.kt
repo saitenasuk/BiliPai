@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -113,5 +114,65 @@ class VideoPlayerOverlayPolicyTest {
                 endDrawerVisible = false
             )
         )
+    }
+
+    @Test
+    fun centerPlayButtonHiddenWhenScrubbingOrBuffering() {
+        assertFalse(
+            shouldShowCenterPlayButton(
+                isVisible = true,
+                isPlaying = false,
+                isQualitySwitching = false,
+                isFullscreen = true,
+                isBuffering = true,
+                isScrubbing = false
+            )
+        )
+        assertFalse(
+            shouldShowCenterPlayButton(
+                isVisible = true,
+                isPlaying = false,
+                isQualitySwitching = false,
+                isFullscreen = true,
+                isBuffering = false,
+                isScrubbing = true
+            )
+        )
+        assertTrue(
+            shouldShowCenterPlayButton(
+                isVisible = true,
+                isPlaying = false,
+                isQualitySwitching = false,
+                isFullscreen = true,
+                isBuffering = false,
+                isScrubbing = false
+            )
+        )
+    }
+
+    @Test
+    fun bufferingIndicatorCanShowDuringScrubbingEvenWhenControlsVisible() {
+        assertTrue(
+            shouldShowBufferingIndicator(
+                isBuffering = true,
+                isQualitySwitching = false,
+                isVisible = true,
+                isScrubbing = true
+            )
+        )
+        assertFalse(
+            shouldShowBufferingIndicator(
+                isBuffering = true,
+                isQualitySwitching = false,
+                isVisible = true,
+                isScrubbing = false
+            )
+        )
+    }
+
+    @Test
+    fun pageSelectorSheetOuterBottomPadding_isZeroInFullscreen() {
+        assertEquals(0, resolvePageSelectorSheetOuterBottomPaddingDp(isFullscreen = true))
+        assertEquals(8, resolvePageSelectorSheetOuterBottomPaddingDp(isFullscreen = false))
     }
 }

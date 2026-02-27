@@ -12,7 +12,9 @@ class PortraitMainPlayerSyncPolicyTest {
         assertFalse(
             shouldReloadMainPlayerAfterPortraitExit(
                 snapshotBvid = " ",
-                currentBvid = "BV1xx411c7mD"
+                snapshotCid = 0L,
+                currentBvid = "BV1xx411c7mD",
+                currentCid = 123L
             )
         )
     }
@@ -22,17 +24,21 @@ class PortraitMainPlayerSyncPolicyTest {
         assertTrue(
             shouldReloadMainPlayerAfterPortraitExit(
                 snapshotBvid = "BV1xx411c7mD",
-                currentBvid = null
+                snapshotCid = 123L,
+                currentBvid = null,
+                currentCid = 0L
             )
         )
     }
 
     @Test
-    fun noReloadWhenSnapshotMatchesCurrent() {
+    fun noReloadWhenSnapshotMatchesCurrent_bvidAndCid() {
         assertFalse(
             shouldReloadMainPlayerAfterPortraitExit(
                 snapshotBvid = "BV1xx411c7mD",
-                currentBvid = "BV1xx411c7mD"
+                snapshotCid = 100L,
+                currentBvid = "BV1xx411c7mD",
+                currentCid = 100L
             )
         )
     }
@@ -42,7 +48,21 @@ class PortraitMainPlayerSyncPolicyTest {
         assertTrue(
             shouldReloadMainPlayerAfterPortraitExit(
                 snapshotBvid = "BV17x411w7KC",
-                currentBvid = "BV1xx411c7mD"
+                snapshotCid = 200L,
+                currentBvid = "BV1xx411c7mD",
+                currentCid = 100L
+            )
+        )
+    }
+
+    @Test
+    fun reloadWhenBvidSameButCidDiffers() {
+        assertTrue(
+            shouldReloadMainPlayerAfterPortraitExit(
+                snapshotBvid = "BV1xx411c7mD",
+                snapshotCid = 222L,
+                currentBvid = "BV1xx411c7mD",
+                currentCid = 111L
             )
         )
     }
@@ -88,8 +108,56 @@ class PortraitMainPlayerSyncPolicyTest {
     }
 
     @Test
-    fun userSpaceNavigation_shouldKeepPortraitState() {
-        assertFalse(shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen = true))
+    fun userSpaceNavigation_shouldExitPortraitBeforeJumping() {
+        assertTrue(shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen = true))
         assertFalse(shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen = false))
+    }
+
+    @Test
+    fun userSpaceReturn_shouldResync_whenCurrentPlayingBvidDiffers() {
+        assertTrue(
+            shouldResyncPortraitPagerOnUserSpaceReturn(
+                pendingUserSpaceNavigation = true,
+                expectedBvid = "BV17x411w7KC",
+                currentPlayingBvid = "BV1xx411c7mD",
+                currentPlayerMediaId = "BV1xx411c7mD"
+            )
+        )
+    }
+
+    @Test
+    fun userSpaceReturn_shouldResync_whenPlayerMediaIdMissing() {
+        assertTrue(
+            shouldResyncPortraitPagerOnUserSpaceReturn(
+                pendingUserSpaceNavigation = true,
+                expectedBvid = "BV17x411w7KC",
+                currentPlayingBvid = "BV17x411w7KC",
+                currentPlayerMediaId = " "
+            )
+        )
+    }
+
+    @Test
+    fun userSpaceReturn_shouldNotResync_whenAlreadyAligned() {
+        assertFalse(
+            shouldResyncPortraitPagerOnUserSpaceReturn(
+                pendingUserSpaceNavigation = true,
+                expectedBvid = "BV17x411w7KC",
+                currentPlayingBvid = "BV17x411w7KC",
+                currentPlayerMediaId = "BV17x411w7KC"
+            )
+        )
+    }
+
+    @Test
+    fun userSpaceReturn_shouldNotResync_whenNoPendingNavigation() {
+        assertFalse(
+            shouldResyncPortraitPagerOnUserSpaceReturn(
+                pendingUserSpaceNavigation = false,
+                expectedBvid = "BV17x411w7KC",
+                currentPlayingBvid = "BV17x411w7KC",
+                currentPlayerMediaId = ""
+            )
+        )
     }
 }

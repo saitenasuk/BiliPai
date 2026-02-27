@@ -9,6 +9,14 @@ import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.spring
@@ -69,6 +77,7 @@ private data class ImagePreviewOverlayRequest(
     val images: List<String>,
     val initialIndex: Int,
     val sourceRect: androidx.compose.ui.geometry.Rect?,
+    val textContent: ImagePreviewTextContent?,
     val onDismiss: () -> Unit
 )
 
@@ -93,6 +102,7 @@ fun ImagePreviewDialog(
     images: List<String>,
     initialIndex: Int,
     sourceRect: androidx.compose.ui.geometry.Rect? = null,
+    textContent: ImagePreviewTextContent? = null,
     onDismiss: () -> Unit
 ) {
     val latestOnDismiss by rememberUpdatedState(onDismiss)
@@ -105,6 +115,7 @@ fun ImagePreviewDialog(
                 images = images,
                 initialIndex = initialIndex,
                 sourceRect = sourceRect,
+                textContent = textContent,
                 onDismiss = { latestOnDismiss() }
             )
         )
@@ -127,6 +138,7 @@ fun ImagePreviewOverlayHost(
             images = request.images,
             initialIndex = request.initialIndex,
             sourceRect = request.sourceRect,
+            textContent = request.textContent,
             onDismiss = {
                 ImagePreviewOverlayController.dismiss(request.token)
                 request.onDismiss()
@@ -143,6 +155,7 @@ private fun ImagePreviewOverlayContent(
     images: List<String>,
     initialIndex: Int,
     sourceRect: androidx.compose.ui.geometry.Rect? = null,
+    textContent: ImagePreviewTextContent? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -476,6 +489,91 @@ private fun ImagePreviewOverlayContent(
                     .fillMaxSize()
                     .graphicsLayer { alpha = transitionFrame.visualProgress }
             ) {
+                val textTransform = resolveImagePreviewTextTransform(
+                    pageOffsetFraction = pagerState.currentPageOffsetFraction
+                )
+                val resolvedText = resolveImagePreviewText(
+                    textContent = textContent,
+                    currentPage = pagerState.currentPage,
+                    totalPages = images.size
+                )
+                val textPlacement = textContent?.placement ?: ImagePreviewTextPlacement.OVERLAY_BOTTOM
+
+                if (resolvedText != null && textPlacement == ImagePreviewTextPlacement.OVERLAY_BOTTOM) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(start = 16.dp, end = 16.dp, bottom = 82.dp)
+                            .graphicsLayer {
+                                alpha = textTransform.alpha
+                                rotationX = textTransform.rotationX
+                                translationY = with(density) { textTransform.translateYDp.dp.toPx() }
+                                cameraDistance = 10f * density.density
+                                transformOrigin = TransformOrigin(0.5f, 1f)
+                            }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.68f),
+                                            Color.Black.copy(alpha = 0.48f)
+                                        )
+                                    )
+                                )
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
+                        ) {
+                            AnimatedContent(
+                                targetState = pagerState.currentPage,
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = tween(250)) + slideInVertically { it / 3 }) togetherWith
+                                        (fadeOut(animationSpec = tween(180)) + slideOutVertically { -it / 4 })
+                                },
+                                label = "imagePreviewTextSwitch"
+                            ) { page ->
+                                val currentText = resolveImagePreviewText(
+                                    textContent = textContent,
+                                    currentPage = page,
+                                    totalPages = images.size
+                                ) ?: resolvedText
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    if (currentText.headline.isNotBlank()) {
+                                        Text(
+                                            text = currentText.headline,
+                                            color = Color.White.copy(alpha = 0.96f),
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    if (currentText.body.isNotBlank()) {
+                                        Text(
+                                            text = currentText.body,
+                                            color = Color.White.copy(alpha = 0.92f),
+                                            fontSize = 15.sp,
+                                            maxLines = 3,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (currentText.pageIndicator.isNotBlank()) {
+                                        Text(
+                                            text = currentText.pageIndicator,
+                                            color = Color.White.copy(alpha = 0.7f),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 //  页码指示器（圆点样式）
                 if (images.size > 1) {
                     Row(
@@ -524,7 +622,6 @@ private fun ImagePreviewOverlayContent(
                         .align(Alignment.TopCenter)
                         .statusBarsPadding()
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 关闭按钮
@@ -540,17 +637,97 @@ private fun ImagePreviewOverlayContent(
                             tint = Color.White
                         )
                     }
-                    
-                    //  页码文字
-                    if (images.size > 1) {
-                        Text(
-                            "${pagerState.currentPage + 1} / ${images.size}",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            modifier = Modifier
-                                .background(Color.Black.copy(0.5f), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when {
+                            resolvedText != null && textPlacement == ImagePreviewTextPlacement.TOP_BAR -> {
+                                Box(
+                                    modifier = Modifier.graphicsLayer {
+                                        alpha = textTransform.alpha
+                                        translationY = with(density) { (textTransform.translateYDp * 0.45f).dp.toPx() }
+                                    }
+                                ) {
+                                    AnimatedContent(
+                                        targetState = pagerState.currentPage,
+                                        transitionSpec = {
+                                            val isForward = targetState > initialState
+                                            (fadeIn(animationSpec = tween(220)) +
+                                                slideInHorizontally { fullWidth ->
+                                                    if (isForward) fullWidth / 3 else -fullWidth / 3
+                                                }) togetherWith
+                                                (fadeOut(animationSpec = tween(160)) +
+                                                    slideOutHorizontally { fullWidth ->
+                                                        if (isForward) -fullWidth / 4 else fullWidth / 4
+                                                    })
+                                        },
+                                        label = "imagePreviewTopBarTextSwitch"
+                                    ) { page ->
+                                        val pageText = resolveImagePreviewText(
+                                            textContent = textContent,
+                                            currentPage = page,
+                                            totalPages = images.size
+                                        ) ?: resolvedText
+                                        val primaryText = pageText.body.ifBlank { pageText.headline }
+                                        val secondaryText = if (
+                                            pageText.body.isNotBlank() &&
+                                            pageText.headline.isNotBlank()
+                                        ) {
+                                            pageText.headline
+                                        } else {
+                                            ""
+                                        }
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            if (secondaryText.isNotBlank()) {
+                                                Text(
+                                                    text = secondaryText,
+                                                    color = Color.White.copy(alpha = 0.82f),
+                                                    fontSize = 11.sp,
+                                                    maxLines = 1,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            if (primaryText.isNotBlank()) {
+                                                Text(
+                                                    text = primaryText,
+                                                    color = Color.White,
+                                                    fontSize = 14.sp,
+                                                    maxLines = 2,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                    modifier = Modifier
+                                                        .background(Color.Black.copy(0.5f), RoundedCornerShape(12.dp))
+                                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                                )
+                                            }
+                                            if (images.size > 1) {
+                                                Text(
+                                                    text = "${page + 1} / ${images.size}",
+                                                    color = Color.White.copy(alpha = 0.8f),
+                                                    fontSize = 12.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            images.size > 1 -> {
+                                Text(
+                                    "${pagerState.currentPage + 1} / ${images.size}",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    modifier = Modifier
+                                        .background(Color.Black.copy(0.5f), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
                     }
                     
                     //  下载按钮

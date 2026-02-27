@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.CacheControl
 import okhttp3.Request
 import retrofit2.HttpException
 import java.io.InputStream
@@ -455,7 +456,13 @@ object VideoRepository {
     }
 
     // [修复] 添加 aid 参数支持，修复移动端推荐流视频播放失败问题
-    suspend fun getVideoDetails(bvid: String, aid: Long = 0, targetQuality: Int? = null, audioLang: String? = null): Result<Pair<ViewInfo, PlayUrlData>> = withContext(Dispatchers.IO) {
+    suspend fun getVideoDetails(
+        bvid: String,
+        aid: Long = 0,
+        requestedCid: Long = 0L,
+        targetQuality: Int? = null,
+        audioLang: String? = null
+    ): Result<Pair<ViewInfo, PlayUrlData>> = withContext(Dispatchers.IO) {
         try {
             val lookup = resolveVideoInfoLookupInput(rawBvid = bvid, aid = aid)
                 ?: throw Exception("无效的视频标识: bvid=$bvid, aid=$aid")
@@ -467,12 +474,24 @@ object VideoRepository {
                 api.getVideoInfoByAid(lookup.aid)
             }
             
-            val info = viewResp.data ?: throw Exception("视频详情为空: ${viewResp.code}")
-            val cid = info.cid
+            val rawInfo = viewResp.data ?: throw Exception("视频详情为空: ${viewResp.code}")
+            val cid = resolveRequestedVideoCid(
+                requestCid = requestedCid,
+                infoCid = rawInfo.cid,
+                pages = rawInfo.pages
+            )
+            val info = if (cid > 0L && cid != rawInfo.cid) {
+                rawInfo.copy(cid = cid)
+            } else {
+                rawInfo
+            }
             val cacheBvid = info.bvid.ifBlank { lookup.bvid.ifBlank { bvid } }
             
             //  [调试] 记录视频信息
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", " getVideoDetails: bvid=${info.bvid}, aid=${info.aid}, cid=$cid, title=${info.title.take(20)}...")
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoRepo",
+                " getVideoDetails: bvid=${info.bvid}, aid=${info.aid}, requestCid=$requestedCid, infoCid=${rawInfo.cid}, resolvedCid=$cid, title=${info.title.take(20)}..."
+            )
             
             if (cid == 0L) throw Exception("CID 获取失败")
 
@@ -480,7 +499,10 @@ object VideoRepository {
             val isAutoHighestQuality = targetQuality != null && targetQuality >= 127
 
             //  [优化] 根据登录和大会员状态选择起始画质
-            val isLogin = !TokenManager.sessDataCache.isNullOrEmpty()
+            val isLogin = resolveVideoPlaybackAuthState(
+                hasSessionCookie = !TokenManager.sessDataCache.isNullOrEmpty(),
+                hasAccessToken = !TokenManager.accessTokenCache.isNullOrEmpty()
+            )
             val isVip = TokenManager.isVipCache
             
             //  [实验性功能] 读取 auto1080p 设置
@@ -706,7 +728,10 @@ object VideoRepository {
         //  关键：确保有正确的 buvid3 (来自 Bilibili SPI API)
         ensureBuvid3FromSpi()
         
-        val isLoggedIn = !TokenManager.sessDataCache.isNullOrEmpty()
+        val isLoggedIn = resolveVideoPlaybackAuthState(
+            hasSessionCookie = !TokenManager.sessDataCache.isNullOrEmpty(),
+            hasAccessToken = !TokenManager.accessTokenCache.isNullOrEmpty()
+        )
         com.android.purebilibili.core.util.Logger.d("VideoRepo", " fetchPlayUrlRecursive: bvid=$bvid, isLoggedIn=$isLoggedIn, targetQn=$targetQn, audioLang=$audioLang")
         
         return if (isLoggedIn) {
@@ -734,7 +759,11 @@ object VideoRepository {
         
         val accessToken = TokenManager.accessTokenCache
         val now = System.currentTimeMillis()
-        val shouldTryAppApi = shouldTryAppApiForTargetQuality(targetQn)
+        val hasSessionCookie = !TokenManager.sessDataCache.isNullOrEmpty()
+        val shouldTryAppApi = shouldTryAppApiForTargetQuality(
+            targetQn = targetQn,
+            hasSessionCookie = hasSessionCookie
+        )
         if (shouldTryAppApi && shouldCallAccessTokenApi(now, appApiCooldownUntilMs, !accessToken.isNullOrEmpty())) {
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " [LoggedIn] Trying APP API first with access_token...")
             val appResult = fetchPlayUrlWithAccessToken(bvid, cid, targetQn, audioLang = audioLang)
@@ -1202,8 +1231,11 @@ object VideoRepository {
 
             val request = Request.Builder()
                 .url(normalizedUrl)
+                .cacheControl(CacheControl.FORCE_NETWORK)
                 .get()
                 .header("Referer", "https://www.bilibili.com")
+                .header("Cache-Control", "no-cache")
+                .header("Pragma", "no-cache")
                 .build()
 
             val response = NetworkModule.okHttpClient.newCall(request).execute()

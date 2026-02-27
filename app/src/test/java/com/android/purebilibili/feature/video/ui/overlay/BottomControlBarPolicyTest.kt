@@ -217,4 +217,38 @@ class BottomControlBarPolicyTest {
         )
     }
 
+    @Test
+    fun fullscreenToggleTouchTargetUsesMinimumAccessibleSize() {
+        assertEquals(40, resolveFullscreenToggleTouchTargetDp(iconSizeDp = 20))
+        assertEquals(46, resolveFullscreenToggleTouchTargetDp(iconSizeDp = 30))
+    }
+
+    @Test
+    fun floatingPanelsShouldConsumeBackgroundInteractions() {
+        assertTrue(
+            shouldConsumeBackgroundGesturesForFloatingPanels(
+                showSubtitlePanel = true,
+                showMoreActionsPanel = false
+            )
+        )
+        assertTrue(
+            shouldConsumeBackgroundGesturesForFloatingPanels(
+                showSubtitlePanel = false,
+                showMoreActionsPanel = true
+            )
+        )
+        assertTrue(
+            shouldConsumeBackgroundGesturesForFloatingPanels(
+                showSubtitlePanel = true,
+                showMoreActionsPanel = true
+            )
+        )
+        assertFalse(
+            shouldConsumeBackgroundGesturesForFloatingPanels(
+                showSubtitlePanel = false,
+                showMoreActionsPanel = false
+            )
+        )
+    }
+
 }

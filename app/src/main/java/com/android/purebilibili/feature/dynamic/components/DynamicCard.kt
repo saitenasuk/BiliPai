@@ -4,6 +4,7 @@ package com.android.purebilibili.feature.dynamic.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
@@ -31,6 +33,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicStatModule
@@ -208,6 +211,12 @@ fun DynamicCardV2(
         content?.major?.draw?.let { draw ->
             var selectedImageIndex by remember { mutableIntStateOf(-1) }
             var sourceRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+            val drawPreviewText = remember(author?.name, content.desc?.text) {
+                ImagePreviewTextContent(
+                    headline = author?.name.orEmpty(),
+                    body = content.desc?.text.orEmpty()
+                )
+            }
             
             DrawGridV2(
                 items = draw.items,
@@ -225,6 +234,7 @@ fun DynamicCardV2(
                     images = draw.items.map { it.src },
                     initialIndex = selectedImageIndex,
                     sourceRect = sourceRect,  //  [新增] 传递源位置用于展开动画
+                    textContent = drawPreviewText,
                     onDismiss = { selectedImageIndex = -1 }
                 )
             }
@@ -234,6 +244,14 @@ fun DynamicCardV2(
         content?.major?.opus?.let { opus ->
             var selectedImageIndex by remember { mutableIntStateOf(-1) }
             var sourceRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+            val opusPreviewText = remember(author?.name, content.desc?.text, opus.summary?.text) {
+                val body = content.desc?.text.takeUnless { it.isNullOrBlank() }
+                    ?: opus.summary?.text.orEmpty()
+                ImagePreviewTextContent(
+                    headline = author?.name.orEmpty(),
+                    body = body
+                )
+            }
             
             // 显示标题 (如果有)
             opus.title?.let { title ->
@@ -289,6 +307,7 @@ fun DynamicCardV2(
                         images = opus.pics.map { it.url },
                         initialIndex = selectedImageIndex,
                         sourceRect = sourceRect,  //  [新增] 传递源位置用于展开动画
+                        textContent = opusPreviewText,
                         onDismiss = { selectedImageIndex = -1 }
                     )
                 }
@@ -473,14 +492,35 @@ fun RichTextContent(
             )
         }
     }
+    val copyText = remember(desc.rich_text_nodes, desc.text) {
+        val richNodeText = desc.rich_text_nodes.joinToString(separator = "") { it.text }
+        richNodeText.ifBlank { desc.text }.trim()
+    }
+    var showCopySelectionDialog by remember(copyText) { mutableStateOf(false) }
     
     Text(
         text = annotatedText,
         inlineContent = inlineContent,
         fontSize = 15.sp,
         lineHeight = 22.sp,
-        color = MaterialTheme.colorScheme.onSurface
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.pointerInput(copyText) {
+            detectTapGestures(
+                onLongPress = {
+                    if (copyText.isNotEmpty()) {
+                        showCopySelectionDialog = true
+                    }
+                }
+            )
+        }
     )
+    if (showCopySelectionDialog) {
+        CopySelectionDialog(
+            text = copyText,
+            title = "选择动态内容",
+            onDismiss = { showCopySelectionDialog = false }
+        )
+    }
 }
 
 /**

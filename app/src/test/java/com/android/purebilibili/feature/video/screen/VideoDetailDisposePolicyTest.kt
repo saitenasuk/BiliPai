@@ -85,4 +85,32 @@ class VideoDetailDisposePolicyTest {
             )
         )
     }
+
+    @Test
+    fun returningState_isMarkedOnlyWhenDisposeShouldBeHandledAsNavigationExit() {
+        assertTrue(
+            shouldMarkReturningStateOnVideoDetailDispose(
+                shouldHandleAsNavigationExit = true
+            )
+        )
+        assertFalse(
+            shouldMarkReturningStateOnVideoDetailDispose(
+                shouldHandleAsNavigationExit = false
+            )
+        )
+    }
+
+    @Test
+    fun enteringVideoDetail_clearsStaleReturningStateWhenPresent() {
+        assertTrue(
+            shouldClearStaleReturningStateOnVideoDetailEnter(
+                isReturningFromDetail = true
+            )
+        )
+        assertFalse(
+            shouldClearStaleReturningStateOnVideoDetailEnter(
+                isReturningFromDetail = false
+            )
+        )
+    }
 }

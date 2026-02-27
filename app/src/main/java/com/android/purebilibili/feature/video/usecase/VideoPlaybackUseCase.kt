@@ -116,6 +116,7 @@ class VideoPlaybackUseCase(
     suspend fun loadVideo(
         bvid: String,
         aid: Long = 0,  // [修复] 新增 aid 参数
+        cid: Long = 0L,
         defaultQuality: Int = 64,
         audioQualityPreference: Int = -1,
 
@@ -159,7 +160,15 @@ class VideoPlaybackUseCase(
             //  [性能优化] 并行请求视频详情、相关推荐。
             // 表情映射在首帧链路中跳过，避免自动播放起播被非关键请求阻塞。
             val (detailResult, relatedVideos, emoteMap) = kotlinx.coroutines.coroutineScope {
-                val detailDeferred = async { VideoRepository.getVideoDetails(bvid, aid, defaultQuality, audioLang) }
+                val detailDeferred = async {
+                    VideoRepository.getVideoDetails(
+                        bvid = bvid,
+                        aid = aid,
+                        requestedCid = cid,
+                        targetQuality = defaultQuality,
+                        audioLang = audioLang
+                    )
+                }
                 val relatedDeferred = async { 
                     if (bvid.isNotEmpty()) VideoRepository.getRelatedVideos(bvid) else emptyList() 
                 }
@@ -265,7 +274,10 @@ class VideoPlaybackUseCase(
                     
                     PlaybackCooldownManager.recordSuccess(bvid)
                     
-                    val isLogin = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
+                    val isLogin = com.android.purebilibili.data.repository.resolveVideoPlaybackAuthState(
+                        hasSessionCookie = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty(),
+                        hasAccessToken = !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty()
+                    )
                     
                     var isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
                     if (isLogin && !isVip && com.android.purebilibili.data.repository.shouldRefreshVipStatusOnVideoLoad()) {

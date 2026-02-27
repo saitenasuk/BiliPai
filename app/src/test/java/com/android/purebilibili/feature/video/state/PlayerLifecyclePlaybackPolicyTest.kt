@@ -52,4 +52,36 @@ class PlayerLifecyclePlaybackPolicyTest {
             )
         )
     }
+
+    @Test
+    fun volumeShouldRestoreWhenLifecycleResumesAndPlayerWasMutedByPauseFlow() {
+        assertTrue(
+            shouldRestorePlayerVolumeOnResume(
+                shouldResume = true,
+                currentVolume = 0f
+            )
+        )
+    }
+
+    @Test
+    fun volumeShouldNotRestoreWhenLifecycleResumeIsNotNeeded() {
+        assertFalse(
+            shouldRestorePlayerVolumeOnResume(
+                shouldResume = false,
+                currentVolume = 0f,
+                shouldEnsureAudible = false
+            )
+        )
+    }
+
+    @Test
+    fun volumeShouldRestoreWhenPlayerIsMutedButForegroundNeedsAudiblePlayback() {
+        assertTrue(
+            shouldRestorePlayerVolumeOnResume(
+                shouldResume = false,
+                currentVolume = 0f,
+                shouldEnsureAudible = true
+            )
+        )
+    }
 }

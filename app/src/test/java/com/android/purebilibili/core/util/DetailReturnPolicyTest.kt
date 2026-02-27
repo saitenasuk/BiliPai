@@ -35,4 +35,17 @@ class DetailReturnPolicyTest {
             )
         )
     }
+
+    @Test
+    fun markAndClearReturning_updatesReturningFlags() {
+        CardPositionManager.clearReturning()
+        assertFalse(CardPositionManager.isReturningFromDetail)
+
+        CardPositionManager.markReturning()
+        assertTrue(CardPositionManager.isReturningFromDetail)
+
+        CardPositionManager.clearReturning()
+        assertFalse(CardPositionManager.isReturningFromDetail)
+        assertFalse(CardPositionManager.isQuickReturnFromDetail)
+    }
 }

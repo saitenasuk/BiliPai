@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.ui.components.*
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
@@ -298,6 +299,7 @@ private fun TabletSecondaryContent(
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
     var sourceRect by remember { mutableStateOf<Rect?>(null) }
+    var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
     
     val context = androidx.compose.ui.platform.LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -331,7 +333,11 @@ private fun TabletSecondaryContent(
             images = previewImages,
             initialIndex = previewInitialIndex,
             sourceRect = sourceRect,
-            onDismiss = { showImagePreview = false }
+            textContent = previewTextContent,
+            onDismiss = {
+                showImagePreview = false
+                previewTextContent = null
+            }
         )
     }
 
@@ -486,10 +492,11 @@ private fun TabletSecondaryContent(
                                         playerState.player.seekTo(positionMs)
                                         playerState.player.play()
                                     },
-                                    onImagePreview = { images, index, rect ->
+                                    onImagePreview = { images, index, rect, textContent ->
                                         previewImages = images
                                         previewInitialIndex = index
                                         sourceRect = rect
+                                        previewTextContent = textContent
                                         showImagePreview = true
                                     },
                                     // [新增] 点赞按钮
@@ -601,7 +608,11 @@ private fun TabletSecondaryContent(
                                 val options = activity?.let { 
                                     android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle() 
                                 }
-                                onRelatedVideoClick(video.bvid, options) 
+                                val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
+                                if (video.cid > 0L) {
+                                    navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, video.cid)
+                                }
+                                onRelatedVideoClick(video.bvid, navOptions) 
                             }
                         )
                     }
@@ -659,7 +670,11 @@ private fun ScrollableVideoInfoSection(
                     val options = activity?.let { 
                         android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle() 
                     }
-                    onRelatedVideoClick(episode.bvid, options)
+                    val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
+                    if (episode.cid > 0L) {
+                        navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, episode.cid)
+                    }
+                    onRelatedVideoClick(episode.bvid, navOptions)
                 }
             )
         }
@@ -804,7 +819,11 @@ private fun ScrollableVideoInfoSection(
                                     val options = activity?.let {
                                         android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle()
                                     }
-                                    onRelatedVideoClick(video.bvid, options)
+                                    val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
+                                    if (video.cid > 0L) {
+                                        navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, video.cid)
+                                    }
+                                    onRelatedVideoClick(video.bvid, navOptions)
                                 }
                         ) {
                             Box(

@@ -99,6 +99,13 @@ internal fun isRetryableWatchLaterDeleteError(code: Int, message: String): Boole
         message.contains("rate", ignoreCase = true)
 }
 
+internal fun resolveWatchLaterPlayAllStartTarget(
+    items: List<VideoItem>
+): Pair<String, Long>? {
+    val first = items.firstOrNull() ?: return null
+    return first.bvid to first.cid
+}
+
 /**
  * 稍后再看 UI 状态
  */
@@ -322,6 +329,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
 fun WatchLaterScreen(
     onBack: () -> Unit,
     onVideoClick: (String, Long) -> Unit,
+    onPlayAllAudioClick: ((String, Long) -> Unit)? = null,
     viewModel: WatchLaterViewModel = viewModel(),
     globalHazeState: HazeState? = null // [新增]
 ) {
@@ -419,6 +427,34 @@ fun WatchLaterScreen(
                                     Icon(
                                         CupertinoIcons.Filled.Play,
                                         contentDescription = "全部播放",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        val externalPlaylist = buildExternalPlaylistFromWatchLater(
+                                            items = state.items,
+                                            clickedBvid = state.items.firstOrNull()?.bvid
+                                        ) ?: return@IconButton
+
+                                        com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
+                                            externalPlaylist.playlistItems,
+                                            externalPlaylist.startIndex,
+                                            source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.WATCH_LATER
+                                        )
+                                        com.android.purebilibili.feature.video.player.PlaylistManager
+                                            .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
+
+                                        val target = resolveWatchLaterPlayAllStartTarget(state.items)
+                                            ?: return@IconButton
+                                        onPlayAllAudioClick?.invoke(target.first, target.second)
+                                            ?: onVideoClick(target.first, target.second)
+                                    }
+                                ) {
+                                    Icon(
+                                        CupertinoIcons.Outlined.Headphones,
+                                        contentDescription = "全部听",
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }

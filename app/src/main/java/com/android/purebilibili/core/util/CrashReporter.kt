@@ -3,6 +3,7 @@ package com.android.purebilibili.core.util
 import android.app.Application
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.lifecycle.BackgroundManager
@@ -10,6 +11,29 @@ import com.google.firebase.crashlytics.ktx.crashlytics
 import com.google.firebase.ktx.Firebase
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+
+private val LIVE_STAGE_WHITESPACE_REGEX = Regex("\\s+")
+
+internal fun sanitizeLiveTraceStage(stage: String): String {
+    return stage
+        .trim()
+        .replace(LIVE_STAGE_WHITESPACE_REGEX, "_")
+        .take(80)
+}
+
+internal fun shouldUpdateLiveTraceStage(lastStage: String, nextStage: String): Boolean {
+    val normalizedNext = sanitizeLiveTraceStage(nextStage)
+    if (normalizedNext.isBlank()) return false
+    return normalizedNext != lastStage
+}
+
+internal fun liveSessionDurationMs(nowElapsedMs: Long, sessionStartElapsedMs: Long): Long {
+    return (nowElapsedMs - sessionStartElapsedMs).coerceAtLeast(0L)
+}
+
+internal fun shouldWriteCrashCustomKey(previousValue: Any?, nextValue: Any): Boolean {
+    return previousValue != nextValue
+}
 
 /**
  * 崩溃报告工具类
@@ -24,6 +48,7 @@ object CrashReporter {
     private const val TAG = "CrashReporter"
     private const val RATE_LIMIT_WINDOW_MS = 60_000L
     private const val RATE_LIMIT_MAX_KEYS = 300
+    private const val CUSTOM_KEY_CACHE_MAX_KEYS = 256
 
     @Volatile
     private var isEnabled: Boolean = true
@@ -33,6 +58,22 @@ object CrashReporter {
 
     private var previousUncaughtHandler: Thread.UncaughtExceptionHandler? = null
     private val nonFatalRateLimiter = ConcurrentHashMap<String, Long>()
+    private val lastCustomKeyValues = ConcurrentHashMap<String, Any>()
+
+    @Volatile
+    private var lastAppForegroundState: Boolean? = null
+
+    @Volatile
+    private var liveSessionActive: Boolean = false
+
+    @Volatile
+    private var liveSessionRoomId: Long = 0L
+
+    @Volatile
+    private var liveSessionStartElapsedMs: Long = 0L
+
+    @Volatile
+    private var liveLastStage: String = ""
 
     /**
      * 基础初始化：写入稳定环境信息
@@ -88,6 +129,18 @@ object CrashReporter {
                     setCustomKey("fatal_thread_name", thread.name)
                     setCustomKey("fatal_thread_id", thread.threadId())
                     setCustomKey("app_in_foreground", !BackgroundManager.isInBackground)
+                    setCustomKey("fatal_in_live_session", liveSessionActive)
+                    if (liveSessionActive) {
+                        setCustomKey("fatal_live_room_id", liveSessionRoomId)
+                        setCustomKey("fatal_live_stage", liveLastStage.ifBlank { "unknown" })
+                        setCustomKey(
+                            "fatal_live_session_uptime_ms",
+                            liveSessionDurationMs(
+                                nowElapsedMs = SystemClock.elapsedRealtime(),
+                                sessionStartElapsedMs = liveSessionStartElapsedMs
+                            )
+                        )
+                    }
                     log("FATAL: ${throwable.javaClass.simpleName}: ${throwable.message.orEmpty().take(200)}")
                 }
             } catch (e: Exception) {
@@ -107,8 +160,10 @@ object CrashReporter {
      */
     fun setAppForegroundState(inForeground: Boolean) {
         if (!isEnabled) return
+        if (lastAppForegroundState == inForeground) return
+        lastAppForegroundState = inForeground
         try {
-            Firebase.crashlytics.setCustomKey("app_in_foreground", inForeground)
+            setCustomKey("app_in_foreground", inForeground)
             Firebase.crashlytics.log("App ${if (inForeground) "foreground" else "background"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set app foreground state", e)
@@ -121,7 +176,7 @@ object CrashReporter {
     fun setLastScreen(screenName: String) {
         if (!isEnabled) return
         try {
-            Firebase.crashlytics.setCustomKey("last_screen", screenName.take(100))
+            setCustomKey("last_screen", screenName.take(100))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set last screen", e)
         }
@@ -133,7 +188,7 @@ object CrashReporter {
     fun setLastEvent(eventName: String) {
         if (!isEnabled) return
         try {
-            Firebase.crashlytics.setCustomKey("last_event", eventName.take(100))
+            setCustomKey("last_event", eventName.take(100))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set last event", e)
         }
@@ -209,6 +264,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: String) {
         if (!isEnabled) return
+        if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
@@ -221,6 +277,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: Boolean) {
         if (!isEnabled) return
+        if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
@@ -233,6 +290,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: Int) {
         if (!isEnabled) return
+        if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
@@ -245,6 +303,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: Long) {
         if (!isEnabled) return
+        if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
         } catch (e: Exception) {
@@ -353,6 +412,81 @@ object CrashReporter {
     }
 
     /**
+     * 标记直播会话开始（仅在进入直播页时调用，无常驻开销）
+     */
+    fun markLiveSessionStart(roomId: Long, title: String, uname: String) {
+        if (!isEnabled || roomId <= 0) return
+
+        val isSameSession = liveSessionActive && liveSessionRoomId == roomId
+        liveSessionActive = true
+        liveSessionRoomId = roomId
+        if (!isSameSession) {
+            liveSessionStartElapsedMs = SystemClock.elapsedRealtime()
+            liveLastStage = ""
+        }
+
+        try {
+            setCustomKey("live_session_active", true)
+            setCustomKey("live_room_id", roomId)
+            setCustomKey("live_room_title", title.take(120))
+            setCustomKey("live_anchor_name", uname.take(80))
+            markLivePlaybackStage("session_start")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to mark live session start", e)
+        }
+    }
+
+    /**
+     * 标记直播会话阶段（去重后才写入，避免高频日志）
+     */
+    fun markLivePlaybackStage(stage: String) {
+        if (!isEnabled || !liveSessionActive) return
+        if (!shouldUpdateLiveTraceStage(lastStage = liveLastStage, nextStage = stage)) return
+
+        val normalizedStage = sanitizeLiveTraceStage(stage)
+        liveLastStage = normalizedStage
+        try {
+            setCustomKey("live_last_stage", normalizedStage)
+            setCustomKey(
+                "live_session_uptime_ms",
+                liveSessionDurationMs(
+                    nowElapsedMs = SystemClock.elapsedRealtime(),
+                    sessionStartElapsedMs = liveSessionStartElapsedMs
+                )
+            )
+            log("LIVE_STAGE:$normalizedStage")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to mark live playback stage", e)
+        }
+    }
+
+    /**
+     * 标记直播会话结束
+     */
+    fun markLiveSessionEnd(reason: String) {
+        if (!isEnabled || !liveSessionActive) return
+
+        val normalizedReason = sanitizeLiveTraceStage(reason).ifBlank { "exit" }
+        try {
+            val duration = liveSessionDurationMs(
+                nowElapsedMs = SystemClock.elapsedRealtime(),
+                sessionStartElapsedMs = liveSessionStartElapsedMs
+            )
+            setCustomKey("live_session_uptime_ms", duration)
+            setCustomKey("live_last_stage", "session_end_$normalizedReason")
+            setCustomKey("live_session_active", false)
+            log("LIVE_END:roomId=$liveSessionRoomId,reason=$normalizedReason,durationMs=$duration")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to mark live session end", e)
+        } finally {
+            liveSessionActive = false
+            liveSessionRoomId = 0L
+            liveSessionStartElapsedMs = 0L
+            liveLastStage = ""
+        }
+    }
+
+    /**
      * 手动触发崩溃（仅用于测试）
      */
     fun testCrash() {
@@ -372,6 +506,19 @@ object CrashReporter {
             nonFatalRateLimiter.entries.removeIf { it.value < expireBefore }
         }
         return false
+    }
+
+    private fun shouldCacheAndWriteCustomKey(key: String, value: Any): Boolean {
+        if (key.isBlank()) return false
+        val previous = lastCustomKeyValues.put(key, value)
+        if (lastCustomKeyValues.size > CUSTOM_KEY_CACHE_MAX_KEYS) {
+            val keepEntries = lastCustomKeyValues.entries.take(CUSTOM_KEY_CACHE_MAX_KEYS / 2)
+            lastCustomKeyValues.clear()
+            keepEntries.forEach { entry ->
+                lastCustomKeyValues[entry.key] = entry.value
+            }
+        }
+        return shouldWriteCrashCustomKey(previousValue = previous, nextValue = value)
     }
 }
 

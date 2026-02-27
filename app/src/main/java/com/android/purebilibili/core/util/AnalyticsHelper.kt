@@ -2,6 +2,7 @@ package com.android.purebilibili.core.util
 
 import android.content.Context
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.store.SettingsManager
@@ -11,6 +12,24 @@ import com.google.firebase.analytics.ktx.analytics
 import com.google.firebase.analytics.ktx.logEvent
 import com.google.firebase.ktx.Firebase
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+
+private val ANALYTICS_DEDUPE_WHITESPACE_REGEX = Regex("\\s+")
+
+internal fun normalizeAnalyticsDedupeToken(token: String): String {
+    return token.trim()
+        .replace(ANALYTICS_DEDUPE_WHITESPACE_REGEX, "_")
+        .take(80)
+}
+
+internal fun shouldSkipAnalyticsEvent(
+    lastLoggedAtMs: Long?,
+    nowElapsedMs: Long,
+    minIntervalMs: Long
+): Boolean {
+    if (minIntervalMs <= 0L || lastLoggedAtMs == null) return false
+    return nowElapsedMs - lastLoggedAtMs < minIntervalMs
+}
 
 /**
  *  Firebase Analytics 工具类
@@ -31,6 +50,10 @@ object AnalyticsHelper {
     private var isEnabled: Boolean = true
     private var isInForeground: Boolean = false
     private var sessionStartMs: Long = 0L
+    private val eventRateLimiter = ConcurrentHashMap<String, Long>()
+
+    private const val EVENT_RATE_LIMIT_MAX_KEYS = 512
+    private const val EVENT_RATE_LIMIT_STALE_MS = 180_000L
 
     private fun resolveDurationBucket(durationMs: Long): String {
         return when {
@@ -49,6 +72,31 @@ object AnalyticsHelper {
             totalPluginCount <= 5 -> "medium"
             else -> "heavy"
         }
+    }
+
+    private fun shouldDropByRateLimit(
+        eventName: String,
+        dedupeToken: String,
+        minIntervalMs: Long
+    ): Boolean {
+        if (minIntervalMs <= 0L) return false
+
+        val normalizedToken = normalizeAnalyticsDedupeToken(dedupeToken)
+        if (normalizedToken.isBlank()) return false
+
+        val key = "${eventName.take(48)}:$normalizedToken"
+        val now = SystemClock.elapsedRealtime()
+        val lastTs = eventRateLimiter[key]
+        if (shouldSkipAnalyticsEvent(lastTs, now, minIntervalMs)) {
+            return true
+        }
+        eventRateLimiter[key] = now
+
+        if (eventRateLimiter.size > EVENT_RATE_LIMIT_MAX_KEYS) {
+            val expireBefore = now - EVENT_RATE_LIMIT_STALE_MS
+            eventRateLimiter.entries.removeIf { it.value < expireBefore }
+        }
+        return false
     }
     
     /**
@@ -183,6 +231,7 @@ object AnalyticsHelper {
      */
     fun logScreenView(screenName: String, screenClass: String? = null) {
         if (!isEnabled) return
+        if (shouldDropByRateLimit("screen_view", screenName, minIntervalMs = 500L)) return
         try {
             analytics?.logEvent(FirebaseAnalytics.Event.SCREEN_VIEW) {
                 param(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
@@ -242,6 +291,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         // 只在关键节点记录: 25%, 50%, 75%, 100%
         if (progress !in listOf(25, 50, 75, 100)) return
+        if (shouldDropByRateLimit("video_progress", "$videoId:$progress", minIntervalMs = 10_000L)) return
         try {
             analytics?.logEvent("video_progress") {
                 param("video_id", videoId)
@@ -469,6 +519,7 @@ object AnalyticsHelper {
      */
     fun logSettingChange(settingName: String, value: String) {
         if (!isEnabled) return
+        if (shouldDropByRateLimit("setting_change", "$settingName:$value", minIntervalMs = 700L)) return
         try {
             analytics?.logEvent("setting_change") {
                 param("setting_name", settingName)
@@ -504,10 +555,12 @@ object AnalyticsHelper {
      */
     fun logLiveWatchTime(roomId: Long, watchTimeSeconds: Long) {
         if (!isEnabled) return
+        val watchBucket = (watchTimeSeconds / 15L) * 15L
+        if (shouldDropByRateLimit("live_watch_time", "$roomId:$watchBucket", minIntervalMs = 12_000L)) return
         try {
             analytics?.logEvent("live_watch_time") {
                 param("room_id", roomId.toString())
-                param("watch_time_sec", watchTimeSeconds)
+                param("watch_time_sec", watchBucket)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log live watch time", e)
@@ -604,6 +657,7 @@ object AnalyticsHelper {
      */
     fun logPictureInPicture(videoId: String, action: String) {
         if (!isEnabled) return
+        if (shouldDropByRateLimit("picture_in_picture", "$videoId:$action", minIntervalMs = 900L)) return
         try {
             analytics?.logEvent("picture_in_picture") {
                 param("video_id", videoId)
@@ -622,6 +676,7 @@ object AnalyticsHelper {
      */
     fun logBackgroundPlay(videoId: String, action: String) {
         if (!isEnabled) return
+        if (shouldDropByRateLimit("background_play", "$videoId:$action", minIntervalMs = 900L)) return
         try {
             analytics?.logEvent("background_play") {
                 param("video_id", videoId)
@@ -640,6 +695,7 @@ object AnalyticsHelper {
      */
     fun logAudioMode(videoId: String, enabled: Boolean) {
         if (!isEnabled) return
+        if (shouldDropByRateLimit("audio_mode", "$videoId:$enabled", minIntervalMs = 900L)) return
         try {
             analytics?.logEvent("audio_mode") {
                 param("video_id", videoId)
@@ -715,6 +771,7 @@ object AnalyticsHelper {
         jsonDanmakuPluginEnabledCount: Int
     ) {
         if (!isEnabled) return
+        if (shouldDropByRateLimit("home_return_animation_perf", "$actualDurationMs:$isQuickReturn:$isTabletLayout", minIntervalMs = 800L)) return
         try {
             val totalPluginCount = builtinPluginEnabledCount + jsonPluginEnabledCount
             analytics?.logEvent("home_return_animation_perf") {

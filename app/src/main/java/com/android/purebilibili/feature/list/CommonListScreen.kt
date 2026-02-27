@@ -65,6 +65,10 @@ import com.android.purebilibili.core.util.rememberAdaptiveGridColumns
 import com.android.purebilibili.core.util.rememberResponsiveSpacing
 import com.android.purebilibili.core.util.rememberResponsiveValue
 import com.android.purebilibili.core.util.PinyinUtils
+import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
+import com.android.purebilibili.feature.video.player.PlayMode
+import com.android.purebilibili.feature.video.player.PlaylistManager
 
 internal enum class FavoriteContentMode {
     BASE_LIST,
@@ -84,12 +88,26 @@ internal fun resolveFavoriteContentMode(
     }
 }
 
+internal fun resolveFavoritePlayAllItems(
+    mode: FavoriteContentMode,
+    baseItems: List<VideoItem>,
+    selectedFolderItems: List<VideoItem>,
+    singleFolderItems: List<VideoItem>
+): List<VideoItem> {
+    return when (mode) {
+        FavoriteContentMode.PAGER -> selectedFolderItems.ifEmpty { baseItems }
+        FavoriteContentMode.SINGLE_FOLDER -> singleFolderItems.ifEmpty { baseItems }
+        FavoriteContentMode.BASE_LIST -> baseItems
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommonListScreen(
     viewModel: BaseListViewModel,
     onBack: () -> Unit,
     onVideoClick: (String, Long) -> Unit,
+    onPlayAllAudioClick: ((String, Long) -> Unit)? = null,
     globalHazeState: HazeState? = null // [新增] 接收全局 HazeState
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -230,6 +248,20 @@ fun CommonListScreen(
         isFavoritePage = favoriteViewModel != null,
         folderCount = foldersState.size
     )
+    val selectedFolderUiState by favoriteViewModel
+        ?.getFolderUiState(selectedFolderIndex)
+        ?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ListUiState()) }
+    val singleFolderUiState by favoriteViewModel
+        ?.getFolderUiState(0)
+        ?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ListUiState()) }
+    val activeFavoriteItems = resolveFavoritePlayAllItems(
+        mode = favoriteContentMode,
+        baseItems = state.items,
+        selectedFolderItems = selectedFolderUiState.items,
+        singleFolderItems = singleFolderUiState.items
+    )
     
     // [新增] Pager State (仅当有多个文件夹时使用)
     // 尽管 compose 会自动处理 rememberKey，但这里用 foldersState.size 作为 key 确保变化时重置
@@ -268,6 +300,23 @@ fun CommonListScreen(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
     }
+
+    val playFavoriteVideo: (List<VideoItem>, String, Long) -> Unit =
+        { items, bvid, cid ->
+            val externalPlaylist = buildExternalPlaylistFromFavorite(
+                items = items,
+                clickedBvid = bvid
+            )
+            if (externalPlaylist != null) {
+                PlaylistManager.setExternalPlaylist(
+                    externalPlaylist.playlistItems,
+                    externalPlaylist.startIndex,
+                    source = ExternalPlaylistSource.FAVORITE
+                )
+                PlaylistManager.setPlayMode(PlayMode.SEQUENTIAL)
+            }
+            onVideoClick(bvid, cid)
+        }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -340,7 +389,9 @@ fun CommonListScreen(
                                 cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                                 cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                                 cardMotionTier = cardMotionTier,
-                                onVideoClick = onVideoClick,
+                                onVideoClick = { bvid, cid ->
+                                    playFavoriteVideo(folderUiState.items, bvid, cid)
+                                },
                                 onLoadMore = { favoriteVm.loadMoreForFolder(page) },
                                 onUnfavorite = { video -> favoriteVm.removeVideo(video) }
                             )
@@ -364,7 +415,9 @@ fun CommonListScreen(
                             cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                             cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                             cardMotionTier = cardMotionTier,
-                            onVideoClick = onVideoClick,
+                            onVideoClick = { bvid, cid ->
+                                playFavoriteVideo(folderUiState.items, bvid, cid)
+                            },
                             onLoadMore = { favoriteVm.loadMoreForFolder(0) },
                             onUnfavorite = { video -> favoriteVm.removeVideo(video) }
                         )
@@ -381,7 +434,13 @@ fun CommonListScreen(
                         cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                         cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                         cardMotionTier = cardMotionTier,
-                        onVideoClick = onVideoClick,
+                        onVideoClick = { bvid, cid ->
+                            if (favoriteViewModel != null) {
+                                playFavoriteVideo(state.items, bvid, cid)
+                            } else {
+                                onVideoClick(bvid, cid)
+                            }
+                        },
                         onLoadMore = { 
                             favoriteViewModel?.loadMore()
                             historyViewModel?.loadMore()
@@ -440,6 +499,36 @@ fun CommonListScreen(
                             }
                         },
                         actions = {
+                            if (favoriteViewModel != null) {
+                                IconButton(
+                                    enabled = activeFavoriteItems.isNotEmpty(),
+                                    onClick = {
+                                        val externalPlaylist = buildExternalPlaylistFromFavorite(
+                                            items = activeFavoriteItems,
+                                            clickedBvid = activeFavoriteItems.firstOrNull()?.bvid
+                                        ) ?: return@IconButton
+
+                                        PlaylistManager.setExternalPlaylist(
+                                            externalPlaylist.playlistItems,
+                                            externalPlaylist.startIndex,
+                                            source = ExternalPlaylistSource.FAVORITE
+                                        )
+                                        PlaylistManager.setPlayMode(PlayMode.SEQUENTIAL)
+
+                                        val startItem = activeFavoriteItems
+                                            .getOrNull(externalPlaylist.startIndex)
+                                            ?: return@IconButton
+                                        onPlayAllAudioClick?.invoke(startItem.bvid, startItem.cid)
+                                            ?: onVideoClick(startItem.bvid, startItem.cid)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = CupertinoIcons.Outlined.Headphones,
+                                        contentDescription = "全部听"
+                                    )
+                                }
+                            }
+
                             if (historyViewModel != null && state.items.isNotEmpty()) {
                                 if (isHistoryBatchMode) {
                                     val allSelected = selectedHistoryKeys.size == state.items.size

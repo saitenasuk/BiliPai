@@ -162,7 +162,7 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
-    fun phoneOrientationPolicy_autoRotateEnabled_usesSensorAlways() {
+    fun phoneOrientationPolicy_autoRotateEnabled_usesSensorToAllowAutoExitFullscreen() {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_SENSOR,
             resolvePhoneVideoRequestedOrientation(

@@ -27,6 +27,7 @@ import com.android.purebilibili.feature.video.controller.QualityPermissionResult
 import com.android.purebilibili.feature.video.usecase.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
+import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlaylistManager
 import com.android.purebilibili.feature.video.player.PlaylistItem
 import com.android.purebilibili.feature.video.player.PlayMode
@@ -55,6 +57,7 @@ import com.android.purebilibili.feature.video.interaction.shouldTriggerInteracti
 import com.android.purebilibili.feature.video.policy.resolveFavoriteFolderMediaId
 import com.android.purebilibili.feature.video.subtitle.SubtitleCue
 import com.android.purebilibili.feature.video.subtitle.SubtitleTrackMeta
+import com.android.purebilibili.feature.video.subtitle.isSubtitleFeatureEnabledForUser
 import com.android.purebilibili.feature.video.subtitle.resolveDefaultSubtitleLanguages
 
 // ========== UI State ==========
@@ -141,6 +144,26 @@ internal data class FavoriteFolderMutation(
     val removeFolderIds: Set<Long>
 )
 
+internal data class ExternalPlaylistSyncDecision(
+    val keepExternalPlaylist: Boolean,
+    val matchedIndex: Int = -1
+)
+
+internal enum class AudioNextPlaybackStrategy {
+    PLAY_EXTERNAL_PLAYLIST,
+    PAGE_THEN_SEASON_THEN_RELATED
+}
+
+internal fun resolveAudioNextPlaybackStrategy(
+    isExternalPlaylist: Boolean,
+    externalPlaylistSource: ExternalPlaylistSource
+): AudioNextPlaybackStrategy {
+    if (!isExternalPlaylist || externalPlaylistSource == ExternalPlaylistSource.NONE) {
+        return AudioNextPlaybackStrategy.PAGE_THEN_SEASON_THEN_RELATED
+    }
+    return AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST
+}
+
 internal fun resolveFavoriteFolderMutation(
     original: Set<Long>,
     selected: Set<Long>
@@ -149,6 +172,201 @@ internal fun resolveFavoriteFolderMutation(
         addFolderIds = selected - original,
         removeFolderIds = original - selected
     )
+}
+
+internal fun shouldBootstrapPlayerContext(
+    hasBoundContext: Boolean,
+    hasGlobalContext: Boolean
+): Boolean {
+    return !hasBoundContext && hasGlobalContext
+}
+
+internal fun shouldApplyVideoLoadResult(
+    activeRequestToken: Long,
+    resultRequestToken: Long,
+    expectedBvid: String,
+    currentBvid: String
+): Boolean {
+    return activeRequestToken == resultRequestToken && expectedBvid == currentBvid
+}
+
+internal fun shouldApplyPlayerInfoResult(
+    activeRequestToken: Long,
+    resultRequestToken: Long,
+    expectedBvid: String,
+    expectedCid: Long,
+    currentBvid: String,
+    currentCid: Long
+): Boolean {
+    return activeRequestToken == resultRequestToken &&
+        expectedBvid == currentBvid &&
+        expectedCid == currentCid
+}
+
+internal fun shouldApplySubtitleLoadResult(
+    activeSubtitleToken: Long,
+    resultSubtitleToken: Long,
+    expectedBvid: String,
+    expectedCid: Long,
+    currentBvid: String,
+    currentCid: Long
+): Boolean {
+    return activeSubtitleToken == resultSubtitleToken &&
+        expectedBvid == currentBvid &&
+        expectedCid == currentCid
+}
+
+internal fun shouldTreatAsSamePlaybackRequest(
+    requestBvid: String,
+    requestCid: Long,
+    currentBvid: String,
+    currentCid: Long,
+    uiBvid: String?,
+    uiCid: Long,
+    miniPlayerBvid: String?,
+    miniPlayerCid: Long,
+    miniPlayerActive: Boolean
+): Boolean {
+    if (requestCid <= 0L) return false
+
+    val effectiveBvid = currentBvid.takeIf { it.isNotBlank() }
+        ?: uiBvid?.takeIf { it.isNotBlank() }
+        ?: miniPlayerBvid?.takeIf { miniPlayerActive && it.isNotBlank() }
+        ?: return false
+
+    if (effectiveBvid != requestBvid) return false
+
+    val effectiveCid = when {
+        currentCid > 0L -> currentCid
+        uiCid > 0L -> uiCid
+        miniPlayerActive && miniPlayerCid > 0L -> miniPlayerCid
+        else -> 0L
+    }
+
+    return effectiveCid > 0L && effectiveCid == requestCid
+}
+
+internal fun resolveExternalPlaylistSyncDecision(
+    isExternalPlaylist: Boolean,
+    playlist: List<PlaylistItem>,
+    currentBvid: String
+): ExternalPlaylistSyncDecision {
+    if (!isExternalPlaylist || currentBvid.isBlank()) {
+        return ExternalPlaylistSyncDecision(keepExternalPlaylist = false)
+    }
+
+    val matchIndex = playlist.indexOfFirst { it.bvid == currentBvid }
+    return if (matchIndex >= 0) {
+        ExternalPlaylistSyncDecision(
+            keepExternalPlaylist = true,
+            matchedIndex = matchIndex
+        )
+    } else {
+        ExternalPlaylistSyncDecision(keepExternalPlaylist = false)
+    }
+}
+
+internal fun clearSubtitleFields(state: PlayerUiState.Success): PlayerUiState.Success {
+    return state.copy(
+        subtitleEnabled = false,
+        subtitlePrimaryLanguage = null,
+        subtitleSecondaryLanguage = null,
+        subtitlePrimaryCues = emptyList(),
+        subtitleSecondaryCues = emptyList()
+    )
+}
+
+internal data class SubtitleTrackLoadDecision(
+    val primaryLanguage: String?,
+    val secondaryLanguage: String?,
+    val primaryCues: List<SubtitleCue>,
+    val secondaryCues: List<SubtitleCue>
+)
+
+internal fun isLikelyLowQualitySubtitleTrack(
+    cues: List<SubtitleCue>,
+    otherTrackCueCount: Int
+): Boolean {
+    if (cues.isEmpty()) return true
+    if (otherTrackCueCount < 8) return false
+
+    if (cues.size <= 2 && otherTrackCueCount >= 8) {
+        return true
+    }
+
+    if (cues.size == 1) {
+        val only = cues.first()
+        val durationMs = (only.endMs - only.startMs).coerceAtLeast(0L)
+        if (durationMs >= 20_000L && otherTrackCueCount >= 6) {
+            return true
+        }
+    }
+
+    return false
+}
+
+internal fun resolveSubtitleTrackLoadDecision(
+    primaryLanguage: String,
+    primaryCues: List<SubtitleCue>,
+    secondaryLanguage: String?,
+    secondaryCues: List<SubtitleCue>
+): SubtitleTrackLoadDecision {
+    if (secondaryLanguage.isNullOrBlank()) {
+        return SubtitleTrackLoadDecision(
+            primaryLanguage = primaryLanguage.takeIf { primaryCues.isNotEmpty() },
+            secondaryLanguage = null,
+            primaryCues = primaryCues,
+            secondaryCues = emptyList()
+        )
+    }
+
+    val primaryLowQuality = isLikelyLowQualitySubtitleTrack(
+        cues = primaryCues,
+        otherTrackCueCount = secondaryCues.size
+    )
+    val secondaryLowQuality = isLikelyLowQualitySubtitleTrack(
+        cues = secondaryCues,
+        otherTrackCueCount = primaryCues.size
+    )
+
+    return when {
+        !primaryLowQuality && !secondaryLowQuality -> SubtitleTrackLoadDecision(
+            primaryLanguage = primaryLanguage.takeIf { primaryCues.isNotEmpty() },
+            secondaryLanguage = secondaryLanguage.takeIf { secondaryCues.isNotEmpty() },
+            primaryCues = primaryCues,
+            secondaryCues = secondaryCues
+        )
+        primaryLowQuality && !secondaryLowQuality -> SubtitleTrackLoadDecision(
+            primaryLanguage = secondaryLanguage.takeIf { secondaryCues.isNotEmpty() },
+            secondaryLanguage = null,
+            primaryCues = secondaryCues,
+            secondaryCues = emptyList()
+        )
+        !primaryLowQuality && secondaryLowQuality -> SubtitleTrackLoadDecision(
+            primaryLanguage = primaryLanguage.takeIf { primaryCues.isNotEmpty() },
+            secondaryLanguage = null,
+            primaryCues = primaryCues,
+            secondaryCues = emptyList()
+        )
+        else -> {
+            val usePrimary = primaryCues.size >= secondaryCues.size
+            if (usePrimary) {
+                SubtitleTrackLoadDecision(
+                    primaryLanguage = primaryLanguage.takeIf { primaryCues.isNotEmpty() },
+                    secondaryLanguage = null,
+                    primaryCues = primaryCues,
+                    secondaryCues = emptyList()
+                )
+            } else {
+                SubtitleTrackLoadDecision(
+                    primaryLanguage = secondaryLanguage.takeIf { secondaryCues.isNotEmpty() },
+                    secondaryLanguage = null,
+                    primaryCues = secondaryCues,
+                    secondaryCues = emptyList()
+                )
+            }
+        }
+    }
 }
 
 // ========== ViewModel ==========
@@ -354,6 +572,9 @@ class PlayerViewModel : ViewModel() {
     private val followingMidsCacheTtlMs: Long = 10 * 60 * 1000L
     private var lastCreatorSignalPositionSec: Long = -1L
     private var subtitleLoadToken: Long = 0L
+    private var currentLoadRequestToken: Long = 0L
+    private var activeLoadJob: Job? = null
+    private var playerInfoJob: Job? = null
     
     //  Public Player Accessor
     val currentPlayer: Player?
@@ -661,10 +882,13 @@ class PlayerViewModel : ViewModel() {
      * 初始化持久化存储（需要在使用前调用一次）
      */
     fun initWithContext(context: android.content.Context) {
-        appContext = context.applicationContext  //  [新增] 保存应用 Context
+        val applicationContext = context.applicationContext
+        if (appContext === applicationContext) return
+
+        appContext = applicationContext  //  [新增] 保存应用 Context
         playbackUseCase.initWithContext(context)
 
-        val miniPlayerManager = MiniPlayerManager.getInstance(context.applicationContext)
+        val miniPlayerManager = MiniPlayerManager.getInstance(applicationContext)
         miniPlayerManager.onPlayNextCallback = { item ->
             viewModelScope.launch {
                 loadVideo(item.bvid, autoPlay = true)
@@ -694,6 +918,18 @@ class PlayerViewModel : ViewModel() {
                     com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🎵 Audio preference updated from Settings to: $it")
                     _audioQualityPreference.value = it 
                 }
+        }
+    }
+
+    private fun bootstrapContextIfNeeded() {
+        val globalContext = com.android.purebilibili.core.network.NetworkModule.appContext
+        if (shouldBootstrapPlayerContext(
+                hasBoundContext = appContext != null,
+                hasGlobalContext = globalContext != null
+            )
+        ) {
+            initWithContext(requireNotNull(globalContext))
+            Logger.d("PlayerVM", "♻️ Bootstrapped PlayerViewModel context from NetworkModule")
         }
     }
     
@@ -855,6 +1091,19 @@ class PlayerViewModel : ViewModel() {
      * 优先级: 分P > 合集下一集 > 推荐视频
      */
     fun playNextPageOrRecommended() {
+        val nextStrategy = resolveAudioNextPlaybackStrategy(
+            isExternalPlaylist = PlaylistManager.isExternalPlaylist.value,
+            externalPlaylistSource = PlaylistManager.externalPlaylistSource.value
+        )
+        if (nextStrategy == AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST) {
+            Logger.d(
+                "PlayerVM",
+                "🔒 外部播放队列模式：下一首按队列播放 source=${PlaylistManager.externalPlaylistSource.value}"
+            )
+            playNextRecommended()
+            return
+        }
+
         val current = _uiState.value as? PlayerUiState.Success ?: run {
             // 如果当前没有成功状态，直接播放推荐
             playNextRecommended()
@@ -958,6 +1207,11 @@ class PlayerViewModel : ViewModel() {
         cid: Long = 0L
     ) {
         if (bvid.isBlank()) return
+        bootstrapContextIfNeeded()
+        Logger.d(
+            "PlayerVM",
+            "SUB_DBG loadVideo start: request=$bvid/$cid, aid=$aid, force=$force, current=$currentBvid/$currentCid, ui=${(_uiState.value as? PlayerUiState.Success)?.info?.bvid}/${(_uiState.value as? PlayerUiState.Success)?.info?.cid}"
+        )
         
         //  防止重复加载：只有在正在加载同一视频时才跳过 (且语言未改变)
         val currentLang = (_uiState.value as? PlayerUiState.Success)?.currentAudioLang
@@ -976,17 +1230,38 @@ class PlayerViewModel : ViewModel() {
             player.playerError == null // 没有播放错误
         
         val currentSuccess = _uiState.value as? PlayerUiState.Success
+        val miniPlayerManager = appContext?.let { MiniPlayerManager.getInstance(it) }
+        val isSamePlaybackRequest = shouldTreatAsSamePlaybackRequest(
+            requestBvid = bvid,
+            requestCid = cid,
+            currentBvid = currentBvid,
+            currentCid = currentCid,
+            uiBvid = currentSuccess?.info?.bvid,
+            uiCid = currentSuccess?.info?.cid ?: 0L,
+            miniPlayerBvid = miniPlayerManager?.currentBvid,
+            miniPlayerCid = miniPlayerManager?.currentCid ?: 0L,
+            miniPlayerActive = miniPlayerManager?.isActive == true
+        )
+        Logger.d(
+            "PlayerVM",
+            "SUB_DBG same-playback check: request=$bvid/$cid, current=$currentBvid/$currentCid, mini=${miniPlayerManager?.currentBvid}/${miniPlayerManager?.currentCid}, miniActive=${miniPlayerManager?.isActive == true}, result=$isSamePlaybackRequest"
+        )
         
         // 🎯 [关键修复] 即使 currentBvid 为空（新 ViewModel），如果播放器已经在播放这个视频，也不要重新加载
         // 这种情况发生在 Notification -> MainActivity (New Activity/VM) -> VideoDetailScreen -> reuse attached player
-        val isPlayerPlayingSameVideo = isPlayerHealthy && (currentBvid == bvid || (currentBvid.isEmpty() && player?.isPlaying == true))
-        val isUiLoaded = currentSuccess != null && currentSuccess.info.bvid == bvid
+        val isPlayerPlayingSameVideo = isPlayerHealthy && isSamePlaybackRequest
+        val isUiLoaded = currentSuccess != null &&
+            currentSuccess.info.bvid == bvid &&
+            (cid <= 0L || currentSuccess.info.cid == cid)
 
         if (!force && isPlayerPlayingSameVideo && isUiLoaded) {
             Logger.d("PlayerVM", "🎯 $bvid already playing healthy + UI loaded, skip reload")
             // 补全 ViewModel 状态：currentBvid 可能为空，需要同步
             if (currentBvid.isEmpty()) {
                 currentBvid = bvid
+            }
+            if (currentCid <= 0L && currentSuccess.info.cid > 0L) {
+                currentCid = currentSuccess.info.cid
             }
             
             //  确保音量正常
@@ -1017,12 +1292,31 @@ class PlayerViewModel : ViewModel() {
             currentSuccess?.info?.bvid == bvid -> currentSuccess.info.cid
             else -> 0L
         }
+        Logger.d(
+            "PlayerVM",
+            "SUB_DBG loadVideo request resolved progressCid=$progressCid for request=$bvid/$cid"
+        )
         val cachedPosition = playbackUseCase.getCachedPosition(bvid, progressCid)
         currentBvid = bvid
         clearInteractiveChoiceRuntime()
         lastCreatorSignalPositionSec = cachedPosition / 1000L
+        currentLoadRequestToken += 1L
+        val requestToken = currentLoadRequestToken
+        subtitleLoadToken += 1L
+        playerInfoJob?.cancel()
+        activeLoadJob?.cancel()
         
-        viewModelScope.launch {
+        activeLoadJob = viewModelScope.launch {
+            if (!shouldApplyVideoLoadResult(
+                    activeRequestToken = currentLoadRequestToken,
+                    resultRequestToken = requestToken,
+                    expectedBvid = bvid,
+                    currentBvid = currentBvid
+                )
+            ) {
+                Logger.d("PlayerVM", "⏭️ Skip stale load request before start: bvid=$bvid token=$requestToken")
+                return@launch
+            }
             _uiState.value = PlayerUiState.Loading.Initial
             
                 val defaultQuality = appContext?.let { NetworkUtils.getDefaultQualityId(it) } ?: 64
@@ -1082,6 +1376,7 @@ class PlayerViewModel : ViewModel() {
                     playbackUseCase.loadVideo(
                         bvid = bvid,
                         aid = aid,
+                        cid = cid,
                         defaultQuality = finalQuality,
                         audioQualityPreference = audioQualityPreference,
                         videoCodecPreference = videoCodecPreference,
@@ -1095,7 +1390,21 @@ class PlayerViewModel : ViewModel() {
 
                 when (result) {
                     is VideoLoadResult.Success -> {
+                        if (!shouldApplyVideoLoadResult(
+                                activeRequestToken = currentLoadRequestToken,
+                                resultRequestToken = requestToken,
+                                expectedBvid = bvid,
+                                currentBvid = currentBvid
+                            )
+                        ) {
+                            Logger.d("PlayerVM", "⏭️ Ignore stale load success: bvid=$bvid token=$requestToken")
+                            return@launch
+                        }
                         currentCid = result.info.cid
+                        Logger.d(
+                            "PlayerVM",
+                            "SUB_DBG loadVideo success: requested=$bvid/$cid, loaded=${result.info.bvid}/${result.info.cid}, token=$requestToken"
+                        )
                         
                         // 🛠️ [修复] 检查是否已播放结束 (余量 < 5秒)
                         // 若上次已看完，则从头开始播放，避免立即触发 STATE_ENDED 导致循环跳转
@@ -1200,7 +1509,11 @@ class PlayerViewModel : ViewModel() {
                             )
                             loadVideoTags(loadedBvid)
                             loadVideoshot(loadedBvid, loadedCid)
-                            loadPlayerInfo(loadedBvid, loadedCid)
+                            loadPlayerInfo(
+                                bvid = loadedBvid,
+                                cid = loadedCid,
+                                requestToken = requestToken
+                            )
                             loadAiSummary(loadedBvid, loadedCid, loadedOwnerMid)
                             startOnlineCountPolling(loadedBvid, loadedCid)
                         }
@@ -1225,17 +1538,58 @@ class PlayerViewModel : ViewModel() {
                         AnalyticsHelper.logVideoPlay(bvid, result.info.title, result.info.owner.name)
                     }
                     is VideoLoadResult.Error -> {
+                        if (!shouldApplyVideoLoadResult(
+                                activeRequestToken = currentLoadRequestToken,
+                                resultRequestToken = requestToken,
+                                expectedBvid = bvid,
+                                currentBvid = currentBvid
+                            )
+                        ) {
+                            Logger.d("PlayerVM", "⏭️ Ignore stale load error: bvid=$bvid token=$requestToken")
+                            return@launch
+                        }
                         CrashReporter.reportVideoError(bvid, "load_failed", result.error.toUserMessage())
+                        Logger.d(
+                            "PlayerVM",
+                            "SUB_DBG loadVideo error: requested=$bvid/$cid, token=$requestToken, error=${result.error}"
+                        )
                         _uiState.value = PlayerUiState.Error(result.error, result.canRetry)
                     }
                 }
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                if (!shouldApplyVideoLoadResult(
+                        activeRequestToken = currentLoadRequestToken,
+                        resultRequestToken = requestToken,
+                        expectedBvid = bvid,
+                        currentBvid = currentBvid
+                    )
+                ) {
+                    Logger.d("PlayerVM", "⏭️ Ignore stale timeout: bvid=$bvid token=$requestToken")
+                    return@launch
+                }
                 Logger.e("PlayerVM", "⚠️ Video load timed out for $bvid")
                 PlaybackCooldownManager.recordFailure(bvid, "timeout")
                 _uiState.value = PlayerUiState.Error(VideoLoadError.Timeout)
+            } catch (e: CancellationException) {
+                Logger.d("PlayerVM", "loadVideo canceled: bvid=$bvid token=$requestToken")
+                throw e
             } catch (e: Exception) {
+                if (!shouldApplyVideoLoadResult(
+                        activeRequestToken = currentLoadRequestToken,
+                        resultRequestToken = requestToken,
+                        expectedBvid = bvid,
+                        currentBvid = currentBvid
+                    )
+                ) {
+                    Logger.d("PlayerVM", "⏭️ Ignore stale exception: bvid=$bvid token=$requestToken")
+                    return@launch
+                }
                 Logger.e("PlayerVM", "⚠️ Unexpected load exception", e)
                 _uiState.value = PlayerUiState.Error(VideoLoadError.UnknownError(e))
+            } finally {
+                if (activeLoadJob === kotlinx.coroutines.currentCoroutineContext()[Job]) {
+                    activeLoadJob = null
+                }
             }
         }
     }
@@ -1284,22 +1638,29 @@ class PlayerViewModel : ViewModel() {
      *  [新增] 更新播放列表
      */
     private fun updatePlaylist(currentInfo: com.android.purebilibili.data.model.response.ViewInfo, related: List<com.android.purebilibili.data.model.response.RelatedVideo>) {
+        val currentPlaylist = PlaylistManager.playlist.value
+        val externalDecision = resolveExternalPlaylistSyncDecision(
+            isExternalPlaylist = PlaylistManager.isExternalPlaylist.value,
+            playlist = currentPlaylist,
+            currentBvid = currentInfo.bvid
+        )
+
         // 🔒 [修复] 检查是否为外部播放列表（稍后再看、UP主页等）
         // 如果是外部播放列表，只更新当前索引，不覆盖列表
-        if (PlaylistManager.isExternalPlaylist.value) {
-            val currentPlaylist = PlaylistManager.playlist.value
-            val matchIndex = currentPlaylist.indexOfFirst { it.bvid == currentInfo.bvid }
-            if (matchIndex >= 0) {
+        if (externalDecision.keepExternalPlaylist) {
+            val matchIndex = externalDecision.matchedIndex
+            if (matchIndex in currentPlaylist.indices) {
                 // 找到当前视频在列表中的位置，更新索引
                 PlaylistManager.playAt(matchIndex)
                 Logger.d("PlayerVM", "🔒 外部播放列表模式: 更新索引到 $matchIndex/${currentPlaylist.size}")
-            } else {
-                Logger.d("PlayerVM", "🔒 外部播放列表模式: 当前视频 ${currentInfo.bvid} 不在列表中")
             }
             return
         }
-        
-        val currentPlaylist = PlaylistManager.playlist.value
+
+        if (PlaylistManager.isExternalPlaylist.value) {
+            Logger.d("PlayerVM", "🔓 外部播放列表模式: 当前视频 ${currentInfo.bvid} 不在外部列表，重建为普通队列")
+        }
+
         val currentIndex = PlaylistManager.currentIndex.value
         val currentItemInList = currentPlaylist.getOrNull(currentIndex)
 
@@ -2444,13 +2805,44 @@ class PlayerViewModel : ViewModel() {
     }
     
     //  [新增] 异步加载播放器额外信息 (章节/看点 + BGM + 互动剧情图)
-    private fun loadPlayerInfo(bvid: String, cid: Long, preferredEdgeId: Long? = null) {
-        viewModelScope.launch {
+    private fun loadPlayerInfo(
+        bvid: String,
+        cid: Long,
+        preferredEdgeId: Long? = null,
+        requestToken: Long = currentLoadRequestToken
+    ) {
+        Logger.d(
+            "PlayerVM",
+            "SUB_DBG loadPlayerInfo start: request=$bvid/$cid, token=$requestToken, current=$currentBvid/$currentCid"
+        )
+        playerInfoJob?.cancel()
+        playerInfoJob = viewModelScope.launch {
             try {
-                // 使用 Repository 的 wrapper 方法
                 val result = VideoRepository.getPlayerInfo(bvid, cid)
-                
+
                 result.onSuccess { data ->
+                    if (!shouldApplyPlayerInfoResult(
+                            activeRequestToken = currentLoadRequestToken,
+                            resultRequestToken = requestToken,
+                            expectedBvid = bvid,
+                            expectedCid = cid,
+                            currentBvid = currentBvid,
+                            currentCid = currentCid
+                        )
+                    ) {
+                        Logger.d("PlayerVM", "📖 Ignore stale player info by token/context: bvid=$bvid cid=$cid")
+                        return@onSuccess
+                    }
+
+                    val currentState = _uiState.value as? PlayerUiState.Success
+                    if (currentState == null ||
+                        currentState.info.bvid != bvid ||
+                        currentState.info.cid != cid
+                    ) {
+                        Logger.d("PlayerVM", "📖 Ignore stale player info by ui state: bvid=$bvid cid=$cid")
+                        return@onSuccess
+                    }
+
                     // 1. 处理章节信息
                     val points = data.viewPoints
                     if (points.isNotEmpty()) {
@@ -2459,7 +2851,7 @@ class PlayerViewModel : ViewModel() {
                     } else {
                         _viewPoints.value = emptyList()
                     }
-                    
+
                     // 2. 处理 BGM 信息
                     if (data.bgmInfo != null) {
                         _uiState.update { current ->
@@ -2471,11 +2863,16 @@ class PlayerViewModel : ViewModel() {
                     }
 
                     // 3. 字幕信息（优先中文主字幕 + 英文副字幕）
-                    loadSubtitleTracksFromPlayerInfo(
-                        bvid = bvid,
-                        cid = cid,
-                        subtitles = data.subtitle?.subtitles.orEmpty()
-                    )
+                    if (isSubtitleFeatureEnabledForUser()) {
+                        loadSubtitleTracksFromPlayerInfo(
+                            bvid = bvid,
+                            cid = cid,
+                            subtitles = data.subtitle?.subtitles.orEmpty(),
+                            requestToken = requestToken
+                        )
+                    } else {
+                        clearSubtitleTracksForCurrentVideo(bvid = bvid, cid = cid)
+                    }
 
                     // 4. 互动剧情图
                     interactiveGraphVersion = data.interaction?.graphVersion ?: 0L
@@ -2491,12 +2888,44 @@ class PlayerViewModel : ViewModel() {
                         clearInteractiveChoiceRuntime()
                     }
                 }.onFailure { e ->
+                    if (!shouldApplyPlayerInfoResult(
+                            activeRequestToken = currentLoadRequestToken,
+                            resultRequestToken = requestToken,
+                            expectedBvid = bvid,
+                            expectedCid = cid,
+                            currentBvid = currentBvid,
+                            currentCid = currentCid
+                        )
+                    ) {
+                        Logger.d("PlayerVM", "📖 Ignore stale player info failure: bvid=$bvid cid=$cid")
+                        return@onFailure
+                    }
                     Logger.d("PlayerVM", "📖 Failed to load player info: ${e.message}")
+                    Logger.d(
+                        "PlayerVM",
+                        "SUB_DBG playerInfo failed: bvid=$bvid, cid=$cid, token=$requestToken, err=${e.message}"
+                    )
                     _viewPoints.value = emptyList()
                     clearSubtitleTracksForCurrentVideo(bvid = bvid, cid = cid)
                 }
             } catch (e: Exception) {
+                if (!shouldApplyPlayerInfoResult(
+                        activeRequestToken = currentLoadRequestToken,
+                        resultRequestToken = requestToken,
+                        expectedBvid = bvid,
+                        expectedCid = cid,
+                        currentBvid = currentBvid,
+                        currentCid = currentCid
+                    )
+                ) {
+                    Logger.d("PlayerVM", "📖 Ignore stale player info exception: bvid=$bvid cid=$cid")
+                    return@launch
+                }
                 Logger.d("PlayerVM", "📖 Exception loading player info: ${e.message}")
+                Logger.d(
+                    "PlayerVM",
+                    "SUB_DBG playerInfo exception: bvid=$bvid, cid=$cid, token=$requestToken, err=${e.message}"
+                )
                 _viewPoints.value = emptyList()
                 clearSubtitleTracksForCurrentVideo(bvid = bvid, cid = cid)
             }
@@ -2504,7 +2933,9 @@ class PlayerViewModel : ViewModel() {
     }
 
     private fun clearSubtitleTracksForCurrentVideo(bvid: String, cid: Long) {
-        subtitleLoadToken += 1
+        if (currentBvid == bvid && currentCid == cid) {
+            subtitleLoadToken += 1
+        }
         _uiState.update { current ->
             if (current is PlayerUiState.Success &&
                 current.info.bvid == bvid &&
@@ -2526,10 +2957,22 @@ class PlayerViewModel : ViewModel() {
     private fun loadSubtitleTracksFromPlayerInfo(
         bvid: String,
         cid: Long,
-        subtitles: List<SubtitleItem>
+        subtitles: List<SubtitleItem>,
+        requestToken: Long = currentLoadRequestToken
     ) {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         if (current.info.bvid != bvid || current.info.cid != cid) return
+        if (!shouldApplyPlayerInfoResult(
+                activeRequestToken = currentLoadRequestToken,
+                resultRequestToken = requestToken,
+                expectedBvid = bvid,
+                expectedCid = cid,
+                currentBvid = currentBvid,
+                currentCid = currentCid
+            )
+        ) {
+            return
+        }
 
         val trackMetas = subtitles.mapNotNull { item ->
             val url = item.subtitleUrl.trim()
@@ -2540,7 +2983,6 @@ class PlayerViewModel : ViewModel() {
                 subtitleUrl = url
             )
         }.distinctBy { meta -> "${meta.lan}|${meta.subtitleUrl}" }
-
         if (trackMetas.isEmpty()) {
             clearSubtitleTracksForCurrentVideo(bvid = bvid, cid = cid)
             return
@@ -2552,9 +2994,20 @@ class PlayerViewModel : ViewModel() {
             ?.let { targetLan ->
                 trackMetas.firstOrNull { it.lan == targetLan && it.lan != primaryTrack.lan }
             }
-
         subtitleLoadToken += 1
         val currentToken = subtitleLoadToken
+
+        if (!shouldApplySubtitleLoadResult(
+                activeSubtitleToken = subtitleLoadToken,
+                resultSubtitleToken = currentToken,
+                expectedBvid = bvid,
+                expectedCid = cid,
+                currentBvid = currentBvid,
+                currentCid = currentCid
+            )
+        ) {
+            return
+        }
 
         _uiState.update { state ->
             if (state is PlayerUiState.Success &&
@@ -2581,16 +3034,31 @@ class PlayerViewModel : ViewModel() {
                 Result.success(emptyList())
             }
 
-            if (currentToken != subtitleLoadToken) return@launch
+            if (!shouldApplySubtitleLoadResult(
+                    activeSubtitleToken = subtitleLoadToken,
+                    resultSubtitleToken = currentToken,
+                    expectedBvid = bvid,
+                    expectedCid = cid,
+                    currentBvid = currentBvid,
+                    currentCid = currentCid
+                )
+            ) {
+                return@launch
+            }
 
-            val primaryCues = primaryResult.getOrElse { error ->
-                Logger.d("PlayerVM", "📝 Primary subtitle load failed: ${error.message}")
+            val primaryCues = primaryResult.getOrElse {
                 emptyList()
             }
-            val secondaryCues = secondaryResult.getOrElse { error ->
-                Logger.d("PlayerVM", "📝 Secondary subtitle load failed: ${error.message}")
+            val secondaryCues = secondaryResult.getOrElse {
                 emptyList()
             }
+
+            val subtitleDecision = resolveSubtitleTrackLoadDecision(
+                primaryLanguage = primaryTrack.lan,
+                primaryCues = primaryCues,
+                secondaryLanguage = secondaryTrack?.lan,
+                secondaryCues = secondaryCues
+            )
 
             _uiState.update { state ->
                 if (state is PlayerUiState.Success &&
@@ -2598,11 +3066,12 @@ class PlayerViewModel : ViewModel() {
                     state.info.cid == cid
                 ) {
                     state.copy(
-                        subtitleEnabled = primaryCues.isNotEmpty() || secondaryCues.isNotEmpty(),
-                        subtitlePrimaryLanguage = primaryTrack.lan.takeIf { primaryCues.isNotEmpty() },
-                        subtitleSecondaryLanguage = secondaryTrack?.lan?.takeIf { secondaryCues.isNotEmpty() },
-                        subtitlePrimaryCues = primaryCues,
-                        subtitleSecondaryCues = secondaryCues
+                        subtitleEnabled = subtitleDecision.primaryCues.isNotEmpty() ||
+                            subtitleDecision.secondaryCues.isNotEmpty(),
+                        subtitlePrimaryLanguage = subtitleDecision.primaryLanguage,
+                        subtitleSecondaryLanguage = subtitleDecision.secondaryLanguage,
+                        subtitlePrimaryCues = subtitleDecision.primaryCues,
+                        subtitleSecondaryCues = subtitleDecision.secondaryCues
                     )
                 } else {
                     state
@@ -3102,12 +3571,14 @@ class PlayerViewModel : ViewModel() {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         val page = current.info.pages.getOrNull(pageIndex) ?: return
         if (page.cid == currentCid) { toast("\u5df2\u662f\u5f53\u524d\u5206P"); return }
+        subtitleLoadToken += 1
+        val subtitleClearedState = clearSubtitleFields(current)
         val previousCid = currentCid
         if (currentBvid.isNotEmpty() && previousCid > 0L) {
             playbackUseCase.savePosition(currentBvid, previousCid)
         }
         currentCid = page.cid
-        _uiState.value = current.copy(isQualitySwitching = true)
+        _uiState.value = subtitleClearedState.copy(isQualitySwitching = true)
         
         viewModelScope.launch {
             try {
@@ -3145,7 +3616,7 @@ class PlayerViewModel : ViewModel() {
                         if (dashVideo != null) playbackUseCase.playDashVideo(videoUrl, audioUrl, restoredPosition)
                         else playbackUseCase.playVideo(videoUrl, restoredPosition)
                         
-                        _uiState.value = current.copy(
+                        _uiState.value = subtitleClearedState.copy(
                             info = current.info.copy(cid = page.cid), playUrl = videoUrl, audioUrl = audioUrl,
                             startPosition = restoredPosition, isQualitySwitching = false,
                             cachedDashVideos = playUrlData.dash?.video ?: emptyList(),
@@ -3231,7 +3702,8 @@ class PlayerViewModel : ViewModel() {
             }
 
             currentCid = targetCid
-            _uiState.value = current.copy(
+            subtitleLoadToken += 1
+            _uiState.value = clearSubtitleFields(current).copy(
                 info = current.info.copy(cid = targetCid),
                 playUrl = videoUrl,
                 audioUrl = audioUrl,
@@ -3366,6 +3838,8 @@ class PlayerViewModel : ViewModel() {
         heartbeatJob?.cancel()
         pluginCheckJob?.cancel()
         onlineCountJob?.cancel()  // 👀 取消在线人数轮询
+        activeLoadJob?.cancel()
+        playerInfoJob?.cancel()
         appContext?.let { context ->
             val miniPlayerManager = MiniPlayerManager.getInstance(context)
             miniPlayerManager.onPlayNextCallback = null
