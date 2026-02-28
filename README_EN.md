@@ -5,19 +5,19 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-02-25 · Synced to v6.3.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-02-27 · Synced to v6.3.2 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.3.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.3.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android%2010+-brightgreen?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/APK-14MB-orange?style=flat-square" alt="Size">
+  <img src="https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026)-brightgreen?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/APK-Varies-orange?style=flat-square" alt="Size">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/Plugins-5%20Built--in-blueviolet?style=flat-square" alt="Plugins">
 </p>
@@ -53,6 +53,7 @@
 | **Audio Mode** | 🆕 Dedicated audio player with immersive/vinyl modes, lyrics, and playlist management |
 | **Background Play** | Continue listening when screen is off or in background |
 | **Playback Order** | Supports Stop After Current / In-order / Single Loop / List Loop / Auto Continue, with quick toggle in landscape and portrait |
+| **Comment Copy UX** | Long-press opens selectable-copy panel so users can drag-select exact comment text (including rich text scenarios) |
 | **Playback History** | Automatically resume playback from where you left off |
 | **TV Login** | Scan QR code to login as TV client to unlock high quality |
 | **Plugin System** | Built-in SponsorBlock, AdBlock, Danmaku Enhancement, Eye Protection, and Today Watch plugins |
@@ -231,7 +232,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 | **Filtering** | Switch between All / Video Only |
 | **GIF Support** | Perfect rendering of GIF images in dynamic posts |
 | **Image Download** | Long press to preview and save to gallery |
-| **Image Preview** | Global non-dialog overlay with iOS-style open/close motion and stable fixed dismiss-back transition |
+| **Image Preview** | Global non-dialog overlay with iOS-style open/close motion; comment scene uses top caption to avoid covering image content, with 3D-like text transition |
 | **@ Highlighting** | Auto-highlight @User mentions |
 
 ### 📥 Offline Cache
@@ -293,10 +294,10 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 | Item | Requirement |
 |-----|-----|
-| **Android Version** | Android 10+ (API 29) |
+| **Android Version** | Android 8.0+ (API 26) |
 | **Architecture** | 64-bit (arm64-v8a) |
 | **Recommended** | Android 12+ for full Material You experience |
-| **Size** | ~14 MB |
+| **Size** | Varies by ABI/build variant |
 
 ### Installation
 
@@ -393,15 +394,13 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v6.3.0 · 2026-02-25)
+### Latest (v6.3.2 · 2026-02-27)
 
-- 🎧 **Audio Mode Playlist Expansion**: Added Audio Mode entry points for Favorites / Watch Later lists, and completed playback modes (sequential, shuffle, repeat-one).
-- 🧩 **Audio Mode Context Consistency**: Fixed mismatched cover vs. currently playing content when entering Audio Mode from Home videos.
-- 🛰️ **Dynamic Feed Stability**: Fixed occasional empty states when quickly switching multiple uploader feeds; improved retry and recovery handling (including HTTP 412 cases).
-- 📺 **First-play Quality Auth Fix**: Fixed “first play capped at 720p until reload” for logged-in non-premium users by improving auth-state resolution and playurl strategy.
-- ✨ **Bottom Bar Visual Tuning**: Removed glossy glass reflection highlight and kept a lighter neutral border for cleaner UI.
-- 🖥️ **Landscape Controls Upgrade (from v6.2.1)**: Added dedicated Subtitle and More panels with quick access to next episode, playback order, aspect ratio, and portrait switch.
-- 🎬 **Return Animation Optimization (from v6.2.1)**: Faster non-shared return path with more stable cover transition and top-tab visibility timing.
+- 🖼️ **Preview Visual Upgrade**: Comment image preview now uses top caption placement so text no longer blocks image content; text switching adds directional 3D-like transition.
+- 💬 **Selectable Copy UX**: Long-press in comments/dynamic text opens a selectable copy panel, allowing drag selection instead of forced full-text copy.
+- 🔊 **Silent-After-Resume Fix**: Fixed occasional no-audio issue when returning from background without explicit pause, with foreground audible-state recovery.
+- 🧭 **Unified Preview Metadata Pipeline**: Dynamic feed, video comments, sub-comments, and tablet layouts now share the same preview text metadata and transition flow.
+- 🛡️ **Crash/Tracking Hardening**: Improved low-overhead live crash tracing and analytics tracking policy coverage with targeted tests.
 
 ---
 
