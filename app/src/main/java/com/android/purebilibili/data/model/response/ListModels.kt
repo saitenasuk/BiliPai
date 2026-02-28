@@ -63,6 +63,19 @@ data class RelationTagUserResponse(
     val data: Map<String, String> = emptyMap()
 )
 
+@Serializable
+data class RelationTagMembersResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 0,
+    val data: List<RelationTagMemberItem> = emptyList()
+)
+
+@Serializable
+data class RelationTagMemberItem(
+    val mid: Long = 0
+)
+
 // --- 0.2 收藏状态响应 ---
 @Serializable
 data class FavouredResponse(

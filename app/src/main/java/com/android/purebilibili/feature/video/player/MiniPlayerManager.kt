@@ -413,6 +413,15 @@ class MiniPlayerManager private constructor(private val context: Context) :
     var entryFromLeft by mutableStateOf(false)
         private set
 
+    // 📺 [新增] 直播小窗模式
+    var isLiveMode by mutableStateOf(false)
+        private set
+    var currentRoomId by mutableLongStateOf(0L)
+        private set
+    // 直播主播名（展开时传回 LivePlayerScreen）
+    var currentLiveUname by mutableStateOf("")
+        private set
+
     // [新增] 保存当前通知实例，供 PlaybackService 使用
     var currentNotification: android.app.Notification? = null
         private set
@@ -838,7 +847,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 停止播放并关闭小窗
      */
     fun dismiss() {
-        Logger.d(TAG, "Dismissing mini player")
+        Logger.d(TAG, "Dismissing mini player (isLiveMode=$isLiveMode)")
         
         //  [修复] 先停止所有播放器的声音
         _externalPlayer?.let { 
@@ -852,6 +861,19 @@ class MiniPlayerManager private constructor(private val context: Context) :
             Logger.d(TAG, "🔇 Stopped internal player")
         }
         
+        // ⚡ [性能优化] player 延迟释放，避免阻塞关闭动画
+        val playerToRelease = _externalPlayer
+        if (playerToRelease != null) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                try {
+                    playerToRelease.release()
+                    Logger.d(TAG, "⚡ 延迟释放外部播放器")
+                } catch (e: Exception) {
+                    Logger.e(TAG, "释放外部播放器失败", e)
+                }
+            }
+        }
+        
         isMiniMode = false
         isActive = false
         playbackServiceRequested = false
@@ -860,6 +882,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
         _externalPlayer = null
         currentBvid = null
         cachedUiState = null  //  [修复] 清除缓存的 UI 状态
+        isLiveMode = false  // 📺 清除直播模式
+        currentRoomId = 0L
+        currentLiveUname = ""
         
         clearPlaybackNotificationArtifacts()
     }
@@ -905,6 +930,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         currentCid = cid  //  保存 cid
         currentAid = aid  //  保存 aid
         entryFromLeft = fromLeft  //  保存入场方向
+        isLiveMode = false  // 📺 视频模式
         
         // 🛑 [修复] 如果存在旧的外部播放器且不同于新的（切换视频场景），必须释放旧的防止泄漏/重音
         if (_externalPlayer != null && _externalPlayer != externalPlayer) {
@@ -931,6 +957,52 @@ class MiniPlayerManager private constructor(private val context: Context) :
             cachedIsPlaying = isPlaying
         )
         duration = externalPlayer.duration.coerceAtLeast(0L)
+    }
+    
+    /**
+     * 📺 [新增] 设置直播信息并关联外部播放器（用于直播小窗模式）
+     * 与 setVideoInfo 类似，但使用 roomId 标识直播间
+     */
+    fun setLiveInfo(
+        roomId: Long,
+        title: String,
+        cover: String,
+        uname: String,
+        externalPlayer: ExoPlayer,
+        fromLeft: Boolean = false
+    ) {
+        Logger.d(TAG, "📺 setLiveInfo: roomId=$roomId, title=$title, uname=$uname")
+        currentRoomId = roomId
+        currentTitle = title
+        currentCover = cover
+        currentOwner = uname
+        currentLiveUname = uname
+        currentBvid = null  // 直播没有 bvid
+        currentCid = 0L
+        currentAid = 0L
+        isLiveMode = true
+        entryFromLeft = fromLeft
+        
+        // 释放旧的外部播放器（如果有且不同）
+        if (_externalPlayer != null && _externalPlayer != externalPlayer) {
+            try {
+                _externalPlayer?.stop()
+                _externalPlayer?.release()
+            } catch (e: Exception) {
+                Logger.e(TAG, "Failed to release old external player", e)
+            }
+        }
+        
+        _externalPlayer = externalPlayer
+        isActive = true
+        isMiniMode = false
+        
+        updateMediaSession(externalPlayer)
+        isPlaying = resolveNotificationIsPlaying(
+            playerIsPlaying = externalPlayer.isPlaying,
+            cachedIsPlaying = isPlaying
+        )
+        duration = 0L  // 直播没有固定时长
     }
     
     /**

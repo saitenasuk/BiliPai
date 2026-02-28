@@ -15,15 +15,17 @@ class DanmakuPlaybackSyncPolicyTest {
     }
 
     @Test
-    fun `drift sync interval should keep low frequency around normal speed`() {
-        assertEquals(5000L, resolveDanmakuDriftSyncIntervalMs(1.0f))
-        assertEquals(5000L, resolveDanmakuDriftSyncIntervalMs(1.01f))
-        assertEquals(5000L, resolveDanmakuDriftSyncIntervalMs(0.99f))
+    fun `drift sync interval should keep moderate frequency around normal speed`() {
+        assertEquals(2200L, resolveDanmakuDriftSyncIntervalMs(1.0f))
+        assertEquals(2200L, resolveDanmakuDriftSyncIntervalMs(1.01f))
+        assertEquals(2200L, resolveDanmakuDriftSyncIntervalMs(0.99f))
     }
 
     @Test
-    fun `force resync should only trigger every third tick outside normal speed`() {
+    fun `force resync should trigger periodically for both normal and non-normal speed`() {
         assertFalse(shouldForceDanmakuDataResync(1.0f, 3))
+        assertFalse(shouldForceDanmakuDataResync(1.0f, 5))
+        assertTrue(shouldForceDanmakuDataResync(1.0f, 6))
         assertFalse(shouldForceDanmakuDataResync(1.3f, 1))
         assertFalse(shouldForceDanmakuDataResync(1.3f, 2))
         assertTrue(shouldForceDanmakuDataResync(1.3f, 3))

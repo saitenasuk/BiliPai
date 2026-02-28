@@ -562,6 +562,14 @@ interface BilibiliApi {
     suspend fun getRelationTagUser(
         @Query("fid") fid: Long
     ): RelationTagUserResponse
+
+    @GET("x/relation/tag")
+    suspend fun getRelationTagMembers(
+        @Query("tagid") tagId: Long,
+        @Query("order_type") orderType: String = "",
+        @Query("ps") pageSize: Int = 100,
+        @Query("pn") page: Int = 1
+    ): com.android.purebilibili.data.model.response.RelationTagMembersResponse
     
     //  [新增] 查询视频是否已收藏
     @GET("x/v2/fav/video/favoured")

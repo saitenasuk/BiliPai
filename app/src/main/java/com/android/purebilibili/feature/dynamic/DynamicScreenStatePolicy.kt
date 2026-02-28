@@ -20,3 +20,15 @@ internal fun shouldShowDynamicNoMoreFooter(
 ): Boolean {
     return !hasMore && activeItemsCount > 0
 }
+
+internal fun shouldResetFollowedUserListToTopOnRefresh(
+    boundaryKey: String?,
+    prependedCount: Int,
+    selectedUserId: Long?,
+    handledBoundaryKey: String?
+): Boolean {
+    if (boundaryKey.isNullOrBlank()) return false
+    if (prependedCount <= 0) return false
+    if (selectedUserId != null) return false
+    return boundaryKey != handledBoundaryKey
+}

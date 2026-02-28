@@ -79,7 +79,9 @@ fun LivePlayerControls(
     isDanmakuEnabled: Boolean = true,
     onToggleDanmaku: () -> Unit = {},
     // [新增] 刷新
-    onRefresh: () -> Unit = {}
+    onRefresh: () -> Unit = {},
+    showPipButton: Boolean = false,
+    onEnterPip: () -> Unit = {}
 ) {
     var isControlsVisible by remember { mutableStateOf(true) }
     
@@ -329,6 +331,27 @@ fun LivePlayerControls(
                     }
                     
                     Spacer(Modifier.width(16.dp))
+                }
+
+                if (showPipButton) {
+                    Surface(
+                        onClick = onEnterPip,
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White.copy(alpha = 0.14f),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        ) {
+                            Text(
+                                text = "小窗",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
                 }
                 
                 // 全屏

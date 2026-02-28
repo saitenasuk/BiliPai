@@ -422,15 +422,22 @@ fun rememberVideoPlayerState(
                 // 小窗模式下不释放 player，只释放其他资源
                 com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " MiniPlayerManager 正在使用此 player，不释放")
             } else {
-                // 正常释放所有资源
-                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.cancel(NOTIFICATION_ID)
-                
-                com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " 释放所有资源")
+                // ⚡ [性能优化] 释放视频尺寸监听器（快速，main thread）
+                holder.release()
                 // 仅当引用匹配时才清理，避免误清理新页面正在使用的 player
                 miniPlayerManager.clearExternalPlayerIfMatches(player)
-                holder.release()  // 📱 释放视频尺寸监听器
-                player.release()
+                
+                // ⚡ [性能优化] 将重量级的 player.release() 和通知清理延迟到下一帧
+                // ExoPlayer 要求 release() 在主线程调用，所以用 Handler.post 而非后台线程
+                // 这样不阻塞当前 onDispose 栈，让导航转场动画先完成
+                val playerToRelease = player
+                val appContext = context.applicationContext
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "⚡ 延迟释放播放器资源")
+                    playerToRelease.release()
+                    val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.cancel(NOTIFICATION_ID)
+                }
             }
             
             (context as? ComponentActivity)?.window?.attributes?.screenBrightness =

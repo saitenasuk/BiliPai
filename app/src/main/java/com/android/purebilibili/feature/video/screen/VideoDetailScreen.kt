@@ -693,41 +693,14 @@ fun VideoDetailScreen(
             //  [关键] 标记页面正在退出，防止 SideEffect 覆盖
             isScreenActive = false
             
-            // 🎯 [修复] 通知小窗管理器这是导航离开（用于控制后台音频）
-            // 移动到这里以支持预测性返回手势（原来在 BackHandler 中会阻止手势动画）
-            // [修复] 如果是导航到音频模式，不要标记为离开（否则会触发自动暂停）
-            // ⚠️ [MOVED] Logic moved to a later DisposableEffect to ensure it runs BEFORE playerState disposal
-            // if (!isNavigatingToAudioMode) {
-            //    miniPlayerManager?.markLeavingByNavigation()
-            // }
-            
+            // ⚡ [性能优化] Phase 1: 同步执行 — 仅保留影响视觉的关键操作
             val layoutParams = window?.attributes
             layoutParams?.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             window?.attributes = layoutParams
-            
-            //  [修复] 离开视频页时取消屏幕常亮
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            
-            //  [安全网] 确保状态栏被恢复（以防 handleBack 未被调用，如系统返回）
             restoreStatusBar()
 
-            // 🔧 [修复] 退出视频页时重置 PiP 参数，防止其他页面自动进入 PiP
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                activity?.let { act ->
-                    try {
-                        val pipParams = android.app.PictureInPictureParams.Builder()
-                            .setAutoEnterEnabled(false)  // 关闭自动进入 PiP
-                            .build()
-                        act.setPictureInPictureParams(pipParams)
-                        com.android.purebilibili.core.util.Logger.d("VideoDetailScreen", 
-                            "🔧 退出页面：重置 PiP autoEnterEnabled=false")
-                    } catch (e: Exception) {
-                        com.android.purebilibili.core.util.Logger.e("VideoDetailScreen", 
-                            "重置 PiP 参数失败", e)
-                    }
-                }
-            }
-            
+            // ⚡ [性能优化] Phase 1b: CardPositionManager 状态（影响首页卡片动画，必须同步）
             val shouldHandleAsNavigationExit = shouldHandleVideoDetailDisposeAsNavigationExit(
                 isNavigatingToAudioMode = isNavigatingToAudioMode,
                 isNavigatingToMiniMode = isNavigatingToMiniMode,
@@ -743,24 +716,43 @@ fun VideoDetailScreen(
                 CardPositionManager.clearReturning()
             }
 
-            // 🔕 [修复] 仅在真正离开视频域时才取消媒体通知，避免通知回流/视频内跳转误清理
-            if (shouldHandleAsNavigationExit) {
-                val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) 
-                    as android.app.NotificationManager
-                notificationManager.cancel(1001)  // NOTIFICATION_ID from VideoPlayerState
-                notificationManager.cancel(PlaybackService.NOTIFICATION_ID)
-                try {
-                    context.startService(
-                        android.content.Intent(context, PlaybackService::class.java).apply {
-                            action = PlaybackService.ACTION_STOP_FOREGROUND
-                        }
-                    )
-                } catch (_: Exception) {
+            // ⚡ [性能优化] Phase 2: 延迟执行 — 非视觉的系统调用推迟到下一帧
+            // PiP 重置、通知清理、Service 停止、屏幕方向恢复等操作不影响退出动画
+            // 将它们 post 到主线程 Handler，在导航转场动画完成后再执行
+            val deferredActivity = activity
+            val deferredContext = context
+            val deferredShouldHandleAsNavExit = shouldHandleAsNavigationExit
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                // 🔧 重置 PiP 参数
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    deferredActivity?.let { act ->
+                        try {
+                            val pipParams = android.app.PictureInPictureParams.Builder()
+                                .setAutoEnterEnabled(false)
+                                .build()
+                            act.setPictureInPictureParams(pipParams)
+                        } catch (_: Exception) {}
+                    }
                 }
+
+                // 🔕 通知清理 + Service 停止
+                if (deferredShouldHandleAsNavExit) {
+                    val notificationManager = deferredContext.getSystemService(android.content.Context.NOTIFICATION_SERVICE) 
+                        as android.app.NotificationManager
+                    notificationManager.cancel(1001)
+                    notificationManager.cancel(PlaybackService.NOTIFICATION_ID)
+                    try {
+                        deferredContext.startService(
+                            android.content.Intent(deferredContext, PlaybackService::class.java).apply {
+                                action = PlaybackService.ACTION_STOP_FOREGROUND
+                            }
+                        )
+                    } catch (_: Exception) {}
+                }
+
+                // 恢复屏幕方向
+                deferredActivity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             }
-            
-            // 恢复屏幕方向
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
     

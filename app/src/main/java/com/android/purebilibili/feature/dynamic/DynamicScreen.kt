@@ -89,6 +89,8 @@ fun DynamicScreen(
     val state by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val listState = rememberLazyListState()
+    val sidebarUserListState = rememberLazyListState()
+    val horizontalUserListState = rememberLazyListState()
     val dynamicScrollChannel = LocalDynamicScrollChannel.current
     
     // 侧边栏状态
@@ -170,6 +172,27 @@ fun DynamicScreen(
     
     //  [修改] 判断是否加载更多（区分全部动态和用户动态）
     val currentHasMore = if (selectedUserId != null) state.hasUserMore else state.hasMore
+
+    var handledUserListRefreshBoundary by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(
+        state.incrementalRefreshBoundaryKey,
+        state.incrementalPrependedCount,
+        selectedUserId
+    ) {
+        val boundaryKey = state.incrementalRefreshBoundaryKey
+        if (!shouldResetFollowedUserListToTopOnRefresh(
+                boundaryKey = boundaryKey,
+                prependedCount = state.incrementalPrependedCount,
+                selectedUserId = selectedUserId,
+                handledBoundaryKey = handledUserListRefreshBoundary
+            )
+        ) {
+            return@LaunchedEffect
+        }
+        handledUserListRefreshBoundary = boundaryKey
+        sidebarUserListState.scrollToItem(0)
+        horizontalUserListState.scrollToItem(0)
+    }
     
     // 加载更多
     val shouldLoadMore by remember {
@@ -298,6 +321,7 @@ fun DynamicScreen(
                             users = followedUsers,
                             selectedUserId = selectedUserId,
                             isExpanded = isSidebarExpanded,
+                            userListState = sidebarUserListState,
                             onUserClick = { viewModel.selectUser(it) },
                             showHiddenUsers = showHiddenUsers,
                             hiddenCount = hiddenUserIds.size,
@@ -434,6 +458,7 @@ fun DynamicScreen(
                                      HorizontalUserList(
                                          users = followedUsers,
                                          selectedUserId = selectedUserId,
+                                         listState = horizontalUserListState,
                                          showHiddenUsers = showHiddenUsers,
                                          hiddenCount = hiddenUserIds.size,
                                          onUserClick = { viewModel.selectUser(it) },
@@ -622,6 +647,7 @@ private fun OldContentDivider(label: String) {
 private fun HorizontalUserList(
     users: List<SidebarUser>,
     selectedUserId: Long?,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     showHiddenUsers: Boolean,
     hiddenCount: Int,
     onUserClick: (Long?) -> Unit,
@@ -632,6 +658,7 @@ private fun HorizontalUserList(
 ) {
     // 移除 Surface，直接使用 LazyRow 配合传入的 modifier，实现背景透明
     LazyRow(
+        state = listState,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier

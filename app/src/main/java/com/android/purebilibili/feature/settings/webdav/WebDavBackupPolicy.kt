@@ -27,6 +27,24 @@ data class WebDavBackupEntry(
     val lastModifiedEpochMs: Long
 )
 
+internal fun ensureWebDavCollectionUrl(url: String): String {
+    val trimmed = url.trim()
+    if (trimmed.isEmpty()) return trimmed
+    return if (trimmed.endsWith("/")) trimmed else "$trimmed/"
+}
+
+internal fun buildWebDavPropfindBody(): String {
+    return """
+        <?xml version="1.0" encoding="utf-8"?>
+        <d:propfind xmlns:d="DAV:">
+          <d:prop>
+            <d:getlastmodified/>
+            <d:getcontentlength/>
+          </d:prop>
+        </d:propfind>
+    """.trimIndent()
+}
+
 internal fun normalizeWebDavBaseUrl(raw: String): String {
     val trimmed = raw.trim()
     if (trimmed.isEmpty()) return ""

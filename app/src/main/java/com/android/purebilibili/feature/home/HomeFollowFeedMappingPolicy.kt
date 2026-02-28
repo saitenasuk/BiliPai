@@ -7,3 +7,8 @@ internal fun resolveDynamicArchiveAid(
     return archiveAid.toLongOrNull()?.takeIf { it > 0 } ?: fallbackId
 }
 
+internal fun shouldIncludeHomeFollowDynamicInVideoFeed(
+    archiveBvid: String
+): Boolean {
+    return archiveBvid.isNotBlank()
+}
