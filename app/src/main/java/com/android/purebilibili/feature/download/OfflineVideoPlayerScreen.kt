@@ -416,8 +416,7 @@ fun OfflineVideoPlayerScreen(
         ) {
             Box(
                 modifier = Modifier
-                    .size(120.dp)
-                    .background(Color.Black.copy(0.7f), RoundedCornerShape(16.dp)),
+                    .size(120.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

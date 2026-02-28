@@ -181,7 +181,7 @@ fun CategoryScreen(
         ) {
             if (videos.isEmpty() && isLoading) {
                 // 首次加载
-                CircularProgressIndicator(
+                com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else if (videos.isEmpty() && error != null) {
@@ -243,7 +243,7 @@ fun CategoryScreen(
                                     .padding(16.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                com.android.purebilibili.core.ui.CutePersonLoadingIndicator(modifier = Modifier.size(24.dp))
                             }
                         }
                     }

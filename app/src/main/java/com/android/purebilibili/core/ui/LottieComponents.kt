@@ -3,6 +3,7 @@ package com.android.purebilibili.core.ui
 
 import androidx.annotation.RawRes
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -15,17 +16,26 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.airbnb.lottie.compose.*
 import com.android.purebilibili.R
+import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
+import io.github.alexzhirkevich.cupertino.icons.filled.*
+import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.sin
 
 /**
  *  Lottie 动画加载器
@@ -400,9 +410,10 @@ fun LoadingAnimation(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        LottieAnimation(
-            url = LottieUrls.LOADING_CIRCLE,
-            size = size
+        CutePersonLoadingIndicator(
+            modifier = Modifier.size(size),
+            color = MaterialTheme.colorScheme.primary,
+            strokeWidth = 2.4.dp
         )
         if (text != null) {
             Spacer(modifier = Modifier.height(BiliDesign.Spacing.sm))
@@ -412,6 +423,78 @@ fun LoadingAnimation(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         }
+    }
+}
+
+internal fun resolveMascotBounceWave(phase: Float): Float {
+    val clamped = phase.coerceIn(0f, 1f)
+    return sin((clamped * (2f * PI)).toFloat())
+}
+
+internal fun resolveMascotDotAlpha(phase: Float, index: Int): Float {
+    val safeIndex = index.coerceIn(0, 2)
+    val offsetPhase = phase.coerceIn(0f, 1f) - safeIndex * 0.17f
+    val wave = (sin((offsetPhase * (2f * PI)).toFloat()) + 1f) / 2f
+    return (0.18f + 0.82f * wave).coerceIn(0.18f, 1f)
+}
+
+@Composable
+fun CutePersonLoadingIndicator(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+    strokeWidth: Dp = 2.dp
+) {
+    val transition = rememberInfiniteTransition(label = "cute-loading")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1120, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "cute-loading-phase"
+    )
+    val density = LocalDensity.current
+    val wave = resolveMascotBounceWave(phase)
+    val iconSize = (strokeWidth.value * 9f).coerceIn(14f, 30f).dp
+    val dotSize = (iconSize.value * 0.2f).coerceIn(2f, 5f).dp
+    val translationY = with(density) { (-wave * 2.8f).dp.toPx() }
+
+    Box(
+        modifier = modifier.sizeIn(
+            minWidth = iconSize + 8.dp,
+            minHeight = iconSize + 8.dp
+        ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .offset(y = 1.dp),
+            horizontalArrangement = Arrangement.spacedBy(dotSize * 0.8f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(3) { index ->
+                Box(
+                    modifier = Modifier
+                        .size(dotSize)
+                        .alpha(resolveMascotDotAlpha(phase = phase, index = index))
+                        .background(color.copy(alpha = 0.92f), CircleShape)
+                )
+            }
+        }
+
+        Icon(
+            imageVector = CupertinoIcons.Default.Person,
+            contentDescription = "加载中",
+            tint = color,
+            modifier = Modifier
+                .size(iconSize)
+                .graphicsLayer {
+                    rotationZ = wave * 8f
+                    this.translationY = translationY
+                }
+        )
     }
 }
 

@@ -302,6 +302,9 @@ fun VideoPlayerOverlay(
     isLiked: Boolean = false,
     isCoined: Boolean = false,
     isFavorited: Boolean = false,
+    likeCount: Long = 0L,
+    favoriteCount: Long = 0L,
+    coinCount: Int = 0,
     onToggleFollow: () -> Unit = {},
     onToggleLike: () -> Unit = {},
     onCoin: () -> Unit = {},
@@ -333,6 +336,15 @@ fun VideoPlayerOverlay(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
+    val showFullscreenLockButton by SettingsManager
+        .getShowFullscreenLockButton(context)
+        .collectAsState(initial = true)
+    val showFullscreenScreenshotButton by SettingsManager
+        .getShowFullscreenScreenshotButton(context)
+        .collectAsState(initial = true)
+    val showFullscreenBatteryLevel by SettingsManager
+        .getShowFullscreenBatteryLevel(context)
+        .collectAsState(initial = true)
     val hasEpisodeEntry = remember(relatedVideos, ugcSeason) {
         shouldShowEpisodeEntryFromVideoData(
             relatedVideosCount = relatedVideos.size,
@@ -557,6 +569,7 @@ fun VideoPlayerOverlay(
                         title = title,
                         onlineCount = onlineCount,
                         isFullscreen = isFullscreen,
+                        showBatteryLevel = showFullscreenBatteryLevel,
                         onBack = onBack,
                         // Interactions
                         isLiked = isLiked,
@@ -663,14 +676,14 @@ fun VideoPlayerOverlay(
         }
         
         // --- 3.5 🔒 [新增] 屏幕锁定按钮 (仅全屏模式) ---
-        if (isFullscreen) {
+        if (isFullscreen && showFullscreenLockButton) {
             AnimatedVisibility(
                 visible = isVisible || isScreenLocked,  // 锁定时始终显示解锁按钮
                 enter = fadeIn(tween(200)),
                 exit = fadeOut(tween(200)),
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = overlayVisualPolicy.lockButtonEndPaddingDp.dp)
+                    .align(Alignment.CenterStart)
+                    .padding(start = overlayVisualPolicy.lockButtonEndPaddingDp.dp)
             ) {
                 Surface(
                     onClick = onLockToggle,
@@ -683,6 +696,33 @@ fun VideoPlayerOverlay(
                             if (isScreenLocked) CupertinoIcons.Default.LockOpen else CupertinoIcons.Default.Lock,
                             contentDescription = if (isScreenLocked) "解锁" else "锁定",
                             tint = if (isScreenLocked) MaterialTheme.colorScheme.primary else Color.White,
+                            modifier = Modifier.size(overlayVisualPolicy.lockIconSizeDp.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (isFullscreen && showFullscreenScreenshotButton) {
+            AnimatedVisibility(
+                visible = isVisible && !isScreenLocked,
+                enter = fadeIn(tween(200)),
+                exit = fadeOut(tween(200)),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = overlayVisualPolicy.lockButtonEndPaddingDp.dp)
+            ) {
+                Surface(
+                    onClick = onCaptureScreenshot,
+                    color = Color.Black.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(overlayVisualPolicy.lockButtonCornerRadiusDp.dp),
+                    modifier = Modifier.size(overlayVisualPolicy.lockButtonSizeDp.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            imageVector = CupertinoIcons.Default.Camera,
+                            contentDescription = "截图",
+                            tint = Color.White,
                             modifier = Modifier.size(overlayVisualPolicy.lockIconSizeDp.dp)
                         )
                     }

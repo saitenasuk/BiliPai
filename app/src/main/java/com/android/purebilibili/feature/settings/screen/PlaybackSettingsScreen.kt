@@ -709,6 +709,25 @@ fun PlaybackSettingsContent(
                         Divider()
                         val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
                             .getAutoRotateEnabled(context).collectAsState(initial = false)
+                        val fullscreenGestureReverse by com.android.purebilibili.core.store.SettingsManager
+                            .getFullscreenGestureReverse(context).collectAsState(initial = false)
+                        val autoEnterFullscreen by com.android.purebilibili.core.store.SettingsManager
+                            .getAutoEnterFullscreen(context).collectAsState(initial = false)
+                        val autoExitFullscreen by com.android.purebilibili.core.store.SettingsManager
+                            .getAutoExitFullscreen(context).collectAsState(initial = true)
+                        val showFullscreenLockButton by com.android.purebilibili.core.store.SettingsManager
+                            .getShowFullscreenLockButton(context).collectAsState(initial = true)
+                        val showFullscreenScreenshotButton by com.android.purebilibili.core.store.SettingsManager
+                            .getShowFullscreenScreenshotButton(context).collectAsState(initial = true)
+                        val showFullscreenBatteryLevel by com.android.purebilibili.core.store.SettingsManager
+                            .getShowFullscreenBatteryLevel(context).collectAsState(initial = true)
+                        val horizontalAdaptationEnabled by com.android.purebilibili.core.store.SettingsManager
+                            .getHorizontalAdaptationEnabled(context)
+                            .collectAsState(initial = context.resources.configuration.smallestScreenWidthDp >= 600)
+                        val fullscreenMode by com.android.purebilibili.core.store.SettingsManager
+                            .getFullscreenMode(context)
+                            .collectAsState(initial = com.android.purebilibili.core.store.FullscreenMode.AUTO)
+
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ArrowTriangle2CirclepathCamera,  // 旋转图标
                             title = "自动横竖屏切换",
@@ -721,6 +740,124 @@ fun PlaybackSettingsContent(
                                 }
                             },
                             iconTint = iOSTeal
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.ArrowLeftArrowRight,
+                            title = "横屏适配",
+                            subtitle = "启用横屏布局和横屏逻辑（平板建议开启）",
+                            checked = horizontalAdaptationEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setHorizontalAdaptationEnabled(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
+                        Divider()
+                        IOSSlidingSegmentedSetting(
+                            title = "默认全屏方向：${fullscreenMode.label}",
+                            subtitle = fullscreenMode.description,
+                            options = listOf(
+                                PlaybackSegmentOption(com.android.purebilibili.core.store.FullscreenMode.AUTO, "自动"),
+                                PlaybackSegmentOption(com.android.purebilibili.core.store.FullscreenMode.NONE, "不改"),
+                                PlaybackSegmentOption(com.android.purebilibili.core.store.FullscreenMode.VERTICAL, "竖屏"),
+                                PlaybackSegmentOption(com.android.purebilibili.core.store.FullscreenMode.HORIZONTAL, "横屏"),
+                                PlaybackSegmentOption(com.android.purebilibili.core.store.FullscreenMode.RATIO, "比例"),
+                                PlaybackSegmentOption(com.android.purebilibili.core.store.FullscreenMode.GRAVITY, "重力")
+                            ),
+                            selectedValue = fullscreenMode,
+                            onSelectionChange = { mode ->
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setFullscreenMode(context, mode)
+                                }
+                            }
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.ArrowUpArrowDown,
+                            title = "全屏手势反向",
+                            subtitle = "默认上滑进全屏、下滑退全屏；开启后方向反转",
+                            checked = fullscreenGestureReverse,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setFullscreenGestureReverse(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSPurple
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Play,
+                            title = "自动进入全屏",
+                            subtitle = "视频开始播放后自动切到全屏",
+                            checked = autoEnterFullscreen,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setAutoEnterFullscreen(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSGreen
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.ForwardEnd,
+                            title = "自动退出全屏",
+                            subtitle = "视频结束播放后自动退出全屏",
+                            checked = autoExitFullscreen,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setAutoExitFullscreen(context, it)
+                                }
+                            },
+                            iconTint = iOSOrange
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Lock,
+                            title = "全屏显示锁定按钮",
+                            subtitle = "控制层中显示防误触锁定按钮",
+                            checked = showFullscreenLockButton,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setShowFullscreenLockButton(context, it)
+                                }
+                            },
+                            iconTint = iOSTeal
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Camera,
+                            title = "全屏显示截图按钮",
+                            subtitle = "控制层中显示快速截图入口",
+                            checked = showFullscreenScreenshotButton,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setShowFullscreenScreenshotButton(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Battery100,
+                            title = "全屏显示电量",
+                            subtitle = "在横屏顶部展示当前电量百分比",
+                            checked = showFullscreenBatteryLevel,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setShowFullscreenBatteryLevel(context, it)
+                                }
+                            },
+                            iconTint = iOSGreen
                         )
                     }
                 }

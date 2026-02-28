@@ -1,6 +1,10 @@
 // File: feature/video/ui/overlay/TopControlBar.kt
 package com.android.purebilibili.feature.video.ui.overlay
 
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -14,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +56,7 @@ fun TopControlBar(
     title: String,
     onlineCount: String = "",
     isFullscreen: Boolean,
+    showBatteryLevel: Boolean = false,
     onBack: () -> Unit,
     // Interactions
     isLiked: Boolean = false,
@@ -63,6 +69,7 @@ fun TopControlBar(
     onMoreClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveTopControlBarLayoutPolicy(
@@ -78,6 +85,24 @@ fun TopControlBar(
             val now = System.currentTimeMillis()
             val nextMinuteDelay = (60_000L - (now % 60_000L)).coerceAtLeast(1_000L)
             delay(nextMinuteDelay)
+        }
+    }
+    val batteryLevelText by produceState<String?>(initialValue = null, showBatteryLevel) {
+        if (!showBatteryLevel) {
+            value = null
+            return@produceState
+        }
+        while (true) {
+            value = resolveBatteryLevelText(context)
+            delay(30_000L)
+        }
+    }
+    val statusText = remember(currentTimeText, batteryLevelText, showBatteryLevel) {
+        val battery = batteryLevelText
+        if (showBatteryLevel && !battery.isNullOrBlank()) {
+            "$currentTimeText  $battery"
+        } else {
+            currentTimeText
         }
     }
 
@@ -96,7 +121,7 @@ fun TopControlBar(
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = currentTimeText,
+                text = statusText,
                 color = Color.White.copy(alpha = 0.9f),
                 fontSize = layoutPolicy.timeFontSp.sp,
                 fontWeight = FontWeight.SemiBold
@@ -235,6 +260,17 @@ fun TopControlBar(
 private fun formatCurrentTime(): String {
     val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
     return formatter.format(Date())
+}
+
+private fun resolveBatteryLevelText(context: Context): String? {
+    return runCatching {
+        val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        if (level < 0 || scale <= 0) return@runCatching null
+        val percent = (level * 100f / scale).toInt().coerceIn(0, 100)
+        "$percent%"
+    }.getOrNull()
 }
 
 @Composable

@@ -102,7 +102,7 @@ fun ChatScreen(
         ) {
             when {
                 uiState.isLoading -> {
-                    CircularProgressIndicator(
+                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
@@ -140,7 +140,7 @@ fun ChatScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (uiState.isLoadingMore) {
-                                        CircularProgressIndicator(
+                                        com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                                             modifier = Modifier.size(24.dp)
                                         )
                                     } else {
@@ -224,7 +224,7 @@ fun ChatInputBar(
                 enabled = text.isNotBlank() && !isSending
             ) {
                 if (isSending) {
-                    CircularProgressIndicator(
+                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp
                     )

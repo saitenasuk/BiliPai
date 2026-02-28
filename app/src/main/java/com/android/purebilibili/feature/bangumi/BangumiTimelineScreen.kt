@@ -43,7 +43,7 @@ fun BangumiTimelineContent(
                 modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                com.android.purebilibili.core.ui.CutePersonLoadingIndicator()
             }
         }
         is TimelineState.Error -> {

@@ -198,7 +198,7 @@ fun LivePlayerControls(
             modifier = Modifier.align(Alignment.Center)
         ) {
             Surface(
-                color = Color.Black.copy(alpha = 0.7f),
+                color = Color.Transparent,
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Column(

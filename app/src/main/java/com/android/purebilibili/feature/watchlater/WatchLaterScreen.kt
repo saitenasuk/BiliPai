@@ -491,7 +491,7 @@ fun WatchLaterScreen(
         ) {
             when {
                 state.isLoading -> {
-                    CircularProgressIndicator(
+                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                         modifier = Modifier.align(Alignment.Center),
                         color = MaterialTheme.colorScheme.primary
                     )

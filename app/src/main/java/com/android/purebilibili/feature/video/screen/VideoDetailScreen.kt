@@ -456,10 +456,13 @@ fun VideoDetailScreen(
     
     // 📐 [大屏适配] 仅 Expanded 才启用平板分栏布局
     val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
+    val horizontalAdaptationEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getHorizontalAdaptationEnabled(context)
+        .collectAsState(initial = configuration.smallestScreenWidthDp >= 600)
     val useTabletLayout = shouldUseTabletVideoLayout(
         isExpandedScreen = windowSizeClass.isExpandedScreen,
         smallestScreenWidthDp = configuration.smallestScreenWidthDp
-    )
+    ) && horizontalAdaptationEnabled
     
     // 🔧 [修复] 追踪用户是否主动请求全屏（点击全屏按钮）
     // 使用 rememberSaveable 确保状态在横竖屏切换时保持
@@ -468,7 +471,15 @@ fun VideoDetailScreen(
     // 📐 全屏模式逻辑：
     // - 手机：横屏时自动进入全屏
     // - 平板：仅用户主动切换全屏
-    val isOrientationDrivenFullscreen = shouldUseOrientationDrivenFullscreen(
+    val fullscreenMode by com.android.purebilibili.core.store.SettingsManager
+        .getFullscreenMode(context)
+        .collectAsState(initial = com.android.purebilibili.core.store.FullscreenMode.AUTO)
+    val prefersManualFullscreenMode = remember(fullscreenMode) {
+        fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.NONE ||
+            fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.VERTICAL
+    }
+    val isOrientationDrivenFullscreen = !prefersManualFullscreenMode &&
+        shouldUseOrientationDrivenFullscreen(
         useTabletLayout = useTabletLayout
     )
     val isFullscreenMode = if (isOrientationDrivenFullscreen) isLandscape else userRequestedFullscreen
@@ -611,28 +622,6 @@ fun VideoDetailScreen(
     val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAutoRotateEnabled(context).collectAsState(initial = false)
     
-    LaunchedEffect(
-        autoRotateEnabled,
-        useTabletLayout,
-        isOrientationDrivenFullscreen,
-        isFullscreenMode
-    ) {
-        val requestedOrientation = resolvePhoneVideoRequestedOrientation(
-            autoRotateEnabled = autoRotateEnabled,
-            useTabletLayout = useTabletLayout,
-            isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
-            isFullscreenMode = isFullscreenMode
-        ) ?: return@LaunchedEffect
-
-        if (activity?.requestedOrientation != requestedOrientation) {
-            activity?.requestedOrientation = requestedOrientation
-        }
-        com.android.purebilibili.core.util.Logger.d(
-            "VideoDetailScreen",
-            "🔄 Auto-rotate: enabled=$autoRotateEnabled, requested=$requestedOrientation, fullscreen=$isFullscreenMode"
-        )
-    }
-
     DisposableEffect(activity, isScreenActive) {
         if (!isScreenActive || activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             onDispose { }
@@ -930,6 +919,33 @@ fun VideoDetailScreen(
     
     // 📱 [优化] 竖屏视频检测已移至 VideoPlayerState 集中管理
     val isVerticalVideo by playerState.isVerticalVideo.collectAsState()
+    LaunchedEffect(
+        autoRotateEnabled,
+        fullscreenMode,
+        useTabletLayout,
+        isOrientationDrivenFullscreen,
+        isFullscreenMode,
+        userRequestedFullscreen,
+        isVerticalVideo
+    ) {
+        val requestedOrientation = resolvePhoneVideoRequestedOrientation(
+            autoRotateEnabled = autoRotateEnabled,
+            fullscreenMode = fullscreenMode,
+            useTabletLayout = useTabletLayout,
+            isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+            isFullscreenMode = isFullscreenMode,
+            manualFullscreenRequested = userRequestedFullscreen,
+            isVerticalVideo = isVerticalVideo
+        ) ?: return@LaunchedEffect
+
+        if (activity?.requestedOrientation != requestedOrientation) {
+            activity?.requestedOrientation = requestedOrientation
+        }
+        com.android.purebilibili.core.util.Logger.d(
+            "VideoDetailScreen",
+            "🔄 Auto-rotate: enabled=$autoRotateEnabled, mode=$fullscreenMode, horizontal=$horizontalAdaptationEnabled, requested=$requestedOrientation, fullscreen=$isFullscreenMode, verticalVideo=$isVerticalVideo"
+        )
+    }
     val portraitExperienceEnabled = shouldEnablePortraitExperience()
     val enterPortraitFullscreen = {
         if (portraitExperienceEnabled) {
@@ -1165,7 +1181,9 @@ fun VideoDetailScreen(
                 
                 if (wasFullscreen && !userRequestedFullscreen) {
                     // check if it is a phone
-                    if (configuration.smallestScreenWidthDp < 600) {
+                    if (configuration.smallestScreenWidthDp < 600 &&
+                        fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.VERTICAL
+                    ) {
                         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     }
                 }
@@ -1180,7 +1198,11 @@ fun VideoDetailScreen(
                     }
                 } else {
                     userRequestedFullscreen = true
-                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    val targetOrientation = resolvePhoneFullscreenEnterOrientation(
+                        fullscreenMode = fullscreenMode,
+                        isVerticalVideo = isVerticalVideo
+                    ) ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    activity.requestedOrientation = targetOrientation
                 }
             }
         }
@@ -3015,19 +3037,61 @@ internal fun shouldApplyPhoneAutoRotatePolicy(
     return !useTabletLayout 
 }
 
+internal fun resolvePhoneFullscreenEnterOrientation(
+    fullscreenMode: com.android.purebilibili.core.store.FullscreenMode,
+    isVerticalVideo: Boolean
+): Int? {
+    return when (fullscreenMode) {
+        com.android.purebilibili.core.store.FullscreenMode.NONE -> null
+        com.android.purebilibili.core.store.FullscreenMode.VERTICAL -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        com.android.purebilibili.core.store.FullscreenMode.HORIZONTAL -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        com.android.purebilibili.core.store.FullscreenMode.AUTO -> {
+            if (isVerticalVideo) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        com.android.purebilibili.core.store.FullscreenMode.RATIO -> {
+            if (isVerticalVideo) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        com.android.purebilibili.core.store.FullscreenMode.GRAVITY -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+    }
+}
+
 internal fun resolvePhoneVideoRequestedOrientation(
     autoRotateEnabled: Boolean,
+    fullscreenMode: com.android.purebilibili.core.store.FullscreenMode,
     useTabletLayout: Boolean,
     isOrientationDrivenFullscreen: Boolean,
-    isFullscreenMode: Boolean
+    isFullscreenMode: Boolean,
+    manualFullscreenRequested: Boolean = false,
+    isVerticalVideo: Boolean = false
 ): Int? {
     if (!shouldApplyPhoneAutoRotatePolicy(useTabletLayout)) return null
-    if (autoRotateEnabled) {
-        // Keep sensor-driven orientation so rotating back to portrait can auto-exit fullscreen.
-        return ActivityInfo.SCREEN_ORIENTATION_SENSOR
+    if (fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.NONE) {
+        return null
     }
-    return if (isOrientationDrivenFullscreen && isFullscreenMode) {
-        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    if (fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.VERTICAL) {
+        return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+    if (!isOrientationDrivenFullscreen) {
+        return null
+    }
+    if (autoRotateEnabled) {
+        return when {
+            manualFullscreenRequested -> {
+                resolvePhoneFullscreenEnterOrientation(
+                    fullscreenMode = fullscreenMode,
+                    isVerticalVideo = isVerticalVideo
+                ) ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+            else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        }
+    }
+    return if (isFullscreenMode) {
+        resolvePhoneFullscreenEnterOrientation(
+            fullscreenMode = fullscreenMode,
+            isVerticalVideo = isVerticalVideo
+        ) ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     } else {
         ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
