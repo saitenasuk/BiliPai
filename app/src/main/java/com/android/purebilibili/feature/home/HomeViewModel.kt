@@ -933,77 +933,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         
         result.onSuccess { items ->
             //  将 DynamicItem 转换为首页卡片：
-            // - 视频动态：保留视频跳转
-            // - 图文/文字动态：映射为动态详情卡片（点击进入动态详情页）
+            // - 仅保留可直接跳转的视频动态，避免与“动态”页图文流重复
             val videos = items.mapNotNull { item ->
                 // Check if author is blocked
                 if ((item.modules.module_author?.mid ?: 0) in blockedMids) return@mapNotNull null
 
-                val archive = item.modules.module_dynamic?.major?.archive
-                if (archive != null && archive.bvid.isNotEmpty()) {
-                    val resolvedAid = resolveDynamicArchiveAid(
-                        archiveAid = archive.aid,
-                        fallbackId = 0L
-                    )
-                    com.android.purebilibili.data.model.response.VideoItem(
-                        id = resolvedAid,
-                        bvid = archive.bvid,
-                        dynamicId = item.id_str.trim(),
-                        aid = resolvedAid,
-                        title = archive.title,
-                        pic = archive.cover,
-                        duration = parseDurationText(archive.duration_text),
-                        owner = com.android.purebilibili.data.model.response.Owner(
-                            mid = item.modules.module_author?.mid ?: 0,
-                            name = item.modules.module_author?.name ?: "",
-                            face = item.modules.module_author?.face ?: ""
-                        ),
-                        stat = com.android.purebilibili.data.model.response.Stat(
-                            view = parseStatText(archive.stat.play),
-                            danmaku = parseStatText(archive.stat.danmaku)
-                        )
-                    )
-                } else {
-                    val supportedDynamicTypes = setOf("DYNAMIC_TYPE_WORD", "DYNAMIC_TYPE_DRAW", "DYNAMIC_TYPE_FORWARD")
-                    if (item.type !in supportedDynamicTypes) {
-                        return@mapNotNull null
-                    }
-                    val dynamicId = item.id_str.trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                    val author = item.modules.module_author
-                    val content = item.modules.module_dynamic
-                    val descText = content?.desc?.text?.trim().orEmpty()
-                    val opusText = content?.major?.opus?.summary?.text?.trim().orEmpty()
-                    val title = descText.ifEmpty { opusText }.ifEmpty { "动态内容" }
-                    val cover = content?.major?.draw?.items?.firstOrNull()?.src
-                        ?: content?.major?.opus?.pics?.firstOrNull()?.url
-                        ?: author?.face
-                        ?: return@mapNotNull null
-                    val stat = item.modules.module_stat
-                    val fallbackId = dynamicId.toLongOrNull() ?: 0L
-
-                    com.android.purebilibili.data.model.response.VideoItem(
-                        id = fallbackId,
-                        bvid = "DYN_$dynamicId",
-                        dynamicId = dynamicId,
-                        aid = 0L,
-                        cid = 0L,
-                        title = title,
-                        pic = cover,
-                        duration = 0,
-                        owner = com.android.purebilibili.data.model.response.Owner(
-                            mid = author?.mid ?: 0L,
-                            name = author?.name.orEmpty(),
-                            face = author?.face.orEmpty()
-                        ),
-                        stat = com.android.purebilibili.data.model.response.Stat(
-                            view = stat?.like?.count ?: 0,
-                            danmaku = stat?.comment?.count ?: 0,
-                            reply = stat?.comment?.count ?: 0,
-                            like = stat?.like?.count ?: 0,
-                            share = stat?.forward?.count ?: 0
-                        )
-                    )
+                val archive = item.modules.module_dynamic?.major?.archive ?: return@mapNotNull null
+                if (!shouldIncludeHomeFollowDynamicInVideoFeed(archive.bvid)) {
+                    return@mapNotNull null
                 }
+
+                val resolvedAid = resolveDynamicArchiveAid(
+                    archiveAid = archive.aid,
+                    fallbackId = 0L
+                )
+                com.android.purebilibili.data.model.response.VideoItem(
+                    id = resolvedAid,
+                    bvid = archive.bvid,
+                    dynamicId = item.id_str.trim(),
+                    aid = resolvedAid,
+                    title = archive.title,
+                    pic = archive.cover,
+                    duration = parseDurationText(archive.duration_text),
+                    owner = com.android.purebilibili.data.model.response.Owner(
+                        mid = item.modules.module_author?.mid ?: 0,
+                        name = item.modules.module_author?.name ?: "",
+                        face = item.modules.module_author?.face ?: ""
+                    ),
+                    stat = com.android.purebilibili.data.model.response.Stat(
+                        view = parseStatText(archive.stat.play),
+                        danmaku = parseStatText(archive.stat.danmaku)
+                    )
+                )
             }
             
             updateCategoryState(HomeCategory.FOLLOW) { oldState ->

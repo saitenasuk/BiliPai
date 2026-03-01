@@ -80,6 +80,8 @@ fun LivePlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    // 📺 [新增] 获取小窗管理器
+    val miniPlayerManager = remember { com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstance(context) }
     val configuration = LocalConfiguration.current
     val lifecycleOwner = LocalLifecycleOwner.current
     
@@ -94,6 +96,8 @@ fun LivePlayerScreen(
     var isFullscreen by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(true) }
     var isChatVisible by remember { mutableStateOf(true) } // 控制侧边栏显示
+    var isPipRequested by remember { mutableStateOf(false) }
+    val showLivePipButton = remember { shouldShowLivePipButton(android.os.Build.VERSION.SDK_INT) }
     
     // Haze blur 状态 (用于侧边栏实时模糊)
     val hazeState = remember { HazeState() }
@@ -109,6 +113,28 @@ fun LivePlayerScreen(
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         } else {
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+    }
+
+    fun enterLivePip() {
+        if (!showLivePipButton) return
+        val hostActivity = activity ?: return
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N &&
+            hostActivity.isInPictureInPictureMode
+        ) {
+            return
+        }
+        try {
+            isPipRequested = true
+            val paramsBuilder = android.app.PictureInPictureParams.Builder()
+                .setAspectRatio(android.util.Rational(16, 9))
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                paramsBuilder.setSeamlessResizeEnabled(true)
+            }
+            hostActivity.enterPictureInPictureMode(paramsBuilder.build())
+        } catch (e: Exception) {
+            isPipRequested = false
+            Logger.e(TAG, "Enter live PiP failed", e)
         }
     }
     
@@ -149,6 +175,19 @@ fun LivePlayerScreen(
             .build().apply { playWhenReady = true }
     }
     
+    // 📺 [新增] 将播放器注册到 MiniPlayerManager
+    val liveCover = (uiState as? LivePlayerState.Success)?.roomInfo?.cover ?: ""
+    val liveTitle = title.ifEmpty { (uiState as? LivePlayerState.Success)?.roomInfo?.title ?: "" }
+    LaunchedEffect(exoPlayer, liveCover) {
+        miniPlayerManager.setLiveInfo(
+            roomId = roomId,
+            title = liveTitle,
+            cover = liveCover,
+            uname = uname,
+            externalPlayer = exoPlayer
+        )
+    }
+    
     // ... (播放监听与 URL 管理保持不变)
     
     // 播放状态监听
@@ -171,6 +210,13 @@ fun LivePlayerScreen(
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
                 CrashReporter.markLivePlaybackStage(if (playing) "playing" else "not_playing")
+            }
+            // 📺 [新增] 直播流结束时自动关闭小窗
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED && miniPlayerManager.isMiniMode && miniPlayerManager.isLiveMode) {
+                    Logger.d(TAG, "📺 直播流结束，自动关闭小窗")
+                    miniPlayerManager.dismiss()
+                }
             }
         }
         exoPlayer.addListener(listener)
@@ -215,10 +261,18 @@ fun LivePlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> {
-                    exoPlayer.pause()
-                    CrashReporter.markLivePlaybackStage("lifecycle_pause")
+                    val isInPictureInPictureMode =
+                        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N &&
+                            (activity?.isInPictureInPictureMode == true)
+                    if (shouldPauseLivePlaybackOnPause(isInPictureInPictureMode, isPipRequested)) {
+                        exoPlayer.pause()
+                        CrashReporter.markLivePlaybackStage("lifecycle_pause")
+                    } else {
+                        CrashReporter.markLivePlaybackStage("lifecycle_pause_keep_playing")
+                    }
                 }
                 Lifecycle.Event.ON_RESUME -> {
+                    isPipRequested = false
                     exoPlayer.play()
                     CrashReporter.markLivePlaybackStage("lifecycle_resume")
                 }
@@ -230,7 +284,13 @@ fun LivePlayerScreen(
         
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            exoPlayer.release()
+            // 📺 [修改] 仅当 MiniPlayerManager 未持有该播放器时才释放
+            if (!miniPlayerManager.isPlayerManaged(exoPlayer)) {
+                exoPlayer.release()
+                Logger.d(TAG, "📺 播放器未被小窗持有，释放")
+            } else {
+                Logger.d(TAG, "📺 播放器被小窗持有，保留")
+            }
             activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
@@ -298,7 +358,15 @@ fun LivePlayerScreen(
                     if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                 },
                 onToggleFullscreen = { toggleFullscreen() },
-                onBack = { if (isFullscreen) toggleFullscreen() else onBack() },
+                onBack = { 
+                    if (isFullscreen) {
+                        toggleFullscreen()
+                    } else {
+                        // 📺 [新增] 退出时进入小窗模式
+                        miniPlayerManager.enterMiniMode(forced = true)
+                        onBack()
+                    }
+                },
                 // 侧边栏开关
                 isChatVisible = isChatVisible,
                 onToggleChat = { isChatVisible = !isChatVisible },
@@ -307,7 +375,9 @@ fun LivePlayerScreen(
                 isDanmakuEnabled = (uiState as? LivePlayerState.Success)?.isDanmakuEnabled ?: true,
                 onToggleDanmaku = { viewModel.toggleDanmaku() },
                 // [新增] 刷新
-                onRefresh = { viewModel.retry() }
+                onRefresh = { viewModel.retry() },
+                showPipButton = showLivePipButton,
+                onEnterPip = { enterLivePip() }
             )
             
             // Loading/Error Indicator

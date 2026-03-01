@@ -18,6 +18,10 @@ object ActionRepository {
     private const val FOLLOW_GROUP_MAX_RETRIES = 3
     private const val FOLLOW_GROUP_REQUEST_INTERVAL_MS = 220L
     private const val FOLLOW_GROUP_RETRY_BASE_DELAY_MS = 900L
+    private const val FOLLOW_GROUP_QUERY_MAX_RETRIES = 3
+    private const val FOLLOW_GROUP_QUERY_RETRY_BASE_DELAY_MS = 600L
+    private const val FOLLOW_GROUP_TAG_MEMBERS_PAGE_SIZE = 100
+    private const val FOLLOW_GROUP_TAG_MEMBERS_MAX_PAGES = 120
 
     private fun normalizeRelationTagIds(raw: Set<Long>): Set<Long> {
         return raw.asSequence().filter { it != 0L }.toSet()
@@ -255,15 +259,86 @@ object ActionRepository {
 
     suspend fun getUserFollowGroupIds(mid: Long): Result<Set<Long>> {
         return withContext(Dispatchers.IO) {
-            try {
-                val response = api.getRelationTagUser(mid)
-                if (response.code != 0) {
-                    return@withContext Result.failure(
-                        Exception(response.message.ifEmpty { "获取分组信息失败: ${response.code}" })
-                    )
+            var lastCode = Int.MIN_VALUE
+            var lastMessage = ""
+            var lastError: Exception? = null
+
+            repeat(FOLLOW_GROUP_QUERY_MAX_RETRIES) { attempt ->
+                try {
+                    val response = api.getRelationTagUser(mid)
+                    if (response.code == 0) {
+                        val ids = response.data.keys.mapNotNull { it.toLongOrNull() }.toSet()
+                        return@withContext Result.success(normalizeRelationTagIds(ids))
+                    }
+
+                    lastCode = response.code
+                    lastMessage = response.message
+                    val retryable = isFollowGroupRetryableError(response.code, response.message)
+                    if (!retryable || attempt >= FOLLOW_GROUP_QUERY_MAX_RETRIES - 1) {
+                        return@withContext Result.failure(
+                            Exception(response.message.ifEmpty { "获取分组信息失败: ${response.code}" })
+                        )
+                    }
+                } catch (e: Exception) {
+                    lastError = e
+                    if (attempt >= FOLLOW_GROUP_QUERY_MAX_RETRIES - 1) {
+                        return@withContext Result.failure(e)
+                    }
                 }
-                val ids = response.data.keys.mapNotNull { it.toLongOrNull() }.toSet()
-                Result.success(normalizeRelationTagIds(ids))
+
+                val backoffMs = FOLLOW_GROUP_QUERY_RETRY_BASE_DELAY_MS * (attempt + 1)
+                delay(backoffMs)
+            }
+
+            val fallbackMessage = if (lastMessage.isNotBlank()) {
+                lastMessage
+            } else {
+                "获取分组信息失败: $lastCode"
+            }
+            Result.failure(lastError ?: Exception(fallbackMessage))
+        }
+    }
+
+    suspend fun getFollowGroupMemberMids(
+        tagId: Long,
+        targetMids: Set<Long> = emptySet()
+    ): Result<Set<Long>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val targetSet = if (targetMids.isEmpty()) null else targetMids
+                val result = linkedSetOf<Long>()
+                var page = 1
+
+                while (page <= FOLLOW_GROUP_TAG_MEMBERS_MAX_PAGES) {
+                    val response = api.getRelationTagMembers(
+                        tagId = tagId,
+                        pageSize = FOLLOW_GROUP_TAG_MEMBERS_PAGE_SIZE,
+                        page = page
+                    )
+                    if (response.code != 0) {
+                        return@withContext Result.failure(
+                            Exception(response.message.ifEmpty { "获取分组成员失败: ${response.code}" })
+                        )
+                    }
+
+                    val mids = response.data
+                        .asSequence()
+                        .map { it.mid }
+                        .filter { it > 0L }
+                        .toList()
+
+                    if (targetSet == null) {
+                        result.addAll(mids)
+                    } else {
+                        mids.filterTo(result) { targetSet.contains(it) }
+                    }
+
+                    if (mids.size < FOLLOW_GROUP_TAG_MEMBERS_PAGE_SIZE) break
+                    page += 1
+                    delay(FOLLOW_GROUP_REQUEST_INTERVAL_MS)
+                }
+
+                Result.success(result)
             } catch (e: Exception) {
                 Result.failure(e)
             }

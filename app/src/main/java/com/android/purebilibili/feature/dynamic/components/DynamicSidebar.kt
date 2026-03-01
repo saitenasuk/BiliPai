@@ -51,6 +51,7 @@ fun DynamicSidebar(
     users: List<SidebarUser>,
     selectedUserId: Long?,
     isExpanded: Boolean,
+    userListState: androidx.compose.foundation.lazy.LazyListState,
     onUserClick: (Long?) -> Unit,
     showHiddenUsers: Boolean,
     hiddenCount: Int,
@@ -95,6 +96,7 @@ fun DynamicSidebar(
         Box(modifier = Modifier.fillMaxSize()) {
             // 可滚动内容 - 作为模糊源
             LazyColumn(
+                state = userListState,
                 horizontalAlignment = Alignment.CenterHorizontally,
                 contentPadding = PaddingValues(
                     top = topPadding + 52.dp, // 为顶部返回按钮留出空间

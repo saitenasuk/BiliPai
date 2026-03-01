@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.screen
 
 import android.content.pm.ActivityInfo
+import com.android.purebilibili.core.store.FullscreenMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -154,6 +155,7 @@ class VideoDetailLayoutModePolicyTest {
             null,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = true,
                 isOrientationDrivenFullscreen = false,
                 isFullscreenMode = false
@@ -167,6 +169,7 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = false
@@ -176,6 +179,7 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = true
@@ -189,6 +193,7 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = false,
+                fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = false
@@ -198,9 +203,97 @@ class VideoDetailLayoutModePolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = false,
+                fullscreenMode = FullscreenMode.AUTO,
                 useTabletLayout = false,
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = true
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_manualFullscreenRequest_withAutoRotate_forcesLandscape() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.AUTO,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false,
+                manualFullscreenRequested = true
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_autoRotateHorizontalMode_withoutManualRequest_usesSensor() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.HORIZONTAL,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = true,
+                isFullscreenMode = false,
+                manualFullscreenRequested = false
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_fullscreenModeNone_keepsCurrentOrientation() {
+        assertEquals(
+            null,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.NONE,
+                useTabletLayout = false,
+                isOrientationDrivenFullscreen = false,
+                isFullscreenMode = true
+            )
+        )
+    }
+
+    @Test
+    fun phoneEnterOrientationPolicy_respectsFullscreenMode() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolvePhoneFullscreenEnterOrientation(
+                fullscreenMode = FullscreenMode.HORIZONTAL,
+                isVerticalVideo = false
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolvePhoneFullscreenEnterOrientation(
+                fullscreenMode = FullscreenMode.VERTICAL,
+                isVerticalVideo = true
+            )
+        )
+        assertEquals(
+            null,
+            resolvePhoneFullscreenEnterOrientation(
+                fullscreenMode = FullscreenMode.NONE,
+                isVerticalVideo = false
+            )
+        )
+    }
+
+    @Test
+    fun phoneEnterOrientationPolicy_autoMode_usesVideoDirection() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolvePhoneFullscreenEnterOrientation(
+                fullscreenMode = FullscreenMode.AUTO,
+                isVerticalVideo = true
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolvePhoneFullscreenEnterOrientation(
+                fullscreenMode = FullscreenMode.AUTO,
+                isVerticalVideo = false
             )
         )
     }

@@ -159,7 +159,8 @@ fun MiniPlayerOverlay(
     val shouldPollProgress = shouldPollMiniPlayerProgress(
         playerExists = player != null,
         isMiniMode = miniPlayerManager.isMiniMode,
-        isActive = miniPlayerManager.isActive
+        isActive = miniPlayerManager.isActive,
+        isLiveMode = miniPlayerManager.isLiveMode  // 📺 直播不轮询进度
     )
     // 仅在小窗真实可用时轮询播放器状态，避免后台空转。
     LaunchedEffect(player, shouldPollProgress, isDraggingProgress) {
@@ -300,38 +301,42 @@ fun MiniPlayerOverlay(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(RoundedCornerShape(layoutPolicy.cardCornerRadiusDp.dp))
-                            //  视频区域：左右滑动调节进度
-                            .pointerInput(Unit) {
-                                detectHorizontalDragGestures(
-                                    onDragStart = { 
-                                        isDraggingProgress = true
-                                        dragProgressDelta = 0f
-                                        seekPreviewPosition = currentPosition
-                                        showControls = true
-                                        lastInteractionTime = System.currentTimeMillis()
-                                    },
-                                    onDragEnd = {
-                                        if (isDraggingProgress && abs(dragProgressDelta) > 10f) {
-                                            val seekDelta = (dragProgressDelta / miniPlayerWidthPx * duration).toLong()
-                                            val newPosition = (currentPosition + seekDelta).coerceIn(0L, duration)
-                                            player?.seekTo(newPosition)
-                                        }
-                                        isDraggingProgress = false
-                                        dragProgressDelta = 0f
-                                    },
-                                    onDragCancel = {
-                                        isDraggingProgress = false
-                                        dragProgressDelta = 0f
-                                    },
-                                    onHorizontalDrag = { change, dragAmount ->
-                                        change.consume()
-                                        dragProgressDelta += dragAmount
-                                        val seekDelta = (dragProgressDelta / miniPlayerWidthPx * duration).toLong()
-                                        seekPreviewPosition = (currentPosition + seekDelta).coerceIn(0L, duration)
-                                        currentProgress = (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                            //  视频区域：左右滑动调节进度（直播模式禁用）
+                            .then(
+                                if (!miniPlayerManager.isLiveMode) {
+                                    Modifier.pointerInput(Unit) {
+                                        detectHorizontalDragGestures(
+                                            onDragStart = { 
+                                                isDraggingProgress = true
+                                                dragProgressDelta = 0f
+                                                seekPreviewPosition = currentPosition
+                                                showControls = true
+                                                lastInteractionTime = System.currentTimeMillis()
+                                            },
+                                            onDragEnd = {
+                                                if (isDraggingProgress && abs(dragProgressDelta) > 10f) {
+                                                    val seekDelta = (dragProgressDelta / miniPlayerWidthPx * duration).toLong()
+                                                    val newPosition = (currentPosition + seekDelta).coerceIn(0L, duration)
+                                                    player?.seekTo(newPosition)
+                                                }
+                                                isDraggingProgress = false
+                                                dragProgressDelta = 0f
+                                            },
+                                            onDragCancel = {
+                                                isDraggingProgress = false
+                                                dragProgressDelta = 0f
+                                            },
+                                            onHorizontalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                dragProgressDelta += dragAmount
+                                                val seekDelta = (dragProgressDelta / miniPlayerWidthPx * duration).toLong()
+                                                seekPreviewPosition = (currentPosition + seekDelta).coerceIn(0L, duration)
+                                                currentProgress = (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                                            }
+                                        )
                                     }
-                                )
-                            }
+                                } else Modifier
+                            )
                             .pointerInput(Unit) {
                                 detectTapGestures(
                                     onTap = {
@@ -537,7 +542,7 @@ fun MiniPlayerOverlay(
                         }
                     } else if (!isDraggingPosition) {
                         Text(
-                            text = "拖动顶部移动 | 左右滑动调进度",
+                            text = if (miniPlayerManager.isLiveMode) "拖动顶部移动 | 双击展开" else "拖动顶部移动 | 左右滑动调进度",
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = layoutPolicy.dragHintFontSp.sp,
                             modifier = Modifier
@@ -545,9 +550,38 @@ fun MiniPlayerOverlay(
                                 .padding(bottom = layoutPolicy.dragHintBottomPaddingDp.dp)
                         )
                     }
+                    
+                    // 📺 [新增] 直播角标
+                    if (miniPlayerManager.isLiveMode) {
+                        androidx.compose.foundation.layout.Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(start = 8.dp, top = 8.dp)
+                                .background(
+                                    color = Color(0xFFFF4444).copy(alpha = 0.9f),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(Color.White, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "直播",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
-                // 进度条 - 始终显示
+                // 进度条 - 仅视频模式显示（直播没有进度）
+                if (!miniPlayerManager.isLiveMode) {
                 LinearProgressIndicator(
                     progress = { currentProgress },
                     modifier = Modifier
@@ -563,6 +597,7 @@ fun MiniPlayerOverlay(
                     color = if (isDraggingProgress) Color.Yellow else MaterialTheme.colorScheme.primary,
                     trackColor = Color.White.copy(alpha = 0.3f)
                 )
+                }
             }
         }
     }

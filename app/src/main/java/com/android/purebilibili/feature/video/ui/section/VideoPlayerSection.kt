@@ -28,13 +28,17 @@ import android.media.AudioManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
 //  Cupertino Icons - iOS SF Symbols 风格图标
@@ -44,22 +48,25 @@ import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
 // 🌈 Material Icons Extended - 亮度图标
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrightnessLow
-import androidx.compose.material.icons.filled.BrightnessMedium
-import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -86,6 +93,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 enum class VideoGestureMode { None, Brightness, Volume, Seek, SwipeToFullscreen }
 
@@ -112,6 +120,54 @@ internal fun shouldCommitGestureSeek(
     minDeltaMs: Long = 300L
 ): Boolean {
     return abs(targetPositionMs - currentPositionMs) >= minDeltaMs
+}
+
+internal fun resolveOrientationSwitchHintText(isFullscreen: Boolean): String {
+    return if (isFullscreen) "已切换到横屏" else "已切换到竖屏"
+}
+
+internal fun shouldTriggerFullscreenBySwipe(
+    isFullscreen: Boolean,
+    reverseGesture: Boolean,
+    totalDragDistanceY: Float,
+    thresholdPx: Float
+): Boolean {
+    if (thresholdPx <= 0f) return false
+    val isSwipeUp = totalDragDistanceY < -thresholdPx
+    val isSwipeDown = totalDragDistanceY > thresholdPx
+    return if (!isFullscreen) {
+        if (reverseGesture) isSwipeDown else isSwipeUp
+    } else {
+        if (reverseGesture) isSwipeUp else isSwipeDown
+    }
+}
+
+internal fun resolveGestureIndicatorLabel(mode: VideoGestureMode): String {
+    return when (mode) {
+        VideoGestureMode.Brightness -> "亮度"
+        VideoGestureMode.Volume -> "音量"
+        else -> ""
+    }
+}
+
+internal fun resolveGestureDisplayIcon(
+    mode: VideoGestureMode,
+    percent: Float,
+    fallbackIcon: ImageVector?
+): ImageVector {
+    val normalizedPercent = percent.coerceIn(0f, 1f)
+    return when (mode) {
+        VideoGestureMode.Brightness -> when {
+            normalizedPercent < 0.34f -> CupertinoIcons.Outlined.SunMax
+            else -> CupertinoIcons.Default.SunMax
+        }
+        VideoGestureMode.Volume -> when {
+            normalizedPercent < 0.01f -> CupertinoIcons.Default.SpeakerSlash
+            normalizedPercent < 0.5f -> CupertinoIcons.Default.Speaker
+            else -> CupertinoIcons.Default.SpeakerWave2
+        }
+        else -> fallbackIcon ?: CupertinoIcons.Filled.SunMax
+    }
 }
 
 internal fun shouldUseTextureSurfaceForFlip(
@@ -303,6 +359,15 @@ fun VideoPlayerSection(
     val fullscreenSwipeSeekEnabled by com.android.purebilibili.core.store.SettingsManager
         .getFullscreenSwipeSeekEnabled(context)
         .collectAsState(initial = true)
+    val fullscreenGestureReverse by com.android.purebilibili.core.store.SettingsManager
+        .getFullscreenGestureReverse(context)
+        .collectAsState(initial = false)
+    val autoEnterFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getAutoEnterFullscreen(context)
+        .collectAsState(initial = false)
+    val autoExitFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getAutoExitFullscreen(context)
+        .collectAsState(initial = true)
     
     //  [新增] 双击跳转视觉反馈状态
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
@@ -315,6 +380,7 @@ fun VideoPlayerSection(
     var isLongPressing by remember { mutableStateOf(false) }
     var originalSpeed by remember { mutableFloatStateOf(1.0f) }
     var longPressSpeedFeedbackVisible by remember { mutableStateOf(false) }
+    var hasAutoEnteredFullscreen by remember(bvid) { mutableStateOf(false) }
     
     //  [新增] 缓冲状态监听
     var isBuffering by remember { mutableStateOf(false) }
@@ -327,6 +393,41 @@ fun VideoPlayerSection(
         playerState.player.addListener(listener)
         // 初始化状态
         isBuffering = playerState.player.playbackState == Player.STATE_BUFFERING
+        onDispose {
+            playerState.player.removeListener(listener)
+        }
+    }
+
+    val latestIsFullscreen by rememberUpdatedState(isFullscreen)
+    val latestOnToggleFullscreen by rememberUpdatedState(onToggleFullscreen)
+    DisposableEffect(
+        playerState.player,
+        autoEnterFullscreenEnabled,
+        autoExitFullscreenEnabled,
+        bvid
+    ) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (
+                    playbackState == Player.STATE_READY &&
+                    autoEnterFullscreenEnabled &&
+                    !hasAutoEnteredFullscreen &&
+                    playerState.player.playWhenReady &&
+                    !latestIsFullscreen
+                ) {
+                    hasAutoEnteredFullscreen = true
+                    latestOnToggleFullscreen()
+                }
+                if (
+                    playbackState == Player.STATE_ENDED &&
+                    autoExitFullscreenEnabled &&
+                    latestIsFullscreen
+                ) {
+                    latestOnToggleFullscreen()
+                }
+            }
+        }
+        playerState.player.addListener(listener)
         onDispose {
             playerState.player.removeListener(listener)
         }
@@ -354,6 +455,15 @@ fun VideoPlayerSection(
     var gestureMode by remember { mutableStateOf<VideoGestureMode>(VideoGestureMode.None) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
     var gesturePercent by remember { mutableFloatStateOf(0f) }
+    val gesturePercentDisplay by remember {
+        derivedStateOf { (gesturePercent * 100f).roundToInt().coerceIn(0, 100) }
+    }
+    val gestureValueBlur = remember { Animatable(0f) }
+    val gestureValueAlpha = remember { Animatable(1f) }
+    var hasAnimatedGestureValue by remember { mutableStateOf(false) }
+    var orientationHintVisible by remember { mutableStateOf(false) }
+    var orientationHintText by remember { mutableStateOf(resolveOrientationSwitchHintText(isFullscreen)) }
+    var hasObservedOrientationChange by remember { mutableStateOf(false) }
 
     // 进度手势相关状态
     var seekTargetTime by remember { mutableLongStateOf(0L) }
@@ -390,6 +500,32 @@ fun VideoPlayerSection(
 
     DisposableEffect(Unit) {
         onDispose { playerViewRef = null }
+    }
+
+    LaunchedEffect(gestureMode, gesturePercentDisplay, isGestureVisible) {
+        val isLevelGesture = gestureMode == VideoGestureMode.Brightness || gestureMode == VideoGestureMode.Volume
+        if (!isGestureVisible || !isLevelGesture) {
+            hasAnimatedGestureValue = false
+            gestureValueBlur.snapTo(0f)
+            gestureValueAlpha.snapTo(1f)
+            return@LaunchedEffect
+        }
+        if (!hasAnimatedGestureValue) {
+            hasAnimatedGestureValue = true
+            return@LaunchedEffect
+        }
+        gestureValueBlur.snapTo(9f)
+        gestureValueAlpha.snapTo(0.52f)
+        launch {
+            gestureValueBlur.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 220)
+            )
+        }
+        gestureValueAlpha.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 220)
+        )
     }
 
     // [新增] 共享元素过渡支持
@@ -519,14 +655,22 @@ fun VideoPlayerSection(
                             } else if (gestureMode == VideoGestureMode.SwipeToFullscreen) {
                                 //  阈值判定：上滑超过一定距离触发全屏
                                 val swipeThreshold = 50.dp.toPx()
-                                if (portraitSwipeToFullscreenEnabled &&
-                                    totalDragDistanceY < -swipeThreshold &&
-                                    !isFullscreen
+                                if (
+                                    portraitSwipeToFullscreenEnabled &&
+                                    shouldTriggerFullscreenBySwipe(
+                                        isFullscreen = isFullscreen,
+                                        reverseGesture = fullscreenGestureReverse,
+                                        totalDragDistanceY = totalDragDistanceY,
+                                        thresholdPx = swipeThreshold
+                                    )
                                 ) {
                                     onToggleFullscreen()
                                     // 震动反馈 (可选)
                                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "👆 Swipe up to fullscreen triggered")
+                                    com.android.purebilibili.core.util.Logger.d(
+                                        "VideoPlayerSection",
+                                        if (isFullscreen) "👇 Swipe to exit fullscreen triggered" else "👆 Swipe to fullscreen triggered"
+                                    )
                                 }
                             }
                             isGestureVisible = false
@@ -588,11 +732,15 @@ fun VideoPlayerSection(
                                         // 横屏模式
                                         // 左侧 1/3: 亮度
                                         // 右侧 1/3: 音量
-                                        // 中间 1/3: 忽略垂直手势，避免误触
+                                        // 中间 1/3: 用于滑动退出全屏（可反向）
                                         when {
                                             startX < leftZoneEnd -> VideoGestureMode.Brightness
                                             startX > rightZoneStart -> VideoGestureMode.Volume
-                                            else -> VideoGestureMode.None
+                                            else -> if (portraitSwipeToFullscreenEnabled) {
+                                                VideoGestureMode.SwipeToFullscreen
+                                            } else {
+                                                VideoGestureMode.None
+                                            }
                                         }
                                     }
 
@@ -883,6 +1031,17 @@ fun VideoPlayerSection(
             if (player.playWhenReady && !player.isPlaying && player.playbackState == Player.STATE_READY) {
                 player.play()
             }
+        }
+
+        LaunchedEffect(isFullscreen) {
+            if (!hasObservedOrientationChange) {
+                hasObservedOrientationChange = true
+                return@LaunchedEffect
+            }
+            orientationHintText = resolveOrientationSwitchHintText(isFullscreen)
+            orientationHintVisible = true
+            delay(760)
+            orientationHintVisible = false
         }
         
         //  弹幕设置变化时实时应用
@@ -1418,83 +1577,215 @@ fun VideoPlayerSection(
             (gestureMode == VideoGestureMode.Seek ||
                 gestureMode == VideoGestureMode.Brightness ||
                 gestureMode == VideoGestureMode.Volume)
+        val shouldShowSeekIndicator = shouldShowGestureIndicator && gestureMode == VideoGestureMode.Seek
+        val shouldShowLevelIndicator = shouldShowGestureIndicator &&
+            (gestureMode == VideoGestureMode.Brightness || gestureMode == VideoGestureMode.Volume)
 
-        if (shouldShowGestureIndicator) {
-            if (gestureMode == VideoGestureMode.Seek) {
-                // 🖼️ Seek 模式：显示带缩略图的预览气泡
-                Box(
-                    modifier = Modifier.align(Alignment.Center),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (videoshotData != null && videoshotData.isValid) {
-                        // 🖼️ 有缩略图：显示完整预览
-                        com.android.purebilibili.feature.video.ui.components.SeekPreviewBubble(
-                            videoshotData = videoshotData,
-                            targetPositionMs = seekTargetTime,
-                            currentPositionMs = startPosition,
-                            durationMs = playerState.player.duration,
-                            offsetX = 80f,  // 居中偏移（气泡宽度的一半）
-                            containerWidth = 160f  // 与气泡宽度匹配
-                        )
-                    } else {
-                        // 无缩略图：使用原有样式
-                        Box(
-                            modifier = Modifier
-                                .size(uiLayoutPolicy.gestureOverlaySizeDp.dp)
-                                .background(Color.Black.copy(0.7f), RoundedCornerShape(16.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                val durationSeconds = (playerState.player.duration / 1000).coerceAtLeast(1)
-                                val targetSeconds = (seekTargetTime / 1000).toInt()
+        if (shouldShowSeekIndicator) {
+            // 🖼️ Seek 模式：显示带缩略图的预览气泡
+            Box(
+                modifier = Modifier.align(Alignment.Center),
+                contentAlignment = Alignment.Center
+            ) {
+                if (videoshotData != null && videoshotData.isValid) {
+                    // 🖼️ 有缩略图：显示完整预览
+                    com.android.purebilibili.feature.video.ui.components.SeekPreviewBubble(
+                        videoshotData = videoshotData,
+                        targetPositionMs = seekTargetTime,
+                        currentPositionMs = startPosition,
+                        durationMs = playerState.player.duration,
+                        offsetX = 80f,  // 居中偏移（气泡宽度的一半）
+                        containerWidth = 160f  // 与气泡宽度匹配
+                    )
+                } else {
+                    // 无缩略图：使用原有样式
+                    Box(
+                        modifier = Modifier
+                            .size(uiLayoutPolicy.gestureOverlaySizeDp.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val durationSeconds = (playerState.player.duration / 1000).coerceAtLeast(1)
+                            val targetSeconds = (seekTargetTime / 1000).toInt()
 
+                            Text(
+                                text = "${FormatUtils.formatDuration(targetSeconds)} / ${FormatUtils.formatDuration(durationSeconds.toInt())}",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            val deltaSeconds = (seekTargetTime - startPosition) / 1000
+                            val sign = if (deltaSeconds > 0) "+" else ""
+                            if (deltaSeconds != 0L) {
                                 Text(
-                                    text = "${FormatUtils.formatDuration(targetSeconds)} / ${FormatUtils.formatDuration(durationSeconds.toInt())}",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
+                                    text = "($sign${deltaSeconds}s)",
+                                    color = if (deltaSeconds > 0) com.android.purebilibili.core.theme.iOSGreen else com.android.purebilibili.core.theme.iOSRed,
+                                    style = MaterialTheme.typography.bodySmall
                                 )
-
-                                val deltaSeconds = (seekTargetTime - startPosition) / 1000
-                                val sign = if (deltaSeconds > 0) "+" else ""
-                                if (deltaSeconds != 0L) {
-                                    Text(
-                                        text = "($sign${deltaSeconds}s)",
-                                        color = if (deltaSeconds > 0) com.android.purebilibili.core.theme.iOSGreen else com.android.purebilibili.core.theme.iOSRed,
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
                             }
                         }
                     }
                 }
-            } else {
-                // 亮度/音量模式：保持原有样式
-                Box(
+            }
+        }
+
+        AnimatedVisibility(
+            visible = shouldShowLevelIndicator,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(animationSpec = tween(160)) +
+                scaleIn(initialScale = 0.84f, animationSpec = tween(220)) +
+                slideInVertically(initialOffsetY = { it / 8 }, animationSpec = tween(220)),
+            exit = fadeOut(animationSpec = tween(200)) +
+                scaleOut(targetScale = 0.9f, animationSpec = tween(200)) +
+                slideOutVertically(targetOffsetY = { -it / 10 }, animationSpec = tween(200))
+        ) {
+            val levelLabel = resolveGestureIndicatorLabel(gestureMode)
+            val dynamicGestureIcon = resolveGestureDisplayIcon(
+                mode = gestureMode,
+                percent = gesturePercent,
+                fallbackIcon = gestureIcon
+            )
+            val iconScale by animateFloatAsState(
+                targetValue = 0.9f + gesturePercent.coerceIn(0f, 1f) * 0.35f,
+                animationSpec = tween(durationMillis = 180),
+                label = "gesture-icon-scale"
+            )
+            val levelAccentColor = when (gestureMode) {
+                VideoGestureMode.Brightness -> Color(0xFFFFD54F)
+                VideoGestureMode.Volume -> Color(0xFF80DEEA)
+                else -> Color.White
+            }
+            val overlayTextShadow = Shadow(
+                color = Color.Black.copy(alpha = 0.62f),
+                offset = Offset(0f, 2f),
+                blurRadius = 8f
+            )
+            Box(
+                modifier = Modifier
+                    .wrapContentSize()
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
                     modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(uiLayoutPolicy.gestureOverlaySizeDp.dp)
-                        .background(Color.Black.copy(0.7f), RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center
+                        .widthIn(min = 132.dp, max = 188.dp)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = gestureIcon ?: CupertinoIcons.Default.SunMax,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(uiLayoutPolicy.gestureIconSizeDp.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "${(gesturePercent * 100).toInt()}%",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
+                    Box(
+                        modifier = Modifier
+                            .size((uiLayoutPolicy.gestureIconSizeDp + 20).dp)
+                            .background(Color.White.copy(alpha = 0.10f), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.66f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AnimatedContent(
+                            targetState = dynamicGestureIcon,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = tween(120)) +
+                                    scaleIn(initialScale = 0.78f, animationSpec = tween(180)))
+                                    .togetherWith(
+                                        fadeOut(animationSpec = tween(110)) +
+                                            scaleOut(targetScale = 1.2f, animationSpec = tween(180))
+                                    )
+                            },
+                            label = "gesture-icon-content"
+                        ) { icon ->
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = levelAccentColor,
+                                modifier = Modifier
+                                    .size(uiLayoutPolicy.gestureIconSizeDp.dp)
+                                    .graphicsLayer {
+                                        scaleX = iconScale
+                                        scaleY = iconScale
+                                    }
                             )
+                        }
+                    }
+                    Text(
+                        text = levelLabel,
+                        color = Color.White.copy(alpha = 0.9f),
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Medium,
+                            shadow = overlayTextShadow
+                        )
+                    )
+                    AnimatedContent(
+                        targetState = gesturePercentDisplay,
+                        modifier = Modifier.widthIn(min = 74.dp),
+                        contentAlignment = Alignment.Center,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(140)) +
+                                scaleIn(initialScale = 0.88f, animationSpec = tween(210)))
+                                .togetherWith(
+                                    fadeOut(animationSpec = tween(130)) +
+                                        scaleOut(targetScale = 1.12f, animationSpec = tween(210))
+                                )
+                        },
+                        label = "gesture-level-percent"
+                    ) { percent ->
+                        Text(
+                            text = "$percent%",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 24.sp,
+                                shadow = overlayTextShadow
+                            ),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .graphicsLayer { alpha = gestureValueAlpha.value }
+                                .blur(
+                                    radius = gestureValueBlur.value.dp,
+                                    edgeTreatment = BlurredEdgeTreatment.Unbounded
+                                )
                         )
                     }
+                    LinearProgressIndicator(
+                        progress = { gesturePercent.coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(999.dp)),
+                        color = levelAccentColor,
+                        trackColor = Color.White.copy(alpha = 0.22f)
+                    )
                 }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = orientationHintVisible && !isInPipMode,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(bottom = 196.dp),
+            enter = fadeIn(animationSpec = tween(150)) +
+                scaleIn(initialScale = 0.85f, animationSpec = tween(230)) +
+                slideInVertically(initialOffsetY = { -it / 5 }, animationSpec = tween(230)),
+            exit = fadeOut(animationSpec = tween(200)) +
+                scaleOut(targetScale = 0.95f, animationSpec = tween(200))
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = orientationHintText,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                )
             }
         }
         
@@ -1893,6 +2184,9 @@ fun VideoPlayerSection(
                 isLiked = isLiked,
                 isCoined = isCoined,
                 isFavorited = isFavorited,
+                likeCount = uiState.info.stat.like.toLong(),
+                favoriteCount = uiState.info.stat.favorite.toLong(),
+                coinCount = uiState.coinCount,
                 onToggleFollow = onToggleFollow,
                 onToggleLike = onToggleLike,
                 onCoin = onCoin,

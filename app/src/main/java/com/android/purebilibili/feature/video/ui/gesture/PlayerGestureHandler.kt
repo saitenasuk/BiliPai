@@ -226,6 +226,7 @@ fun GestureIndicator(
                     // 无缩略图：显示简化版
                     Surface(
                         shape = RoundedCornerShape(12.dp),
+                        // Seek fallback - keep background for readability
                         color = Color.Black.copy(alpha = 0.8f)
                     ) {
                         Column(
@@ -258,7 +259,7 @@ fun GestureIndicator(
             Surface(
                 modifier = modifier,
                 shape = RoundedCornerShape(12.dp),
-                color = Color.Black.copy(alpha = 0.8f)
+                color = Color.Transparent
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -277,7 +278,7 @@ fun GestureIndicator(
             Surface(
                 modifier = modifier,
                 shape = RoundedCornerShape(12.dp),
-                color = Color.Black.copy(alpha = 0.8f)
+                color = Color.Transparent
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,

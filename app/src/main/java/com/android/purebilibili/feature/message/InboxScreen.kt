@@ -74,7 +74,7 @@ fun InboxScreen(
         ) {
             when {
                 uiState.isLoading -> {
-                    CircularProgressIndicator(
+                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
@@ -135,7 +135,7 @@ fun InboxScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         if (uiState.isLoadingMore) {
-                                            CircularProgressIndicator(
+                                            com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                                                 modifier = Modifier.size(24.dp)
                                             )
                                         } else {

@@ -749,11 +749,26 @@ class MainActivity : ComponentActivity() {
                         MiniPlayerOverlay(
                             miniPlayerManager = miniPlayerManager,
                             onExpandClick = {
-                                //  [修改] 导航回详情页，而不是只显示全屏播放器
-                                miniPlayerManager.currentBvid?.let { bvid ->
-                                    val cid = miniPlayerManager.currentCid
-                                    navController.navigate("video/$bvid?cid=$cid&cover=") {
+                                if (miniPlayerManager.isLiveMode) {
+                                    // 📺 直播小窗展开：导航回直播间
+                                    val roomId = miniPlayerManager.currentRoomId
+                                    val liveTitle = miniPlayerManager.currentTitle
+                                    val liveUname = miniPlayerManager.currentLiveUname
+                                    miniPlayerManager.exitMiniMode(animate = false)
+                                    navController.navigate(
+                                        com.android.purebilibili.navigation.ScreenRoutes.Live.createRoute(roomId, liveTitle, liveUname)
+                                    ) {
                                         launchSingleTop = true
+                                    }
+                                } else {
+                                    //  [修改] 导航回详情页，而不是只显示全屏播放器
+                                    miniPlayerManager.currentBvid?.let { bvid ->
+                                        miniPlayerManager.isNavigatingToVideo = true
+                                        miniPlayerManager.exitMiniMode(animate = false)
+                                        val cid = miniPlayerManager.currentCid
+                                        navController.navigate("video/$bvid?cid=$cid&cover=") {
+                                            launchSingleTop = true
+                                        }
                                     }
                                 }
                             }
@@ -772,6 +787,8 @@ class MainActivity : ComponentActivity() {
                                 //  关闭全屏覆盖层并导航到视频详情页
                                 showFullscreen = false
                                 miniPlayerManager.currentBvid?.let { bvid ->
+                                    miniPlayerManager.isNavigatingToVideo = true
+                                    miniPlayerManager.exitMiniMode(animate = false)
                                     //  [修复] 使用正确的 cid，而不是 0
                                     val cid = miniPlayerManager.currentCid
                                     navController.navigate("video/$bvid?cid=$cid&cover=") {

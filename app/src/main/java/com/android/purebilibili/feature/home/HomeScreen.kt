@@ -505,6 +505,15 @@ fun HomeScreen(
             }
             delay(returnAnimationSuppressionDurationMs)
             val actualDurationMs = (SystemClock.elapsedRealtime() - startElapsedMs).coerceAtLeast(0L)
+            val isQuickReturn = CardPositionManager.isQuickReturnFromDetail
+            val sharedTransitionReady = cardTransitionEnabled &&
+                CardPositionManager.lastClickedCardBounds != null &&
+                CardPositionManager.isCardFullyVisible
+
+            // 先解除“返回中”状态，避免后续埋点统计导致首页手势恢复滞后。
+            returnAnimationStartElapsedMs = 0L
+            CardPositionManager.clearReturning()
+
             val builtinPluginEnabledCount = com.android.purebilibili.core.plugin.PluginManager.getEnabledCount()
             val playerPluginEnabledCount = com.android.purebilibili.core.plugin.PluginManager.getEnabledPlayerPlugins().size
             val feedPluginEnabledCount = com.android.purebilibili.core.plugin.PluginManager.getEnabledFeedPlugins().size
@@ -519,10 +528,8 @@ fun HomeScreen(
                 actualDurationMs = actualDurationMs,
                 plannedSuppressionMs = returnAnimationSuppressionDurationMs,
                 sharedTransitionEnabled = cardTransitionEnabled,
-                sharedTransitionReady = cardTransitionEnabled &&
-                    CardPositionManager.lastClickedCardBounds != null &&
-                    CardPositionManager.isCardFullyVisible,
-                isQuickReturn = CardPositionManager.isQuickReturnFromDetail,
+                sharedTransitionReady = sharedTransitionReady,
+                isQuickReturn = isQuickReturn,
                 isTabletLayout = windowSizeClass.isTablet,
                 cardAnimationEnabled = cardAnimationEnabled,
                 builtinPluginEnabledCount = builtinPluginEnabledCount,
@@ -533,8 +540,6 @@ fun HomeScreen(
                 jsonFeedPluginEnabledCount = jsonFeedPluginEnabledCount,
                 jsonDanmakuPluginEnabledCount = jsonDanmakuPluginEnabledCount
             )
-            returnAnimationStartElapsedMs = 0L
-            CardPositionManager.clearReturning()
         }
         if (CardPositionManager.isSwitchingCategory) {
             delay(300)

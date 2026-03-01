@@ -83,7 +83,7 @@ fun MyBangumiContent(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator()
                 }
             }
             is MyFollowState.Error -> {
@@ -459,7 +459,7 @@ private fun MyFollowGrid(
                             .padding(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
+                        com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                             modifier = Modifier.size(24.dp),
                             strokeWidth = 2.dp
                         )

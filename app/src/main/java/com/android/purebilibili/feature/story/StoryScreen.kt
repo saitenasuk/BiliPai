@@ -66,7 +66,7 @@ fun StoryScreen(
 
         if (uiState.isLoading && uiState.items.isEmpty()) {
             // 加载中
-            CircularProgressIndicator(
+            com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                 modifier = Modifier.align(Alignment.Center),
                 color = Color.White
             )
@@ -242,7 +242,7 @@ private fun StoryPageContent(
             
             // 加载指示器
             if (isLoading && isCurrentPage) {
-                CircularProgressIndicator(
+                com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                     modifier = Modifier.align(Alignment.Center),
                     color = Color.White.copy(alpha = 0.7f),
                     strokeWidth = 2.dp

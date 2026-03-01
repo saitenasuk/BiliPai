@@ -121,18 +121,11 @@ class WebDavBackupService(private val context: Context) {
     }
 
     private fun listBackupsInternal(directoryUrl: String, authHeader: String): List<WebDavBackupEntry> {
-        val propfindBody = """
-            <?xml version=\"1.0\" encoding=\"utf-8\"?>
-            <d:propfind xmlns:d=\"DAV:\">
-              <d:prop>
-                <d:getlastmodified/>
-                <d:getcontentlength/>
-              </d:prop>
-            </d:propfind>
-        """.trimIndent()
+        val propfindBody = buildWebDavPropfindBody()
+        val collectionUrl = ensureWebDavCollectionUrl(directoryUrl)
 
         val request = Request.Builder()
-            .url(directoryUrl)
+            .url(collectionUrl)
             .header("Authorization", authHeader)
             .header("Depth", "1")
             .method("PROPFIND", propfindBody.toRequestBody(XML_CONTENT_TYPE.toMediaType()))
@@ -140,7 +133,7 @@ class WebDavBackupService(private val context: Context) {
 
         val xml = httpClient.newCall(request).execute().use { response ->
             if (response.code !in setOf(200, 207)) {
-                throw IOException("读取目录失败: HTTP ${response.code}")
+                throw IOException("读取目录失败: HTTP ${response.code} (PROPFIND ${request.url.encodedPath})")
             }
             response.body?.string() ?: ""
         }

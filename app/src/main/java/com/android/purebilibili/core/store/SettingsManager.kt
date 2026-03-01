@@ -51,6 +51,21 @@ enum class PlaybackCompletionBehavior(val value: Int, val label: String) {
     }
 }
 
+enum class FullscreenMode(val value: Int, val label: String, val description: String) {
+    AUTO(0, "自动", "按视频方向自动切换全屏方向"),
+    NONE(1, "不改方向", "保持当前方向，仅切换全屏 UI"),
+    VERTICAL(2, "竖屏", "进入全屏时保持竖屏"),
+    HORIZONTAL(3, "横屏", "进入全屏时切换到横屏"),
+    RATIO(4, "比例判断", "按屏幕比例和视频方向决定横竖"),
+    GRAVITY(5, "重力感应", "尽量跟随重力方向（受系统限制）");
+
+    companion object {
+        fun fromValue(value: Int): FullscreenMode {
+            return entries.find { it.value == value } ?: AUTO
+        }
+    }
+}
+
 internal fun normalizePlaybackSpeed(speed: Float): Float {
     return speed.coerceIn(0.1f, 8.0f)
 }
@@ -1764,6 +1779,14 @@ object SettingsManager {
     private val KEY_PORTRAIT_SWIPE_TO_FULLSCREEN = booleanPreferencesKey("portrait_swipe_to_fullscreen")
     private val KEY_FULLSCREEN_SWIPE_SEEK_ENABLED = booleanPreferencesKey("fullscreen_swipe_seek_enabled")
     private val KEY_FULLSCREEN_SWIPE_SEEK_SECONDS = intPreferencesKey("fullscreen_swipe_seek_seconds")
+    private val KEY_FULLSCREEN_GESTURE_REVERSE = booleanPreferencesKey("fullscreen_gesture_reverse")
+    private val KEY_AUTO_ENTER_FULLSCREEN = booleanPreferencesKey("auto_enter_fullscreen")
+    private val KEY_AUTO_EXIT_FULLSCREEN = booleanPreferencesKey("auto_exit_fullscreen")
+    private val KEY_SHOW_FULLSCREEN_LOCK_BUTTON = booleanPreferencesKey("show_fullscreen_lock_button")
+    private val KEY_SHOW_FULLSCREEN_SCREENSHOT_BUTTON = booleanPreferencesKey("show_fullscreen_screenshot_button")
+    private val KEY_SHOW_FULLSCREEN_BATTERY_LEVEL = booleanPreferencesKey("show_fullscreen_battery_level")
+    private val KEY_HORIZONTAL_ADAPTATION = booleanPreferencesKey("horizontal_adaptation_enabled")
+    private val KEY_FULLSCREEN_MODE = intPreferencesKey("fullscreen_mode")
     private val FULLSCREEN_SWIPE_SEEK_OPTIONS = listOf(10, 15, 20, 30)
     
     // --- 上滑隐藏播放器开关 ---
@@ -1807,6 +1830,86 @@ object SettingsManager {
 
     private fun normalizeFullscreenSwipeSeekSeconds(seconds: Int): Int {
         return FULLSCREEN_SWIPE_SEEK_OPTIONS.minByOrNull { option -> abs(option - seconds) } ?: 15
+    }
+
+    private fun isTabletConfiguration(context: Context): Boolean {
+        return context.resources.configuration.smallestScreenWidthDp >= 600
+    }
+
+    fun getFullscreenGestureReverse(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FULLSCREEN_GESTURE_REVERSE] ?: false }
+
+    suspend fun setFullscreenGestureReverse(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FULLSCREEN_GESTURE_REVERSE] = enabled
+        }
+    }
+
+    fun getAutoEnterFullscreen(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_AUTO_ENTER_FULLSCREEN] ?: false }
+
+    suspend fun setAutoEnterFullscreen(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_AUTO_ENTER_FULLSCREEN] = enabled
+        }
+    }
+
+    fun getAutoExitFullscreen(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_AUTO_EXIT_FULLSCREEN] ?: true }
+
+    suspend fun setAutoExitFullscreen(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_AUTO_EXIT_FULLSCREEN] = enabled
+        }
+    }
+
+    fun getShowFullscreenLockButton(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SHOW_FULLSCREEN_LOCK_BUTTON] ?: true }
+
+    suspend fun setShowFullscreenLockButton(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SHOW_FULLSCREEN_LOCK_BUTTON] = enabled
+        }
+    }
+
+    fun getShowFullscreenScreenshotButton(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SHOW_FULLSCREEN_SCREENSHOT_BUTTON] ?: true }
+
+    suspend fun setShowFullscreenScreenshotButton(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SHOW_FULLSCREEN_SCREENSHOT_BUTTON] = enabled
+        }
+    }
+
+    fun getShowFullscreenBatteryLevel(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SHOW_FULLSCREEN_BATTERY_LEVEL] ?: true }
+
+    suspend fun setShowFullscreenBatteryLevel(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SHOW_FULLSCREEN_BATTERY_LEVEL] = enabled
+        }
+    }
+
+    fun getHorizontalAdaptationEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[KEY_HORIZONTAL_ADAPTATION] ?: isTabletConfiguration(context)
+        }
+
+    suspend fun setHorizontalAdaptationEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HORIZONTAL_ADAPTATION] = enabled
+        }
+    }
+
+    fun getFullscreenMode(context: Context): Flow<FullscreenMode> = context.settingsDataStore.data
+        .map { preferences ->
+            FullscreenMode.fromValue(preferences[KEY_FULLSCREEN_MODE] ?: FullscreenMode.AUTO.value)
+        }
+
+    suspend fun setFullscreenMode(context: Context, mode: FullscreenMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FULLSCREEN_MODE] = mode.value
+        }
     }
     
 

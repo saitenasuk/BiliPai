@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.settings.webdav
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -19,6 +20,26 @@ class WebDavBackupPolicyTest {
     fun `normalize remote dir ensures single leading slash and no trailing slash`() {
         assertEquals("/BiliPai/backups", normalizeWebDavRemoteDir("BiliPai/backups/"))
         assertEquals("/BiliPai", normalizeWebDavRemoteDir("//BiliPai//"))
+    }
+
+    @Test
+    fun `collection url should keep trailing slash`() {
+        assertEquals(
+            "https://dav.example.com/remote.php/dav/files/test/",
+            ensureWebDavCollectionUrl("https://dav.example.com/remote.php/dav/files/test")
+        )
+        assertEquals(
+            "https://dav.example.com/remote.php/dav/files/test/",
+            ensureWebDavCollectionUrl("https://dav.example.com/remote.php/dav/files/test/")
+        )
+    }
+
+    @Test
+    fun `propfind body should be valid xml without escaped quotes`() {
+        val body = buildWebDavPropfindBody()
+        assertTrue(body.startsWith("<?xml version=\"1.0\" encoding=\"utf-8\"?>"))
+        assertTrue(body.contains("<d:propfind xmlns:d=\"DAV:\">"))
+        assertFalse(body.contains("\\\""))
     }
 
     @Test

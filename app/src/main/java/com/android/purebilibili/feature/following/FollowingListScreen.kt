@@ -148,6 +148,10 @@ class FollowingListViewModel : ViewModel() {
         if (mid <= 0) return
         currentMid = mid
         removedUserMids.clear()
+        followGroupRefreshJob?.cancel()
+        followGroupRefreshJob = null
+        _userFollowGroupIds.value = emptyMap()
+        _isFollowGroupMetaLoading.value = false
         
         viewModelScope.launch {
             _uiState.value = FollowingListUiState.Loading
@@ -307,8 +311,7 @@ class FollowingListViewModel : ViewModel() {
     }
 
     private fun refreshFollowGroupMetadata(users: List<FollowingUser>) {
-        val mids = users.map { it.mid }.toSet()
-        if (mids.isEmpty()) return
+        if (users.isEmpty()) return
 
         followGroupRefreshJob?.cancel()
         followGroupRefreshJob = viewModelScope.launch {
@@ -320,27 +323,66 @@ class FollowingListViewModel : ViewModel() {
                 }
             }
 
-            val existing = _userFollowGroupIds.value
-            val missingMids = mids.filterNot { existing.containsKey(it) }
-            if (missingMids.isEmpty()) return@launch
-
             _isFollowGroupMetaLoading.value = true
             try {
-                val fetched = linkedMapOf<Long, Set<Long>>()
-                missingMids.forEachIndexed { index, mid ->
-                    val groupIds = ActionRepository.getUserFollowGroupIds(mid)
-                        .getOrElse { emptySet() }
-                    fetched[mid] = groupIds
-                    if (index < missingMids.lastIndex) {
+                val userMidSet = users.asSequence().map { it.mid }.toSet()
+                val orderedTagIds = buildList {
+                    add(SPECIAL_FOLLOW_TAG_ID)
+                    addAll(_followGroupTags.value.map { it.tagid })
+                }.distinct().filter { it != DEFAULT_FOLLOW_TAG_ID }
+
+                // 每轮重建当前列表的“已命中分组”映射，避免旧结果残留。
+                _userFollowGroupIds.update { currentMap ->
+                    currentMap - userMidSet
+                }
+
+                var allTagsFetched = true
+                orderedTagIds.forEachIndexed { index, tagId ->
+                    val result = ActionRepository.getFollowGroupMemberMids(
+                        tagId = tagId,
+                        targetMids = userMidSet
+                    )
+                    result.onSuccess { mids ->
+                        if (mids.isEmpty()) return@onSuccess
+                        _userFollowGroupIds.update { currentMap ->
+                            val mutable = currentMap.toMutableMap()
+                            mids.forEach { mid ->
+                                val existing = mutable[mid].orEmpty().toMutableSet()
+                                existing.add(tagId)
+                                mutable[mid] = existing
+                            }
+                            mutable
+                        }
+                    }.onFailure { error ->
+                        allTagsFetched = false
+                        com.android.purebilibili.core.util.Logger.w(
+                            "FollowingListVM",
+                            "skip tag=$tagId group mapping: ${error.message}"
+                        )
+                    }
+
+                    if (index < orderedTagIds.lastIndex) {
                         delay(FOLLOW_GROUP_META_FETCH_INTERVAL_MS)
                     }
                 }
 
-                _userFollowGroupIds.update { currentMap ->
-                    currentMap + fetched
+                // 只有全部分组都成功时，才把“未命中任何分组”的用户标记为默认分组。
+                if (allTagsFetched) {
+                    _userFollowGroupIds.update { currentMap ->
+                        val mutable = currentMap
+                            .filterKeys { userMidSet.contains(it) }
+                            .toMutableMap()
+                        users.forEach { user ->
+                            if (!mutable.containsKey(user.mid)) {
+                                mutable[user.mid] = emptySet()
+                            }
+                        }
+                        mutable
+                    }
                 }
             } finally {
                 _isFollowGroupMetaLoading.value = false
+                followGroupRefreshJob = null
             }
         }
     }
@@ -364,7 +406,17 @@ class FollowingListViewModel : ViewModel() {
             val missingMids = mids.filterNot { currentGroups.containsKey(it) }
             val fetched = linkedMapOf<Long, Set<Long>>()
             missingMids.forEachIndexed { index, mid ->
-                fetched[mid] = ActionRepository.getUserFollowGroupIds(mid).getOrElse { emptySet() }
+                val error = addFollowGroupMappingIfSuccess(
+                    target = fetched,
+                    userMid = mid,
+                    result = ActionRepository.getUserFollowGroupIds(mid)
+                )
+                if (error != null) {
+                    com.android.purebilibili.core.util.Logger.w(
+                        "FollowingListVM",
+                        "skip group mapping for batch mid=$mid: ${error.message}"
+                    )
+                }
                 if (index < missingMids.lastIndex) {
                     delay(FOLLOW_GROUP_META_FETCH_INTERVAL_MS)
                 }
@@ -502,9 +554,7 @@ fun FollowingListScreen(
 
                         val groupFilterChips = remember(state.users, followGroupTags, userFollowGroupIds) {
                             val users = state.users
-                            val defaultCount = users.count { user ->
-                                userFollowGroupIds[user.mid].isNullOrEmpty()
-                            }
+                            val defaultCount = countUsersInDefaultFollowGroup(users, userFollowGroupIds)
                             val dynamicTags = followGroupTags.ifEmpty {
                                 listOf(
                                     RelationTagItem(tagid = SPECIAL_FOLLOW_TAG_ID, name = "特别关注", count = 0)
@@ -523,15 +573,16 @@ fun FollowingListScreen(
                         }
 
                         val usersByGroup = remember(state.users, selectedGroupFilter, userFollowGroupIds) {
-                            when (selectedGroupFilter) {
-                                null, Long.MIN_VALUE -> state.users
-                                DEFAULT_FOLLOW_TAG_ID -> state.users.filter { user ->
-                                    userFollowGroupIds[user.mid].isNullOrEmpty()
-                                }
-                                else -> state.users.filter { user ->
-                                    userFollowGroupIds[user.mid]?.contains(selectedGroupFilter) == true
-                                }
-                            }
+                            filterUsersBySelectedFollowGroup(
+                                users = state.users,
+                                selectedGroupFilter = selectedGroupFilter,
+                                userFollowGroupIds = userFollowGroupIds,
+                                defaultGroupTagId = DEFAULT_FOLLOW_TAG_ID,
+                                allGroupTagId = Long.MIN_VALUE
+                            )
+                        }
+                        val followGroupMetaLoadedCount = remember(state.users, userFollowGroupIds) {
+                            state.users.count { user -> userFollowGroupIds.containsKey(user.mid) }
                         }
 
                         // 🔍 过滤列表
@@ -595,7 +646,7 @@ fun FollowingListScreen(
                                 if (isFollowGroupMetaLoading) {
                                     item {
                                         Text(
-                                            text = "分组信息加载中...",
+                                            text = "分组信息加载中...($followGroupMetaLoadedCount/${state.users.size})",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)

@@ -1010,7 +1010,7 @@ private fun GestureIndicator(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = Color.Black.copy(alpha = 0.8f)
+        color = Color.Transparent
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,

@@ -475,7 +475,7 @@ private fun BangumiListContent(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                com.android.purebilibili.core.ui.CutePersonLoadingIndicator()
             }
         }
         is BangumiListState.Error -> {
@@ -533,7 +533,7 @@ private fun BangumiSearchContent(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                com.android.purebilibili.core.ui.CutePersonLoadingIndicator()
             }
         }
         is BangumiSearchState.Error -> {
@@ -628,7 +628,7 @@ private fun BangumiSearchGrid(
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
+                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp
                     )

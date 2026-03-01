@@ -48,4 +48,17 @@ class MiniPlayerOverlayPollingPolicyTest {
         assertEquals(300L, resolveMiniPlayerPollingIntervalMs(isPlaying = true))
         assertEquals(600L, resolveMiniPlayerPollingIntervalMs(isPlaying = false))
     }
+
+    @Test
+    fun pollingDisabled_whenLiveMode() {
+        // 📺 直播模式不需要进度轮询
+        assertFalse(
+            shouldPollMiniPlayerProgress(
+                playerExists = true,
+                isMiniMode = true,
+                isActive = true,
+                isLiveMode = true
+            )
+        )
+    }
 }

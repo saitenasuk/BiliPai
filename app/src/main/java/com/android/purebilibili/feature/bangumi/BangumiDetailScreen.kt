@@ -97,7 +97,7 @@ fun BangumiDetailScreen(
                         .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator()
                 }
             }
             is BangumiDetailState.Error -> {

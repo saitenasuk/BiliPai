@@ -39,4 +39,40 @@ class DynamicScreenStatePolicyTest {
         assertFalse(shouldShowDynamicNoMoreFooter(hasMore = true, activeItemsCount = 1))
         assertFalse(shouldShowDynamicNoMoreFooter(hasMore = false, activeItemsCount = 0))
     }
+
+    @Test
+    fun `followed user list reset should trigger only for fresh prepended refresh while viewing all`() {
+        assertTrue(
+            shouldResetFollowedUserListToTopOnRefresh(
+                boundaryKey = "dyn:123",
+                prependedCount = 3,
+                selectedUserId = null,
+                handledBoundaryKey = null
+            )
+        )
+        assertFalse(
+            shouldResetFollowedUserListToTopOnRefresh(
+                boundaryKey = "dyn:123",
+                prependedCount = 0,
+                selectedUserId = null,
+                handledBoundaryKey = null
+            )
+        )
+        assertFalse(
+            shouldResetFollowedUserListToTopOnRefresh(
+                boundaryKey = "dyn:123",
+                prependedCount = 2,
+                selectedUserId = 10001L,
+                handledBoundaryKey = null
+            )
+        )
+        assertFalse(
+            shouldResetFollowedUserListToTopOnRefresh(
+                boundaryKey = "dyn:123",
+                prependedCount = 2,
+                selectedUserId = null,
+                handledBoundaryKey = "dyn:123"
+            )
+        )
+    }
 }
