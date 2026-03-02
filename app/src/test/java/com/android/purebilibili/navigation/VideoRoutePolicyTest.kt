@@ -11,11 +11,12 @@ class VideoRoutePolicyTest {
             bvid = "BV1abc",
             cid = 233L,
             encodedCover = "https%3A%2F%2Fimg",
-            startAudio = true
+            startAudio = true,
+            autoPortrait = false
         )
 
         assertEquals(
-            "video/BV1abc?cid=233&cover=https%3A%2F%2Fimg&startAudio=true",
+            "video/BV1abc?cid=233&cover=https%3A%2F%2Fimg&startAudio=true&autoPortrait=false",
             route
         )
     }
@@ -26,11 +27,12 @@ class VideoRoutePolicyTest {
             bvid = "BV9xyz",
             cid = 0L,
             encodedCover = "",
-            startAudio = false
+            startAudio = false,
+            autoPortrait = true
         )
 
         assertEquals(
-            "video/BV9xyz?cid=0&cover=&startAudio=false",
+            "video/BV9xyz?cid=0&cover=&startAudio=false&autoPortrait=true",
             route
         )
     }

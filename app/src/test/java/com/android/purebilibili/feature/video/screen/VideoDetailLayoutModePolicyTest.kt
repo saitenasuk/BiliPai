@@ -327,4 +327,46 @@ class VideoDetailLayoutModePolicyTest {
             )
         )
     }
+
+    @Test
+    fun autoPortraitRoutePolicy_enters_whenAllConditionsMatch() {
+        assertTrue(
+            shouldAutoEnterPortraitFullscreenFromRoute(
+                autoEnterPortraitFromRoute = true,
+                startAudioFromRoute = false,
+                portraitExperienceEnabled = true,
+                isVerticalVideo = true,
+                isPortraitFullscreen = false,
+                hasAutoEnteredPortraitFromRoute = false
+            )
+        )
+    }
+
+    @Test
+    fun autoPortraitRoutePolicy_doesNotEnter_whenAudioRoute() {
+        assertFalse(
+            shouldAutoEnterPortraitFullscreenFromRoute(
+                autoEnterPortraitFromRoute = true,
+                startAudioFromRoute = true,
+                portraitExperienceEnabled = true,
+                isVerticalVideo = true,
+                isPortraitFullscreen = false,
+                hasAutoEnteredPortraitFromRoute = false
+            )
+        )
+    }
+
+    @Test
+    fun autoPortraitRoutePolicy_doesNotEnter_whenNotVertical() {
+        assertFalse(
+            shouldAutoEnterPortraitFullscreenFromRoute(
+                autoEnterPortraitFromRoute = true,
+                startAudioFromRoute = false,
+                portraitExperienceEnabled = true,
+                isVerticalVideo = false,
+                isPortraitFullscreen = false,
+                hasAutoEnteredPortraitFromRoute = false
+            )
+        )
+    }
 }

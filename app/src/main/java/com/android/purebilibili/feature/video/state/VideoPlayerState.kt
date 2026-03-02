@@ -104,6 +104,19 @@ internal fun shouldRestoreCachedUiState(
     return cachedCid > 0L && cachedCid == requestCid
 }
 
+internal fun resolveApiDimensionIsVertical(
+    width: Int,
+    height: Int,
+    rotate: Int = 0
+): Boolean {
+    if (width <= 0 || height <= 0) return false
+    val normalizedRotate = ((rotate % 360) + 360) % 360
+    val shouldSwap = normalizedRotate == 90 || normalizedRotate == 270
+    val effectiveWidth = if (shouldSwap) height else width
+    val effectiveHeight = if (shouldSwap) width else height
+    return effectiveHeight > effectiveWidth
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class VideoPlayerState(
     val context: Context,
@@ -200,16 +213,21 @@ class VideoPlayerState(
      * 📱 从 API dimension 字段设置预判断值
      * 在视频加载完成但播放器还未解析时调用
      */
-    fun setApiDimension(width: Int, height: Int) {
+    fun setApiDimension(width: Int, height: Int, rotate: Int = 0) {
         if (width > 0 && height > 0) {
-            _apiDimension.value = Pair(width, height)
+            val normalizedRotate = ((rotate % 360) + 360) % 360
+            val shouldSwap = normalizedRotate == 90 || normalizedRotate == 270
+            val effectiveWidth = if (shouldSwap) height else width
+            val effectiveHeight = if (shouldSwap) width else height
+            val apiIsVertical = resolveApiDimensionIsVertical(width = width, height = height, rotate = rotate)
+            _apiDimension.value = Pair(effectiveWidth, effectiveHeight)
             // 只有在播放器还没提供精确值时才使用 API 值
             if (_verticalVideoSource.value != VerticalVideoSource.PLAYER) {
-                _isVerticalVideo.value = height > width
+                _isVerticalVideo.value = apiIsVertical
                 _verticalVideoSource.value = VerticalVideoSource.API
                 com.android.purebilibili.core.util.Logger.d(
                     "VideoPlayerState",
-                    "📱 VideoSize(API): ${width}x${height}, isVertical=${height > width}"
+                    "📱 VideoSize(API): raw=${width}x${height}, rotate=$rotate, effective=${effectiveWidth}x${effectiveHeight}, isVertical=$apiIsVertical"
                 )
             }
         }
