@@ -4,12 +4,12 @@ import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.data.repository.FavoriteRepository
 import com.android.purebilibili.feature.list.BaseListViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.android.purebilibili.data.model.response.Stat
-import com.android.purebilibili.core.util.FormatUtils
 
 class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(application, "") {
 
@@ -56,6 +56,8 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
             return fetchSeasonArchives()
         } else if (type == "series") {
             return fetchSeriesArchives()
+        } else if (type == "favorite") {
+            return fetchFavoriteResources()
         }
         return emptyList()
     }
@@ -119,6 +121,22 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         }
         return emptyList()
     }
+
+    private suspend fun fetchFavoriteResources(): List<VideoItem> {
+        currentPage = 1
+        return try {
+            val response = FavoriteRepository.getFavoriteList(mediaId = id, pn = currentPage).getOrNull()
+            hasMore = response?.has_more == true
+            _hasMoreState.value = hasMore
+            response?.medias
+                .orEmpty()
+                .map { it.toVideoItem() }
+                .filter { it.bvid.isNotBlank() } // 收藏夹里可能有合集资源，当前列表页仅展示可播放视频
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
     
     // Supports loading more pages
     fun loadMore() {
@@ -163,14 +181,24 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                             )
                         }
                      }
+                } else if (type == "favorite") {
+                    val response = FavoriteRepository.getFavoriteList(mediaId = id, pn = currentPage).getOrNull()
+                    hasMore = response?.has_more == true
+                    _hasMoreState.value = hasMore
+                    newItems = response?.medias
+                        .orEmpty()
+                        .map { it.toVideoItem() }
+                        .filter { it.bvid.isNotBlank() }
                 }
                 
                 if (newItems.isNotEmpty()) {
                     val currentItems = _uiState.value.items
                     _uiState.value = _uiState.value.copy(items = currentItems + newItems)
-                    
-                    hasMore = newItems.size >= 30
-                    _hasMoreState.value = hasMore
+
+                    if (type != "favorite") {
+                        hasMore = newItems.size >= 30
+                        _hasMoreState.value = hasMore
+                    }
                 } else {
                     hasMore = false
                     _hasMoreState.value = false

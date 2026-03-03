@@ -23,6 +23,26 @@ object FavoriteRepository {
         }
     }
 
+    suspend fun getCollectedFavFolders(
+        mid: Long,
+        pn: Int = 1,
+        ps: Int = 20,
+        platform: String = "web"
+    ): Result<List<FavFolder>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.getCollectedFavFolders(mid = mid, pn = pn, ps = ps, platform = platform)
+                if (response.code == 0) {
+                    Result.success(response.data?.list ?: emptyList())
+                } else {
+                    Result.failure(Exception("获取收藏合集失败: ${response.code}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
     suspend fun getFavoriteList(mediaId: Long, pn: Int): Result<FavoriteResourceData> {
         return withContext(Dispatchers.IO) {
             try {

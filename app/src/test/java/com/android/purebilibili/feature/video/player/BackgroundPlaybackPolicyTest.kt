@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.player
 
+import androidx.media3.common.Player
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.R
 import kotlin.test.Test
@@ -133,36 +134,47 @@ class BackgroundPlaybackPolicyTest {
             shouldContinuePlaybackDuringPause(
                 isMiniMode = true,
                 isPip = false,
-                isBackgroundAudio = false,
-                hasRecentUserLeaveHint = false
+                isBackgroundAudio = false
             )
         )
         assertTrue(
             shouldContinuePlaybackDuringPause(
                 isMiniMode = false,
                 isPip = true,
-                isBackgroundAudio = false,
-                hasRecentUserLeaveHint = false
+                isBackgroundAudio = false
             )
         )
     }
 
     @Test
-    fun pausePolicyRequiresRecentLeaveHintForBackgroundAudio() {
-        assertFalse(
-            shouldContinuePlaybackDuringPause(
-                isMiniMode = false,
-                isPip = false,
-                isBackgroundAudio = true,
-                hasRecentUserLeaveHint = false
-            )
-        )
+    fun pausePolicyKeepsBackgroundAudioEvenWithoutRecentLeaveHint() {
         assertTrue(
             shouldContinuePlaybackDuringPause(
                 isMiniMode = false,
                 isPip = false,
-                isBackgroundAudio = true,
-                hasRecentUserLeaveHint = true
+                isBackgroundAudio = true
+            )
+        )
+    }
+
+    @Test
+    fun bufferingWithPlayWhenReadyShouldNotBeTreatedAsInactiveInBackground() {
+        assertFalse(
+            shouldPauseBackgroundBuffering(
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+    }
+
+    @Test
+    fun pausedStateShouldStillBeTreatedAsInactiveInBackground() {
+        assertTrue(
+            shouldPauseBackgroundBuffering(
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_READY
             )
         )
     }

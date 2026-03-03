@@ -54,6 +54,8 @@ import androidx.compose.ui.semantics.contentDescription
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
 //  [预览播放] 相关引用已移除
 
 // 显式导入 collectAsState 以避免 ambiguity 或 missing reference
@@ -194,15 +196,19 @@ fun ElegantVideoCard(
         //  尝试获取共享元素作用域
         val sharedTransitionScope = LocalSharedTransitionScope.current
         val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-        val coverSharedEnabled = transitionEnabled &&
-            sharedTransitionScope != null &&
-            animatedVisibilityScope != null
-        val metadataSharedEnabled = coverSharedEnabled &&
-            !CardPositionManager.shouldLimitSharedElementsForQuickReturn()
+        val coverSharedEnabled = shouldEnableVideoCoverSharedTransition(
+            transitionEnabled = transitionEnabled,
+            hasSharedTransitionScope = sharedTransitionScope != null,
+            hasAnimatedVisibilityScope = animatedVisibilityScope != null
+        )
+        val metadataSharedEnabled = shouldEnableVideoMetadataSharedTransition(
+            coverSharedEnabled = coverSharedEnabled,
+            isQuickReturnLimited = CardPositionManager.shouldLimitSharedElementsForQuickReturn()
+        )
         
         //  封面容器 - 官方 B 站风格，支持共享元素过渡（受开关控制）
         val coverModifier = if (coverSharedEnabled) {
-            with(sharedTransitionScope) {
+            with(requireNotNull(sharedTransitionScope)) {
                 Modifier
                     .sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
@@ -268,7 +274,7 @@ fun ElegantVideoCard(
             // [新增] 监听共享元素归位（即封面重新可见时），触发轻微震动反馈
             // 注意：当从详情页返回时，sharedElement 动画结束，封面会从不可见变为可见
             if (metadataSharedEnabled) {
-                with(sharedTransitionScope) {
+                with(requireNotNull(sharedTransitionScope)) {
                      // 使用 renderInSharedTransitionScopeOverlayOption 控制可见性
                      // 但此处我们可以利用 SideEffect 或 LaunchedEffect 监听
                 }
@@ -429,7 +435,7 @@ fun ElegantVideoCard(
                 .semantics { contentDescription = "视频标题: ${video.title}" }
             
             if (metadataSharedEnabled) {
-                with(sharedTransitionScope) {
+                with(requireNotNull(sharedTransitionScope)) {
                     titleModifier = titleModifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_title_${video.bvid}"),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
@@ -543,7 +549,7 @@ fun ElegantVideoCard(
             var upNameModifier = Modifier.weight(1f, fill = false)
             
             if (metadataSharedEnabled) {
-                with(sharedTransitionScope) {
+                with(requireNotNull(sharedTransitionScope)) {
                     upNameModifier = upNameModifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_up_${video.bvid}"),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
@@ -578,7 +584,7 @@ fun ElegantVideoCard(
                             .background(MaterialTheme.colorScheme.surfaceVariant)
 
                         if (metadataSharedEnabled) {
-                            with(sharedTransitionScope) {
+                            with(requireNotNull(sharedTransitionScope)) {
                                 avatarModifier = avatarModifier.sharedBounds(
                                     sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
                                     animatedVisibilityScope = requireNotNull(animatedVisibilityScope),

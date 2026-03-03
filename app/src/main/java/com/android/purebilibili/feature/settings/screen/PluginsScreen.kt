@@ -32,6 +32,7 @@ import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.core.util.FormatUtils
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
 import io.github.alexzhirkevich.cupertino.CupertinoSwitchDefaults
 import kotlinx.coroutines.launch
@@ -1150,7 +1151,5 @@ private fun TestResultDialog(
  * 格式化时长（秒 -> 分:秒）
  */
 private fun formatDuration(seconds: Int): String {
-    val mins = seconds / 60
-    val secs = seconds % 60
-    return "${mins}分${secs}秒"
+    return FormatUtils.formatDuration(seconds)
 }

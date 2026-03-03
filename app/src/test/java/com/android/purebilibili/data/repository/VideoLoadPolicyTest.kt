@@ -101,6 +101,76 @@ class VideoLoadPolicyTest {
         assertFalse(shouldTryAppApiForTargetQuality(64))
         assertTrue(shouldTryAppApiForTargetQuality(112))
         assertTrue(shouldTryAppApiForTargetQuality(120))
+        assertTrue(
+            shouldTryAppApiForTargetQuality(
+                targetQn = 64,
+                hasSessionCookie = true,
+                directedTrafficMode = true
+            )
+        )
+    }
+
+    @Test
+    fun `shouldEnableDirectedTrafficMode only when enabled on mobile network`() {
+        assertTrue(
+            shouldEnableDirectedTrafficMode(
+                directedTrafficEnabled = true,
+                isOnMobileData = true
+            )
+        )
+        assertFalse(
+            shouldEnableDirectedTrafficMode(
+                directedTrafficEnabled = true,
+                isOnMobileData = false
+            )
+        )
+        assertFalse(
+            shouldEnableDirectedTrafficMode(
+                directedTrafficEnabled = false,
+                isOnMobileData = true
+            )
+        )
+    }
+
+    @Test
+    fun `buildDirectedTrafficWbiOverrides returns android app params in directed traffic mode`() {
+        val overrides = buildDirectedTrafficWbiOverrides(
+            directedTrafficEnabled = true,
+            isOnMobileData = true
+        )
+        assertEquals("android", overrides["platform"])
+        assertEquals("android", overrides["mobi_app"])
+        assertEquals("android", overrides["device"])
+        assertEquals("8130300", overrides["build"])
+
+        assertTrue(
+            buildDirectedTrafficWbiOverrides(
+                directedTrafficEnabled = false,
+                isOnMobileData = true
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun `shouldAcceptAppApiResultForTargetQuality rejects downgraded high quality response`() {
+        assertFalse(
+            shouldAcceptAppApiResultForTargetQuality(
+                targetQn = 120,
+                returnedQuality = 80,
+                dashVideoIds = listOf(80, 64)
+            )
+        )
+    }
+
+    @Test
+    fun `shouldAcceptAppApiResultForTargetQuality accepts when target exists in dash list`() {
+        assertTrue(
+            shouldAcceptAppApiResultForTargetQuality(
+                targetQn = 120,
+                returnedQuality = 80,
+                dashVideoIds = listOf(120, 80, 64)
+            )
+        )
     }
 
     @Test

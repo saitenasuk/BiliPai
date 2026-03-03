@@ -225,4 +225,20 @@ class VideoGestureFeedbackPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `resolveGesturePercentDigitChangeMask only animates ones for 40 to 41`() {
+        assertEquals(
+            listOf(false, false, true),
+            resolveGesturePercentDigitChangeMask(previousPercent = 40, currentPercent = 41)
+        )
+    }
+
+    @Test
+    fun `resolveGesturePercentDigitChangeMask animates tens and ones for 49 to 50`() {
+        assertEquals(
+            listOf(false, true, true),
+            resolveGesturePercentDigitChangeMask(previousPercent = 49, currentPercent = 50)
+        )
+    }
 }

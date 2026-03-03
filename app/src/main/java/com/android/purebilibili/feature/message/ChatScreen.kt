@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.EmoteInfo
 import com.android.purebilibili.data.model.response.PrivateMessageItem
 import kotlinx.serialization.json.Json
@@ -498,14 +499,7 @@ fun VideoLinkPreviewCard(
  * 格式化时长
  */
 private fun formatDuration(seconds: Long): String {
-    val h = seconds / 3600
-    val m = (seconds % 3600) / 60
-    val s = seconds % 60
-    return if (h > 0) {
-        String.format("%d:%02d:%02d", h, m, s)
-    } else {
-        String.format("%d:%02d", m, s)
-    }
+    return FormatUtils.formatDuration(seconds.coerceAtLeast(0L).toInt())
 }
 
 /**

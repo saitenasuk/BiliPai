@@ -1,9 +1,25 @@
 package com.android.purebilibili.navigation
 
+import com.android.purebilibili.core.ui.transition.VideoSharedTransitionProfile
+import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionProfile
+
 internal enum class VideoPopExitDirection {
     LEFT,
     RIGHT,
     DOWN
+}
+
+internal fun shouldUseNoOpRouteTransitionOnQuickReturn(
+    cardTransitionEnabled: Boolean,
+    isQuickReturnFromDetail: Boolean,
+    sharedTransitionReady: Boolean,
+    profile: VideoSharedTransitionProfile = resolveVideoSharedTransitionProfile()
+): Boolean {
+    if (!cardTransitionEnabled || !isQuickReturnFromDetail) return false
+    return when (profile) {
+        VideoSharedTransitionProfile.COVER_ONLY -> sharedTransitionReady
+        VideoSharedTransitionProfile.COVER_AND_METADATA -> true
+    }
 }
 
 internal fun shouldUseTabletSeamlessBackTransition(

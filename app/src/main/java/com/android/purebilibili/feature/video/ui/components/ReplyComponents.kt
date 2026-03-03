@@ -49,6 +49,19 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 private val EMOTE_TOKEN_PATTERN = """\[(.*?)\]""".toRegex()
+internal val COMMENT_TIMESTAMP_PATTERN =
+    """(?<!\d)(\d{1,2})\s*[:：]\s*(\d{2})(?:\s*[:：]\s*(\d{2}))?(?!\d)""".toRegex()
+
+internal fun parseCommentTimestampSeconds(match: MatchResult): Long? {
+    val first = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return null
+    val second = match.groupValues.getOrNull(2)?.toIntOrNull() ?: return null
+    val third = match.groupValues.getOrNull(3)?.toIntOrNull()
+    return if (third != null) {
+        first * 3600L + second * 60L + third
+    } else {
+        first * 60L + second
+    }
+}
 
 internal fun collectRenderableEmoteKeys(
     text: String,
@@ -401,8 +414,6 @@ fun RichCommentText(
     val timestampColor = MaterialTheme.colorScheme.primary
     val urlColor = MaterialTheme.colorScheme.primary
     
-    //  时间戳正则: 支持 "1:23", "12:34", "1:23:45" 格式
-    val timestampPattern = """(?<!\d)(\d{1,2}):(\d{2})(?::(\d{2}))?(?!\d)""".toRegex()
     val renderableEmoteKeys = remember(text, emoteMap) {
         collectRenderableEmoteKeys(text, emoteMap)
     }
@@ -444,17 +455,9 @@ fun RichCommentText(
             }
             
             // 收集时间戳匹配
-            timestampPattern.findAll(remainingText).forEach { match ->
-                val minutes = match.groupValues[1].toIntOrNull() ?: 0
-                val seconds = match.groupValues[2].toIntOrNull() ?: 0
-                val totalSeconds = if (match.groupValues[3].isNotEmpty()) {
-                    // 格式: H:MM:SS
-                    match.groupValues[1].toInt() * 3600 + match.groupValues[2].toInt() * 60 + match.groupValues[3].toInt()
-                } else {
-                    // 格式: MM:SS
-                    minutes * 60 + seconds
-                }
-                allMatches.add(MatchInfo(match.range, "timestamp", match.value, totalSeconds.toLong()))
+            COMMENT_TIMESTAMP_PATTERN.findAll(remainingText).forEach { match ->
+                val totalSeconds = parseCommentTimestampSeconds(match) ?: return@forEach
+                allMatches.add(MatchInfo(match.range, "timestamp", match.value, totalSeconds))
             }
             
             // 收集 URL 匹配

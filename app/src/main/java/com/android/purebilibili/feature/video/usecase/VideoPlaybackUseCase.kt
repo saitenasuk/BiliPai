@@ -306,22 +306,9 @@ class VideoPlaybackUseCase(
                     val qualityMergeResult = mergeQualityOptions(apiQualities, dashVideoIds)
                     val mergedQualityIds = qualityMergeResult.mergedQualityIds
                     
-                    //  [修复] 生成对应的画质标签 - 使用更短的名称确保竖屏显示完整
-                    val qualityLabelMap = mapOf(
-                        127 to "8K",
-                        126 to "杜比",
-                        125 to "HDR",
-                        120 to "4K",
-                        116 to "60帧",   //  "1080P60" 改为 "60帧"
-                        112 to "高码",   //  "1080P+" 改为 "高码"
-                        80 to "1080P",
-                        74 to "720P60",
-                        64 to "720P",
-                        32 to "480P",
-                        16 to "360P"
-                    )
+                    // 统一输出纯画质文案，避免向用户暴露 qn 数字编码。
                     val mergedQualityLabels = mergedQualityIds.map { qn ->
-                        qualityLabelMap[qn] ?: "${qn}P"
+                        qualityManager.getQualityLabel(qn)
                     }
                     
                     Logger.d(

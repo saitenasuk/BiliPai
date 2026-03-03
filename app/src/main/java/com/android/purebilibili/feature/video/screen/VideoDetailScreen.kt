@@ -137,6 +137,7 @@ import com.android.purebilibili.feature.video.ui.components.BottomInputBar // [N
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.IOSModalBottomSheet
 import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.core.util.FormatUtils
 import coil.compose.AsyncImage
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
@@ -336,6 +337,7 @@ fun VideoDetailScreen(
     val view = LocalView.current
     val configuration = LocalConfiguration.current
     val uiState by viewModel.uiState.collectAsState()
+    val resumePlaybackSuggestion by viewModel.resumePlaybackSuggestion.collectAsState()
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     var isNavigatingToVideo by remember { mutableStateOf(false) }
     var isNavigatingToAudioMode by remember { mutableStateOf(false) }
@@ -2733,6 +2735,28 @@ fun VideoDetailScreen(
                     modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
                 )
             }
+        }
+
+        resumePlaybackSuggestion?.let { suggestion ->
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissResumePlaybackSuggestion() },
+                title = { Text("继续播放") },
+                text = {
+                    Text(
+                        text = "检测到上次播放到 ${suggestion.targetLabel}（${FormatUtils.formatDuration(suggestion.positionMs)}），是否跳转继续播放？"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.continueResumePlaybackSuggestion() }) {
+                        Text("跳转")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissResumePlaybackSuggestion() }) {
+                        Text("稍后")
+                    }
+                }
+            )
         }
 
         // 💬 弹幕上下文菜单

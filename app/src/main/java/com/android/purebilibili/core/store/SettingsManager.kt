@@ -69,6 +69,19 @@ enum class FullscreenMode(val value: Int, val label: String, val description: St
     }
 }
 
+enum class FullscreenAspectRatio(val value: Int, val label: String, val description: String) {
+    FIT(0, "适应", "完整显示画面，尽量不裁切"),
+    FILL(1, "填充", "填满屏幕，可能裁切边缘"),
+    RATIO_16_9(2, "16:9", "优先按 16:9 展示画面"),
+    RATIO_4_3(3, "4:3", "优先按 4:3 展示画面");
+
+    companion object {
+        fun fromValue(value: Int): FullscreenAspectRatio {
+            return entries.find { it.value == value } ?: FIT
+        }
+    }
+}
+
 enum class BottomProgressBehavior(
     val value: Int,
     val label: String,
@@ -1318,6 +1331,7 @@ object SettingsManager {
     
     // --- 🚀 自动最高画质 (开启后忽略上方设置，始终选择最高可用画质) ---
     private val KEY_AUTO_HIGHEST_QUALITY = booleanPreferencesKey("auto_highest_quality")
+    private val KEY_BILI_DIRECTED_TRAFFIC = booleanPreferencesKey("bili_directed_traffic")
     
     fun getAutoHighestQuality(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_AUTO_HIGHEST_QUALITY] ?: false }  // 默认关闭
@@ -1333,6 +1347,26 @@ object SettingsManager {
     fun getAutoHighestQualitySync(context: Context): Boolean {
         return context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
             .getBoolean("auto_highest_quality", false)
+    }
+
+    // --- B站定向流量支持（实验性）---
+    fun getBiliDirectedTrafficEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_BILI_DIRECTED_TRAFFIC] ?: false }
+
+    suspend fun setBiliDirectedTrafficEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_BILI_DIRECTED_TRAFFIC] = value
+        }
+        context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("bili_directed_traffic", value)
+            .commit()
+        com.android.purebilibili.core.util.Logger.d("SettingsManager", "📶 B站定向流量支持: $value")
+    }
+
+    fun getBiliDirectedTrafficEnabledSync(context: Context): Boolean {
+        return context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
+            .getBoolean("bili_directed_traffic", false)
     }
 
     // --- Video Codec Preference (Default: HEVC/hev1) ---
@@ -1842,6 +1876,7 @@ object SettingsManager {
     private val KEY_BOTTOM_PROGRESS_BEHAVIOR = intPreferencesKey("bottom_progress_behavior")
     private val KEY_HORIZONTAL_ADAPTATION = booleanPreferencesKey("horizontal_adaptation_enabled")
     private val KEY_FULLSCREEN_MODE = intPreferencesKey("fullscreen_mode")
+    private val KEY_FULLSCREEN_ASPECT_RATIO = intPreferencesKey("fullscreen_aspect_ratio")
     private val FULLSCREEN_SWIPE_SEEK_OPTIONS = listOf(10, 15, 20, 30)
     
     // --- 上滑隐藏播放器开关 ---
@@ -2016,6 +2051,19 @@ object SettingsManager {
     suspend fun setFullscreenMode(context: Context, mode: FullscreenMode) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_FULLSCREEN_MODE] = mode.value
+        }
+    }
+
+    fun getFullscreenAspectRatio(context: Context): Flow<FullscreenAspectRatio> =
+        context.settingsDataStore.data.map { preferences ->
+            FullscreenAspectRatio.fromValue(
+                preferences[KEY_FULLSCREEN_ASPECT_RATIO] ?: FullscreenAspectRatio.FIT.value
+            )
+        }
+
+    suspend fun setFullscreenAspectRatio(context: Context, ratio: FullscreenAspectRatio) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FULLSCREEN_ASPECT_RATIO] = ratio.value
         }
     }
     

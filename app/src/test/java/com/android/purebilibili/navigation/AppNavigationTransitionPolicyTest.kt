@@ -1,5 +1,6 @@
 package com.android.purebilibili.navigation
 
+import com.android.purebilibili.core.ui.transition.VideoSharedTransitionProfile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -117,6 +118,42 @@ class AppNavigationTransitionPolicyTest {
                 targetRoute = ScreenRoutes.Search.route,
                 isSingleColumnCard = true,
                 lastClickedCardCenterX = 0.2f
+            )
+        )
+    }
+
+    @Test
+    fun quickReturn_coverOnlyProfile_usesNoOpWhenSharedTransitionReady() {
+        assertTrue(
+            shouldUseNoOpRouteTransitionOnQuickReturn(
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = true,
+                sharedTransitionReady = true,
+                profile = VideoSharedTransitionProfile.COVER_ONLY
+            )
+        )
+    }
+
+    @Test
+    fun quickReturn_coverOnlyProfile_usesFallbackWhenSharedTransitionNotReady() {
+        assertFalse(
+            shouldUseNoOpRouteTransitionOnQuickReturn(
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = true,
+                sharedTransitionReady = false,
+                profile = VideoSharedTransitionProfile.COVER_ONLY
+            )
+        )
+    }
+
+    @Test
+    fun quickReturn_coverAndMetadataProfile_allowsNoOpRouteTransition() {
+        assertTrue(
+            shouldUseNoOpRouteTransitionOnQuickReturn(
+                cardTransitionEnabled = true,
+                isQuickReturnFromDetail = true,
+                sharedTransitionReady = false,
+                profile = VideoSharedTransitionProfile.COVER_AND_METADATA
             )
         )
     }

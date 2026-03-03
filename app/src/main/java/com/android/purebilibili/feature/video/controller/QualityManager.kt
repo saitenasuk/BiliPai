@@ -25,8 +25,8 @@ class QualityManager {
         // Quality ID to label mapping
         private val QUALITY_LABELS = mapOf(
             127 to "8K",
-            126 to "Dolby Vision",
-            125 to "HDR",
+            126 to "杜比视界",
+            125 to "HDR 真彩",
             120 to "4K",
             116 to "1080P60",
             112 to "1080P+",
@@ -114,7 +114,7 @@ class QualityManager {
      * Get quality label
      */
     fun getQualityLabel(qualityId: Int): String {
-        return QUALITY_LABELS[qualityId] ?: "${qualityId}P"
+        return QUALITY_LABELS[qualityId] ?: "其他画质"
     }
     
     /**
@@ -145,7 +145,8 @@ class QualityManager {
         isLoggedIn: Boolean,
         isVip: Boolean,
         isHdrSupported: Boolean = true,
-        isDolbyVisionSupported: Boolean = true
+        isDolbyVisionSupported: Boolean = true,
+        serverAdvertisedQualities: List<Int> = emptyList()
     ): QualityPermissionResult {
         // [New] 检查是否开启“解锁高画质” - REVERTED
         // if (context != null) ...
@@ -163,11 +164,15 @@ class QualityManager {
                 Logger.d(TAG, "Quality $qualityId requires login, user isLoggedIn=$isLoggedIn")
                 QualityPermissionResult.RequiresLogin(label)
             }
-            qualityId == 126 && !isDolbyVisionSupported -> {
+            qualityId == 126 &&
+                !isDolbyVisionSupported &&
+                qualityId !in serverAdvertisedQualities -> {
                 Logger.d(TAG, "Quality $qualityId not supported by device: dolbyVision=$isDolbyVisionSupported")
                 QualityPermissionResult.UnsupportedByDevice(label)
             }
-            qualityId == 125 && !isHdrSupported -> {
+            qualityId == 125 &&
+                !isHdrSupported &&
+                qualityId !in serverAdvertisedQualities -> {
                 Logger.d(TAG, "Quality $qualityId not supported by device: hdr=$isHdrSupported")
                 QualityPermissionResult.UnsupportedByDevice(label)
             }

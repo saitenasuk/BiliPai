@@ -53,6 +53,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.spring
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -74,6 +75,7 @@ fun SpaceScreen(
     val followGroupSelectedTagIds by viewModel.followGroupSelectedTagIds.collectAsState()
     val isFollowGroupsLoading by viewModel.isFollowGroupsLoading.collectAsState()
     val isSavingFollowGroups by viewModel.isSavingFollowGroups.collectAsState()
+    val selectedMainTab by viewModel.selectedMainTab.collectAsState()
     
     // [Block] Repository & State
     val blockedUpRepository = remember { com.android.purebilibili.data.repository.BlockedUpRepository(context) }
@@ -81,6 +83,7 @@ fun SpaceScreen(
     val scope = rememberCoroutineScope()
     var showBlockMenu by remember { mutableStateOf(false) }
     var showBlockConfirmDialog by remember { mutableStateOf(false) }
+    var showTopPhotoPreview by remember(mid) { mutableStateOf(false) }
     
     // [Blur] Haze State
     val hazeState = remember { HazeState() }
@@ -180,6 +183,8 @@ fun SpaceScreen(
                 is SpaceUiState.Success -> {
                     SpaceContent(
                         state = state,
+                        selectedTab = selectedMainTab,
+                        onMainTabSelected = { viewModel.selectMainTab(it) },
                         onVideoClick = onVideoClick,
                         onPlayAllAudioClick = onPlayAllAudioClick,
                         onDynamicDetailClick = onDynamicDetailClick,
@@ -195,12 +200,26 @@ fun SpaceScreen(
                         contentPadding = padding,
 
                         onFollowClick = { viewModel.toggleFollow() },
+                        onTopPhotoClick = {
+                            showTopPhotoPreview = true
+                        },
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
             }
         }
+    }
+
+    val topPhotoPreviewUrl = normalizeSpaceTopPhotoUrl(
+        (uiState as? SpaceUiState.Success)?.userInfo?.topPhoto.orEmpty()
+    )
+    if (showTopPhotoPreview && shouldEnableSpaceTopPhotoPreview(topPhotoPreviewUrl)) {
+        ImagePreviewDialog(
+            images = listOf(topPhotoPreviewUrl),
+            initialIndex = 0,
+            onDismiss = { showTopPhotoPreview = false }
+        )
     }
     
     if (showBlockConfirmDialog) {
@@ -328,6 +347,8 @@ fun SpaceScreen(
 @Composable
 private fun SpaceContent(
     state: SpaceUiState.Success,
+    selectedTab: Int,
+    onMainTabSelected: (Int) -> Unit,
     onVideoClick: (String) -> Unit,
     onPlayAllAudioClick: ((String) -> Unit)?,
     onDynamicDetailClick: (String) -> Unit,
@@ -342,6 +363,7 @@ private fun SpaceContent(
     onViewAllClick: (String, Long, Long, String) -> Unit,
     contentPadding: PaddingValues, // [Blur] Receive padding from Scaffold
     onFollowClick: () -> Unit,
+    onTopPhotoClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?
 ) {
@@ -377,9 +399,6 @@ private fun SpaceContent(
 
         onPlayAllAudioClick?.invoke(startBvid) ?: onVideoClick(startBvid)
     }
-    //  当前选中的 Tab（目前只实现投稿页）
-    var selectedTab by remember { mutableIntStateOf(2) }  // 默认投稿
-    
     val listState = rememberLazyGridState()
     
     //  自动加载更多：当滚动接近底部时触发
@@ -416,6 +435,7 @@ private fun SpaceContent(
                 relationStat = state.relationStat,
                 upStat = state.upStat,
                 onFollowClick = onFollowClick,
+                onTopPhotoClick = onTopPhotoClick,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope
             )
@@ -426,8 +446,13 @@ private fun SpaceContent(
             SpaceTabRow(
                 selectedTab = selectedTab,
                 videoCount = state.totalVideos,
-                collectionsCount = state.seasons.size + state.series.size,
-                onTabSelected = { selectedTab = it }
+                collectionsCount = resolveSpaceCollectionTabCount(
+                    seasonCount = state.seasons.size,
+                    seriesCount = state.series.size,
+                    createdFavoriteCount = state.createdFavoriteFolders.size,
+                    collectedFavoriteCount = state.collectedFavoriteFolders.size
+                ),
+                onTabSelected = onMainTabSelected
             )
         }
         
@@ -638,6 +663,7 @@ private fun SpaceContent(
                             onVideoClick = onVideoClick,
                             mid = state.userInfo.mid,
                             onMoreClick = {
+                                onMainTabSelected(3)
                                 onViewAllClick("season", season.meta.season_id, state.userInfo.mid, season.meta.name)
                             }
                         )
@@ -652,13 +678,66 @@ private fun SpaceContent(
                             archives = state.seriesArchives[series.meta.series_id] ?: emptyList(),
                             onVideoClick = onVideoClick,
                             onMoreClick = {
+                                onMainTabSelected(3)
                                 onViewAllClick("series", series.meta.series_id, state.userInfo.mid, series.meta.name)
                             }
                         )
                     }
                 }
+
+                if (state.createdFavoriteFolders.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text(
+                            text = "TA 创建的收藏夹",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                    items(
+                        items = state.createdFavoriteFolders,
+                        key = { "fav_created_${it.id}" },
+                        span = { GridItemSpan(maxLineSpan) }
+                    ) { folder ->
+                        SpaceFavoriteFolderRow(
+                            folder = folder,
+                            onClick = {
+                                onMainTabSelected(3)
+                                onViewAllClick("favorite", folder.id, state.userInfo.mid, folder.title)
+                            }
+                        )
+                    }
+                }
+
+                if (state.collectedFavoriteFolders.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text(
+                            text = "TA 收藏的视频合集",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                    items(
+                        items = state.collectedFavoriteFolders,
+                        key = { "fav_collected_${it.id}" },
+                        span = { GridItemSpan(maxLineSpan) }
+                    ) { folder ->
+                        SpaceFavoriteFolderRow(
+                            folder = folder,
+                            onClick = {
+                                onMainTabSelected(3)
+                                onViewAllClick("favorite", folder.id, state.userInfo.mid, folder.title)
+                            }
+                        )
+                    }
+                }
                 
-                if (state.seasons.isEmpty() && state.series.isEmpty()) {
+                if (state.seasons.isEmpty() &&
+                    state.series.isEmpty() &&
+                    state.createdFavoriteFolders.isEmpty() &&
+                    state.collectedFavoriteFolders.isEmpty()
+                ) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(
                             modifier = Modifier
@@ -667,7 +746,7 @@ private fun SpaceContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "该用户暂无合集和系列",
+                                text = "该用户暂无合集、系列或收藏夹内容",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         }
@@ -690,7 +769,7 @@ private fun SpaceContent(
                             count = if (state.totalVideos > 0) state.totalVideos else state.videos.size,
                             onViewMore = { 
                                 // 切换到投稿Tab (index 2)
-                                selectedTab = 2
+                                onMainTabSelected(2)
                                 onSubTabSelected(SpaceSubTab.VIDEO)
                             }
                         )
@@ -726,7 +805,7 @@ private fun SpaceContent(
                             count = state.articles.size,
                             onViewMore = { 
                                 // 切换到投稿Tab的图文分类
-                                selectedTab = 2
+                                onMainTabSelected(2)
                                 onSubTabSelected(SpaceSubTab.ARTICLE)
                             }
                         )
@@ -835,24 +914,36 @@ private fun SpaceHeader(
     relationStat: RelationStatData?,
     upStat: UpStatData?,
     onFollowClick: () -> Unit,
+    onTopPhotoClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?
 ) {
+    val topPhotoUrl = normalizeSpaceTopPhotoUrl(userInfo.topPhoto)
+    val hasTopPhoto = topPhotoUrl.isNotEmpty()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
     ) {
         //  头图 Banner - 更紧凑的高度
-        if (userInfo.topPhoto.isNotEmpty()) {
+        if (hasTopPhoto) {
+            val topPhotoPreviewEnabled = shouldEnableSpaceTopPhotoPreview(topPhotoUrl)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(80.dp)  //  减少高度
+                    .then(
+                        if (topPhotoPreviewEnabled) {
+                            Modifier.clickable { onTopPhotoClick() }
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(FormatUtils.fixImageUrl(userInfo.topPhoto))
+                        .data(topPhotoUrl)
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -880,7 +971,7 @@ private fun SpaceHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .offset(y = if (userInfo.topPhoto.isNotEmpty()) (-20).dp else 4.dp),  //  减少 offset
+                .offset(y = if (hasTopPhoto) (-20).dp else 4.dp),  //  减少 offset
             verticalAlignment = Alignment.Bottom
         ) {
             // 头像（带边框）
@@ -1043,7 +1134,7 @@ private fun SpaceHeader(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(top = if (userInfo.topPhoto.isNotEmpty()) 0.dp else 8.dp)
+                    .padding(top = if (hasTopPhoto) 0.dp else 8.dp)
             )
         }
         
@@ -1071,6 +1162,59 @@ private fun SpaceHeader(
         HorizontalDivider(
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
         )
+    }
+}
+
+@Composable
+private fun SpaceFavoriteFolderRow(
+    folder: FavFolder,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() },
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = CupertinoIcons.Default.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = folder.title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "${folder.media_count} 个视频",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(6.dp))
+            Icon(
+                imageVector = CupertinoIcons.Default.ChevronForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+        }
     }
 }
 

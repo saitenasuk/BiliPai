@@ -107,10 +107,49 @@ internal fun shouldCallAccessTokenApi(
 
 internal fun shouldTryAppApiForTargetQuality(
     targetQn: Int,
-    hasSessionCookie: Boolean = true
+    hasSessionCookie: Boolean = true,
+    directedTrafficMode: Boolean = false
 ): Boolean {
+    if (directedTrafficMode && targetQn > 0) return true
     // 标准策略：高画质走 APP API；兜底策略：无 Cookie 但有 APP token 时，1080P(80) 也走 APP API。
     return targetQn >= 112 || (!hasSessionCookie && targetQn >= 80)
+}
+
+internal fun shouldEnableDirectedTrafficMode(
+    directedTrafficEnabled: Boolean,
+    isOnMobileData: Boolean
+): Boolean {
+    return directedTrafficEnabled && isOnMobileData
+}
+
+internal fun buildDirectedTrafficWbiOverrides(
+    directedTrafficEnabled: Boolean,
+    isOnMobileData: Boolean
+): Map<String, String> {
+    if (!shouldEnableDirectedTrafficMode(directedTrafficEnabled, isOnMobileData)) {
+        return emptyMap()
+    }
+    return mapOf(
+        "platform" to "android",
+        "mobi_app" to "android",
+        "device" to "android",
+        "build" to "8130300"
+    )
+}
+
+internal fun shouldAcceptAppApiResultForTargetQuality(
+    targetQn: Int,
+    returnedQuality: Int,
+    dashVideoIds: List<Int>
+): Boolean {
+    // 标准清晰度请求不做严格校验，保持原有快速起播策略。
+    if (targetQn < 112) return true
+
+    // DASH 轨道中存在目标清晰度，说明结果可满足切换目标。
+    if (dashVideoIds.distinct().contains(targetQn)) return true
+
+    // 非 DASH 场景下，返回清晰度本身满足目标也视为可接受。
+    return returnedQuality >= targetQn && returnedQuality > 0
 }
 
 internal fun buildGuestFallbackQualities(): List<Int> {

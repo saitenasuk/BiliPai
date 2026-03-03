@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.store.FullscreenMode
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -79,6 +80,20 @@ class PlaybackSettingsSelectionPolicyTest {
                 FullscreenMode.HORIZONTAL
             ),
             modes
+        )
+    }
+
+    @Test
+    fun `resolveFullscreenAspectRatioSegmentOptions should expose fixed fullscreen ratios`() {
+        val ratios = resolveFullscreenAspectRatioSegmentOptions().map { it.value }
+        assertEquals(
+            listOf(
+                FullscreenAspectRatio.FIT,
+                FullscreenAspectRatio.FILL,
+                FullscreenAspectRatio.RATIO_16_9,
+                FullscreenAspectRatio.RATIO_4_3
+            ),
+            ratios
         )
     }
 }

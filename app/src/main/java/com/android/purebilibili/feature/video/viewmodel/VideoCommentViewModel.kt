@@ -2,9 +2,12 @@ package com.android.purebilibili.feature.video.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.repository.CommentRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
@@ -50,7 +53,11 @@ data class CommentUiState(
     val rootInputHint: String = "进来唠会嗑呗~",
     val childInputHint: String = "回复一下吧~",
     val canUploadImage: Boolean = true,
-    val canInputComment: Boolean = true
+    val canInputComment: Boolean = true,
+    // [新增] 评论反诈检测状态
+    val isDetectingFraud: Boolean = false,
+    val fraudDetectResult: CommentFraudStatus? = null,
+    val fraudDetectRpid: Long = 0  // 被检测的评论 rpid
 )
 
 // 二级评论状态 (从 PlayerViewModel 移过来)
@@ -73,6 +80,10 @@ class VideoCommentViewModel : ViewModel() {
 
     private val _subReplyState = MutableStateFlow(SubReplyUiState())
     val subReplyState = _subReplyState.asStateFlow()
+
+    // [新增] 评论反诈检测事件流（one-shot event）
+    private val _fraudEvent = MutableSharedFlow<CommentFraudStatus>(extraBufferCapacity = 1)
+    val fraudEvent = _fraudEvent.asSharedFlow()
 
     private var currentAid: Long = 0
     
@@ -322,6 +333,12 @@ class VideoCommentViewModel : ViewModel() {
             result.onSuccess { newReply ->
                 android.util.Log.d("CommentVM", " sendComment success: newReply=${newReply?.rpid}, root=$root, parent=$parent")
                 val current = _commentState.value
+
+                // [新增] 启动评论反诈检测（后台协程，不阻塞 UI）
+                val rpidToCheck = newReply?.rpid ?: 0L
+                if (rpidToCheck > 0) {
+                    launchFraudDetection(currentAid, rpidToCheck, root)
+                }
                 
                 // 1. 如果是主层级评论 (root=0)
                 if (root == 0L) {
@@ -439,6 +456,49 @@ class VideoCommentViewModel : ViewModel() {
     
     fun reportComment(rpid: Long, reason: Int, content: String = "") {
         viewModelScope.launch { CommentRepository.reportComment(currentAid, rpid, reason, content) }
+    }
+
+    // --- [新增] 评论反诈检测 ---
+
+    /**
+     * 启动评论反诈后台检测
+     */
+    private fun launchFraudDetection(aid: Long, rpid: Long, rootId: Long) {
+        _commentState.value = _commentState.value.copy(
+            isDetectingFraud = true,
+            fraudDetectResult = null,
+            fraudDetectRpid = rpid
+        )
+        viewModelScope.launch {
+            val result = CommentRepository.checkCommentStatus(
+                aid = aid,
+                rpid = rpid,
+                rootId = rootId
+            )
+            result.onSuccess { status ->
+                android.util.Log.d("CommentVM", "评论反诈检测结果: $status (rpid=$rpid)")
+                _commentState.value = _commentState.value.copy(
+                    isDetectingFraud = false,
+                    fraudDetectResult = status,
+                    fraudDetectRpid = rpid
+                )
+                // 发射 one-shot event 给 UI 弹窗
+                _fraudEvent.tryEmit(status)
+            }.onFailure { e ->
+                android.util.Log.e("CommentVM", "评论反诈检测失败: ${e.message}")
+                _commentState.value = _commentState.value.copy(
+                    isDetectingFraud = false
+                )
+            }
+        }
+    }
+
+    /** 清除检测结果（用户关闭弹窗后调用） */
+    fun dismissFraudResult() {
+        _commentState.value = _commentState.value.copy(
+            fraudDetectResult = null,
+            fraudDetectRpid = 0
+        )
     }
 
     // --- [新增] 删除动画逻辑 ---

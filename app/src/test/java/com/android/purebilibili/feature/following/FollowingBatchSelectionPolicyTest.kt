@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.following
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FollowingBatchSelectionPolicyTest {
@@ -66,5 +67,55 @@ class FollowingBatchSelectionPolicyTest {
         assertTrue(isRetryableBatchOperationError("触发风控，请稍后再试"))
         assertTrue(isRetryableBatchOperationError("too many requests"))
         assertTrue(!isRetryableBatchOperationError("内容不存在"))
+    }
+
+    @Test
+    fun `shouldSkipFollowingReload should skip when same mid and cached success`() {
+        val skip = shouldSkipFollowingReload(
+            cachedMid = 123L,
+            targetMid = 123L,
+            uiState = FollowingListUiState.Success(
+                users = emptyList(),
+                total = 0
+            ),
+            forceRefresh = false
+        )
+        assertTrue(skip)
+    }
+
+    @Test
+    fun `shouldSkipFollowingReload should not skip when force refresh is enabled`() {
+        val skip = shouldSkipFollowingReload(
+            cachedMid = 123L,
+            targetMid = 123L,
+            uiState = FollowingListUiState.Success(
+                users = emptyList(),
+                total = 0
+            ),
+            forceRefresh = true
+        )
+        assertFalse(skip)
+    }
+
+    @Test
+    fun `shouldUseFollowingPersistentCache should use cache when same mid and has users`() {
+        val useCache = shouldUseFollowingPersistentCache(
+            forceRefresh = false,
+            requestMid = 123L,
+            cachedMid = 123L,
+            cachedUsersCount = 10
+        )
+        assertTrue(useCache)
+    }
+
+    @Test
+    fun `shouldUseFollowingPersistentCache should ignore cache during force refresh`() {
+        val useCache = shouldUseFollowingPersistentCache(
+            forceRefresh = true,
+            requestMid = 123L,
+            cachedMid = 123L,
+            cachedUsersCount = 10
+        )
+        assertFalse(useCache)
     }
 }
