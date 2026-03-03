@@ -290,6 +290,22 @@ internal fun shouldAutoEnterAudioModeFromRoute(
     return startAudioFromRoute && !hasAutoEnteredAudioMode && isVideoLoadSuccess
 }
 
+internal fun shouldAutoEnterPortraitFullscreenFromRoute(
+    autoEnterPortraitFromRoute: Boolean,
+    startAudioFromRoute: Boolean,
+    portraitExperienceEnabled: Boolean,
+    isVerticalVideo: Boolean,
+    isPortraitFullscreen: Boolean,
+    hasAutoEnteredPortraitFromRoute: Boolean
+): Boolean {
+    return autoEnterPortraitFromRoute &&
+        !startAudioFromRoute &&
+        portraitExperienceEnabled &&
+        isVerticalVideo &&
+        !isPortraitFullscreen &&
+        !hasAutoEnteredPortraitFromRoute
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -300,6 +316,7 @@ fun VideoDetailScreen(
     coverUrl: String = "",
     startInFullscreen: Boolean = false,
     startAudioFromRoute: Boolean = false,
+    autoEnterPortraitFromRoute: Boolean = false,
     transitionEnabled: Boolean = false,
     transitionEnterDurationMillis: Int = 320,
     transitionMaxBlurRadiusPx: Float = 20f,
@@ -324,6 +341,7 @@ fun VideoDetailScreen(
     var isNavigatingToAudioMode by remember { mutableStateOf(false) }
     var isNavigatingToMiniMode by remember { mutableStateOf(false) }
     var hasAutoEnteredAudioMode by rememberSaveable { mutableStateOf(false) }
+    var hasAutoEnteredPortraitFromRoute by rememberSaveable(bvid) { mutableStateOf(false) }
 
     val navigateToRelatedVideo = remember(onVideoClick, miniPlayerManager, uiState) {
         { targetBvid: String, options: android.os.Bundle? ->
@@ -956,6 +974,28 @@ fun VideoDetailScreen(
             isPortraitFullscreen = true
         }
     }
+    LaunchedEffect(
+        autoEnterPortraitFromRoute,
+        startAudioFromRoute,
+        portraitExperienceEnabled,
+        isVerticalVideo,
+        isPortraitFullscreen,
+        hasAutoEnteredPortraitFromRoute
+    ) {
+        if (
+            shouldAutoEnterPortraitFullscreenFromRoute(
+                autoEnterPortraitFromRoute = autoEnterPortraitFromRoute,
+                startAudioFromRoute = startAudioFromRoute,
+                portraitExperienceEnabled = portraitExperienceEnabled,
+                isVerticalVideo = isVerticalVideo,
+                isPortraitFullscreen = isPortraitFullscreen,
+                hasAutoEnteredPortraitFromRoute = hasAutoEnteredPortraitFromRoute
+            )
+        ) {
+            enterPortraitFullscreen()
+            hasAutoEnteredPortraitFromRoute = true
+        }
+    }
     val shouldMirrorPortraitProgressToMainPlayer = com.android.purebilibili.feature.video.ui.pager
         .shouldMirrorPortraitProgressToMainPlayer(useSharedPlayer = useSharedPortraitPlayer)
 
@@ -1118,7 +1158,7 @@ fun VideoDetailScreen(
             
             // 📱 [双重验证] 从 API dimension 字段设置预判断值
             info.dimension?.let { dim ->
-                playerState.setApiDimension(dim.width, dim.height)
+                playerState.setApiDimension(dim.width, dim.height, dim.rotate)
             }
             
             //  同步视频信息到小窗管理器（为小窗模式做准备）
@@ -1197,12 +1237,22 @@ fun VideoDetailScreen(
                         ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     }
                 } else {
-                    userRequestedFullscreen = true
                     val targetOrientation = resolvePhoneFullscreenEnterOrientation(
                         fullscreenMode = fullscreenMode,
                         isVerticalVideo = isVerticalVideo
                     ) ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    activity.requestedOrientation = targetOrientation
+                    if (shouldEnterPortraitFullscreenOnFullscreenToggle(
+                            targetOrientation = targetOrientation,
+                            portraitExperienceEnabled = portraitExperienceEnabled
+                        )
+                    ) {
+                        // 比例模式命中竖屏目标时，进入竖屏全屏覆盖层，避免点击后“无变化”。
+                        userRequestedFullscreen = false
+                        enterPortraitFullscreen()
+                    } else {
+                        userRequestedFullscreen = true
+                        activity.requestedOrientation = targetOrientation
+                    }
                 }
             }
         }
@@ -1371,6 +1421,7 @@ fun VideoDetailScreen(
                 isFavorited = (uiState as? PlayerUiState.Success)?.isFavorited ?: false,
                 onToggleFollow = { viewModel.toggleFollow() },
                 onToggleLike = { viewModel.toggleLike() },
+                onDislike = { viewModel.markVideoNotInterested() },
                 onCoin = { viewModel.showCoinDialog() },
                 onToggleFavorite = { viewModel.toggleFavorite() },
                 onTriple = { viewModel.doTripleAction() },
@@ -3049,11 +3100,6 @@ internal fun resolvePhoneFullscreenEnterOrientation(
             if (isVerticalVideo) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         }
-        com.android.purebilibili.core.store.FullscreenMode.RATIO -> {
-            if (isVerticalVideo) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        }
-        com.android.purebilibili.core.store.FullscreenMode.GRAVITY -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
     }
 }
 
@@ -3095,6 +3141,13 @@ internal fun resolvePhoneVideoRequestedOrientation(
     } else {
         ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
+}
+
+internal fun shouldEnterPortraitFullscreenOnFullscreenToggle(
+    targetOrientation: Int,
+    portraitExperienceEnabled: Boolean
+): Boolean {
+    return portraitExperienceEnabled && targetOrientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 }
 
 internal fun shouldEnableVideoCoverSharedTransition(

@@ -22,8 +22,16 @@ data class Dimension(
     val height: Int = 0,
     val rotate: Int = 0
 ) {
-    /** 是否为竖屏视频 (高度 > 宽度) */
-    val isVertical: Boolean get() = height > width
+    /** 是否为竖屏视频（考虑 rotate=90/270 的场景） */
+    val isVertical: Boolean
+        get() {
+            if (width <= 0 || height <= 0) return false
+            val normalizedRotate = ((rotate % 360) + 360) % 360
+            val shouldSwap = normalizedRotate == 90 || normalizedRotate == 270
+            val effectiveWidth = if (shouldSwap) height else width
+            val effectiveHeight = if (shouldSwap) width else height
+            return effectiveHeight > effectiveWidth
+        }
 }
 
 @Serializable

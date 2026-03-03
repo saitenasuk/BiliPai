@@ -93,15 +93,16 @@ import androidx.compose.runtime.setValue
 // 定义路由参数结构
 object VideoRoute {
     const val base = "video"
-    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}"
+    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}&autoPortrait={autoPortrait}"
 
     internal fun resolveVideoRoutePath(
         bvid: String,
         cid: Long,
         encodedCover: String,
-        startAudio: Boolean
+        startAudio: Boolean,
+        autoPortrait: Boolean
     ): String {
-        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio"
+        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio&autoPortrait=$autoPortrait"
     }
 
     // 构建 helper
@@ -109,14 +110,16 @@ object VideoRoute {
         bvid: String,
         cid: Long,
         coverUrl: String,
-        startAudio: Boolean = false
+        startAudio: Boolean = false,
+        autoPortrait: Boolean = false
     ): String {
         val encodedCover = Uri.encode(coverUrl)
         return resolveVideoRoutePath(
             bvid = bvid,
             cid = cid,
             encodedCover = encodedCover,
-            startAudio = startAudio
+            startAudio = startAudio,
+            autoPortrait = autoPortrait
         )
     }
 }
@@ -178,9 +181,18 @@ fun AppNavigation(
         bvid: String,
         cid: Long = 0L,
         coverUrl: String = "",
-        startAudio: Boolean = false
+        startAudio: Boolean = false,
+        autoPortrait: Boolean = true
     ) {
-        navigateToVideoRoute(VideoRoute.createRoute(bvid, cid, coverUrl, startAudio = startAudio))
+        navigateToVideoRoute(
+            VideoRoute.createRoute(
+                bvid = bvid,
+                cid = cid,
+                coverUrl = coverUrl,
+                startAudio = startAudio,
+                autoPortrait = autoPortrait
+            )
+        )
     }
 
     fun navigateToVideoFromHome(request: HomeVideoClickRequest) {
@@ -417,10 +429,22 @@ fun AppNavigation(
                         initialAlpha = 0.96f
                     )
                 } else if (cardTransitionEnabled && CardPositionManager.isQuickReturnFromDetail) {
-                    fadeIn(
-                        animationSpec = tween(durationMillis = 170, easing = IOS_RETURN_EASING),
-                        initialAlpha = 0.99f
-                    )
+                    val quickReturnSharedTransitionReady =
+                        CardPositionManager.lastClickedCardBounds != null &&
+                            CardPositionManager.isCardFullyVisible
+                    if (shouldUseNoOpRouteTransitionOnQuickReturn(
+                            cardTransitionEnabled = cardTransitionEnabled,
+                            isQuickReturnFromDetail = CardPositionManager.isQuickReturnFromDetail,
+                            sharedTransitionReady = quickReturnSharedTransitionReady
+                        )
+                    ) {
+                        EnterTransition.None
+                    } else {
+                        fadeIn(
+                            animationSpec = tween(durationMillis = 170, easing = IOS_RETURN_EASING),
+                            initialAlpha = 0.99f
+                        )
+                    }
                 } else {
                     fadeIn(
                         animationSpec = tween(
@@ -475,6 +499,7 @@ fun AppNavigation(
                 navArgument("cid") { type = NavType.LongType; defaultValue = 0L },
                 navArgument("cover") { type = NavType.StringType; defaultValue = "" },
                 navArgument("startAudio") { type = NavType.BoolType; defaultValue = false },
+                navArgument("autoPortrait") { type = NavType.BoolType; defaultValue = false },
                 navArgument("fullscreen") { type = NavType.BoolType; defaultValue = false }
             ),
             //  进入动画：当卡片过渡开启时用淡入（配合共享元素），关闭时用滑入
@@ -506,8 +531,24 @@ fun AppNavigation(
                         targetAlpha = 0f
                     )
                 } else if (cardTransitionEnabled && CardPositionManager.isQuickReturnFromDetail) {
-                    // Quick return: keep route layers stable and let cover sharedBounds dominate.
-                    ExitTransition.None
+                    val quickReturnSharedTransitionReady =
+                        CardPositionManager.lastClickedCardBounds != null &&
+                            CardPositionManager.isCardFullyVisible
+                    if (shouldUseNoOpRouteTransitionOnQuickReturn(
+                            cardTransitionEnabled = cardTransitionEnabled,
+                            isQuickReturnFromDetail = CardPositionManager.isQuickReturnFromDetail,
+                            sharedTransitionReady = quickReturnSharedTransitionReady
+                        )
+                    ) {
+                        // Keep route layers stable and let cover sharedBounds dominate.
+                        ExitTransition.None
+                    } else {
+                        // Cover-only profile: keep a minimal fallback so fast return still has perceivable motion.
+                        fadeOut(
+                            animationSpec = tween(durationMillis = 120, easing = IOS_RETURN_EASING),
+                            targetAlpha = 0.94f
+                        )
+                    }
                 } else if (cardTransitionEnabled) {
                     // 🔧 [修复] 使用简单淡出，避免与 sharedBounds 共享元素动画冲突
                     fadeOut(
@@ -556,7 +597,25 @@ fun AppNavigation(
             popEnterTransition = {
                 if (cardTransitionEnabled) {
                      if (CardPositionManager.isQuickReturnFromDetail) {
-                         EnterTransition.None
+                         val quickReturnSharedTransitionReady =
+                             CardPositionManager.lastClickedCardBounds != null &&
+                                 CardPositionManager.isCardFullyVisible
+                         if (shouldUseNoOpRouteTransitionOnQuickReturn(
+                                 cardTransitionEnabled = cardTransitionEnabled,
+                                 isQuickReturnFromDetail = CardPositionManager.isQuickReturnFromDetail,
+                                 sharedTransitionReady = quickReturnSharedTransitionReady
+                             )
+                         ) {
+                             EnterTransition.None
+                         } else {
+                             fadeIn(
+                                 animationSpec = tween(
+                                     durationMillis = 120,
+                                     easing = IOS_RETURN_EASING
+                                 ),
+                                 initialAlpha = 0.98f
+                             )
+                         }
                      } else {
                          fadeIn(
                              animationSpec = tween(
@@ -573,6 +632,7 @@ fun AppNavigation(
             val bvid = backStackEntry.arguments?.getString("bvid") ?: ""
             val coverUrl = android.net.Uri.decode(backStackEntry.arguments?.getString("cover") ?: "")
             val startAudio = backStackEntry.arguments?.getBoolean("startAudio") ?: false
+            val autoPortraitFromRoute = backStackEntry.arguments?.getBoolean("autoPortrait") ?: false
             val startFullscreen = backStackEntry.arguments?.getBoolean("fullscreen") ?: false
             
             //  使用顶层定义的 cardTransitionEnabled（已在 line 68 定义）
@@ -638,6 +698,7 @@ fun AppNavigation(
                     isVisible = true,
                     startInFullscreen = startFullscreen,  //  传递全屏参数
                     startAudioFromRoute = startAudio,
+                    autoEnterPortraitFromRoute = autoPortraitFromRoute,
                     transitionEnabled = cardTransitionEnabled,  //  传递过渡动画开关
                     transitionEnterDurationMillis = navMotionSpec.slowFadeDurationMillis,
                     transitionMaxBlurRadiusPx = navMotionSpec.maxBackdropBlurRadius,
@@ -1459,7 +1520,7 @@ fun AppNavigation(
                 userName = userName,
                 onBack = { navController.popBackStack() },
                 onNavigateToVideo = { bvid ->
-                    navController.navigate(ScreenRoutes.VideoPlayer.createRoute(bvid))
+                    navigateToVideo(bvid, 0L, "")
                 }
             )
         }

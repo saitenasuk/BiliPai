@@ -141,6 +141,19 @@ internal fun shouldNavigateToVideoFromNotification(
     return !(isInVideoRoute && currentBvid == targetBvid)
 }
 
+internal fun resolveMainActivityVideoRoute(
+    bvid: String,
+    cid: Long
+): String {
+    return com.android.purebilibili.navigation.VideoRoute.resolveVideoRoutePath(
+        bvid = bvid,
+        cid = cid,
+        encodedCover = "",
+        startAudio = false,
+        autoPortrait = true
+    )
+}
+
 internal fun shouldForceStopPlaybackOnUserLeaveHint(
     isInVideoDetail: Boolean,
     stopPlaybackOnExit: Boolean,
@@ -614,7 +627,7 @@ class MainActivity : ComponentActivity() {
                     if (shouldNavigate) {
                         Logger.d(TAG, "🚀 导航到视频: $videoId")
                         miniPlayerManager.isNavigatingToVideo = true
-                        navController.navigate("video/$videoId?cid=0&cover=") {
+                        navController.navigate(resolveMainActivityVideoRoute(bvid = videoId, cid = 0L)) {
                             launchSingleTop = true
                         }
                     } else {
@@ -766,7 +779,7 @@ class MainActivity : ComponentActivity() {
                                         miniPlayerManager.isNavigatingToVideo = true
                                         miniPlayerManager.exitMiniMode(animate = false)
                                         val cid = miniPlayerManager.currentCid
-                                        navController.navigate("video/$bvid?cid=$cid&cover=") {
+                                        navController.navigate(resolveMainActivityVideoRoute(bvid = bvid, cid = cid)) {
                                             launchSingleTop = true
                                         }
                                     }
@@ -791,7 +804,7 @@ class MainActivity : ComponentActivity() {
                                     miniPlayerManager.exitMiniMode(animate = false)
                                     //  [修复] 使用正确的 cid，而不是 0
                                     val cid = miniPlayerManager.currentCid
-                                    navController.navigate("video/$bvid?cid=$cid&cover=") {
+                                    navController.navigate(resolveMainActivityVideoRoute(bvid = bvid, cid = cid)) {
                                         launchSingleTop = true
                                     }
                                 }

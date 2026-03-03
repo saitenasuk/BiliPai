@@ -1,0 +1,23 @@
+package com.android.purebilibili
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class MainActivityVideoRoutePolicyTest {
+
+    @Test
+    fun notificationRoute_defaultsToAutoPortraitAndStartAudioFalse() {
+        assertEquals(
+            "video/BV1abc?cid=0&cover=&startAudio=false&autoPortrait=true",
+            resolveMainActivityVideoRoute(bvid = "BV1abc", cid = 0L)
+        )
+    }
+
+    @Test
+    fun notificationRoute_keepsCidValue() {
+        assertEquals(
+            "video/BV2xyz?cid=12345&cover=&startAudio=false&autoPortrait=true",
+            resolveMainActivityVideoRoute(bvid = "BV2xyz", cid = 12345L)
+        )
+    }
+}

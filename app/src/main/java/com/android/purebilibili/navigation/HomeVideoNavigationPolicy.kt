@@ -34,7 +34,13 @@ internal fun resolveHomeVideoNavigationIntent(
 internal fun resolveHomeVideoRoute(request: HomeVideoClickRequest): String? {
     val intent = resolveHomeVideoNavigationIntent(request) ?: return null
     val encodedCover = URLEncoder.encode(intent.coverUrl, StandardCharsets.UTF_8.toString())
-    return "${VideoRoute.base}/${intent.bvid}?cid=${intent.cid}&cover=$encodedCover"
+    return VideoRoute.resolveVideoRoutePath(
+        bvid = intent.bvid,
+        cid = intent.cid,
+        encodedCover = encodedCover,
+        startAudio = false,
+        autoPortrait = true
+    )
 }
 
 internal fun resolveHomeNavigationTarget(
