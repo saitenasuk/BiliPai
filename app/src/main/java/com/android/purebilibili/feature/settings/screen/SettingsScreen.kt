@@ -111,6 +111,7 @@ fun SettingsScreen(
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var updateStatusText by remember { mutableStateOf("点击检查") }
     var updateCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
+    var changelogCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
     
     // [新增] 黑名单页面状态
     var showBlockedList by remember { mutableStateOf(false) }
@@ -192,7 +193,10 @@ fun SettingsScreen(
     val onGithubClick: () -> Unit = { uriHandler.openUri(OFFICIAL_GITHUB_URL) }
     val onDisclaimerClick: () -> Unit = { showReleaseDisclaimerDialog = true }
     val onBlockedListClickAction: () -> Unit = { showBlockedList = true }
-    suspend fun runUpdateCheck(silent: Boolean) {
+    suspend fun runUpdateCheck(
+        silent: Boolean,
+        shouldOpenReleaseNotes: Boolean = false
+    ) {
         isCheckingUpdate = true
         if (!silent) {
             updateStatusText = "检查中..."
@@ -200,13 +204,21 @@ fun SettingsScreen(
         val result = AppUpdateChecker.check(com.android.purebilibili.BuildConfig.VERSION_NAME)
         result.onSuccess { info ->
             updateStatusText = info.message
-            if (info.isUpdateAvailable) {
-                updateCheckResult = info
-            } else if (!silent) {
-                Toast.makeText(context, info.message, Toast.LENGTH_SHORT).show()
+            when (resolveAppUpdateDialogMode(info.isUpdateAvailable, shouldOpenReleaseNotes)) {
+                AppUpdateDialogMode.UPDATE_AVAILABLE -> {
+                    updateCheckResult = info
+                }
+                AppUpdateDialogMode.CHANGELOG -> {
+                    changelogCheckResult = info
+                }
+                AppUpdateDialogMode.NONE -> {
+                    if (!silent) {
+                        Toast.makeText(context, info.message, Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }.onFailure { error ->
-            if (!silent) {
+            if (!silent || shouldOpenReleaseNotes) {
                 updateStatusText = "检查失败"
                 Toast.makeText(context, error.message ?: "更新检查失败，请稍后重试", Toast.LENGTH_SHORT).show()
             }
@@ -217,7 +229,24 @@ fun SettingsScreen(
         if (isCheckingUpdate) {
             Toast.makeText(context, "正在检查更新，请稍候", Toast.LENGTH_SHORT).show()
         } else {
-            scope.launch { runUpdateCheck(silent = false) }
+            scope.launch {
+                runUpdateCheck(
+                    silent = false,
+                    shouldOpenReleaseNotes = false
+                )
+            }
+        }
+    }
+    val onViewReleaseNotesAction: () -> Unit = {
+        if (isCheckingUpdate) {
+            Toast.makeText(context, "正在检查更新，请稍候", Toast.LENGTH_SHORT).show()
+        } else {
+            scope.launch {
+                runUpdateCheck(
+                    silent = true,
+                    shouldOpenReleaseNotes = true
+                )
+            }
         }
     }
 
@@ -386,6 +415,45 @@ fun SettingsScreen(
         )
     }
 
+    changelogCheckResult?.let { info ->
+        val resolvedReleaseNotes = remember(info.releaseNotes) {
+            resolveUpdateReleaseNotesText(info.releaseNotes)
+        }
+        val releaseNotesScrollState = rememberScrollState()
+        com.android.purebilibili.core.ui.IOSAlertDialog(
+            onDismissRequest = { changelogCheckResult = null },
+            title = { Text("更新日志 v${info.latestVersion}") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "当前版本 v${info.currentVersion}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = resolvedReleaseNotes,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                            .verticalScroll(releaseNotesScrollState)
+                    )
+                }
+            },
+            confirmButton = {
+                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                    changelogCheckResult = null
+                    uriHandler.openUri(info.releaseUrl)
+                }) { Text("查看发布页") }
+            },
+            dismissButton = {
+                com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
+                    changelogCheckResult = null
+                }) { Text("关闭") }
+            }
+        )
+    }
+
     val onOpenLinksAction: () -> Unit = {
         try {
             val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -425,6 +493,7 @@ fun SettingsScreen(
                     onDisclaimerClick = onDisclaimerClick,
                     onGithubClick = onGithubClick,
                     onCheckUpdateClick = onCheckUpdateAction,
+                    onViewReleaseNotesClick = onViewReleaseNotesAction,
                     onVersionClick = onVersionClickAction,
                     onReplayOnboardingClick = onReplayOnboardingClick,
                     onTipsClick = onTipsClick, // [Feature]
@@ -485,6 +554,7 @@ fun SettingsScreen(
                     onDisclaimerClick = onDisclaimerClick,
                     onGithubClick = onGithubClick,
                     onCheckUpdateClick = onCheckUpdateAction,
+                    onViewReleaseNotesClick = onViewReleaseNotesAction,
                     onVersionClick = onVersionClickAction,
                     onTipsClick = onTipsClick, // [Feature]
                     onReplayOnboardingClick = onReplayOnboardingClick,
@@ -596,6 +666,7 @@ private fun MobileSettingsLayout(
     onDisclaimerClick: () -> Unit,
     onGithubClick: () -> Unit,
     onCheckUpdateClick: () -> Unit,
+    onViewReleaseNotesClick: () -> Unit,
     onVersionClick: () -> Unit,
     onReplayOnboardingClick: () -> Unit,
     onTelegramClick: () -> Unit,
@@ -763,6 +834,7 @@ private fun MobileSettingsLayout(
                                     onLicenseClick = onLicenseClick,
                                     onGithubClick = onGithubClick,
                                     onCheckUpdateClick = onCheckUpdateClick,
+                                    onViewReleaseNotesClick = onViewReleaseNotesClick,
                                     autoCheckUpdateEnabled = autoCheckUpdateEnabled,
                                     onAutoCheckUpdateChange = onAutoCheckUpdateChange,
                                     onVersionClick = onVersionClick,

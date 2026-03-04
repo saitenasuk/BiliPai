@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 /**
  * 瀑布流/交错式入场动画
@@ -28,6 +29,12 @@ data class StaggeredEntranceMotionPolicy(
     val scaleDurationMs: Int,
     val initialScale: Float,
     val offsetFactor: Float
+)
+
+internal data class StaggeredEntranceInitialState(
+    val alpha: Float,
+    val translationY: Float,
+    val scale: Float
 )
 
 fun resolveStaggeredEntranceMotionPolicy(
@@ -66,6 +73,36 @@ fun resolveStaggeredEntranceMotionPolicy(
     }
 }
 
+internal fun resolveStaggeredEntranceInitialState(
+    visible: Boolean,
+    offsetDistance: Float,
+    policy: StaggeredEntranceMotionPolicy
+): StaggeredEntranceInitialState {
+    return if (visible) {
+        StaggeredEntranceInitialState(
+            alpha = 1f,
+            translationY = 0f,
+            scale = 1f
+        )
+    } else {
+        StaggeredEntranceInitialState(
+            alpha = 0f,
+            translationY = offsetDistance * policy.offsetFactor,
+            scale = policy.initialScale
+        )
+    }
+}
+
+internal fun shouldRunStaggeredEntranceAnimation(
+    visible: Boolean,
+    currentAlpha: Float,
+    currentTranslationY: Float,
+    currentScale: Float
+): Boolean {
+    if (!visible) return false
+    return currentAlpha < 0.999f || abs(currentTranslationY) > 0.5f || currentScale < 0.999f
+}
+
 fun Modifier.staggeredEntrance(
     index: Int,
     visible: Boolean,
@@ -73,46 +110,65 @@ fun Modifier.staggeredEntrance(
     motionTier: MotionTier = MotionTier.Normal
 ): Modifier = composed {
     val policy = remember(motionTier) { resolveStaggeredEntranceMotionPolicy(motionTier) }
-    val alpha = remember { Animatable(0f) }
-    val translationY = remember(offsetDistance, policy.offsetFactor) {
-        Animatable(offsetDistance * policy.offsetFactor)
+    val initialState = remember(offsetDistance, policy) {
+        resolveStaggeredEntranceInitialState(
+            visible = visible,
+            offsetDistance = offsetDistance,
+            policy = policy
+        )
     }
-    val scale = remember(policy.initialScale) { Animatable(policy.initialScale) }
+    val alpha = remember { Animatable(initialState.alpha) }
+    val translationY = remember { Animatable(initialState.translationY) }
+    val scale = remember { Animatable(initialState.scale) }
 
     LaunchedEffect(visible) {
-        if (visible) {
-            // Delay based on index for the staggered effect
-            val delayMs = (index * policy.delayStepMs).coerceAtMost(policy.maxDelayMs).toLong()
-            delay(delayMs)
+        if (!visible) {
+            alpha.snapTo(0f)
+            translationY.snapTo(offsetDistance * policy.offsetFactor)
+            scale.snapTo(policy.initialScale)
+            return@LaunchedEffect
+        }
+        if (!shouldRunStaggeredEntranceAnimation(
+                visible = visible,
+                currentAlpha = alpha.value,
+                currentTranslationY = translationY.value,
+                currentScale = scale.value
+            )
+        ) {
+            return@LaunchedEffect
+        }
 
-            // Parallel animations
-            launch {
-                alpha.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(
-                        durationMillis = policy.alphaDurationMs,
-                        easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f) // Ease-out
-                    )
+        // Delay based on index for the staggered effect
+        val delayMs = (index * policy.delayStepMs).coerceAtMost(policy.maxDelayMs).toLong()
+        delay(delayMs)
+
+        // Parallel animations
+        launch {
+            alpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = policy.alphaDurationMs,
+                    easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f) // Ease-out
                 )
-            }
-            launch {
-                translationY.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(
-                        durationMillis = policy.translationDurationMs,
-                        easing = CubicBezierEasing(0.18f, 0.8f, 0.2f, 1.0f) // Fast-out, slow-in
-                    )
+            )
+        }
+        launch {
+            translationY.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(
+                    durationMillis = policy.translationDurationMs,
+                    easing = CubicBezierEasing(0.18f, 0.8f, 0.2f, 1.0f) // Fast-out, slow-in
                 )
-            }
-            launch {
-                scale.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(
-                        durationMillis = policy.scaleDurationMs,
-                        easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f)
-                    )
+            )
+        }
+        launch {
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = policy.scaleDurationMs,
+                    easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f)
                 )
-            }
+            )
         }
     }
 

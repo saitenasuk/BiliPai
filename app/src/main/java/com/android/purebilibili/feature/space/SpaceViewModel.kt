@@ -1,11 +1,13 @@
 package com.android.purebilibili.feature.space
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.data.repository.ActionRepository
+import com.android.purebilibili.data.repository.FavoriteRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +37,8 @@ sealed class SpaceUiState {
         val series: List<SeriesItem> = emptyList(),
         val seasonArchives: Map<Long, List<SeasonArchiveItem>> = emptyMap(),  // season_id -> videos
         val seriesArchives: Map<Long, List<SeriesArchiveItem>> = emptyMap(),   // series_id -> videos
+        val createdFavoriteFolders: List<FavFolder> = emptyList(),
+        val collectedFavoriteFolders: List<FavFolder> = emptyList(),
         //  主页 Tab
         val topVideo: SpaceTopArcData? = null,
         val notice: String = "",
@@ -58,12 +62,19 @@ sealed class SpaceUiState {
     data class Error(val message: String) : SpaceUiState()
 }
 
-class SpaceViewModel : ViewModel() {
+class SpaceViewModel(
+    private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
     
     private val spaceApi = NetworkModule.spaceApi
     
     private val _uiState = MutableStateFlow<SpaceUiState>(SpaceUiState.Loading)
     val uiState = _uiState.asStateFlow()
+
+    private val _selectedMainTab = MutableStateFlow(
+        savedStateHandle.get<Int>(KEY_SELECTED_MAIN_TAB) ?: 2
+    )
+    val selectedMainTab = _selectedMainTab.asStateFlow()
     
     private var currentMid: Long = 0
     private var currentPage = 1
@@ -119,14 +130,22 @@ class SpaceViewModel : ViewModel() {
                 val relationDeferred = async { fetchRelationStat(mid) }
                 val upStatDeferred = async { fetchUpStat(mid) }
                 val videosDeferred = async { fetchSpaceVideos(mid, 1, cachedImgKey, cachedSubKey) }
+                val cardTopPhotoDeferred = async { fetchUserCardSpaceTopPhoto(mid) }
                 
                 
-                val userInfo = infoDeferred.await()
+                val userInfoRaw = infoDeferred.await()
+                val userCardTopPhoto = cardTopPhotoDeferred.await()
                 val relationStat = relationDeferred.await()
                 val upStat = upStatDeferred.await()
                 val videosResult = videosDeferred.await()
                 
-                if (userInfo != null) {
+                if (userInfoRaw != null) {
+                    val resolvedTopPhoto = resolveSpaceTopPhoto(
+                        topPhoto = userInfoRaw.topPhoto,
+                        cardLargePhoto = userCardTopPhoto.first,
+                        cardSmallPhoto = userCardTopPhoto.second
+                    )
+                    val userInfo = userInfoRaw.copy(topPhoto = resolvedTopPhoto)
                     val videos = videosResult?.list?.vlist ?: emptyList()
                     
                     //  调试日志
@@ -143,6 +162,9 @@ class SpaceViewModel : ViewModel() {
                     val seasons = seasonsSeriesResult?.items_lists?.seasons_list ?: emptyList()
                     val series = seasonsSeriesResult?.items_lists?.series_list ?: emptyList()
                     com.android.purebilibili.core.util.Logger.d("SpaceVM", " Seasons: ${seasons.size}, Series: ${series.size}")
+
+                    val createdFavoriteFoldersDeferred = async { fetchCreatedFavoriteFolders(mid) }
+                    val collectedFavoriteFoldersDeferred = async { fetchCollectedFavoriteFolders(mid) }
                     
                     //  预加载每个合集的前几个视频
                     val seasonArchives = mutableMapOf<Long, List<SeasonArchiveItem>>()
@@ -161,6 +183,9 @@ class SpaceViewModel : ViewModel() {
                             seriesArchives[seriesItem.meta.series_id] = archives
                         }
                     }
+
+                    val createdFavoriteFolders = createdFavoriteFoldersDeferred.await()
+                    val collectedFavoriteFolders = collectedFavoriteFoldersDeferred.await()
                     
                     _uiState.value = SpaceUiState.Success(
                         userInfo = userInfo,
@@ -173,7 +198,9 @@ class SpaceViewModel : ViewModel() {
                         seasons = seasons,
                         series = series,
                         seasonArchives = seasonArchives,
-                        seriesArchives = seriesArchives
+                        seriesArchives = seriesArchives,
+                        createdFavoriteFolders = createdFavoriteFolders,
+                        collectedFavoriteFolders = collectedFavoriteFolders
                     )
                 } else {
                     _uiState.value = SpaceUiState.Error("获取用户信息失败")
@@ -183,6 +210,11 @@ class SpaceViewModel : ViewModel() {
                 _uiState.value = SpaceUiState.Error(e.message ?: "加载失败")
             }
         }
+    }
+
+    fun selectMainTab(tab: Int) {
+        _selectedMainTab.value = tab
+        savedStateHandle[KEY_SELECTED_MAIN_TAB] = tab
     }
     
     fun loadMoreVideos() {
@@ -246,6 +278,20 @@ class SpaceViewModel : ViewModel() {
         } catch (e: Exception) {
             android.util.Log.e("SpaceVM", "fetchSpaceInfo error: ${e.message}", e)
             null
+        }
+    }
+
+    private suspend fun fetchUserCardSpaceTopPhoto(mid: Long): Pair<String, String> {
+        return try {
+            val response = NetworkModule.api.getUserCard(mid = mid, photo = true)
+            if (response.code == 0) {
+                val space = response.data?.space
+                Pair(space?.l_img.orEmpty(), space?.s_img.orEmpty())
+            } else {
+                Pair("", "")
+            }
+        } catch (_: Exception) {
+            Pair("", "")
         }
     }
     
@@ -443,6 +489,22 @@ class SpaceViewModel : ViewModel() {
             android.util.Log.e("SpaceVM", "fetchSeriesArchives error: ${e.message}", e)
             null
         }
+    }
+
+    private suspend fun fetchCreatedFavoriteFolders(mid: Long): List<FavFolder> {
+        return FavoriteRepository
+            .getFavFolders(mid)
+            .getOrNull()
+            .orEmpty()
+            .let(::resolveSpaceFavoriteFoldersForDisplay)
+    }
+
+    private suspend fun fetchCollectedFavoriteFolders(mid: Long): List<FavFolder> {
+        return FavoriteRepository
+            .getCollectedFavFolders(mid = mid, pn = 1, ps = 40, platform = "web")
+            .getOrNull()
+            .orEmpty()
+            .let(::resolveSpaceFavoriteFoldersForDisplay)
     }
     
     // ==========  主页 Tab 数据加载 ==========
@@ -770,6 +832,10 @@ class SpaceViewModel : ViewModel() {
 
             _isFollowGroupsLoading.value = false
         }
+    }
+
+    private companion object {
+        const val KEY_SELECTED_MAIN_TAB = "space_selected_main_tab"
     }
 
 }

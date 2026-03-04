@@ -27,3 +27,15 @@ internal fun shouldForceDanmakuDataResync(videoSpeed: Float, tickCount: Int): Bo
     }
     return tickCount % interval == 0
 }
+
+internal inline fun executeExplicitDanmakuResync(
+    pause: () -> Unit,
+    setData: () -> Unit,
+    start: () -> Unit
+) {
+    // DanmakuRenderEngine start() is ignored while already playing.
+    // Force a deterministic restart order for explicit timeline jumps.
+    pause()
+    setData()
+    start()
+}

@@ -3,6 +3,7 @@ package com.android.purebilibili.core.ui.animation
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class StaggeredEntranceMotionPolicyTest {
@@ -31,5 +32,32 @@ class StaggeredEntranceMotionPolicyTest {
 
         assertTrue(enhanced.offsetFactor >= normal.offsetFactor)
         assertTrue(enhanced.initialScale < normal.initialScale)
+    }
+
+    @Test
+    fun initialState_shouldStartAtFinalValuesWhenAlreadyVisible() {
+        val policy = resolveStaggeredEntranceMotionPolicy(MotionTier.Normal)
+
+        val state = resolveStaggeredEntranceInitialState(
+            visible = true,
+            offsetDistance = 50f,
+            policy = policy
+        )
+
+        assertEquals(1f, state.alpha)
+        assertEquals(0f, state.translationY)
+        assertEquals(1f, state.scale)
+    }
+
+    @Test
+    fun shouldAnimate_falseWhenAlreadyAtFinalState() {
+        assertFalse(
+            shouldRunStaggeredEntranceAnimation(
+                visible = true,
+                currentAlpha = 1f,
+                currentTranslationY = 0f,
+                currentScale = 1f
+            )
+        )
     }
 }

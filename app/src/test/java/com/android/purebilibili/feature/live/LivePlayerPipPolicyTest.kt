@@ -18,19 +18,33 @@ class LivePlayerPipPolicyTest {
         assertFalse(
             shouldPauseLivePlaybackOnPause(
                 isInPictureInPictureMode = true,
-                isPipRequested = false
+                isPipRequested = false,
+                shouldKeepPlayingInBackground = false
             )
         )
         assertFalse(
             shouldPauseLivePlaybackOnPause(
                 isInPictureInPictureMode = false,
-                isPipRequested = true
+                isPipRequested = true,
+                shouldKeepPlayingInBackground = false
             )
         )
         assertTrue(
             shouldPauseLivePlaybackOnPause(
                 isInPictureInPictureMode = false,
-                isPipRequested = false
+                isPipRequested = false,
+                shouldKeepPlayingInBackground = false
+            )
+        )
+    }
+
+    @Test
+    fun `live playback should keep playing when background audio policy allows`() {
+        assertFalse(
+            shouldPauseLivePlaybackOnPause(
+                isInPictureInPictureMode = false,
+                isPipRequested = false,
+                shouldKeepPlayingInBackground = true
             )
         )
     }

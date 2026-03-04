@@ -32,6 +32,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.store.BottomProgressBehavior
+import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSTeal
@@ -566,6 +567,8 @@ fun PlaybackSettingsContent(
                     //  [新增] 自动播放下一个
                     val autoPlayEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getAutoPlay(context).collectAsState(initial = true)
+                    val resumePlaybackPromptEnabled by com.android.purebilibili.core.store.SettingsManager
+                        .getResumePlaybackPromptEnabled(context).collectAsState(initial = true)
                     val playbackCompletionBehavior by com.android.purebilibili.core.store.SettingsManager
                         .getPlaybackCompletionBehavior(context)
                         .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
@@ -597,6 +600,24 @@ fun PlaybackSettingsContent(
                                 }
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.ArrowTriangle2Circlepath,
+                            title = "续播弹窗提示",
+                            subtitle = if (resumePlaybackPromptEnabled) {
+                                "检测到历史进度时仅提醒一次"
+                            } else {
+                                "关闭后不再弹出“继续播放”提示"
+                            },
+                            checked = resumePlaybackPromptEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setResumePlaybackPromptEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSTeal
                         )
                         Divider()
                         //  [新增] 自动播放下一个视频
@@ -862,6 +883,9 @@ fun PlaybackSettingsContent(
                         val fullscreenMode by com.android.purebilibili.core.store.SettingsManager
                             .getFullscreenMode(context)
                             .collectAsState(initial = com.android.purebilibili.core.store.FullscreenMode.AUTO)
+                        val fullscreenAspectRatio by com.android.purebilibili.core.store.SettingsManager
+                            .getFullscreenAspectRatio(context)
+                            .collectAsState(initial = FullscreenAspectRatio.FIT)
                         val fullscreenModeSubtitle = if (autoRotateEnabled) {
                             "${fullscreenMode.description}；已开启自动横竖屏，日常会跟随设备方向自动进退全屏"
                         } else {
@@ -910,6 +934,19 @@ fun PlaybackSettingsContent(
                                 scope.launch {
                                     com.android.purebilibili.core.store.SettingsManager
                                         .setFullscreenMode(context, mode)
+                                }
+                            }
+                        )
+                        Divider()
+                        IOSSlidingSegmentedSetting(
+                            title = "固定全屏比例：${fullscreenAspectRatio.label}",
+                            subtitle = fullscreenAspectRatio.description,
+                            options = resolveFullscreenAspectRatioSegmentOptions(),
+                            selectedValue = fullscreenAspectRatio,
+                            onSelectionChange = { ratio ->
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setFullscreenAspectRatio(context, ratio)
                                 }
                             }
                         )
@@ -1072,6 +1109,8 @@ fun PlaybackSettingsContent(
                     // 🚀 [新增] 自动最高画质
                     val autoHighestQuality by com.android.purebilibili.core.store.SettingsManager
                         .getAutoHighestQuality(context).collectAsState(initial = false)
+                    val directedTrafficEnabled by com.android.purebilibili.core.store.SettingsManager
+                        .getBiliDirectedTrafficEnabled(context).collectAsState(initial = false)
                     
                     // 画质选项列表
                     val qualityOptions = listOf(
@@ -1104,6 +1143,26 @@ fun PlaybackSettingsContent(
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
                         
+                        Divider()
+
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.ChartBar,
+                            title = "B站定向流量支持",
+                            subtitle = if (directedTrafficEnabled) {
+                                "移动数据下优先使用 App 播放链路（实验性）"
+                            } else {
+                                "若套餐含 B 站定向流量，建议开启"
+                            },
+                            checked = directedTrafficEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setBiliDirectedTrafficEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSTeal
+                        )
+
                         Divider()
 
                         IOSSlidingSegmentedSetting(

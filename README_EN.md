@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-02-27 · Synced to v6.3.2 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-03 · Synced to v6.5.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.3.2-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.5.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -54,7 +54,7 @@
 | **Background Play** | Continue listening when screen is off or in background |
 | **Playback Order** | Supports Stop After Current / In-order / Single Loop / List Loop / Auto Continue, with quick toggle in landscape and portrait |
 | **Comment Copy UX** | Long-press opens selectable-copy panel so users can drag-select exact comment text (including rich text scenarios) |
-| **Playback History** | Automatically resume playback from where you left off |
+| **Playback History** | Automatically resume playback, with a toggle and one-time prompt per target |
 | **TV Login** | Scan QR code to login as TV client to unlock high quality |
 | **Plugin System** | Built-in SponsorBlock, AdBlock, Danmaku Enhancement, Eye Protection, and Today Watch plugins |
 
@@ -372,13 +372,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 - [x] Landscape player controls upgrade (subtitle panel + more panel + play-order quick switch)
 - [x] Shared Element Transitions + return-to-home animation optimization
 - [x] Tablet/Foldable Support (sidebar + bottom bar layout)
-- [x] In-app update checks (manual check + auto-check toggle + startup prompt)
+- [x] In-app update checks (manual + auto-check on app entry + startup prompt + release notes viewer)
 - [x] Plugin System Core
 - [x] Built-in Plugins
 
 ### 🚧 WIP
 
-- [ ] In-app update UX polish (copywriting, check cadence, download-jump feedback)
 - [ ] Wiki and module-level documentation expansion
 
 ### 📋 Planned
@@ -394,13 +393,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v6.3.2 · 2026-02-27)
+### Latest (v6.5.0 · 2026-03-03)
 
-- 🖼️ **Preview Visual Upgrade**: Comment image preview now uses top caption placement so text no longer blocks image content; text switching adds directional 3D-like transition.
-- 💬 **Selectable Copy UX**: Long-press in comments/dynamic text opens a selectable copy panel, allowing drag selection instead of forced full-text copy.
-- 🔊 **Silent-After-Resume Fix**: Fixed occasional no-audio issue when returning from background without explicit pause, with foreground audible-state recovery.
-- 🧭 **Unified Preview Metadata Pipeline**: Dynamic feed, video comments, sub-comments, and tablet layouts now share the same preview text metadata and transition flow.
-- 🛡️ **Crash/Tracking Hardening**: Improved low-overhead live crash tracing and analytics tracking policy coverage with targeted tests.
+- 🔄 **Update Flow Improvements**: App now checks updates on entry, and settings page can open latest release notes directly.
+- ▶️ **Resume Prompt Control**: Added a toggle for resume-playback prompt, with default one-time prompt per target to reduce repeated interruptions.
+- 🧪 **Policy Test Coverage Added**: Added tests for update dialog policies and resume-prompt policies to reduce regressions.
 
 ---
 

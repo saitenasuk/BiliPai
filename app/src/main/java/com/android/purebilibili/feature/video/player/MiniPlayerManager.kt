@@ -47,6 +47,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.VideoActivity
+import com.android.purebilibili.feature.video.state.isPlaybackActiveForLifecycle
 
 private const val TAG = "MiniPlayerManager"
 private const val NOTIFICATION_ID = 1002
@@ -110,11 +111,22 @@ internal fun shouldHandleNavigationLeaveForBvid(
 internal fun shouldContinuePlaybackDuringPause(
     isMiniMode: Boolean,
     isPip: Boolean,
-    isBackgroundAudio: Boolean,
-    hasRecentUserLeaveHint: Boolean
+    isBackgroundAudio: Boolean
 ): Boolean {
     if (isMiniMode || isPip) return true
-    return isBackgroundAudio && hasRecentUserLeaveHint
+    return isBackgroundAudio
+}
+
+internal fun shouldPauseBackgroundBuffering(
+    isPlaying: Boolean,
+    playWhenReady: Boolean,
+    playbackState: Int
+): Boolean {
+    return !isPlaybackActiveForLifecycle(
+        isPlaying = isPlaying,
+        playWhenReady = playWhenReady,
+        playbackState = playbackState
+    )
 }
 
 internal fun resolveNotificationIsPlaying(
@@ -313,8 +325,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
         val currentPlayer = player ?: return
         
         // 🔧 [优化] 如果未在播放，直接暂停/停止缓冲，避免浪费 CDN 请求
-        val wasPlaying = currentPlayer.isPlaying
-        if (!wasPlaying) {
+        val shouldPauseBuffering = shouldPauseBackgroundBuffering(
+            isPlaying = currentPlayer.isPlaying,
+            playWhenReady = currentPlayer.playWhenReady,
+            playbackState = currentPlayer.playbackState
+        )
+        if (shouldPauseBuffering) {
             currentPlayer.pause()
             Logger.d(TAG, "🔋 后台模式：未播放，暂停缓冲节省流量")
             return
@@ -1003,6 +1019,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
             cachedIsPlaying = isPlaying
         )
         duration = 0L  // 直播没有固定时长
+
+        // 📺 直播也需要推送媒体元数据与前台通知，避免后台被系统快速回收。
+        updateMediaMetadata(
+            title = title.ifBlank { "直播中" },
+            artist = uname.ifBlank { "直播" },
+            coverUrl = cover
+        )
     }
     
     /**

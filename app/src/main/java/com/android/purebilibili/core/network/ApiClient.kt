@@ -80,6 +80,14 @@ interface BilibiliApi {
         @Query("rid") rid: Long? = null
     ): FavFolderResponse
 
+    @GET("x/v3/fav/folder/collected/list")
+    suspend fun getCollectedFavFolders(
+        @Query("up_mid") mid: Long,
+        @Query("pn") pn: Int = 1,
+        @Query("ps") ps: Int = 20,
+        @Query("platform") platform: String = "web"
+    ): FavFolderResponse
+
     // [新增] 创建收藏夹
     @retrofit2.http.FormUrlEncoded
     @retrofit2.http.POST("x/v3/fav/folder/add")
@@ -1500,11 +1508,15 @@ object NetworkModule {
                 if (!bvid.isNullOrEmpty()) {
                     referer = "https://www.bilibili.com/video/$bvid"
                 }
-                
+
+                val isWbiEndpoint = url.encodedPath.contains("/wbi/")
                 val builder = original.newBuilder()
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-                    .header("Referer", referer)
                     .header("Origin", "https://www.bilibili.com")
+
+                if (!isWbiEndpoint) {
+                    builder.header("Referer", referer)
+                }
                 
                 val request = builder.build()
                 try {

@@ -35,8 +35,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,6 +47,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.data.model.CommentFraudStatus
+import com.android.purebilibili.feature.video.ui.components.CommentFraudDetectingBanner
+import com.android.purebilibili.feature.video.ui.components.CommentFraudResultDialog
 import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
@@ -89,6 +94,36 @@ fun PortraitCommentSheet(
         if (visible) {
              commentViewModel.init(aid, upMid = upMid, preferredSortMode = preferredSortMode)
         }
+    }
+
+    // [新增] 评论反诈检测结果弹窗状态
+    var fraudDialogStatus by remember { mutableStateOf<CommentFraudStatus?>(null) }
+    LaunchedEffect(Unit) {
+        commentViewModel.fraudEvent.collect { status ->
+            // 只在非正常状态时弹窗
+            if (status != CommentFraudStatus.NORMAL) {
+                fraudDialogStatus = status
+            }
+        }
+    }
+
+    // 检测结果弹窗
+    fraudDialogStatus?.let { status ->
+        CommentFraudResultDialog(
+            status = status,
+            onDismiss = {
+                fraudDialogStatus = null
+                commentViewModel.dismissFraudResult()
+            },
+            onDeleteComment = if (status == CommentFraudStatus.SHADOW_BANNED) {
+                {
+                    val rpid = commentViewModel.commentState.value.fraudDetectRpid
+                    if (rpid > 0) {
+                        commentViewModel.startDissolve(rpid)
+                    }
+                }
+            } else null
+        )
     }
 
     // 整个覆盖层动画 (Fade In/Out)
@@ -177,6 +212,9 @@ private fun MainCommentList(
             upOnly = state.upOnlyFilter,
             onUpOnlyToggle = { viewModel.toggleUpOnly() }
         )
+
+        // [新增] 评论反诈检测中提示条
+        CommentFraudDetectingBanner(isDetecting = state.isDetectingFraud)
         
         if (state.isRepliesLoading && state.replies.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

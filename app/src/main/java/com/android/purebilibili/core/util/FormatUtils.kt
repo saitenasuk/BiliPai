@@ -13,25 +13,29 @@ object FormatUtils {
     }
 
     /**
-     * 将秒数格式化为 mm:ss
-     */
-    /**
-     * 将秒数格式化为 mm:ss
+     * 将秒数格式化为 HH:MM:SS
      */
     fun formatDuration(seconds: Int): String {
-        val min = seconds / 60
-        val sec = seconds % 60
-        return String.format("%02d:%02d", min, sec)
+        return formatDurationFromSeconds(seconds.toLong())
     }
 
     /**
-     * 将毫秒数格式化为 mm:ss
+     * 将毫秒数格式化为 HH:MM:SS
      */
     fun formatDuration(milliseconds: Long): String {
-        val seconds = milliseconds / 1000
-        val min = seconds / 60
-        val sec = seconds % 60
-        return String.format("%02d:%02d", min, sec)
+        return formatDurationFromSeconds(milliseconds / 1000L)
+    }
+
+    private fun formatDurationFromSeconds(rawSeconds: Long): String {
+        val seconds = rawSeconds.coerceAtLeast(0L)
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        val secs = seconds % 60
+        return if (hours > 0) {
+            String.format("%02d:%02d:%02d", hours, minutes, secs)
+        } else {
+            String.format("%02d:%02d", minutes, secs)
+        }
     }
 
     /**

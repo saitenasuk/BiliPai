@@ -161,6 +161,105 @@ internal data class ExternalPlaylistSyncDecision(
     val matchedIndex: Int = -1
 )
 
+data class ResumePlaybackSuggestion(
+    val targetBvid: String,
+    val targetCid: Long,
+    val targetLabel: String,
+    val positionMs: Long
+)
+
+private data class ResumeProgressSource(
+    val bvid: String,
+    val cid: Long,
+    val label: String
+)
+
+internal fun resolveResumePlaybackSuggestion(
+    requestCid: Long,
+    loadedInfo: ViewInfo,
+    minResumePositionMs: Long = 15_000L,
+    minDeltaFromCurrentMs: Long = 8_000L,
+    progressLookup: (bvid: String, cid: Long) -> Long
+): ResumePlaybackSuggestion? {
+    val firstCid = loadedInfo.pages.firstOrNull { it.cid > 0L }?.cid
+        ?: loadedInfo.cid.takeIf { it > 0L }
+        ?: 0L
+    if (requestCid > 0L && requestCid != firstCid) return null
+
+    val currentBvid = loadedInfo.bvid
+    val currentCid = loadedInfo.cid
+    val currentPositionMs = if (currentBvid.isNotBlank() && currentCid > 0L) {
+        progressLookup(currentBvid, currentCid).coerceAtLeast(0L)
+    } else {
+        0L
+    }
+
+    val pageSources = loadedInfo.pages.mapIndexedNotNull { index, page ->
+        val cid = page.cid.takeIf { it > 0L } ?: return@mapIndexedNotNull null
+        val pageNo = page.page.takeIf { it > 0 } ?: (index + 1)
+        ResumeProgressSource(
+            bvid = loadedInfo.bvid,
+            cid = cid,
+            label = "P$pageNo"
+        )
+    }
+
+    val seasonEpisodeSources = loadedInfo.ugc_season
+        ?.sections
+        .orEmpty()
+        .flatMap { section -> section.episodes }
+        .mapIndexedNotNull { index, episode ->
+            val bvid = episode.bvid.trim()
+            val cid = episode.cid
+            if (bvid.isBlank() || cid <= 0L) return@mapIndexedNotNull null
+            val title = episode.title.trim().ifBlank { episode.arc?.title?.trim().orEmpty() }
+            ResumeProgressSource(
+                bvid = bvid,
+                cid = cid,
+                label = if (title.isBlank()) "第${index + 1}集" else "第${index + 1}集 $title"
+            )
+        }
+
+    val candidates = (pageSources + seasonEpisodeSources)
+        .distinctBy { source -> "${source.bvid}#${source.cid}" }
+        .asSequence()
+        .filterNot { source ->
+            source.bvid == currentBvid && source.cid == currentCid
+        }
+        .mapNotNull { source ->
+            val positionMs = progressLookup(source.bvid, source.cid).coerceAtLeast(0L)
+            if (positionMs < minResumePositionMs) {
+                null
+            } else {
+                ResumePlaybackSuggestion(
+                    targetBvid = source.bvid,
+                    targetCid = source.cid,
+                    targetLabel = source.label,
+                    positionMs = positionMs
+                )
+            }
+        }
+        .toList()
+
+    val bestCandidate = candidates.maxByOrNull { it.positionMs } ?: return null
+    if (bestCandidate.positionMs <= currentPositionMs + minDeltaFromCurrentMs) return null
+    return bestCandidate
+}
+
+internal fun resolveResumePlaybackPromptKey(
+    suggestion: ResumePlaybackSuggestion
+): String = "${suggestion.targetBvid}#${suggestion.targetCid}"
+
+internal fun shouldShowResumePlaybackPrompt(
+    suggestion: ResumePlaybackSuggestion?,
+    promptEnabled: Boolean,
+    hasPromptedBefore: (String) -> Boolean
+): Boolean {
+    if (!promptEnabled) return false
+    val candidate = suggestion ?: return false
+    return !hasPromptedBefore(resolveResumePlaybackPromptKey(candidate))
+}
+
 internal enum class AudioNextPlaybackStrategy {
     PLAY_EXTERNAL_PLAYLIST,
     PAGE_THEN_SEASON_THEN_RELATED
@@ -484,6 +583,9 @@ class PlayerViewModel : ViewModel() {
     
     private val _toastEvent = Channel<String>()
     val toastEvent = _toastEvent.receiveAsFlow()
+
+    private val _resumePlaybackSuggestion = MutableStateFlow<ResumePlaybackSuggestion?>(null)
+    val resumePlaybackSuggestion = _resumePlaybackSuggestion.asStateFlow()
     
     // Celebration animations
     private val _likeBurstVisible = MutableStateFlow(false)
@@ -1306,6 +1408,7 @@ class PlayerViewModel : ViewModel() {
         cid: Long = 0L
     ) {
         if (bvid.isBlank()) return
+        _resumePlaybackSuggestion.value = null
         bootstrapContextIfNeeded()
         Logger.d(
             "PlayerVM",
@@ -1582,6 +1685,10 @@ class PlayerViewModel : ViewModel() {
                             aiAudio = result.aiAudio,
                             currentAudioLang = result.curAudioLang,
                             videoDurationMs = result.duration
+                        )
+                        maybeEmitResumePlaybackSuggestion(
+                            requestCid = cid,
+                            loadedInfo = result.info
                         )
 
                         // 首帧优先：非关键网络请求延后触发，减少启动时网络争用。
@@ -3855,7 +3962,8 @@ class PlayerViewModel : ViewModel() {
             isLoggedIn = current.isLoggedIn,
             isVip = current.isVip,
             isHdrSupported = isHdrSupported,
-            isDolbyVisionSupported = isDolbyVisionSupported
+            isDolbyVisionSupported = isDolbyVisionSupported,
+            serverAdvertisedQualities = current.qualityIds
         )
         
         when (permissionResult) {
@@ -3916,7 +4024,9 @@ class PlayerViewModel : ViewModel() {
                     cachedDashVideos = result.cachedDashVideos.ifEmpty { current.cachedDashVideos },
                     cachedDashAudios = result.cachedDashAudios.ifEmpty { current.cachedDashAudios }
                 )
-                val label = current.qualityLabels.getOrNull(current.qualityIds.indexOf(result.actualQuality)) ?: "${result.actualQuality}"
+                val label = current.qualityLabels.getOrNull(
+                    current.qualityIds.indexOf(result.actualQuality)
+                ) ?: qualityManager.getQualityLabel(result.actualQuality)
                 toast(
                     if (result.wasFallback) {
                         "目标清晰度不可用，已切换至 $label"
@@ -3939,6 +4049,7 @@ class PlayerViewModel : ViewModel() {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         val page = current.info.pages.getOrNull(pageIndex) ?: return
         if (page.cid == currentCid) { toast("\u5df2\u662f\u5f53\u524d\u5206P"); return }
+        _resumePlaybackSuggestion.value = null
         subtitleLoadToken += 1
         val subtitleClearedState = clearSubtitleFields(current)
         val previousCid = currentCid
@@ -4001,6 +4112,74 @@ class PlayerViewModel : ViewModel() {
             } catch (e: Exception) {
                 _uiState.value = current.copy(isQualitySwitching = false)
             }
+        }
+    }
+
+    fun dismissResumePlaybackSuggestion() {
+        _resumePlaybackSuggestion.value = null
+    }
+
+    fun continueResumePlaybackSuggestion() {
+        val suggestion = _resumePlaybackSuggestion.value ?: return
+        _resumePlaybackSuggestion.value = null
+
+        val current = _uiState.value as? PlayerUiState.Success
+        if (current != null &&
+            current.info.bvid == suggestion.targetBvid &&
+            current.info.pages.isNotEmpty()
+        ) {
+            val pageIndex = current.info.pages.indexOfFirst { page ->
+                page.cid == suggestion.targetCid
+            }
+            if (pageIndex >= 0) {
+                switchPage(pageIndex)
+                return
+            }
+        }
+
+        loadVideo(
+            bvid = suggestion.targetBvid,
+            cid = suggestion.targetCid,
+            autoPlay = true
+        )
+    }
+
+    private fun maybeEmitResumePlaybackSuggestion(
+        requestCid: Long,
+        loadedInfo: ViewInfo
+    ) {
+        val suggestion = resolveResumePlaybackSuggestion(
+            requestCid = requestCid,
+            loadedInfo = loadedInfo,
+            progressLookup = { bvid, cid ->
+                playbackUseCase.getCachedPosition(bvid, cid)
+            }
+        )
+        val context = appContext
+        val promptEnabled = context?.let {
+            com.android.purebilibili.core.store.SettingsManager.getResumePlaybackPromptEnabledSync(it)
+        } ?: true
+
+        val shouldShowPrompt = shouldShowResumePlaybackPrompt(
+            suggestion = suggestion,
+            promptEnabled = promptEnabled,
+            hasPromptedBefore = { key ->
+                context?.let {
+                    com.android.purebilibili.core.store.SettingsManager.hasResumePlaybackPromptShown(it, key)
+                } ?: false
+            }
+        )
+
+        if (shouldShowPrompt && suggestion != null) {
+            context?.let {
+                com.android.purebilibili.core.store.SettingsManager.markResumePlaybackPromptShown(
+                    context = it,
+                    promptKey = resolveResumePlaybackPromptKey(suggestion)
+                )
+            }
+            _resumePlaybackSuggestion.value = suggestion
+        } else {
+            _resumePlaybackSuggestion.value = null
         }
     }
 

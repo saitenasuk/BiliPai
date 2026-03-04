@@ -33,6 +33,9 @@ import com.android.purebilibili.core.ui.common.copyOnLongPress
 import androidx.compose.foundation.text.selection.SelectionContainer
 import com.android.purebilibili.core.ui.common.copyOnClick
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
+import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.AiSummaryData
 import androidx.compose.ui.platform.LocalUriHandler
@@ -128,6 +131,15 @@ fun VideoTitleWithDesc(
     //  尝试获取共享元素作用域
     val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
+    val coverSharedEnabled = shouldEnableVideoCoverSharedTransition(
+        transitionEnabled = transitionEnabled,
+        hasSharedTransitionScope = sharedTransitionScope != null,
+        hasAnimatedVisibilityScope = animatedVisibilityScope != null
+    )
+    val metadataSharedEnabled = shouldEnableVideoMetadataSharedTransition(
+        coverSharedEnabled = coverSharedEnabled,
+        isQuickReturnLimited = CardPositionManager.shouldLimitSharedElementsForQuickReturn()
+    )
     
     Column(
         modifier = Modifier
@@ -145,11 +157,11 @@ fun VideoTitleWithDesc(
                 var titleModifier = Modifier.animateContentSize()
                 
                 //  注意：使用 ExperimentalSharedTransitionApi 注解需要上下文
-                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
+                if (metadataSharedEnabled) {
+                    with(requireNotNull(sharedTransitionScope)) {
                          titleModifier = titleModifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "video_title_${info.bvid}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
+                            animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                             boundsTransform = { _, _ ->
                                 androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
                             }
@@ -188,11 +200,11 @@ fun VideoTitleWithDesc(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Views
                 var viewsModifier = Modifier.wrapContentSize()
-                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
+                if (metadataSharedEnabled) {
+                    with(requireNotNull(sharedTransitionScope)) {
                         viewsModifier = viewsModifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "video_views_${info.bvid}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
+                            animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                             boundsTransform = { _, _ ->
                                 androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
                             }
@@ -214,11 +226,11 @@ fun VideoTitleWithDesc(
 
                 // Danmaku
                 var danmakuModifier = Modifier.wrapContentSize()
-                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
+                if (metadataSharedEnabled) {
+                    with(requireNotNull(sharedTransitionScope)) {
                         danmakuModifier = danmakuModifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "video_danmaku_${info.bvid}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
+                            animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                             boundsTransform = { _, _ ->
                                 androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
                             }
@@ -331,6 +343,15 @@ fun UpInfoSection(
     //  尝试获取共享元素作用域
     val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
+    val coverSharedEnabled = shouldEnableVideoCoverSharedTransition(
+        transitionEnabled = transitionEnabled,
+        hasSharedTransitionScope = sharedTransitionScope != null,
+        hasAnimatedVisibilityScope = animatedVisibilityScope != null
+    )
+    val metadataSharedEnabled = shouldEnableVideoMetadataSharedTransition(
+        coverSharedEnabled = coverSharedEnabled,
+        isQuickReturnLimited = CardPositionManager.shouldLimitSharedElementsForQuickReturn()
+    )
     val upStatsText = resolveUpStatsText(
         followerCount = followerCount,
         videoCount = videoCount
@@ -349,11 +370,11 @@ fun UpInfoSection(
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
 
-            if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
+            if (metadataSharedEnabled) {
+                with(requireNotNull(sharedTransitionScope)) {
                     avatarModifier = avatarModifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_avatar_${info.bvid}"),
-                        animatedVisibilityScope = animatedVisibilityScope,
+                        animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                         boundsTransform = { _, _ ->
                             androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
                         },
@@ -398,11 +419,11 @@ fun UpInfoSection(
                 //  [调整] 确保 sharedBounds 在交互修饰符之前应用
                 var upNameModifier: Modifier = Modifier
                 
-                if (transitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
+                if (metadataSharedEnabled) {
+                    with(requireNotNull(sharedTransitionScope)) {
                         upNameModifier = upNameModifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "video_up_${info.bvid}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
+                            animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
                             boundsTransform = { _, _ ->
                                 androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 200f)
                             }

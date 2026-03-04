@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-02-27 · 文档已同步至 v6.3.2（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-03-03 · 文档已同步至 v6.5.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.3.2-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.5.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -66,7 +66,7 @@
 | **评论体验** | 支持默认排序偏好（最热/最新），并修复特定排序下 UP 主/置顶评论缺失问题 |
 | **评论复制增强** | 长按进入可选择复制面板，支持拖拽选择评论片段（含表情/富文本场景） |
 | **横屏信息栏** | 全屏顶部新增时间显示，横屏交互信息更完整 |
-| **播放记忆** | 自动记录观看进度，下次打开继续播放 |
+| **播放记忆** | 自动记录观看进度，续播提示支持开关与同目标仅提醒一次 |
 | **高画质扫码登录** | 支持扫码登录，解锁大会员专属高画质 |
 | **插件系统** | 内置空降助手、去广告、弹幕增强、夜间护眼、今日推荐单等插件，可扩展架构 |
 
@@ -505,7 +505,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-02-27（v6.3.2）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-03-03（v6.5.0）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -523,7 +523,7 @@ app/src/main/java/com/android/purebilibili
 - [x] 横屏控制栏增强（字幕面板 / 更多面板 / 播放顺序快捷切换）
 - [x] 共享元素过渡动画 + 返回首页动效优化
 - [x] 平板/折叠屏适配（侧边栏 + 底栏布局）
-- [x] 应用内更新检测（手动检查 + 自动检查开关 + 启动提示）
+- [x] 应用内更新检测（手动检查 + 进入应用自动检查 + 启动提示 + 查看更新日志）
 - [x] 插件系统核心架构
 - [x] 内置插件 (空降助手 / 去广告 / 弹幕增强 / 夜间护眼 / 今日推荐单)
 - [x] Firebase Analytics + Crashlytics（支持用户行为统计与崩溃追踪）
@@ -531,7 +531,6 @@ app/src/main/java/com/android/purebilibili
 
 ### 🚧 开发中
 
-- [ ] 应用内更新体验持续优化（文案、频率与下载跳转反馈）
 - [ ] 文档站与 Wiki 持续补全（模块 API / 调试手册 / 回归清单）
 
 ### 📋 计划中
@@ -547,13 +546,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v6.3.2 · 2026-02-27)
+### 最近更新 (v6.5.0 · 2026-03-03)
 
-- 🖼️ **开屏/预览视觉升级**：图片预览新增评论场景顶部文案布局，避免遮挡图片主体；支持文案立体过渡与方向感切换动画。
-- 💬 **评论复制体验升级**：评论区与动态富文本长按进入“可选择复制”面板，支持拖拽选择片段后复制，不再只能整段复制。
-- 🔊 **后台返回无声修复**：修复视频未暂停切换到其他应用再返回后偶发无声问题，前台恢复时增加静音纠正策略。
-- 🧭 **视频/评论图片预览链路统一**：动态、视频评论、子评论与平板布局统一接入图片预览文字元数据与过渡策略。
-- 🛡️ **崩溃与行为追踪增强**：补充直播崩溃追踪与行为埋点策略，并增加对应单测覆盖，保证低开销路径下的可观测性。
+- 🔄 **应用更新体验优化**：进入应用后自动检查更新；设置页支持直接查看最新更新日志。
+- ▶️ **续播提示可控**：新增“续播弹窗提示”开关；同一续播目标默认仅提醒一次，避免重复打扰。
+- 🧪 **策略单测补齐**：新增更新弹窗策略与续播提示策略测试，降低回归风险。
 
 ### 历史版本
 

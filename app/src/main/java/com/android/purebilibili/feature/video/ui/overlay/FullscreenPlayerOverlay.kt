@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.purebilibili.core.store.DanmakuSettings
+import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.store.SettingsManager
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
@@ -70,6 +71,8 @@ import androidx.compose.runtime.collectAsState
 import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
+import com.android.purebilibili.feature.video.ui.components.toFullscreenAspectRatio
+import com.android.purebilibili.feature.video.ui.components.toVideoAspectRatio
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -112,7 +115,10 @@ fun FullscreenPlayerOverlay(
     var showSpeedMenu by remember { mutableStateOf(false) }
     
     //  视频比例状态
-    var aspectRatio by remember { mutableStateOf(VideoAspectRatio.FIT) }
+    val fixedFullscreenAspectRatio by SettingsManager
+        .getFullscreenAspectRatio(context)
+        .collectAsState(initial = FullscreenAspectRatio.FIT)
+    var aspectRatio by remember { mutableStateOf(fixedFullscreenAspectRatio.toVideoAspectRatio()) }
     var showRatioMenu by remember { mutableStateOf(false) }
     
     //  画质选择菜单状态
@@ -184,6 +190,10 @@ fun FullscreenPlayerOverlay(
                 exoPlayer.removeListener(speedListener)
             }
         }
+    }
+
+    LaunchedEffect(fixedFullscreenAspectRatio) {
+        aspectRatio = fixedFullscreenAspectRatio.toVideoAspectRatio()
     }
     
     //  [修复] 获取生命周期用于监听前后台切换
@@ -989,6 +999,12 @@ fun FullscreenPlayerOverlay(
                     currentRatio = aspectRatio,
                     onRatioSelected = { ratio ->
                         aspectRatio = ratio
+                        scope.launch {
+                            SettingsManager.setFullscreenAspectRatio(
+                                context,
+                                ratio.toFullscreenAspectRatio()
+                            )
+                        }
                         showRatioMenu = false
                         lastInteractionTime = System.currentTimeMillis()
                     },

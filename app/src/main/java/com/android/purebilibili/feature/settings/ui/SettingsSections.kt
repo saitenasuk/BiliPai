@@ -503,6 +503,7 @@ fun AboutSection(
     onLicenseClick: () -> Unit,
     onGithubClick: () -> Unit,
     onCheckUpdateClick: () -> Unit,
+    onViewReleaseNotesClick: () -> Unit,
     autoCheckUpdateEnabled: Boolean,
     onAutoCheckUpdateChange: (Boolean) -> Unit,
     onVersionClick: () -> Unit,
@@ -573,10 +574,18 @@ fun AboutSection(
             iconTint = iOSBlue
         )
         SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
+            icon = CupertinoIcons.Default.DocText,
+            title = "查看更新日志",
+            value = "最新版本说明",
+            onClick = onViewReleaseNotesClick,
+            iconTint = iOSTeal
+        )
+        SettingsDivider(startIndent = 66.dp)
         SettingSwitchItem(
             icon = CupertinoIcons.Default.BellBadge,
             title = "自动检查更新",
-            subtitle = "进入设置页时自动检查新版本",
+            subtitle = resolveAutoCheckUpdateSubtitle(autoCheckEnabled = autoCheckUpdateEnabled),
             checked = autoCheckUpdateEnabled,
             onCheckedChange = onAutoCheckUpdateChange,
             iconTint = iOSBlue

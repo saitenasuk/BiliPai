@@ -45,6 +45,8 @@ import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 
@@ -109,14 +111,18 @@ fun StoryVideoCard(
     //  尝试获取共享元素作用域
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val coverSharedEnabled = transitionEnabled &&
-        sharedTransitionScope != null &&
-        animatedVisibilityScope != null
-    val metadataSharedEnabled = coverSharedEnabled &&
-        !CardPositionManager.shouldLimitSharedElementsForQuickReturn()
+    val coverSharedEnabled = shouldEnableVideoCoverSharedTransition(
+        transitionEnabled = transitionEnabled,
+        hasSharedTransitionScope = sharedTransitionScope != null,
+        hasAnimatedVisibilityScope = animatedVisibilityScope != null
+    )
+    val metadataSharedEnabled = shouldEnableVideoMetadataSharedTransition(
+        coverSharedEnabled = coverSharedEnabled,
+        isQuickReturnLimited = CardPositionManager.shouldLimitSharedElementsForQuickReturn()
+    )
     
     val cardModifier = if (coverSharedEnabled) {
-        with(sharedTransitionScope) {
+        with(requireNotNull(sharedTransitionScope)) {
             Modifier
                 .sharedBounds(
                     sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
@@ -242,7 +248,7 @@ fun StoryVideoCard(
         // 🔗 [共享元素] 标题
         var titleModifier = Modifier.fillMaxWidth()
         if (metadataSharedEnabled) {
-            with(sharedTransitionScope) {
+            with(requireNotNull(sharedTransitionScope)) {
                 titleModifier = titleModifier.sharedBounds(
                     sharedContentState = rememberSharedContentState(key = "video_title_${video.bvid}"),
                     animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
@@ -275,7 +281,7 @@ fun StoryVideoCard(
             // 🔗 [共享元素] UP主名称
             var upNameModifier = Modifier.wrapContentSize()
             if (metadataSharedEnabled) {
-                with(sharedTransitionScope) {
+                with(requireNotNull(sharedTransitionScope)) {
                     upNameModifier = upNameModifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_up_${video.bvid}"),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
@@ -299,7 +305,7 @@ fun StoryVideoCard(
                             .clip(CircleShape)
 
                         if (metadataSharedEnabled) {
-                            with(sharedTransitionScope) {
+                            with(requireNotNull(sharedTransitionScope)) {
                                 avatarModifier = avatarModifier.sharedBounds(
                                     sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
                                     animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
@@ -345,7 +351,7 @@ fun StoryVideoCard(
                      // 🔗 [共享元素] 播放量
                     var viewsModifier = Modifier.wrapContentSize()
                     if (metadataSharedEnabled) {
-                        with(sharedTransitionScope) {
+                        with(requireNotNull(sharedTransitionScope)) {
                             viewsModifier = viewsModifier.sharedBounds(
                                 sharedContentState = rememberSharedContentState(key = "video_views_${video.bvid}"),
                                 animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
@@ -382,7 +388,7 @@ fun StoryVideoCard(
                      // 🔗 [共享元素] 弹幕数
                      var danmakuModifier = Modifier.wrapContentSize()
                      if (metadataSharedEnabled) {
-                         with(sharedTransitionScope) {
+                         with(requireNotNull(sharedTransitionScope)) {
                              danmakuModifier = danmakuModifier.sharedBounds(
                                  sharedContentState = rememberSharedContentState(key = "video_danmaku_${video.bvid}"),
                                  animatedVisibilityScope = requireNotNull(animatedVisibilityScope),

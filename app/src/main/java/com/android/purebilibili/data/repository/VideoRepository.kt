@@ -8,6 +8,7 @@ import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.feature.video.subtitle.SubtitleCue
 import com.android.purebilibili.feature.video.subtitle.normalizeBilibiliSubtitleUrl
@@ -80,6 +81,16 @@ object VideoRepository {
     
     //  [新增] 确保 buvid3 来自 Bilibili SPI API + 激活（解决 412 问题）
     private var buvidInitialized = false
+
+    private fun isDirectedTrafficModeActive(): Boolean {
+        val context = NetworkModule.appContext ?: return false
+        val enabled = SettingsManager.getBiliDirectedTrafficEnabledSync(context)
+        val isOnMobileData = NetworkUtils.isMobileData(context)
+        return shouldEnableDirectedTrafficMode(
+            directedTrafficEnabled = enabled,
+            isOnMobileData = isOnMobileData
+        )
+    }
     
     private suspend fun ensureBuvid3FromSpi() {
         if (buvidInitialized) return
@@ -675,16 +686,32 @@ object VideoRepository {
     }
 
     suspend fun getPlayUrlData(bvid: String, cid: Long, qn: Int, audioLang: String? = null): PlayUrlData? = withContext(Dispatchers.IO) {
-        //  [新增] 对于高画质请求 (>=112)，优先尝试 APP API
+        //  [新增] 对于高画质请求 (>=112) 或定向流量模式，优先尝试 APP API
         val isHighQuality = qn >= 112
+        val directedTrafficMode = isDirectedTrafficModeActive()
         val accessToken = TokenManager.accessTokenCache
         
-        if (isHighQuality && !accessToken.isNullOrEmpty()) {
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", " High quality request (qn=$qn), trying APP API first...")
+        if ((isHighQuality || directedTrafficMode) && !accessToken.isNullOrEmpty()) {
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoRepo",
+                " APP API preflight: qn=$qn, highQuality=$isHighQuality, directedTrafficMode=$directedTrafficMode"
+            )
             val appResult = fetchPlayUrlWithAccessToken(bvid, cid, qn, audioLang = audioLang)
-            if (appResult != null) {
-                com.android.purebilibili.core.util.Logger.d("VideoRepo", " APP API success for high quality")
-                return@withContext appResult
+            if (appResult != null && hasPlayableStreams(appResult)) {
+                val appDashIds = appResult.dash?.video?.map { it.id }?.distinct() ?: emptyList()
+                if (shouldAcceptAppApiResultForTargetQuality(
+                        targetQn = qn,
+                        returnedQuality = appResult.quality,
+                        dashVideoIds = appDashIds
+                    )
+                ) {
+                    com.android.purebilibili.core.util.Logger.d("VideoRepo", " APP API accepted for high quality request qn=$qn")
+                    return@withContext appResult
+                }
+                com.android.purebilibili.core.util.Logger.d(
+                    "VideoRepo",
+                    " APP API downgraded high quality request qn=$qn to quality=${appResult.quality}, dashIds=$appDashIds, fallback to Web API"
+                )
             }
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " APP API failed, fallback to Web API")
         }
@@ -776,21 +803,39 @@ object VideoRepository {
         targetQn: Int,
         audioLang: String? = null
     ): PlayUrlFetchResult? {
-        com.android.purebilibili.core.util.Logger.d("VideoRepo", " [LoggedIn] DASH-first strategy, qn=$targetQn")
+        val directedTrafficMode = isDirectedTrafficModeActive()
+        com.android.purebilibili.core.util.Logger.d(
+            "VideoRepo",
+            " [LoggedIn] DASH-first strategy, qn=$targetQn, directedTrafficMode=$directedTrafficMode"
+        )
         
         val accessToken = TokenManager.accessTokenCache
         val now = System.currentTimeMillis()
         val hasSessionCookie = !TokenManager.sessDataCache.isNullOrEmpty()
         val shouldTryAppApi = shouldTryAppApiForTargetQuality(
             targetQn = targetQn,
-            hasSessionCookie = hasSessionCookie
+            hasSessionCookie = hasSessionCookie,
+            directedTrafficMode = directedTrafficMode
         )
         if (shouldTryAppApi && shouldCallAccessTokenApi(now, appApiCooldownUntilMs, !accessToken.isNullOrEmpty())) {
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " [LoggedIn] Trying APP API first with access_token...")
             val appResult = fetchPlayUrlWithAccessToken(bvid, cid, targetQn, audioLang = audioLang)
-            if (hasPlayableStreams(appResult)) {
-                com.android.purebilibili.core.util.Logger.d("VideoRepo", " [LoggedIn] APP API success: quality=${appResult?.quality}")
-                return appResult?.let { PlayUrlFetchResult(it, PlayUrlSource.APP) }
+            if (appResult != null && hasPlayableStreams(appResult)) {
+                val payload = appResult
+                val appDashIds = payload.dash?.video?.map { it.id }?.distinct() ?: emptyList()
+                if (shouldAcceptAppApiResultForTargetQuality(
+                        targetQn = targetQn,
+                        returnedQuality = payload.quality,
+                        dashVideoIds = appDashIds
+                    )
+                ) {
+                    com.android.purebilibili.core.util.Logger.d("VideoRepo", " [LoggedIn] APP API success: quality=${payload.quality}")
+                    return PlayUrlFetchResult(payload, PlayUrlSource.APP)
+                }
+                com.android.purebilibili.core.util.Logger.d(
+                    "VideoRepo",
+                    " [LoggedIn] APP API downgraded qn=$targetQn to quality=${payload.quality}, dashIds=$appDashIds, continue DASH/Web fallback"
+                )
             }
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " [LoggedIn] APP API failed, trying DASH...")
         } else if (shouldTryAppApi && !accessToken.isNullOrEmpty()) {
@@ -1015,6 +1060,22 @@ object VideoRepository {
             "gaia_source" to "pre-load",
             "web_location" to "1550101"
         ).toMutableMap()
+
+        val directedOverrides = buildDirectedTrafficWbiOverrides(
+            directedTrafficEnabled = NetworkModule.appContext?.let {
+                SettingsManager.getBiliDirectedTrafficEnabledSync(it)
+            } ?: false,
+            isOnMobileData = NetworkModule.appContext?.let {
+                NetworkUtils.isMobileData(it)
+            } ?: false
+        )
+        if (directedOverrides.isNotEmpty()) {
+            params.putAll(directedOverrides)
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoRepo",
+                " Applied directed traffic WBI overrides: $directedOverrides"
+            )
+        }
         
         if (!audioLang.isNullOrEmpty()) {
             params["cur_language"] = audioLang

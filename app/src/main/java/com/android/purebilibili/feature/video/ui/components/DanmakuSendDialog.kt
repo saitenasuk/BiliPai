@@ -26,6 +26,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +54,13 @@ internal fun resolveDanmakuSendDialogLayoutPolicy(): DanmakuSendDialogLayoutPoli
     )
 }
 
+internal fun resolveDanmakuDialogBottomLiftDp(
+    defaultBottomLiftDp: Int,
+    imeBottomPx: Int
+): Int {
+    return if (imeBottomPx > 0) 0 else defaultBottomLiftDp
+}
+
 /**
  * 弹幕发送对话框
  *
@@ -69,6 +77,12 @@ fun DanmakuSendDialog(
 ) {
     val layoutPolicy = remember { resolveDanmakuSendDialogLayoutPolicy() }
     val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val imeBottomPx = WindowInsets.ime.getBottom(density)
+    val effectiveBottomLiftDp = resolveDanmakuDialogBottomLiftDp(
+        defaultBottomLiftDp = layoutPolicy.bottomLiftDp,
+        imeBottomPx = imeBottomPx
+    )
     val maxSheetHeight = remember(configuration.screenHeightDp, topReservedSpace) {
         (configuration.screenHeightDp.dp - topReservedSpace).coerceAtLeast(1.dp)
     }
@@ -139,7 +153,7 @@ fun DanmakuSendDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = topReservedSpace)
-                    .padding(bottom = layoutPolicy.bottomLiftDp.dp)
+                    .padding(bottom = effectiveBottomLiftDp.dp)
                     .imePadding(),
                 verticalArrangement = if (layoutPolicy.bottomAligned) Arrangement.Bottom else Arrangement.Center
             ) {

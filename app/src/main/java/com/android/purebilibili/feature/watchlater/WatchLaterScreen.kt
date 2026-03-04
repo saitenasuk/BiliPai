@@ -58,12 +58,11 @@ import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import com.android.purebilibili.core.util.FormatUtils
 
 // 辅助函数：格式化时长
 private fun formatDuration(seconds: Int): String {
-    val minutes = seconds / 60
-    val secs = seconds % 60
-    return String.format("%d:%02d", minutes, secs)
+    return FormatUtils.formatDuration(seconds)
 }
 
 // 辅助函数：格式化数字

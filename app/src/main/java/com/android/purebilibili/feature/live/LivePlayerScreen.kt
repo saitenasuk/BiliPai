@@ -51,6 +51,9 @@ import com.android.purebilibili.data.model.response.LiveQuality
 import com.android.purebilibili.feature.live.components.LiveChatSection
 import com.android.purebilibili.feature.live.components.LandscapeChatOverlay
 import com.android.purebilibili.feature.live.components.LivePlayerControls
+import com.android.purebilibili.feature.video.player.shouldContinuePlaybackDuringPause
+import com.android.purebilibili.feature.video.state.isPlaybackActiveForLifecycle
+import com.android.purebilibili.feature.video.state.shouldResumeAfterLifecyclePause
 import com.android.purebilibili.feature.video.ui.overlay.LiveDanmakuOverlay
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -97,6 +100,7 @@ fun LivePlayerScreen(
     var isPlaying by remember { mutableStateOf(true) }
     var isChatVisible by remember { mutableStateOf(true) } // 控制侧边栏显示
     var isPipRequested by remember { mutableStateOf(false) }
+    var wasPlaybackActiveBeforePause by remember { mutableStateOf(false) }
     val showLivePipButton = remember { shouldShowLivePipButton(android.os.Build.VERSION.SDK_INT) }
     
     // Haze blur 状态 (用于侧边栏实时模糊)
@@ -144,6 +148,7 @@ fun LivePlayerScreen(
     }
 
     DisposableEffect(roomId) {
+        miniPlayerManager.resetNavigationFlag()
         CrashReporter.setLastScreen("live_player")
         CrashReporter.markLiveSessionStart(roomId = roomId, title = title, uname = uname)
         CrashReporter.markLivePlaybackStage("screen_enter")
@@ -178,7 +183,7 @@ fun LivePlayerScreen(
     // 📺 [新增] 将播放器注册到 MiniPlayerManager
     val liveCover = (uiState as? LivePlayerState.Success)?.roomInfo?.cover ?: ""
     val liveTitle = title.ifEmpty { (uiState as? LivePlayerState.Success)?.roomInfo?.title ?: "" }
-    LaunchedEffect(exoPlayer, liveCover) {
+    LaunchedEffect(exoPlayer, liveCover, liveTitle, uname) {
         miniPlayerManager.setLiveInfo(
             roomId = roomId,
             title = liveTitle,
@@ -240,6 +245,11 @@ fun LivePlayerScreen(
                 }
                 exoPlayer.setMediaSource(mediaSource)
                 exoPlayer.prepare()
+                miniPlayerManager.updateMediaMetadata(
+                    title = liveTitle.ifBlank { "直播中" },
+                    artist = uname.ifBlank { "直播" },
+                    coverUrl = liveCover
+                )
                 CrashReporter.markLivePlaybackStage("media_source_prepared")
             } catch (e: Exception) {
                 Logger.e(TAG, "Play failed", e)
@@ -264,7 +274,35 @@ fun LivePlayerScreen(
                     val isInPictureInPictureMode =
                         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N &&
                             (activity?.isInPictureInPictureMode == true)
-                    if (shouldPauseLivePlaybackOnPause(isInPictureInPictureMode, isPipRequested)) {
+                    val isBackgroundAudioEnabled = miniPlayerManager.shouldContinueBackgroundAudio()
+                    val hasRecentUserLeaveHint = miniPlayerManager.hasRecentUserLeaveHint()
+                    val shouldKeepPlayingInBackground = shouldContinuePlaybackDuringPause(
+                        isMiniMode = miniPlayerManager.isMiniMode,
+                        isPip = isInPictureInPictureMode || isPipRequested,
+                        isBackgroundAudio = isBackgroundAudioEnabled
+                    )
+                    wasPlaybackActiveBeforePause = isPlaybackActiveForLifecycle(
+                        isPlaying = exoPlayer.isPlaying,
+                        playWhenReady = exoPlayer.playWhenReady,
+                        playbackState = exoPlayer.playbackState
+                    )
+                    val shouldKeepBackgroundAudioByFallback =
+                        isBackgroundAudioEnabled &&
+                            wasPlaybackActiveBeforePause
+                    val shouldPausePlayback = shouldPauseLivePlaybackOnPause(
+                        isInPictureInPictureMode = isInPictureInPictureMode,
+                        isPipRequested = isPipRequested,
+                        shouldKeepPlayingInBackground =
+                            shouldKeepPlayingInBackground || shouldKeepBackgroundAudioByFallback
+                    )
+                    Logger.d(
+                        TAG,
+                        "ON_PAUSE live policy: pip=$isInPictureInPictureMode, pipRequested=$isPipRequested, " +
+                            "bgAudio=$isBackgroundAudioEnabled, leaveHint=$hasRecentUserLeaveHint, " +
+                            "wasActive=$wasPlaybackActiveBeforePause, keepByPolicy=$shouldKeepPlayingInBackground, " +
+                            "keepByFallback=$shouldKeepBackgroundAudioByFallback, shouldPause=$shouldPausePlayback"
+                    )
+                    if (shouldPausePlayback) {
                         exoPlayer.pause()
                         CrashReporter.markLivePlaybackStage("lifecycle_pause")
                     } else {
@@ -273,7 +311,16 @@ fun LivePlayerScreen(
                 }
                 Lifecycle.Event.ON_RESUME -> {
                     isPipRequested = false
-                    exoPlayer.play()
+                    val shouldResumePlayback = shouldResumeAfterLifecyclePause(
+                        wasPlaybackActive = wasPlaybackActiveBeforePause,
+                        isPlaying = exoPlayer.isPlaying,
+                        playWhenReady = exoPlayer.playWhenReady,
+                        playbackState = exoPlayer.playbackState
+                    )
+                    Logger.d(TAG, "ON_RESUME live policy: shouldResume=$shouldResumePlayback")
+                    if (shouldResumePlayback) {
+                        exoPlayer.play()
+                    }
                     CrashReporter.markLivePlaybackStage("lifecycle_resume")
                 }
                 else -> {}

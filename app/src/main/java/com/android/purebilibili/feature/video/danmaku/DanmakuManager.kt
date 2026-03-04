@@ -298,17 +298,39 @@ class DanmakuManager private constructor(
             return
         }
 
-        controller?.setData(list, 0)
-        controller?.invalidateView()
-        controller?.start(currentPos)
+        resyncDanmakuTimeline(
+            list = list,
+            positionMs = currentPos,
+            shouldPlay = player?.isPlaying == true,
+            invalidateView = true,
+            reason = "applyCached:$reason"
+        )
+        Log.w(TAG, " applyCachedDanmakuToController($reason): size=${list.size}, pos=${currentPos}ms")
+    }
 
-        if (player?.isPlaying == true && config.isEnabled) {
+    private fun resyncDanmakuTimeline(
+        list: List<DanmakuData>,
+        positionMs: Long,
+        shouldPlay: Boolean,
+        invalidateView: Boolean = false,
+        reason: String
+    ) {
+        val ctrl = controller ?: return
+        executeExplicitDanmakuResync(
+            pause = { ctrl.pause() },
+            setData = { ctrl.setData(list, 0) },
+            start = { ctrl.start(positionMs) }
+        )
+        if (invalidateView) {
+            ctrl.invalidateView()
+        }
+        if (shouldPlay && config.isEnabled) {
             isPlaying = true
         } else {
-            controller?.pause()
+            ctrl.pause()
             isPlaying = false
         }
-        Log.w(TAG, " applyCachedDanmakuToController($reason): size=${list.size}, pos=${currentPos}ms")
+        Log.w(TAG, " Resynced danmaku timeline ($reason) at ${positionMs}ms, play=$shouldPlay")
     }
 
     private fun TextData.copyForPluginPipeline(): TextData {
@@ -714,11 +736,12 @@ class DanmakuManager private constructor(
                 cachedDanmakuList?.let { list ->
                     val currentPos = player?.currentPosition ?: 0L
                     Log.w(TAG, " Re-applying danmaku data after $reason change at ${currentPos}ms")
-                    ctrl.setData(list, 0)
-                    ctrl.start(currentPos)
-                    if (player?.isPlaying != true) {
-                        ctrl.pause()
-                    }
+                    resyncDanmakuTimeline(
+                        list = list,
+                        positionMs = currentPos,
+                        shouldPlay = player?.isPlaying == true,
+                        reason = "config:$reason"
+                    )
                 }
             } else {
                 ctrl.invalidateView()
@@ -841,31 +864,16 @@ class DanmakuManager private constructor(
         cachedDanmakuList?.let { list ->
             //  [修复] 始终用 playTime=0 设置数据，因为弹幕的 showAtTime 是相对于视频开头的
             Log.w(TAG, "📎 Calling setData with ${list.size} items, playTime=0 (base reference)")
-            controller?.setData(list, 0)
-            Log.w(TAG, "📎 setData completed")
-            
-            // 强制刷新视图
-            controller?.invalidateView()
-            Log.w(TAG, "📎 invalidateView called")
-            
-            // 同步到当前播放位置
             player?.let { p ->
                 val position = p.currentPosition
                 Log.w(TAG, "📎 Player state: isPlaying=${p.isPlaying}, isEnabled=${config.isEnabled}, position=${position}ms")
-                
-                //  [修复] 始终先 start 到当前位置，让 controller 知道视频在哪里
-                controller?.start(position)
-                Log.w(TAG, " controller.start($position) called")
-                
-                if (p.isPlaying && config.isEnabled) {
-                    isPlaying = true
-                    Log.w(TAG, " Danmaku playing")
-                } else {
-                    // 如果视频暂停中，也暂停弹幕
-                    controller?.pause()
-                    isPlaying = false
-                    Log.w(TAG, " Danmaku paused (player not playing)")
-                }
+                resyncDanmakuTimeline(
+                    list = list,
+                    positionMs = position,
+                    shouldPlay = p.isPlaying,
+                    invalidateView = true,
+                    reason = "applyDanmakuData"
+                )
             } ?: Log.w(TAG, "📎 Player is null, not syncing")
         } ?: Log.w(TAG, "📎 No cached danmaku list to apply")
     }
@@ -897,10 +905,16 @@ class DanmakuManager private constructor(
                         controller?.let { ctrl ->
                             if (shouldForceDanmakuDataResync(currentVideoSpeed, tickCount)) {
                                 cachedDanmakuList?.let { list ->
-                                    ctrl.setData(list, 0)
+                                    resyncDanmakuTimeline(
+                                        list = list,
+                                        positionMs = playerPos,
+                                        shouldPlay = true,
+                                        reason = "drift_sync"
+                                    )
                                 }
+                            } else {
+                                ctrl.start(playerPos)
                             }
-                            ctrl.start(playerPos)
                         }
                         Log.d(
                             TAG,
@@ -1016,17 +1030,13 @@ class DanmakuManager private constructor(
                     //  关键修复：Seek 时重新调用 setData(list, 0) + start(newPosition)
                     cachedDanmakuList?.let { list ->
                         Log.w(TAG, " Re-setting data with playTime=0, then start at ${newPosition.positionMs}ms")
-                        controller?.setData(list, 0)  // 始终用 0 作为基准
-                        controller?.start(newPosition.positionMs)  // 用实际位置启动
-                        
-                        if (exoPlayer.isPlaying && config.isEnabled) {
-                            isPlaying = true
-                            Log.w(TAG, " Danmaku restarted at ${newPosition.positionMs}ms")
-                        } else {
-                            controller?.pause()
-                            isPlaying = false
-                            Log.w(TAG, " Danmaku paused after seek (player not playing)")
-                        }
+                        resyncDanmakuTimeline(
+                            list = list,
+                            positionMs = newPosition.positionMs,
+                            shouldPlay = exoPlayer.isPlaying,
+                            reason = "seek_discontinuity"
+                        )
+                        Log.w(TAG, " Danmaku resynced at ${newPosition.positionMs}ms")
                     } ?: run {
                         controller?.clear()
                         Log.w(TAG, " No cached danmaku, just cleared screen")
@@ -1057,11 +1067,12 @@ class DanmakuManager private constructor(
                         val currentPos = exoPlayer.currentPosition
                         Log.w(TAG, "⏩ Speed changed, resyncing danmaku at ${currentPos}ms")
                         cachedDanmakuList?.let { list ->
-                            ctrl.setData(list, 0)
-                            ctrl.start(currentPos)
-                            if (!exoPlayer.isPlaying) {
-                                ctrl.pause()
-                            }
+                            resyncDanmakuTimeline(
+                                list = list,
+                                positionMs = currentPos,
+                                shouldPlay = exoPlayer.isPlaying,
+                                reason = "speed_change"
+                            )
                         }
                         
                         ctrl.invalidateView()
@@ -1101,22 +1112,15 @@ class DanmakuManager private constructor(
         if (cid == cachedCid && cachedDanmakuList != null) {
             val currentPos = player?.currentPosition ?: 0L
             Log.w(TAG, " Using cached danmaku list (${cachedDanmakuList!!.size} items) for cid=$cid, position=${currentPos}ms")
-            
-            //  [修复] 仿照 Seek 处理器的模式：先用 0 设置基准，再用 currentPos 启动
-            controller?.setData(cachedDanmakuList!!, 0)  // 基准时间 0
-            controller?.start(currentPos)  // 跳到当前位置
+
+            //  [修复] 显式重同步要先 pause 再 start，避免引擎在播放中忽略 start()
+            resyncDanmakuTimeline(
+                list = cachedDanmakuList!!,
+                positionMs = currentPos,
+                shouldPlay = player?.isPlaying == true,
+                reason = "load_cached"
+            )
             Log.w(TAG, " Cached data: setData(0) + start(${currentPos}ms)")
-            
-            player?.let { p ->
-                if (p.isPlaying && config.isEnabled) {
-                    isPlaying = true
-                    Log.w(TAG, " Player playing, danmaku active")
-                } else {
-                    controller?.pause()
-                    isPlaying = false
-                    Log.w(TAG, " Player paused, danmaku paused")
-                }
-            }
             return
         }
         
@@ -1237,26 +1241,14 @@ class DanmakuManager private constructor(
                         return@withContext
                     }
                     Log.w(TAG, "📎 Calling setData with ${finalList.size} items, playTime=0 (base)")
-                    controller?.setData(finalList, 0)  // 基准时间 0
-                    Log.w(TAG, "📎 setData completed")
-                    
-                    //  [关键] 强制刷新视图 - 与横竖屏切换路径一致
-                    controller?.invalidateView()
-                    Log.w(TAG, "📎 invalidateView called")
-                    
-                    // start 同步到当前位置
-                    controller?.start(currentPlayTime)
-                    Log.w(TAG, " controller.start($currentPlayTime) called - video is at this position")
-                    
-                    // 如果 player 暂停中，也暂停 controller
-                    if (player?.isPlaying != true) {
-                        controller?.pause()
-                        isPlaying = false
-                        Log.w(TAG, " Player not playing, controller paused")
-                    } else {
-                        isPlaying = true
-                        Log.w(TAG, " Player is playing, danmaku active")
-                    }
+                    resyncDanmakuTimeline(
+                        list = finalList,
+                        positionMs = currentPlayTime,
+                        shouldPlay = player?.isPlaying == true,
+                        invalidateView = true,
+                        reason = "load_new"
+                    )
+                    Log.w(TAG, " controller synced to $currentPlayTime ms")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, " Failed to load danmaku for cid=$cid: ${e.message}", e)
@@ -1303,22 +1295,13 @@ class DanmakuManager private constructor(
         Log.w(TAG, "⏭️ seekTo($positionMs) - refreshing danmaku")
         
         cachedDanmakuList?.let { list ->
-            // 先清除当前显示的弹幕
-            controller?.clear()
-            // 重新设置数据基准
-            controller?.setData(list, 0)
-            // 从新位置开始
-            controller?.start(positionMs)
-            
-            // 根据播放器状态决定是否暂停
-            if (player?.isPlaying == true && config.isEnabled) {
-                isPlaying = true
-                Log.w(TAG, "⏭️ Danmaku restarted at ${positionMs}ms")
-            } else {
-                controller?.pause()
-                isPlaying = false
-                Log.w(TAG, "⏭️ Danmaku paused at ${positionMs}ms (player not playing)")
-            }
+            resyncDanmakuTimeline(
+                list = list,
+                positionMs = positionMs,
+                shouldPlay = player?.isPlaying == true,
+                reason = "manual_seek"
+            )
+            Log.w(TAG, "⏭️ Danmaku restarted at ${positionMs}ms")
         } ?: run {
             controller?.clear()
             Log.w(TAG, "⏭️ No cached danmaku, just cleared")
@@ -1408,20 +1391,13 @@ class DanmakuManager private constructor(
         // 立即显示（通过重新设置数据并跳到当前位置）
         cachedDanmakuList?.let { list ->
             Log.d(TAG, "📝 Calling setData with ${list.size} items")
-            controller?.setData(list, 0)
-            controller?.start(currentPosition)
-            
-            //  [关键修复] 强制刷新视图，确保新弹幕立即渲染
-            controller?.invalidateView()
-            Log.d(TAG, "📝 invalidateView called")
-            
-            if (player?.isPlaying == true && config.isEnabled) {
-                isPlaying = true
-                Log.d(TAG, "📝 Danmaku playing")
-            } else {
-                controller?.pause()
-                Log.d(TAG, "📝 Danmaku paused (player not playing)")
-            }
+            resyncDanmakuTimeline(
+                list = list,
+                positionMs = currentPosition,
+                shouldPlay = player?.isPlaying == true,
+                invalidateView = true,
+                reason = "add_local"
+            )
         }
         
         Log.d(TAG, "📝 Local danmaku added and displayed")

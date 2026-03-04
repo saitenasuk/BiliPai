@@ -18,6 +18,8 @@ import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlCallback
 import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlUiState
 import com.android.purebilibili.feature.video.ui.components.SponsorSkipButton
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
+import com.android.purebilibili.feature.video.ui.components.toFullscreenAspectRatio
+import com.android.purebilibili.feature.video.ui.components.toVideoAspectRatio
 import com.android.purebilibili.data.model.response.ViewPoint
 
 import android.app.Activity
@@ -85,6 +87,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
+import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
@@ -222,6 +225,29 @@ internal fun resolveGestureDisplayIcon(
     }
 }
 
+internal fun resolveGesturePercentDigits(percent: Int): List<Char?> {
+    val normalized = percent.coerceIn(0, 100)
+    val hundreds = (normalized / 100)
+    val tens = (normalized / 10) % 10
+    val ones = normalized % 10
+    return listOf(
+        hundreds.takeIf { it > 0 }?.let { ('0'.code + it).toChar() },
+        if (hundreds > 0 || tens > 0) ('0'.code + tens).toChar() else null,
+        ('0'.code + ones).toChar()
+    )
+}
+
+internal fun resolveGesturePercentDigitChangeMask(
+    previousPercent: Int,
+    currentPercent: Int
+): List<Boolean> {
+    val previousDigits = resolveGesturePercentDigits(previousPercent)
+    val currentDigits = resolveGesturePercentDigits(currentPercent)
+    return currentDigits.indices.map { index ->
+        previousDigits.getOrNull(index) != currentDigits.getOrNull(index)
+    }
+}
+
 internal fun shouldUseTextureSurfaceForFlip(
     isFlippedHorizontal: Boolean,
     isFlippedVertical: Boolean
@@ -276,6 +302,112 @@ internal fun shouldPromoteFirstFrameByPlaybackFallback(
         playWhenReady &&
         playbackState == Player.STATE_READY &&
         currentPositionMs > 300L
+}
+
+@Composable
+private fun GesturePercentDigit(
+    digit: Char?,
+    shouldAnimate: Boolean,
+    textStyle: TextStyle,
+    textShadow: Shadow,
+    slotWidth: androidx.compose.ui.unit.Dp
+) {
+    val blurAnim = remember { Animatable(0f) }
+    val alphaAnim = remember { Animatable(1f) }
+    var initialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(digit, shouldAnimate) {
+        if (!initialized) {
+            initialized = true
+            return@LaunchedEffect
+        }
+        if (!shouldAnimate || digit == null) {
+            blurAnim.snapTo(0f)
+            alphaAnim.snapTo(1f)
+            return@LaunchedEffect
+        }
+        blurAnim.snapTo(8f)
+        alphaAnim.snapTo(0.55f)
+        launch {
+            blurAnim.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 220)
+            )
+        }
+        alphaAnim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 220)
+        )
+    }
+
+    AnimatedContent(
+        targetState = digit,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(130)) +
+                scaleIn(initialScale = 0.9f, animationSpec = tween(200)))
+                .togetherWith(
+                    fadeOut(animationSpec = tween(120)) +
+                        scaleOut(targetScale = 1.1f, animationSpec = tween(200))
+                )
+        },
+        label = "gesture-percent-digit"
+    ) { target ->
+        if (target == null) {
+            Spacer(modifier = Modifier.width(slotWidth))
+        } else {
+            Text(
+                text = target.toString(),
+                color = Color.White,
+                style = textStyle.copy(shadow = textShadow),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .width(slotWidth)
+                    .graphicsLayer { alpha = alphaAnim.value }
+                    .blur(
+                        radius = blurAnim.value.dp,
+                        edgeTreatment = BlurredEdgeTreatment.Unbounded
+                    )
+            )
+        }
+    }
+}
+
+@Composable
+private fun GesturePercentValue(
+    percent: Int,
+    previousPercent: Int,
+    textStyle: TextStyle,
+    textShadow: Shadow,
+    modifier: Modifier = Modifier
+) {
+    val digits = remember(percent) { resolveGesturePercentDigits(percent) }
+    val changeMask = remember(previousPercent, percent) {
+        resolveGesturePercentDigitChangeMask(previousPercent, percent)
+    }
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        digits.forEachIndexed { index, digit ->
+            key(index) {
+                GesturePercentDigit(
+                    digit = digit,
+                    shouldAnimate = changeMask.getOrElse(index) { false },
+                    textStyle = textStyle,
+                    textShadow = textShadow,
+                    slotWidth = 16.dp
+                )
+            }
+        }
+        Text(
+            text = "%",
+            color = Color.White,
+            style = textStyle.copy(shadow = textShadow),
+            modifier = Modifier.padding(start = 2.dp)
+        )
+    }
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -433,6 +565,9 @@ fun VideoPlayerSection(
     val autoExitFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAutoExitFullscreen(context)
         .collectAsState(initial = true)
+    val fixedFullscreenAspectRatio by com.android.purebilibili.core.store.SettingsManager
+        .getFullscreenAspectRatio(context)
+        .collectAsState(initial = FullscreenAspectRatio.FIT)
     val subtitleAutoPreference by com.android.purebilibili.core.store.SettingsManager
         .getSubtitleAutoPreference(context)
         .collectAsState(initial = SubtitleAutoPreference.OFF)
@@ -526,9 +661,7 @@ fun VideoPlayerSection(
     val gesturePercentDisplay by remember {
         derivedStateOf { (gesturePercent * 100f).roundToInt().coerceIn(0, 100) }
     }
-    val gestureValueBlur = remember { Animatable(0f) }
-    val gestureValueAlpha = remember { Animatable(1f) }
-    var hasAnimatedGestureValue by remember { mutableStateOf(false) }
+    var previousGesturePercentDisplay by remember { mutableIntStateOf(gesturePercentDisplay) }
     var orientationHintVisible by remember { mutableStateOf(false) }
     var orientationHintText by remember { mutableStateOf(resolveOrientationSwitchHintText(isFullscreen)) }
     var hasObservedOrientationChange by remember { mutableStateOf(false) }
@@ -539,7 +672,7 @@ fun VideoPlayerSection(
     var isGestureVisible by remember { mutableStateOf(false) }
     
     //  视频比例状态
-    var currentAspectRatio by remember { mutableStateOf(VideoAspectRatio.FIT) }
+    var currentAspectRatio by remember { mutableStateOf(fixedFullscreenAspectRatio.toVideoAspectRatio()) }
     
     //  [新增] 视频翻转状态
     var isFlippedHorizontal by remember { mutableStateOf(false) }
@@ -566,34 +699,18 @@ fun VideoPlayerSection(
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
 
+    LaunchedEffect(fixedFullscreenAspectRatio) {
+        currentAspectRatio = fixedFullscreenAspectRatio.toVideoAspectRatio()
+    }
+
     DisposableEffect(Unit) {
         onDispose { playerViewRef = null }
     }
 
-    LaunchedEffect(gestureMode, gesturePercentDisplay, isGestureVisible) {
-        val isLevelGesture = gestureMode == VideoGestureMode.Brightness || gestureMode == VideoGestureMode.Volume
-        if (!isGestureVisible || !isLevelGesture) {
-            hasAnimatedGestureValue = false
-            gestureValueBlur.snapTo(0f)
-            gestureValueAlpha.snapTo(1f)
-            return@LaunchedEffect
+    LaunchedEffect(gesturePercentDisplay) {
+        if (gesturePercentDisplay != previousGesturePercentDisplay) {
+            previousGesturePercentDisplay = gesturePercentDisplay
         }
-        if (!hasAnimatedGestureValue) {
-            hasAnimatedGestureValue = true
-            return@LaunchedEffect
-        }
-        gestureValueBlur.snapTo(9f)
-        gestureValueAlpha.snapTo(0.52f)
-        launch {
-            gestureValueBlur.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(durationMillis = 220)
-            )
-        }
-        gestureValueAlpha.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 220)
-        )
     }
 
     // [新增] 共享元素过渡支持
@@ -1851,37 +1968,16 @@ fun VideoPlayerSection(
                             shadow = overlayTextShadow
                         )
                     )
-                    AnimatedContent(
-                        targetState = gesturePercentDisplay,
-                        modifier = Modifier.widthIn(min = 74.dp),
-                        contentAlignment = Alignment.Center,
-                        transitionSpec = {
-                            (fadeIn(animationSpec = tween(140)) +
-                                scaleIn(initialScale = 0.88f, animationSpec = tween(210)))
-                                .togetherWith(
-                                    fadeOut(animationSpec = tween(130)) +
-                                        scaleOut(targetScale = 1.12f, animationSpec = tween(210))
-                                )
-                        },
-                        label = "gesture-level-percent"
-                    ) { percent ->
-                        Text(
-                            text = "$percent%",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 24.sp,
-                                shadow = overlayTextShadow
-                            ),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .graphicsLayer { alpha = gestureValueAlpha.value }
-                                .blur(
-                                    radius = gestureValueBlur.value.dp,
-                                    edgeTreatment = BlurredEdgeTreatment.Unbounded
-                                )
-                        )
-                    }
+                    GesturePercentValue(
+                        percent = gesturePercentDisplay,
+                        previousPercent = previousGesturePercentDisplay,
+                        textStyle = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp
+                        ),
+                        textShadow = overlayTextShadow,
+                        modifier = Modifier.widthIn(min = 74.dp)
+                    )
                     LinearProgressIndicator(
                         progress = { gesturePercent.coerceIn(0f, 1f) },
                         modifier = Modifier
@@ -2241,7 +2337,13 @@ fun VideoPlayerSection(
                 //  视频比例调节
 
                 currentAspectRatio = currentAspectRatio,
-                onAspectRatioChange = { currentAspectRatio = it },
+                onAspectRatioChange = { ratio ->
+                    currentAspectRatio = ratio
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager
+                            .setFullscreenAspectRatio(context, ratio.toFullscreenAspectRatio())
+                    }
+                },
                 // 🕺 [新增] 分享功能
                 bvid = bvid,
                 cid = uiState.info.cid,

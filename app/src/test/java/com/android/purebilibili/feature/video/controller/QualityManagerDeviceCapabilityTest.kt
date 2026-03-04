@@ -19,7 +19,7 @@ class QualityManagerDeviceCapabilityTest {
         )
 
         assertEquals(
-            QualityPermissionResult.UnsupportedByDevice("Dolby Vision"),
+            QualityPermissionResult.UnsupportedByDevice("杜比视界"),
             result
         )
     }
@@ -35,9 +35,16 @@ class QualityManagerDeviceCapabilityTest {
         )
 
         assertEquals(
-            QualityPermissionResult.UnsupportedByDevice("HDR"),
+            QualityPermissionResult.UnsupportedByDevice("HDR 真彩"),
             result
         )
+    }
+
+    @Test
+    fun `getQualityLabel hides api qn numbers`() {
+        assertEquals("1080P+", qualityManager.getQualityLabel(112))
+        assertEquals("1080P60", qualityManager.getQualityLabel(116))
+        assertEquals("4K", qualityManager.getQualityLabel(120))
     }
 
     @Test
@@ -51,6 +58,20 @@ class QualityManagerDeviceCapabilityTest {
         )
 
         assertTrue(result is QualityPermissionResult.RequiresVip)
+    }
+
+    @Test
+    fun `checkQualityPermission allows dolby when server advertises target quality`() {
+        val result = qualityManager.checkQualityPermission(
+            qualityId = 126,
+            isLoggedIn = true,
+            isVip = true,
+            isHdrSupported = true,
+            isDolbyVisionSupported = false,
+            serverAdvertisedQualities = listOf(126, 120, 80)
+        )
+
+        assertEquals(QualityPermissionResult.Permitted, result)
     }
 
     @Test

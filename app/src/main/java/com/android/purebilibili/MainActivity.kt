@@ -57,11 +57,13 @@ import com.android.purebilibili.feature.settings.AppUpdateChecker
 import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
 import com.android.purebilibili.feature.settings.resolveUpdateReleaseNotesText
+import com.android.purebilibili.feature.settings.shouldRunAppEntryAutoCheck
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenPlayerOverlay
 import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
 import com.android.purebilibili.navigation.AppNavigation
 import dev.chrisbanes.haze.haze
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.net.URI
 import java.net.URLDecoder
@@ -599,11 +601,12 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val uriHandler = LocalUriHandler.current
             val navController = androidx.navigation.compose.rememberNavController()
-            val autoCheckUpdateEnabled by SettingsManager.getAutoCheckAppUpdate(context).collectAsState(initial = true)
             var startupUpdateCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
 
-            LaunchedEffect(autoCheckUpdateEnabled) {
-                if (autoCheckUpdateEnabled && AppUpdateAutoCheckGate.tryMarkChecked()) {
+            LaunchedEffect(Unit) {
+                val autoCheckUpdateEnabled = SettingsManager.getAutoCheckAppUpdate(context).first()
+                val gateAllowsCheck = AppUpdateAutoCheckGate.tryMarkChecked()
+                if (shouldRunAppEntryAutoCheck(autoCheckUpdateEnabled, gateAllowsCheck)) {
                     AppUpdateChecker.check(BuildConfig.VERSION_NAME).onSuccess { info ->
                         if (info.isUpdateAvailable) {
                             startupUpdateCheckResult = info

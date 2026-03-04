@@ -10,7 +10,11 @@ internal fun shouldShowLivePipButton(
 
 internal fun shouldPauseLivePlaybackOnPause(
     isInPictureInPictureMode: Boolean,
-    isPipRequested: Boolean
+    isPipRequested: Boolean,
+    shouldKeepPlayingInBackground: Boolean = false
 ): Boolean {
-    return !isInPictureInPictureMode && !isPipRequested
+    if (isInPictureInPictureMode || isPipRequested) {
+        return false
+    }
+    return !shouldKeepPlayingInBackground
 }

@@ -60,6 +60,8 @@ import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.components.UpBadgeName
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
+import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
@@ -144,11 +146,15 @@ fun CinematicVideoCard(
     // 共享元素
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val coverSharedEnabled = transitionEnabled &&
-        sharedTransitionScope != null &&
-        animatedVisibilityScope != null
-    val metadataSharedEnabled = coverSharedEnabled &&
-        !CardPositionManager.shouldLimitSharedElementsForQuickReturn()
+    val coverSharedEnabled = shouldEnableVideoCoverSharedTransition(
+        transitionEnabled = transitionEnabled,
+        hasSharedTransitionScope = sharedTransitionScope != null,
+        hasAnimatedVisibilityScope = animatedVisibilityScope != null
+    )
+    val metadataSharedEnabled = shouldEnableVideoMetadataSharedTransition(
+        coverSharedEnabled = coverSharedEnabled,
+        isQuickReturnLimited = CardPositionManager.shouldLimitSharedElementsForQuickReturn()
+    )
 
     Box(
         modifier = Modifier
@@ -202,7 +208,7 @@ fun CinematicVideoCard(
             
             // 共享元素: 封面
             val finalCoverModifier = if (coverSharedEnabled) {
-                with(sharedTransitionScope) {
+                with(requireNotNull(sharedTransitionScope)) {
                     coverModifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
                         animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
@@ -253,7 +259,7 @@ fun CinematicVideoCard(
                 // 标题
                  var titleModifier = Modifier.fillMaxWidth().semantics { contentDescription = "视频标题: ${video.title}" }
                 if (metadataSharedEnabled) {
-                    with(sharedTransitionScope) {
+                    with(requireNotNull(sharedTransitionScope)) {
                         titleModifier = titleModifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "video_title_${video.bvid}"),
                             animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
@@ -287,7 +293,7 @@ fun CinematicVideoCard(
                 ) {
                      var upNameModifier = Modifier.wrapContentSize()
                      if (metadataSharedEnabled) {
-                         with(sharedTransitionScope) {
+                         with(requireNotNull(sharedTransitionScope)) {
                              upNameModifier = upNameModifier.sharedBounds(
                                 sharedContentState = rememberSharedContentState(key = "video_up_${video.bvid}"),
                                 animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
@@ -305,7 +311,7 @@ fun CinematicVideoCard(
                                      .background(Color.White.copy(alpha = 0.2f))
 
                                  if (metadataSharedEnabled) {
-                                     with(sharedTransitionScope) {
+                                     with(requireNotNull(sharedTransitionScope)) {
                                          avatarModifier = avatarModifier.sharedBounds(
                                              sharedContentState = rememberSharedContentState(key = "video_avatar_${video.bvid}"),
                                              animatedVisibilityScope = requireNotNull(animatedVisibilityScope),

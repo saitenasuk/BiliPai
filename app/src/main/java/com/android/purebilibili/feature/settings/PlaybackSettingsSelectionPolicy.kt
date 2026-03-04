@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.store.FullscreenAspectRatio
 import com.android.purebilibili.core.store.FullscreenMode
 import com.android.purebilibili.core.store.SettingsManager
 
@@ -66,5 +67,14 @@ internal fun resolveFullscreenModeSegmentOptions(): List<PlaybackSegmentOption<F
         PlaybackSegmentOption(FullscreenMode.NONE, "不改"),
         PlaybackSegmentOption(FullscreenMode.VERTICAL, "竖屏"),
         PlaybackSegmentOption(FullscreenMode.HORIZONTAL, "横屏")
+    )
+}
+
+internal fun resolveFullscreenAspectRatioSegmentOptions(): List<PlaybackSegmentOption<FullscreenAspectRatio>> {
+    return listOf(
+        PlaybackSegmentOption(FullscreenAspectRatio.FIT, "适应"),
+        PlaybackSegmentOption(FullscreenAspectRatio.FILL, "填充"),
+        PlaybackSegmentOption(FullscreenAspectRatio.RATIO_16_9, "16:9"),
+        PlaybackSegmentOption(FullscreenAspectRatio.RATIO_4_3, "4:3")
     )
 }
