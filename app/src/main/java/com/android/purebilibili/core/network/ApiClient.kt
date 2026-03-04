@@ -345,11 +345,10 @@ interface BilibiliApi {
         @Query("index") index: Int = 1  // 是否返回时间索引，1=是
     ): VideoshotResponse
     
-    //  [新增] 获取播放器信息（包含章节/看点数据）
-    @GET("x/player/v2")
+    //  [修复] 获取播放器信息（包含章节/看点数据）— 使用 WBI 签名版本
+    @GET("x/player/wbi/v2")
     suspend fun getPlayerInfo(
-        @Query("bvid") bvid: String,
-        @Query("cid") cid: Long
+        @QueryMap params: Map<String, String>
     ): PlayerInfoResponse
 
     @GET("x/stein/edgeinfo_v2")

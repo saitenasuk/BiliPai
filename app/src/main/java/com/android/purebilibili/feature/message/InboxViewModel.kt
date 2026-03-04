@@ -37,6 +37,15 @@ data class InboxUiState(
     val userInfoMap: Map<Long, UserBasicInfo> = emptyMap()  //  用户信息缓存
 )
 
+/**
+ * 会话排序：置顶在前（按置顶时间降序），再按最近消息时间降序
+ */
+private fun List<SessionItem>.sortedByPin(): List<SessionItem> =
+    sortedWith(
+        compareByDescending<SessionItem> { it.top_ts }
+            .thenByDescending { it.session_ts }
+    )
+
 class InboxViewModel : ViewModel() {
     
     private val _uiState = MutableStateFlow(InboxUiState())
@@ -93,7 +102,7 @@ class InboxViewModel : ViewModel() {
                     
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        sessions = sessions,
+                        sessions = sessions.sortedByPin(),
                         hasMore = data.has_more == 1,
                         userInfoMap = userCache.toMap(),
                         endTs = nextEndTs
@@ -222,7 +231,7 @@ class InboxViewModel : ViewModel() {
                         "${it.talker_id}_${it.session_type}" !in existingKeys
                     }
                     
-                    val allSessions = _uiState.value.sessions + filteredNewSessions
+                    val allSessions = (_uiState.value.sessions + filteredNewSessions).sortedByPin()
                     
                     // 计算更新后的 cursor (虽然不再用于请求，但可以保留在状态中作为参考，或者直接置0)
                     val nextEndTs = 0L
@@ -278,7 +287,7 @@ class InboxViewModel : ViewModel() {
                     
                     _uiState.value = _uiState.value.copy(
                         isRefreshing = false,
-                        sessions = sessions,
+                        sessions = sessions.sortedByPin(),
                         hasMore = data.has_more == 1,
                         userInfoMap = userCache.toMap(),
                         endTs = nextEndTs
@@ -319,9 +328,23 @@ class InboxViewModel : ViewModel() {
     fun toggleTop(session: SessionItem) {
         viewModelScope.launch {
             val isCurrentlyTop = session.top_ts > 0
+            
+            // 乐观更新：立即在本地修改 top_ts 并重排
+            val now = System.currentTimeMillis() / 1000
+            val updatedSessions = _uiState.value.sessions.map {
+                if (it.talker_id == session.talker_id && it.session_type == session.session_type) {
+                    it.copy(top_ts = if (isCurrentlyTop) 0 else now)
+                } else it
+            }.sortedByPin()
+            _uiState.value = _uiState.value.copy(sessions = updatedSessions)
+            
             MessageRepository.setSessionTop(session.talker_id, session.session_type, !isCurrentlyTop)
                 .onSuccess {
-                    // 刷新列表
+                    // 后台同步服务器最新状态
+                    refresh()
+                }
+                .onFailure {
+                    // 失败时也刷新，恢复真实状态
                     refresh()
                 }
         }
