@@ -602,30 +602,31 @@ fun BottomControlBar(
         ) {
             Surface(
                 color = Color.Black.copy(alpha = 0.76f),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.16f)
+                    width = 0.5.dp,
+                    color = Color.White.copy(alpha = 0.12f)
                 )
             ) {
                 Column(
                     modifier = Modifier
-                        .widthIn(min = floatingPanelMinWidthDp.dp)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .widthIn(min = 140.dp, max = 220.dp)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = "字幕语言",
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold
+                        color = Color.White.copy(alpha = 0.88f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
                     )
                     subtitleOptions.forEach { option ->
                         SubtitlePanelOption(
                             label = option.label,
                             selected = subtitleDisplayMode == option.mode,
                             enabled = option.enabled,
-                            minWidthDp = moreActionItemMinWidthDp,
+                            minWidthDp = 80,
                             onClick = {
                                 if (!option.enabled) return@SubtitlePanelOption
                                 com.android.purebilibili.core.util.Logger.d(
@@ -638,21 +639,24 @@ fun BottomControlBar(
                         )
                     }
                     if (subtitleOptions.size > 1) {
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp)
                         ) {
                             Text(
-                                text = "字幕大字号",
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 16.sp,
+                                text = "大字号",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Switch(
                                 checked = subtitleLargeTextEnabled,
-                                onCheckedChange = onSubtitleLargeTextChange
+                                onCheckedChange = onSubtitleLargeTextChange,
+                                modifier = Modifier.height(28.dp)
                             )
                         }
                     }
@@ -788,13 +792,13 @@ private fun SubtitlePanelOption(
             else -> Color.White
         },
         textAlign = TextAlign.Center,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp,
+        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         modifier = Modifier
             .widthIn(min = minWidthDp.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 6.dp, vertical = 4.dp)
     )
 }
 

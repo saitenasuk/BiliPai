@@ -69,6 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.IntOffset
@@ -1787,13 +1788,14 @@ fun VideoPlayerSection(
                     .fillMaxWidth(0.9f)
                     .padding(horizontal = 10.dp)
                     .padding(bottom = subtitleBottomPadding)
-                    .background(
-                        Color.Black.copy(alpha = 0.42f),
-                        RoundedCornerShape(10.dp)
-                    )
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                val subtitleShadow = Shadow(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    offset = Offset(0f, 1.5f),
+                    blurRadius = 6f
+                )
                 val showPrimaryLine = !subtitlePrimaryText.isNullOrBlank()
                 val showSecondaryLine = !subtitleSecondaryText.isNullOrBlank()
                 val secondaryAsPrimaryLine = showSecondaryLine && !showPrimaryLine
@@ -1809,7 +1811,8 @@ fun VideoPlayerSection(
                         },
                         fontWeight = if (secondaryAsPrimaryLine) FontWeight.SemiBold else FontWeight.Normal,
                         maxLines = 2,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        style = LocalTextStyle.current.copy(shadow = subtitleShadow)
                     )
                 }
                 if (!subtitlePrimaryText.isNullOrBlank()) {
@@ -1819,7 +1822,8 @@ fun VideoPlayerSection(
                         fontSize = if (subtitleLargeTextByUser) 18.sp else 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 2,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        style = LocalTextStyle.current.copy(shadow = subtitleShadow)
                     )
                 }
             }

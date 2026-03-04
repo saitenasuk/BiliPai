@@ -345,9 +345,10 @@ fun ElegantVideoCard(
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 8.dp, bottom = 8.dp, end = 64.dp),
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -356,7 +357,7 @@ fun ElegantVideoCard(
                         Icon(
                             imageVector = CupertinoIcons.Outlined.PlayCircle,
                             contentDescription = null,
-                            modifier = Modifier.size(12.dp),
+                            modifier = Modifier.size(10.dp),
                             tint = Color.White.copy(alpha = 0.92f)
                         )
                         Text(
@@ -380,7 +381,7 @@ fun ElegantVideoCard(
                             Icon(
                                 imageVector = CupertinoIcons.Outlined.BubbleLeft,
                                 contentDescription = null,
-                                modifier = Modifier.size(12.dp),
+                                modifier = Modifier.size(10.dp),
                                 tint = Color.White.copy(alpha = 0.86f)
                             )
                             Text(
@@ -391,31 +392,54 @@ fun ElegantVideoCard(
                             )
                         }
                     }
-                }
-            }
-            
-            //  时长标签 - 右下角 (官方风格)
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(6.dp),
-                shape = RoundedCornerShape(smallCornerRadius),
-                color = Color.Black.copy(alpha = durationBadgeStyle.backgroundAlpha)
-            ) {
-                Text(
-                    text = FormatUtils.formatDuration(video.duration),
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    style = androidx.compose.ui.text.TextStyle(
-                        shadow = Shadow(
-                            color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
-                            offset = Offset(0f, 1f),
-                            blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    //  时长标签 (与播放量/评论数同行对齐)
+                    Surface(
+                        shape = RoundedCornerShape(smallCornerRadius),
+                        color = Color.Black.copy(alpha = durationBadgeStyle.backgroundAlpha)
+                    ) {
+                        Text(
+                            text = FormatUtils.formatDuration(video.duration),
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            style = androidx.compose.ui.text.TextStyle(
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
+                                    offset = Offset(0f, 1f),
+                                    blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
+                                )
+                            ),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                         )
-                    ),
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                )
+                    }
+                }
+            } else {
+                //  非贴封面模式时，时长标签仍独立显示在右下角
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp),
+                    shape = RoundedCornerShape(smallCornerRadius),
+                    color = Color.Black.copy(alpha = durationBadgeStyle.backgroundAlpha)
+                ) {
+                    Text(
+                        text = FormatUtils.formatDuration(video.duration),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        style = androidx.compose.ui.text.TextStyle(
+                            shadow = Shadow(
+                                color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
+                                offset = Offset(0f, 1f),
+                                blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
+                            )
+                        ),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
             }
             
         }
