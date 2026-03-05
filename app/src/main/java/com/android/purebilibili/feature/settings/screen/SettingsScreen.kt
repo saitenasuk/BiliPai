@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -115,6 +116,7 @@ fun SettingsScreen(
     
     // [新增] 黑名单页面状态
     var showBlockedList by remember { mutableStateOf(false) }
+    var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
 
     // Haze State for this screen
     val activeHazeState = mainHazeState ?: remember { dev.chrisbanes.haze.HazeState() }
@@ -470,6 +472,38 @@ fun SettingsScreen(
             Toast.makeText(context, "无法打开设置", Toast.LENGTH_SHORT).show()
         }
     }
+    val settingsSearchResults = remember(settingsSearchQuery) {
+        resolveSettingsSearchResults(
+            query = settingsSearchQuery,
+            maxResults = 12
+        )
+    }
+    val onSettingsSearchResultClick: (SettingsSearchTarget) -> Unit = { target ->
+        settingsSearchQuery = ""
+        when (target) {
+            SettingsSearchTarget.APPEARANCE -> onAppearanceClick()
+            SettingsSearchTarget.PLAYBACK -> onPlaybackClick()
+            SettingsSearchTarget.BOTTOM_BAR -> onNavigateToBottomBarSettings()
+            SettingsSearchTarget.PERMISSION -> onPermissionClick()
+            SettingsSearchTarget.BLOCKED_LIST -> onBlockedListClickAction()
+            SettingsSearchTarget.WEBDAV_BACKUP -> onWebDavBackupClick()
+            SettingsSearchTarget.DOWNLOAD_PATH -> onDownloadPathAction()
+            SettingsSearchTarget.CLEAR_CACHE -> onClearCacheAction()
+            SettingsSearchTarget.PLUGINS -> onPluginsClick()
+            SettingsSearchTarget.EXPORT_LOGS -> onExportLogsAction()
+            SettingsSearchTarget.OPEN_SOURCE_LICENSES -> onOpenSourceLicensesClick()
+            SettingsSearchTarget.OPEN_SOURCE_HOME -> onGithubClick()
+            SettingsSearchTarget.CHECK_UPDATE -> onCheckUpdateAction()
+            SettingsSearchTarget.VIEW_RELEASE_NOTES -> onViewReleaseNotesAction()
+            SettingsSearchTarget.REPLAY_ONBOARDING -> onReplayOnboardingClick()
+            SettingsSearchTarget.TIPS -> onTipsClick()
+            SettingsSearchTarget.OPEN_LINKS -> onOpenLinksAction()
+            SettingsSearchTarget.DONATE -> showDonateDialog = true
+            SettingsSearchTarget.TELEGRAM -> onTelegramClick()
+            SettingsSearchTarget.TWITTER -> onTwitterClick()
+            SettingsSearchTarget.DISCLAIMER -> onDisclaimerClick()
+        }
+    }
 
     // 页面跳转逻辑
     if (showBlockedList) {
@@ -523,6 +557,10 @@ fun SettingsScreen(
                     onDonateClick = { showDonateDialog = true },
                     onOpenLinksClick = onOpenLinksAction,
                     onBlockedListClick = onBlockedListClickAction, // Pass to tablet layout
+                    searchQuery = settingsSearchQuery,
+                    onSearchQueryChange = { settingsSearchQuery = it },
+                    searchResults = settingsSearchResults,
+                    onSearchResultClick = onSettingsSearchResultClick,
                     feedApiType = feedApiType,
                     onFeedApiTypeChange = { type ->
                         scope.launch {
@@ -601,7 +639,11 @@ fun SettingsScreen(
                     },
                     onDonateClick = { showDonateDialog = true },
                     onOpenLinksClick = onOpenLinksAction,
-                    onBlockedListClick = onBlockedListClickAction // Pass to mobile layout
+                    onBlockedListClick = onBlockedListClickAction, // Pass to mobile layout
+                    searchQuery = settingsSearchQuery,
+                    onSearchQueryChange = { settingsSearchQuery = it },
+                    searchResults = settingsSearchResults,
+                    onSearchResultClick = onSettingsSearchResultClick
                 )
             }
             
@@ -640,7 +682,7 @@ internal fun resolveCacheClearFailureMessage(error: Throwable?): String {
 }
 
 @Composable
-private fun SettingsCategoryHeader(title: String) {
+internal fun SettingsCategoryHeader(title: String) {
     Text(
         text = title,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
@@ -677,6 +719,10 @@ private fun MobileSettingsLayout(
     onDonateClick: () -> Unit,
     onOpenLinksClick: () -> Unit, // [New]
     onBlockedListClick: () -> Unit, // [New]
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    searchResults: List<SettingsSearchResult>,
+    onSearchResultClick: (SettingsSearchTarget) -> Unit,
     
     // Logic Callbacks
     onPrivacyModeChange: (Boolean) -> Unit,
@@ -756,108 +802,125 @@ private fun MobileSettingsLayout(
                 .fillMaxSize(),
             contentPadding = PaddingValues(bottom = bottomInset + 28.dp)
         ) {
-            sectionOrder.forEachIndexed { index, section ->
+            item {
+                SettingsSearchBarSection(
+                    query = searchQuery,
+                    onQueryChange = onSearchQueryChange
+                )
+            }
+
+            if (searchQuery.isNotBlank()) {
                 item {
-                    Box(modifier = Modifier.staggeredEntrance(index * 2, isVisible, motionTier = effectiveMotionTier)) {
-                        SettingsCategoryHeader(
-                            title = when (section) {
-                                MobileSettingsRootSection.FOLLOW_AUTHOR -> "关注作者"
-                                MobileSettingsRootSection.GENERAL -> "常规"
-                                MobileSettingsRootSection.PRIVACY -> "隐私与安全"
-                                MobileSettingsRootSection.STORAGE -> "数据与存储"
-                                MobileSettingsRootSection.DEVELOPER -> "开发者选项"
-                                MobileSettingsRootSection.FEED -> "推荐流"
-                                MobileSettingsRootSection.ABOUT -> "关于"
-                                MobileSettingsRootSection.SUPPORT -> "帮助与系统"
-                            }
-                        )
-                    }
+                    SettingsSearchResultsSection(
+                        results = searchResults,
+                        onResultClick = onSearchResultClick
+                    )
                 }
-                item {
-                    Box(modifier = Modifier.staggeredEntrance(index * 2 + 1, isVisible, motionTier = effectiveMotionTier)) {
-                        when (section) {
-                            MobileSettingsRootSection.FOLLOW_AUTHOR -> {
-                                FollowAuthorSection(
-                                    onTelegramClick = onTelegramClick,
-                                    onTwitterClick = onTwitterClick,
-                                    onDonateClick = onDonateClick
-                                )
-                            }
-                            MobileSettingsRootSection.GENERAL -> {
-                                GeneralSection(
-                                    onAppearanceClick = onAppearanceClick,
-                                    onPlaybackClick = onPlaybackClick,
-                                    onBottomBarClick = onNavigateToBottomBarSettings
-                                )
-                            }
-                            MobileSettingsRootSection.PRIVACY -> {
-                                PrivacySection(
-                                    privacyModeEnabled = privacyModeEnabled,
-                                    onPrivacyModeChange = onPrivacyModeChange,
-                                    onPermissionClick = onPermissionClick,
-                                    onBlockedListClick = onBlockedListClick
-                                )
-                            }
-                            MobileSettingsRootSection.STORAGE -> {
-                                DataStorageSection(
-                                    customDownloadPath = customDownloadPath,
-                                    cacheSize = cacheSize,
-                                    onWebDavBackupClick = onWebDavBackupClick,
-                                    onDownloadPathClick = onDownloadPathClick,
-                                    onClearCacheClick = onClearCacheClick
-                                )
-                            }
-                            MobileSettingsRootSection.DEVELOPER -> {
-                                DeveloperSection(
-                                    crashTrackingEnabled = crashTrackingEnabled,
-                                    analyticsEnabled = analyticsEnabled,
-                                    pluginCount = pluginCount,
-                                    onCrashTrackingChange = onCrashTrackingChange,
-                                    onAnalyticsChange = onAnalyticsChange,
-                                    onPluginsClick = onPluginsClick,
-                                    onExportLogsClick = onExportLogsClick
-                                )
-                            }
-                            MobileSettingsRootSection.FEED -> {
-                                FeedApiSection(
-                                    feedApiType = feedApiType,
-                                    onFeedApiTypeChange = onFeedApiTypeChange,
-                                    incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
-                                    onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange
-                                )
-                            }
-                            MobileSettingsRootSection.ABOUT -> {
-                                AboutSection(
-                                    versionName = versionName,
-                                    easterEggEnabled = easterEggEnabled,
-                                    onDisclaimerClick = onDisclaimerClick,
-                                    onLicenseClick = onLicenseClick,
-                                    onGithubClick = onGithubClick,
-                                    onCheckUpdateClick = onCheckUpdateClick,
-                                    onViewReleaseNotesClick = onViewReleaseNotesClick,
-                                    autoCheckUpdateEnabled = autoCheckUpdateEnabled,
-                                    onAutoCheckUpdateChange = onAutoCheckUpdateChange,
-                                    onVersionClick = onVersionClick,
-                                    onReplayOnboardingClick = onReplayOnboardingClick,
-                                    onEasterEggChange = onEasterEggChange,
-                                    updateStatusText = updateStatusText,
-                                    isCheckingUpdate = isCheckingUpdate,
-                                    versionClickCount = versionClickCount,
-                                    versionClickThreshold = versionClickThreshold
-                                )
-                            }
-                            MobileSettingsRootSection.SUPPORT -> {
-                                SupportToolsSection(
-                                    onTipsClick = onTipsClick,
-                                    onOpenLinksClick = onOpenLinksClick
-                                )
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+            } else {
+                sectionOrder.forEachIndexed { index, section ->
+                    item {
+                        Box(modifier = Modifier.staggeredEntrance(index * 2, isVisible, motionTier = effectiveMotionTier)) {
+                            SettingsCategoryHeader(
+                                title = when (section) {
+                                    MobileSettingsRootSection.FOLLOW_AUTHOR -> "关注作者"
+                                    MobileSettingsRootSection.GENERAL -> "常规"
+                                    MobileSettingsRootSection.PRIVACY -> "隐私与安全"
+                                    MobileSettingsRootSection.STORAGE -> "数据与存储"
+                                    MobileSettingsRootSection.DEVELOPER -> "开发者选项"
+                                    MobileSettingsRootSection.FEED -> "推荐流"
+                                    MobileSettingsRootSection.ABOUT -> "关于"
+                                    MobileSettingsRootSection.SUPPORT -> "帮助与系统"
+                                }
+                            )
+                        }
+                    }
+                    item {
+                        Box(modifier = Modifier.staggeredEntrance(index * 2 + 1, isVisible, motionTier = effectiveMotionTier)) {
+                            when (section) {
+                                MobileSettingsRootSection.FOLLOW_AUTHOR -> {
+                                    FollowAuthorSection(
+                                        onTelegramClick = onTelegramClick,
+                                        onTwitterClick = onTwitterClick,
+                                        onDonateClick = onDonateClick
+                                    )
+                                }
+                                MobileSettingsRootSection.GENERAL -> {
+                                    GeneralSection(
+                                        onAppearanceClick = onAppearanceClick,
+                                        onPlaybackClick = onPlaybackClick,
+                                        onBottomBarClick = onNavigateToBottomBarSettings
+                                    )
+                                }
+                                MobileSettingsRootSection.PRIVACY -> {
+                                    PrivacySection(
+                                        privacyModeEnabled = privacyModeEnabled,
+                                        onPrivacyModeChange = onPrivacyModeChange,
+                                        onPermissionClick = onPermissionClick,
+                                        onBlockedListClick = onBlockedListClick
+                                    )
+                                }
+                                MobileSettingsRootSection.STORAGE -> {
+                                    DataStorageSection(
+                                        customDownloadPath = customDownloadPath,
+                                        cacheSize = cacheSize,
+                                        onWebDavBackupClick = onWebDavBackupClick,
+                                        onDownloadPathClick = onDownloadPathClick,
+                                        onClearCacheClick = onClearCacheClick
+                                    )
+                                }
+                                MobileSettingsRootSection.DEVELOPER -> {
+                                    DeveloperSection(
+                                        crashTrackingEnabled = crashTrackingEnabled,
+                                        analyticsEnabled = analyticsEnabled,
+                                        pluginCount = pluginCount,
+                                        onCrashTrackingChange = onCrashTrackingChange,
+                                        onAnalyticsChange = onAnalyticsChange,
+                                        onPluginsClick = onPluginsClick,
+                                        onExportLogsClick = onExportLogsClick
+                                    )
+                                }
+                                MobileSettingsRootSection.FEED -> {
+                                    FeedApiSection(
+                                        feedApiType = feedApiType,
+                                        onFeedApiTypeChange = onFeedApiTypeChange,
+                                        incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
+                                        onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange
+                                    )
+                                }
+                                MobileSettingsRootSection.ABOUT -> {
+                                    AboutSection(
+                                        versionName = versionName,
+                                        easterEggEnabled = easterEggEnabled,
+                                        onDisclaimerClick = onDisclaimerClick,
+                                        onLicenseClick = onLicenseClick,
+                                        onGithubClick = onGithubClick,
+                                        onCheckUpdateClick = onCheckUpdateClick,
+                                        onViewReleaseNotesClick = onViewReleaseNotesClick,
+                                        autoCheckUpdateEnabled = autoCheckUpdateEnabled,
+                                        onAutoCheckUpdateChange = onAutoCheckUpdateChange,
+                                        onVersionClick = onVersionClick,
+                                        onReplayOnboardingClick = onReplayOnboardingClick,
+                                        onEasterEggChange = onEasterEggChange,
+                                        updateStatusText = updateStatusText,
+                                        isCheckingUpdate = isCheckingUpdate,
+                                        versionClickCount = versionClickCount,
+                                        versionClickThreshold = versionClickThreshold
+                                    )
+                                }
+                                MobileSettingsRootSection.SUPPORT -> {
+                                    SupportToolsSection(
+                                        onTipsClick = onTipsClick,
+                                        onOpenLinksClick = onOpenLinksClick
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            item { Spacer(modifier = Modifier.height(16.dp)) }
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+            }
         }
     }
 }

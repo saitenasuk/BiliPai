@@ -345,11 +345,10 @@ interface BilibiliApi {
         @Query("index") index: Int = 1  // 是否返回时间索引，1=是
     ): VideoshotResponse
     
-    //  [新增] 获取播放器信息（包含章节/看点数据）
-    @GET("x/player/v2")
+    //  [修复] 获取播放器信息（包含章节/看点数据）— 使用 WBI 签名版本
+    @GET("x/player/wbi/v2")
     suspend fun getPlayerInfo(
-        @Query("bvid") bvid: String,
-        @Query("cid") cid: Long
+        @QueryMap params: Map<String, String>
     ): PlayerInfoResponse
 
     @GET("x/stein/edgeinfo_v2")
@@ -1050,7 +1049,7 @@ interface PassportApi {
     @retrofit2.http.POST("x/passport-login/web/sms/send")
     suspend fun sendSmsCode(
         @retrofit2.http.Field("cid") cid: Int = 86,           // 国家代码，中国大陆 = 86
-        @retrofit2.http.Field("tel") tel: Long,                // 手机号
+        @retrofit2.http.Field("tel") tel: String,              // 手机号
         @retrofit2.http.Field("source") source: String = "main_web",
         @retrofit2.http.Field("token") token: String,          // captcha token
         @retrofit2.http.Field("challenge") challenge: String,  // 极验 challenge
@@ -1063,7 +1062,7 @@ interface PassportApi {
     @retrofit2.http.POST("x/passport-login/web/login/sms")
     suspend fun loginBySms(
         @retrofit2.http.Field("cid") cid: Int = 86,
-        @retrofit2.http.Field("tel") tel: Long,
+        @retrofit2.http.Field("tel") tel: String,
         @retrofit2.http.Field("code") code: Int,                // 短信验证码
         @retrofit2.http.Field("source") source: String = "main_mini",
         @retrofit2.http.Field("captcha_key") captchaKey: String, // sendSmsCode 返回的 key
@@ -1079,7 +1078,7 @@ interface PassportApi {
     @retrofit2.http.FormUrlEncoded
     @retrofit2.http.POST("x/passport-login/web/login")
     suspend fun loginByPassword(
-        @retrofit2.http.Field("username") username: Long,       // 手机号
+        @retrofit2.http.Field("username") username: String,     // 手机号
         @retrofit2.http.Field("password") password: String,     // RSA 加密后的密码
         @retrofit2.http.Field("keep") keep: Int = 0,
         @retrofit2.http.Field("token") token: String,

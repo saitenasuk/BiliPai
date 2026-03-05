@@ -75,6 +75,8 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.ui.performance.TrackJankStateFlag
+import com.android.purebilibili.core.ui.performance.TrackJankStateValue
 import com.android.purebilibili.core.util.resolveScrollToTopPlan
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import coil.imageLoader
@@ -107,6 +109,7 @@ fun HomeScreen(
     onVideoClick: (HomeVideoClickRequest) -> Unit,
     onAvatarClick: () -> Unit,
     onProfileClick: () -> Unit,
+    onLogout: (() -> Unit)? = null,
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
     //  新增：动态页面回调
@@ -128,7 +131,8 @@ fun HomeScreen(
     onDownloadClick: () -> Unit = {},  // 离线缓存页面
     onInboxClick: () -> Unit = {},  // 私信页面
     onStoryClick: () -> Unit = {},  //  [新增] 竖屏短视频
-    globalHazeState: dev.chrisbanes.haze.HazeState? = null  //  [新增] 全局底栏模糊状态
+    globalHazeState: dev.chrisbanes.haze.HazeState? = null,  //  [新增] 全局底栏模糊状态
+    predictiveBackAnimationEnabled: Boolean = true
 ) {
     val state by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -203,6 +207,14 @@ fun HomeScreen(
     val initialPage = resolveHomeTopTabIndex(state.currentCategory, topCategories)
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topCategories.size }
     var hasSyncedPagerWithState by remember(topCategories) { mutableStateOf(false) }
+    TrackJankStateFlag(
+        stateName = "home:pager_swipe",
+        isActive = pagerState.isScrollInProgress
+    )
+    TrackJankStateValue(
+        stateName = "home:current_category",
+        stateValue = state.currentCategory.name
+    )
 
     // [修复] 仅在完成首次“状态->Pager”对齐后，才允许“Pager->状态”反向同步，避免返回首页时误跳分类。
     LaunchedEffect(pagerState, topCategories, hasSyncedPagerWithState, state.currentCategory) {
@@ -432,7 +444,8 @@ fun HomeScreen(
     val baseIsBottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled
     val crashTrackingConsentShown = homeSettings.crashTrackingConsentShown
     val baseCardAnimationEnabled = homeSettings.cardAnimationEnabled      //  卡片进场动画开关
-    val baseCardTransitionEnabled = homeSettings.cardTransitionEnabled    //  卡片过渡动画开关
+    val baseCardTransitionEnabled = homeSettings.cardTransitionEnabled &&
+        !predictiveBackAnimationEnabled // 预测返回模式下禁用首页共享元素，避免叠层滞留
     val baseIsLiquidGlassEnabled = homeSettings.isLiquidGlassEnabled      //  流体玻璃特效开关
     val baseIsDataSaverActive = remember(context) {
         com.android.purebilibili.core.store.SettingsManager.isDataSaverActive(context)
@@ -451,7 +464,8 @@ fun HomeScreen(
             liquidGlassEnabled = baseIsLiquidGlassEnabled,
             cardAnimationEnabled = baseCardAnimationEnabled,
             cardTransitionEnabled = baseCardTransitionEnabled,
-            isDataSaverActive = baseIsDataSaverActive
+            isDataSaverActive = baseIsDataSaverActive,
+            smartVisualGuardEnabled = homeSettings.smartVisualGuardEnabled
         )
     }
     val isHeaderBlurEnabled = homePerformanceConfig.headerBlurEnabled
@@ -1096,6 +1110,7 @@ fun HomeScreen(
                                      cardAnimationEnabled = cardAnimationEnabled,
                                      cardMotionTier = cardMotionTier,
                                      cardTransitionEnabled = cardTransitionEnabled,
+                                     smartVisualGuardEnabled = homeSettings.smartVisualGuardEnabled,
                                      isDataSaverActive = isDataSaverActive,
                                      compactStatsOnCover = homeSettings.compactVideoStatsOnCover,
                                      oldContentAnchorBvid = if (category == HomeCategory.RECOMMEND &&
@@ -1145,6 +1160,21 @@ fun HomeScreen(
 
         //  [Restored] Header 始终显示，不再随 Loading/Error 状态隐藏
         //  这保证了 Tab 指示器状态的连续性，防止消失或重置
+        val activeGridState = gridStates[state.currentCategory]
+        val isFeedScrollInProgress by remember(activeGridState) {
+            derivedStateOf { activeGridState?.isScrollInProgress == true }
+        }
+        val isHeaderTransitionRunning by remember(pagerState) {
+            derivedStateOf {
+                kotlin.math.abs(headerOffsetHeightPx) > 0.5f || pagerState.isScrollInProgress
+            }
+        }
+        TrackJankStateFlag(
+            stateName = "home:header_transition",
+            isActive = isHeaderTransitionRunning
+        )
+        val forceLowBlurBudget = homeSettings.smartVisualGuardEnabled &&
+            (isFeedScrollInProgress || isHeaderTransitionRunning || isVideoNavigating || isDrawerOpenOrOpening)
         
         // Calculate parameters based on scroll
         // 1. Search Bar Collapse (First phase)
@@ -1188,7 +1218,11 @@ fun HomeScreen(
                 isDelayedForCardSettle = delayTopTabsUntilCardSettled,
                 isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav,
                 isReturningFromDetail = CardPositionManager.isReturningFromDetail
-            )
+            ),
+            motionTier = deviceUiProfile.motionTier,
+            isScrolling = isFeedScrollInProgress,
+            isTransitionRunning = isHeaderTransitionRunning,
+            forceLowBlurBudget = forceLowBlurBudget
         )
 
         AnimatedVisibility(
@@ -1302,6 +1336,21 @@ fun HomeScreen(
                     viewModel.addToWatchLater(item.bvid, item.aid)
                     targetVideoItemState.value = null
                 },
+                onSaveCover = {
+                    val coverUrl = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(item.pic)
+                    if (coverUrl.isBlank()) {
+                        android.widget.Toast.makeText(context, "无法获取封面地址", android.widget.Toast.LENGTH_SHORT).show()
+                        targetVideoItemState.value = null
+                    } else {
+                        coroutineScope.launch {
+                            val success = com.android.purebilibili.feature.download.DownloadManager
+                                .saveImageToGallery(context, coverUrl, item.title)
+                            val message = if (success) "封面已保存到相册" else "保存失败"
+                            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                        targetVideoItemState.value = null
+                    }
+                },
                 onShare = {
                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -1337,7 +1386,10 @@ fun HomeScreen(
                     MineSideDrawer(
                         drawerState = drawerState,
                         user = state.user,
-                        onLogout = { /* 登出后由 ProfileScreen 处理 */ },
+                        onLogout = resolveHomeDrawerLogoutAction(
+                            onLogout = onLogout,
+                            onProfileClick = onProfileClick
+                        ),
                         onHistoryClick = onHistoryClick,
                         onFavoriteClick = onFavoriteClick,
                         onBangumiClick = { onBangumiClick(1) },
@@ -1585,14 +1637,14 @@ internal fun resolveReturnAnimationSuppressionDurationMs(
     isQuickReturnFromDetail: Boolean
 ): Long {
     if (cardTransitionEnabled && isQuickReturnFromDetail) {
-        return if (isTabletLayout) 500L else 360L
+        return if (isTabletLayout) 500L else 380L
     }
-    if (!cardTransitionEnabled) {
-        if (!cardAnimationEnabled) return 90L
-        return if (isTabletLayout) 220L else 150L
+    if (cardTransitionEnabled) {
+        if (!cardAnimationEnabled) return if (isTabletLayout) 420L else 360L
+        return if (isTabletLayout) 420L else 360L
     }
-    if (!cardAnimationEnabled) return 120L
-    return if (isTabletLayout) 420L else 260L
+    if (!cardAnimationEnabled) return 220L
+    return if (isTabletLayout) 220L else 240L
 }
 
 internal fun resolveBottomBarRestoreDelayMs(

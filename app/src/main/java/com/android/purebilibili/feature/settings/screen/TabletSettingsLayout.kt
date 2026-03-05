@@ -74,6 +74,10 @@ fun TabletSettingsLayout(
     onTipsClick: () -> Unit, // [Feature]
     onOpenLinksClick: () -> Unit, // [New]
     onBlockedListClick: () -> Unit, // [New]
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    searchResults: List<SettingsSearchResult>,
+    onSearchResultClick: (SettingsSearchTarget) -> Unit,
     
     // Logic Callbacks
     onPrivacyModeChange: (Boolean) -> Unit,
@@ -163,6 +167,10 @@ fun TabletSettingsLayout(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 16.dp, start = 8.dp)
                 )
+                SettingsSearchBarSection(
+                    query = searchQuery,
+                    onQueryChange = onSearchQueryChange
+                )
 
                 SettingsCategory.entries.forEach { category ->
                             val isSelected = category == selectedCategory
@@ -209,7 +217,17 @@ fun TabletSettingsLayout(
                 ) {
                 // If we have an active detail, show it. Otherwise show Category Root.
                 val detail = activeDetail
-                if (detail != null) {
+                if (searchQuery.isNotBlank()) {
+                    Column(modifier = Modifier.widthIn(max = layoutPolicy.detailMaxWidthDp.dp)) {
+                        SettingsSearchResultsSection(
+                            results = searchResults,
+                            onResultClick = { target ->
+                                activeDetail = null
+                                onSearchResultClick(target)
+                            }
+                        )
+                    }
+                } else if (detail != null) {
                     // Sub-page Content
                     Column(modifier = Modifier.widthIn(max = layoutPolicy.detailMaxWidthDp.dp)) {
                         // Header with Back Button

@@ -1,0 +1,43 @@
+package com.android.purebilibili.feature.settings
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class SettingsSearchPolicyTest {
+
+    @Test
+    fun blankQuery_returnsEmptyList() {
+        val results = resolveSettingsSearchResults("   ")
+
+        assertTrue(results.isEmpty())
+    }
+
+    @Test
+    fun queryByChineseKeyword_hitsExpectedSetting() {
+        val results = resolveSettingsSearchResults("缓存")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.CLEAR_CACHE })
+    }
+
+    @Test
+    fun queryByEnglishAlias_isCaseInsensitive() {
+        val results = resolveSettingsSearchResults("gItHuB")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.OPEN_SOURCE_HOME })
+    }
+
+    @Test
+    fun prefixMatch_ranksBeforeGenericContains() {
+        val results = resolveSettingsSearchResults("检查")
+
+        assertEquals(SettingsSearchTarget.CHECK_UPDATE, results.firstOrNull()?.target)
+    }
+
+    @Test
+    fun limit_isRespected() {
+        val results = resolveSettingsSearchResults("设", maxResults = 3)
+
+        assertEquals(3, results.size)
+    }
+}

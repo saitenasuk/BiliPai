@@ -157,4 +157,128 @@ class AppNavigationTransitionPolicyTest {
             )
         )
     }
+
+    @Test
+    fun predictiveBack_enabled_withCardTransitionAndSharedReady_disablesOneTakeReturnForStability() {
+        assertFalse(
+            shouldPreferOneTakeVideoToHomeReturn(
+                predictiveBackAnimationEnabled = true,
+                cardTransitionEnabled = true,
+                sharedTransitionReady = true
+            )
+        )
+    }
+
+    @Test
+    fun predictiveBack_disabled_neverPrefersOneTakeReturn() {
+        assertFalse(
+            shouldPreferOneTakeVideoToHomeReturn(
+                predictiveBackAnimationEnabled = false,
+                cardTransitionEnabled = true,
+                sharedTransitionReady = true
+            )
+        )
+    }
+
+    @Test
+    fun predictiveBack_disabled_withCardTransition_usesClassicBackRouteMotion() {
+        assertTrue(
+            shouldUseClassicBackRouteMotion(
+                predictiveBackAnimationEnabled = false,
+                cardTransitionEnabled = true
+            )
+        )
+        assertFalse(
+            shouldUseClassicBackRouteMotion(
+                predictiveBackAnimationEnabled = true,
+                cardTransitionEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun predictiveBack_enabled_withCardTransition_usesPredictiveStableBackRouteMotion() {
+        assertTrue(
+            shouldUsePredictiveStableBackRouteMotion(
+                predictiveBackAnimationEnabled = true,
+                cardTransitionEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun predictiveBack_disabled_orCardTransitionDisabled_doesNotUsePredictiveStableBackRouteMotion() {
+        assertFalse(
+            shouldUsePredictiveStableBackRouteMotion(
+                predictiveBackAnimationEnabled = false,
+                cardTransitionEnabled = true
+            )
+        )
+        assertFalse(
+            shouldUsePredictiveStableBackRouteMotion(
+                predictiveBackAnimationEnabled = true,
+                cardTransitionEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun predictiveBack_enabled_withCardTransition_usesLinkedSettingsBackMotion() {
+        assertTrue(
+            shouldUseLinkedSettingsBackMotion(
+                predictiveBackAnimationEnabled = true,
+                cardTransitionEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun predictiveBack_disabled_forSettingsBackMotion_fallsBackToClassic() {
+        assertFalse(
+            shouldUseLinkedSettingsBackMotion(
+                predictiveBackAnimationEnabled = false,
+                cardTransitionEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun cardTransition_disabled_forSettingsBackMotion_staysClassic() {
+        assertFalse(
+            shouldUseLinkedSettingsBackMotion(
+                predictiveBackAnimationEnabled = true,
+                cardTransitionEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun returningFromDetailToHome_shouldNotDeferBottomBarReveal() {
+        assertFalse(
+            shouldDeferBottomBarRevealOnVideoReturn(
+                isReturningFromDetail = true,
+                currentRoute = ScreenRoutes.Home.route
+            )
+        )
+    }
+
+    @Test
+    fun notReturningFromDetail_shouldNotDeferBottomBarReveal() {
+        assertFalse(
+            shouldDeferBottomBarRevealOnVideoReturn(
+                isReturningFromDetail = false,
+                currentRoute = ScreenRoutes.Home.route
+            )
+        )
+    }
+
+    @Test
+    fun returningFromDetailOnNonHomeRoute_shouldNotDeferBottomBarReveal() {
+        assertFalse(
+            shouldDeferBottomBarRevealOnVideoReturn(
+                isReturningFromDetail = true,
+                currentRoute = ScreenRoutes.History.route
+            )
+        )
+    }
 }

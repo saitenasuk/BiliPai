@@ -20,8 +20,6 @@ import android.webkit.WebViewClient
 import java.security.KeyFactory
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.Cipher
-import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
  * 极验验证管理器 (WebView 方案)
@@ -59,6 +57,10 @@ class CaptchaManager(private val activity: Activity) {
             
             // 创建 WebView
             webView = WebView(activity).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = true
@@ -129,17 +131,18 @@ class CaptchaManager(private val activity: Activity) {
             dialog?.show()
             
             dialog?.window?.apply {
+                val policy = resolveCaptchaDialogLayoutPolicy(
+                    screenWidthPx = activity.resources.displayMetrics.widthPixels,
+                    screenHeightPx = activity.resources.displayMetrics.heightPixels,
+                    density = activity.resources.displayMetrics.density
+                )
                 setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
                 setGravity(Gravity.CENTER)
-                val widthPx = min(
-                    (activity.resources.displayMetrics.widthPixels * 0.92f).roundToInt(),
-                    dp(420)
-                )
-                setLayout(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT)
-                setDimAmount(0.42f)
+                setLayout(policy.widthPx, policy.heightPx)
+                setDimAmount(policy.dimAmount)
                 setSoftInputMode(
                     WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN or
-                        WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+                        WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                 )
             }
             
@@ -175,11 +178,16 @@ class CaptchaManager(private val activity: Activity) {
         }
         html, body {
             width: 100%;
+            min-height: 100%;
+            height: 100%;
             background: ${pageBg};
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         .container {
-            width: 100%;
+            width: min(100%, 392px);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -285,8 +293,6 @@ class CaptchaManager(private val activity: Activity) {
 </html>
         """.trimIndent()
     }
-
-    private fun dp(value: Int): Int = (value * activity.resources.displayMetrics.density).roundToInt()
 
     private fun hideKeyboard() {
         try {

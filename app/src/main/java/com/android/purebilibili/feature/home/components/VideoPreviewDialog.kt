@@ -49,6 +49,8 @@ import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.zIndex
 
+internal fun shouldEnableSaveCoverAction(coverUrl: String): Boolean = coverUrl.isNotBlank()
+
 /**
  * iOS 3D Touch style Preview Dialog
  */
@@ -58,6 +60,7 @@ fun VideoPreviewDialog(
     onDismiss: () -> Unit,
     onWatchLater: () -> Unit,
     onShare: () -> Unit,
+    onSaveCover: (() -> Unit)? = null,
     onPlay: () -> Unit, // Navigate to Full Screen
     onNotInterested: (() -> Unit)? = null,
     onGetPreviewUrl: suspend (String, Long) -> String? = { _, _ -> null }, // [New] Fetch Url
@@ -231,8 +234,21 @@ fun VideoPreviewDialog(
                             }
                         )
                         
-                        MenuDivider()
+                        if (onSaveCover != null && shouldEnableSaveCoverAction(video.pic)) {
+                            MenuDivider()
+                            PreviewMenuItem(
+                                text = "保存封面",
+                                icon = CupertinoIcons.Default.Photo,
+                                onClick = {
+                                    haptic(HapticType.MEDIUM)
+                                    onSaveCover()
+                                    onDismiss()
+                                }
+                            )
+                        }
                         
+                        MenuDivider()
+
                         // Share
                         PreviewMenuItem(
                             text = "分享",

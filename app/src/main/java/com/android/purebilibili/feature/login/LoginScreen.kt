@@ -211,13 +211,13 @@ private fun WideLoginSheetContent(
             BrandingHeader(isSmall = false)
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "扫码登录推荐用于高画质播放",
+                text = "仅扫码登录可解锁更高画质（4K/HDR/1080P60）",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "手机号登录适合快速验证，扫码登录更稳定。",
+                text = "手机号登录可正常使用，但高码率播放能力以扫码登录为准。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 lineHeight = 18.sp

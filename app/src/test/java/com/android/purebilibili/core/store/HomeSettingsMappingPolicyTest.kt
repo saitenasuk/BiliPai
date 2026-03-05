@@ -26,6 +26,8 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
         assertFalse(result.cardAnimationEnabled)
         assertTrue(result.cardTransitionEnabled)
+        assertTrue(result.predictiveBackAnimationEnabled)
+        assertTrue(result.smartVisualGuardEnabled)
         assertTrue(result.compactVideoStatsOnCover)
         assertFalse(result.crashTrackingConsentShown)
     }
@@ -45,6 +47,8 @@ class HomeSettingsMappingPolicyTest {
             intPreferencesKey("grid_column_count") to 4,
             booleanPreferencesKey("card_animation_enabled") to true,
             booleanPreferencesKey("card_transition_enabled") to false,
+            booleanPreferencesKey("predictive_back_animation_enabled") to false,
+            booleanPreferencesKey("smart_visual_guard_enabled") to false,
             booleanPreferencesKey("compact_video_stats_on_cover") to false,
             booleanPreferencesKey("crash_tracking_consent_shown") to true
         )
@@ -63,6 +67,8 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(4, result.gridColumnCount)
         assertTrue(result.cardAnimationEnabled)
         assertFalse(result.cardTransitionEnabled)
+        assertFalse(result.predictiveBackAnimationEnabled)
+        assertFalse(result.smartVisualGuardEnabled)
         assertFalse(result.compactVideoStatsOnCover)
         assertTrue(result.crashTrackingConsentShown)
     }

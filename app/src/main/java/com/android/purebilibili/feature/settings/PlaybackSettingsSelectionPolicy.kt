@@ -50,6 +50,16 @@ internal fun resolveSegmentedSwipeTargetIndex(
     }
 }
 
+internal fun resolveDefaultPlaybackQualityOptions(): List<PlaybackSegmentOption<Int>> {
+    return listOf(
+        PlaybackSegmentOption(116, "1080P60"),
+        PlaybackSegmentOption(80, "1080P"),
+        PlaybackSegmentOption(64, "720P"),
+        PlaybackSegmentOption(32, "480P"),
+        PlaybackSegmentOption(16, "360P")
+    )
+}
+
 internal fun resolveFeedApiSegmentOptions(
     entries: List<SettingsManager.FeedApiType> = SettingsManager.FeedApiType.entries
 ): List<PlaybackSegmentOption<SettingsManager.FeedApiType>> {
@@ -75,6 +85,7 @@ internal fun resolveFullscreenAspectRatioSegmentOptions(): List<PlaybackSegmentO
         PlaybackSegmentOption(FullscreenAspectRatio.FIT, "适应"),
         PlaybackSegmentOption(FullscreenAspectRatio.FILL, "填充"),
         PlaybackSegmentOption(FullscreenAspectRatio.RATIO_16_9, "16:9"),
-        PlaybackSegmentOption(FullscreenAspectRatio.RATIO_4_3, "4:3")
+        PlaybackSegmentOption(FullscreenAspectRatio.RATIO_4_3, "4:3"),
+        PlaybackSegmentOption(FullscreenAspectRatio.STRETCH, "拉伸")
     )
 }

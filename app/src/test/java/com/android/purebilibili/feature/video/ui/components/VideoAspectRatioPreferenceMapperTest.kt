@@ -12,6 +12,7 @@ class VideoAspectRatioPreferenceMapperTest {
         assertEquals(VideoAspectRatio.FILL, FullscreenAspectRatio.FILL.toVideoAspectRatio())
         assertEquals(VideoAspectRatio.RATIO_16_9, FullscreenAspectRatio.RATIO_16_9.toVideoAspectRatio())
         assertEquals(VideoAspectRatio.RATIO_4_3, FullscreenAspectRatio.RATIO_4_3.toVideoAspectRatio())
+        assertEquals(VideoAspectRatio.STRETCH, FullscreenAspectRatio.STRETCH.toVideoAspectRatio())
     }
 
     @Test
@@ -20,5 +21,6 @@ class VideoAspectRatioPreferenceMapperTest {
         assertEquals(FullscreenAspectRatio.FILL, VideoAspectRatio.FILL.toFullscreenAspectRatio())
         assertEquals(FullscreenAspectRatio.RATIO_16_9, VideoAspectRatio.RATIO_16_9.toFullscreenAspectRatio())
         assertEquals(FullscreenAspectRatio.RATIO_4_3, VideoAspectRatio.RATIO_4_3.toFullscreenAspectRatio())
+        assertEquals(FullscreenAspectRatio.STRETCH, VideoAspectRatio.STRETCH.toFullscreenAspectRatio())
     }
 }

@@ -42,6 +42,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
@@ -487,7 +489,7 @@ fun QrCodeLoginContent(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "推荐用于高画质播放与更稳定的登录体验",
+            text = "仅扫码登录可解锁更高画质（4K/HDR/1080P60）",
             color = palette.secondaryText,
             fontSize = 13.sp,
             textAlign = TextAlign.Center
@@ -616,7 +618,14 @@ fun PhoneLoginContent(
 
     var phoneNumber by rememberSaveable { mutableStateOf("") }
     var smsCode by rememberSaveable { mutableStateOf("") }
+    var selectedRegionCid by rememberSaveable { mutableStateOf(86) }
     var captchaManager by remember { mutableStateOf<CaptchaManager?>(null) }
+    var regionMenuExpanded by remember { mutableStateOf(false) }
+    val phoneRegions = remember { resolveSupportedPhoneRegions() }
+    val selectedRegion = remember(selectedRegionCid, phoneRegions) {
+        phoneRegions.firstOrNull { it.cid == selectedRegionCid } ?: phoneRegions.first()
+    }
+    val phoneEligible = isPhoneEligibleForCaptcha(phoneNumber, selectedRegion)
 
     DisposableEffect(Unit) {
         onDispose { captchaManager?.destroy() }
@@ -626,15 +635,24 @@ fun PhoneLoginContent(
     val captchaData = (state as? LoginState.CaptchaReady)?.captchaData
     val showCodeInput = state is LoginState.SmsSent || smsCode.isNotEmpty()
 
-    LaunchedEffect(captchaReady, captchaData, phoneNumber) {
-        if (captchaReady && captchaData != null && activity != null && phoneNumber.length == 11) {
+    LaunchedEffect(selectedRegionCid) {
+        if (phoneNumber.length > selectedRegion.maxDigits) {
+            phoneNumber = phoneNumber.take(selectedRegion.maxDigits)
+        }
+    }
+
+    LaunchedEffect(captchaReady, captchaData, phoneNumber, selectedRegionCid) {
+        if (captchaReady && captchaData != null && activity != null && phoneEligible) {
             captchaManager = CaptchaManager(activity)
             captchaManager?.startCaptcha(
                 gt = captchaData.geetest?.gt ?: "",
                 challenge = captchaData.geetest?.challenge ?: "",
                 onSuccess = { validate, seccode, challenge ->
                     viewModel.saveCaptchaResult(validate, seccode, challenge)
-                    viewModel.sendSmsCode(phoneNumber.toLongOrNull() ?: 0L)
+                    viewModel.sendSmsCode(
+                        phone = phoneNumber,
+                        countryCode = selectedRegion.cid
+                    )
                 },
                 onFailed = { error ->
                     android.util.Log.e("PhoneLogin", "Captcha failed: $error")
@@ -664,19 +682,82 @@ fun PhoneLoginContent(
             modifier = Modifier.fillMaxWidth(0.92f)
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = palette.segmentTrack,
+            border = BorderStroke(1.dp, palette.segmentBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = CupertinoIcons.Filled.Star,
+                    contentDescription = null,
+                    tint = palette.buttonGradientStart,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "提示：仅扫码登录可解锁更高画质（4K/HDR/1080P60）",
+                    fontSize = 12.sp,
+                    color = palette.tertiaryText
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(18.dp))
 
-        ModernTextField(
-            value = phoneNumber,
-            onValueChange = { value ->
-                if (value.length <= 11 && value.all { it.isDigit() }) {
-                    phoneNumber = value
-                }
-            },
-            placeholder = "+86 中国大陆手机号",
-            icon = CupertinoIcons.Filled.Phone,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CountryCodeSelector(
+                region = selectedRegion,
+                onClick = { regionMenuExpanded = true },
+                modifier = Modifier.width(152.dp)
+            )
+            ModernTextField(
+                value = phoneNumber,
+                onValueChange = { value ->
+                    if (value.length <= selectedRegion.maxDigits && value.all { it.isDigit() }) {
+                        phoneNumber = value
+                    }
+                },
+                placeholder = "${selectedRegion.dialingCode} ${selectedRegion.name}手机号",
+                icon = CupertinoIcons.Filled.Phone,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        DropdownMenu(
+            expanded = regionMenuExpanded,
+            onDismissRequest = { regionMenuExpanded = false }
+        ) {
+            phoneRegions.forEach { region ->
+                DropdownMenuItem(
+                    text = { Text("${region.dialingCode} ${region.name}") },
+                    onClick = {
+                        selectedRegionCid = region.cid
+                        regionMenuExpanded = false
+                    }
+                )
+            }
+        }
+
+        if (phoneNumber.isNotBlank() && !phoneEligible) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "号码长度需为 ${selectedRegion.minDigits}-${selectedRegion.maxDigits} 位",
+                color = palette.tertiaryText,
+                fontSize = 12.sp,
+                modifier = Modifier.fillMaxWidth(0.96f)
+            )
+        }
 
         if (showCodeInput) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -735,7 +816,7 @@ fun PhoneLoginContent(
                     keyboardController?.hide()
                     viewModel.getCaptcha()
                 },
-                enabled = phoneNumber.length == 11 && state !is LoginState.Loading
+                enabled = phoneEligible && state !is LoginState.Loading
             ) {
                 Text(text = "重新获取验证码", color = palette.link, fontSize = 13.sp)
             }
@@ -747,7 +828,7 @@ fun PhoneLoginContent(
                     keyboardController?.hide()
                     viewModel.getCaptcha()
                 },
-                enabled = phoneNumber.length == 11,
+                enabled = phoneEligible,
                 isLoading = state is LoginState.Loading
             )
         }
@@ -766,13 +847,55 @@ fun PhoneLoginContent(
 }
 
 @Composable
+private fun CountryCodeSelector(
+    region: PhoneRegion,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val palette = rememberLoginPalette()
+    Row(
+        modifier = modifier
+            .heightIn(min = 54.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(palette.inputFill)
+            .border(1.dp, palette.inputStroke, RoundedCornerShape(14.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = region.dialingCode,
+            color = palette.inputText,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = region.name,
+            color = palette.inputPlaceholder,
+            fontSize = 12.sp,
+            maxLines = 1,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "▾",
+            color = palette.inputIcon,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
 fun ModernTextField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     visualTransformation: VisualTransformation = VisualTransformation.None,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    modifier: Modifier = Modifier
 ) {
     val palette = rememberLoginPalette()
 
@@ -788,7 +911,7 @@ fun ModernTextField(
             fontWeight = FontWeight.Medium
         ),
         cursorBrush = SolidColor(palette.buttonFill),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         decorationBox = { innerTextField ->
             Box(
                 modifier = Modifier

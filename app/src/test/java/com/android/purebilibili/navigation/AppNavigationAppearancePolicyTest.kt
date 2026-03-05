@@ -15,11 +15,13 @@ class AppNavigationAppearancePolicyTest {
                 isBottomBarFloating = false,
                 bottomBarLabelMode = 2,
                 isBottomBarBlurEnabled = false,
-                cardTransitionEnabled = false
+                cardTransitionEnabled = false,
+                predictiveBackAnimationEnabled = false
             )
         )
 
         assertFalse(appearance.cardTransitionEnabled)
+        assertFalse(appearance.predictiveBackAnimationEnabled)
         assertFalse(appearance.bottomBarBlurEnabled)
         assertEquals(2, appearance.bottomBarLabelMode)
         assertFalse(appearance.bottomBarFloating)
@@ -30,6 +32,7 @@ class AppNavigationAppearancePolicyTest {
         val appearance = resolveAppNavigationAppearance(HomeSettings())
 
         assertTrue(appearance.cardTransitionEnabled)
+        assertTrue(appearance.predictiveBackAnimationEnabled)
         assertTrue(appearance.bottomBarBlurEnabled)
         assertEquals(0, appearance.bottomBarLabelMode)
         assertTrue(appearance.bottomBarFloating)

@@ -4,6 +4,7 @@ import com.android.purebilibili.core.store.HomeSettings
 
 internal data class AppNavigationAppearance(
     val cardTransitionEnabled: Boolean,
+    val predictiveBackAnimationEnabled: Boolean,
     val bottomBarBlurEnabled: Boolean,
     val bottomBarLabelMode: Int,
     val bottomBarFloating: Boolean
@@ -14,6 +15,7 @@ internal fun resolveAppNavigationAppearance(
 ): AppNavigationAppearance {
     return AppNavigationAppearance(
         cardTransitionEnabled = homeSettings.cardTransitionEnabled,
+        predictiveBackAnimationEnabled = homeSettings.predictiveBackAnimationEnabled,
         bottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled,
         bottomBarLabelMode = homeSettings.bottomBarLabelMode,
         bottomBarFloating = homeSettings.isBottomBarFloating

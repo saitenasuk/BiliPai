@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-03 · Synced to v6.5.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-04 · Synced to v6.6.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.5.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.6.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -393,11 +393,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v6.5.0 · 2026-03-03)
+### Latest (v6.6.0 · 2026-03-04)
 
-- 🔄 **Update Flow Improvements**: App now checks updates on entry, and settings page can open latest release notes directly.
-- ▶️ **Resume Prompt Control**: Added a toggle for resume-playback prompt, with default one-time prompt per target to reduce repeated interruptions.
-- 🧪 **Policy Test Coverage Added**: Added tests for update dialog policies and resume-prompt policies to reduce regressions.
+- 🎬 **Subtitle Pipeline Upgrade**: Subtitles enabled by default, player info switched to WBI-signed endpoint, and subtitle panel/readability improved.
+- 🎵 **Favorites Audio Queue Fix**: Fixed stop-after-one issue in sequential/shuffle modes; favorites queue now follows its own continuous playback strategy.
+- 💬 **UX Improvements**: Inbox pin-first sorting and optimistic updates, horizontal scrolling filter bar in search, and cleaner info layout on home video cards.
 
 ---
 
@@ -420,6 +420,14 @@ Issues and Pull Requests are welcome!
 3. Commit changes
 4. Push to branch
 5. Submit Pull Request
+
+---
+
+## 🙏 Acknowledgements
+
+| Project | Description |
+|-----|-----|
+| [biliSendCommAntifraud](https://github.com/freedom-introvert/biliSendCommAntifraud) | Reference implementation for comment anti-fraud detection |
 
 ---
 

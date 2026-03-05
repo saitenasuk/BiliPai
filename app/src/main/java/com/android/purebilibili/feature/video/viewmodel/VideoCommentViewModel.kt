@@ -210,13 +210,15 @@ class VideoCommentViewModel : ViewModel() {
                 }
                 allReplies = combinedReplies
                 
-                // 统一获取评论总数和结束标志 (兼容 WBI 和旧版 API)
-                val totalCount = data.getAllCount()
-                val isEnd = if (data.cursor.allCount > 0) {
-                    data.cursor.isEnd
-                } else {
-                    data.getIsEnd(pageToLoad, combinedReplies.size) || newReplies.isEmpty()
-                }
+                // 统一获取评论总数和结束标志 (兼容 WBI 游客 all_count=0 场景)
+                val pageResolution = resolveCommentPageResolution(
+                    data = data,
+                    pageToLoad = pageToLoad,
+                    combinedRepliesSize = combinedReplies.size,
+                    newRepliesSize = newReplies.size
+                )
+                val totalCount = pageResolution.totalCount
+                val isEnd = pageResolution.isEnd
                 
                 android.util.Log.d(
                     "CommentVM",

@@ -73,7 +73,8 @@ enum class FullscreenAspectRatio(val value: Int, val label: String, val descript
     FIT(0, "适应", "完整显示画面，尽量不裁切"),
     FILL(1, "填充", "填满屏幕，可能裁切边缘"),
     RATIO_16_9(2, "16:9", "优先按 16:9 展示画面"),
-    RATIO_4_3(3, "4:3", "优先按 4:3 展示画面");
+    RATIO_4_3(3, "4:3", "优先按 4:3 展示画面"),
+    STRETCH(4, "拉伸", "铺满屏幕，可能导致画面变形");
 
     companion object {
         fun fromValue(value: Int): FullscreenAspectRatio {
@@ -126,6 +127,8 @@ data class HomeSettings(
     val gridColumnCount: Int = 0, // [New] 网格列数 (0=自动, 1-6=固定)
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = true,    //  卡片过渡动画（默认开启）
+    val predictiveBackAnimationEnabled: Boolean = true, // [New] 预测性返回联动动画（默认开启）
+    val smartVisualGuardEnabled: Boolean = true, // [New] 智能流畅优先（默认开启）
     val compactVideoStatsOnCover: Boolean = true, //  播放量/评论数显示在封面底部（默认开启）
     //  [修复] 默认值改为 true，避免在 Flow 加载实际值之前错误触发弹窗
     // 当 Flow 加载完成后，如果实际值是 false，LaunchedEffect 会再次触发并显示弹窗
@@ -259,6 +262,10 @@ object SettingsManager {
     private val KEY_CARD_ANIMATION_ENABLED = booleanPreferencesKey("card_animation_enabled")
     //  [新增] 卡片过渡动画开关
     private val KEY_CARD_TRANSITION_ENABLED = booleanPreferencesKey("card_transition_enabled")
+    // [New] 预测性返回联动动画开关
+    private val KEY_PREDICTIVE_BACK_ANIMATION_ENABLED = booleanPreferencesKey("predictive_back_animation_enabled")
+    // [New] 运行时视觉降级守卫开关
+    private val KEY_SMART_VISUAL_GUARD_ENABLED = booleanPreferencesKey("smart_visual_guard_enabled")
     //  [新增] 视频卡片统计信息贴封面开关
     private val KEY_COMPACT_VIDEO_STATS_ON_COVER = booleanPreferencesKey("compact_video_stats_on_cover")
     //  [合并] 崩溃追踪同意弹窗
@@ -297,6 +304,8 @@ object SettingsManager {
             gridColumnCount = preferences[KEY_GRID_COLUMN_COUNT] ?: 0,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
             cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: true,
+            predictiveBackAnimationEnabled = preferences[KEY_PREDICTIVE_BACK_ANIMATION_ENABLED] ?: true,
+            smartVisualGuardEnabled = preferences[KEY_SMART_VISUAL_GUARD_ENABLED] ?: true,
             compactVideoStatsOnCover = preferences[KEY_COMPACT_VIDEO_STATS_ON_COVER] ?: true,
             // 保持现有运行时行为：首次未配置时按 false 返回
             crashTrackingConsentShown = preferences[KEY_CRASH_TRACKING_CONSENT_SHOWN] ?: false
@@ -679,6 +688,24 @@ object SettingsManager {
 
     suspend fun setCardTransitionEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] = value }
+    }
+
+    fun getPredictiveBackAnimationEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PREDICTIVE_BACK_ANIMATION_ENABLED] ?: true }
+
+    suspend fun setPredictiveBackAnimationEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_PREDICTIVE_BACK_ANIMATION_ENABLED] = value
+        }
+    }
+
+    fun getSmartVisualGuardEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SMART_VISUAL_GUARD_ENABLED] ?: true }
+
+    suspend fun setSmartVisualGuardEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SMART_VISUAL_GUARD_ENABLED] = value
+        }
     }
 
     //  [新增] --- 视频卡片统计信息贴封面 ---

@@ -56,6 +56,7 @@ import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
+import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
 //  [预览播放] 相关引用已移除
 
 // 显式导入 collectAsState 以避免 ambiguity 或 missing reference
@@ -85,6 +86,7 @@ fun ElegantVideoCard(
     animationEnabled: Boolean = true,   //  卡片进场动画开关
     motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
+    scrollLiteModeEnabled: Boolean = false,
     showPublishTime: Boolean = false,   //  是否显示发布时间（搜索结果用）
     isDataSaverActive: Boolean = false, // 🚀 [性能优化] 从父级传入，避免每个卡片重复计算
     compactStatsOnCover: Boolean = true, // 播放量/评论数是否贴在封面底部
@@ -106,6 +108,12 @@ fun ElegantVideoCard(
     val cardCornerRadius = 12.dp * cornerRadiusScale  // HIG 标准圆角
     val smallCornerRadius = iOSCornerRadius.Tiny * cornerRadiusScale  // 4.dp * scale
     val durationBadgeStyle = remember { resolveVideoCardDurationBadgeVisualStyle() }
+    val scrollLitePolicy = remember(scrollLiteModeEnabled, compactStatsOnCover) {
+        resolveVideoCardScrollLiteVisualPolicy(
+            scrollLiteModeEnabled = scrollLiteModeEnabled,
+            compactStatsOnCover = compactStatsOnCover
+        )
+    }
     val showHistoryProgressBar = remember(video.view_at, video.duration, video.progress) {
         shouldShowVideoCardHistoryProgressBar(
             viewAt = video.view_at,
@@ -168,6 +176,13 @@ fun ElegantVideoCard(
         }
         onClick(video.bvid, video.cid)
     }
+    val enterAnimationEnabledAtMount = remember(video.bvid) {
+        resolveHomeCardEnterAnimationEnabledAtMount(
+            baseAnimationEnabled = animationEnabled,
+            isReturningFromDetail = CardPositionManager.isReturningFromDetail,
+            isSwitchingCategory = CardPositionManager.isSwitchingCategory
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -182,7 +197,7 @@ fun ElegantVideoCard(
             .animateEnter(
                 index = index, 
                 key = Unit, 
-                animationEnabled = animationEnabled && !CardPositionManager.isReturningFromDetail && !CardPositionManager.isSwitchingCategory,
+                animationEnabled = enterAnimationEnabledAtMount,
                 motionTier = motionTier
             )
             //  [新增] 记录卡片位置
@@ -235,7 +250,7 @@ fun ElegantVideoCard(
                 .aspectRatio(16f / 10f)
                 // [性能优化] 使用 shadow(clip = true) 合并裁剪和阴影层，避免创建额外的 GraphicsLayer
                 .shadow(
-                    elevation = 1.dp,
+                    elevation = scrollLitePolicy.coverShadowElevationDp.dp,
                     shape = coverShape,
                     ambientColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.08f),
                     spotColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.10f),
@@ -307,22 +322,24 @@ fun ElegantVideoCard(
             
             //  底部渐变遮罩
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.6f)
+            if (scrollLitePolicy.showCoverGradientMask) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.6f)
+                                )
                             )
                         )
-                    )
-            )
+                )
+            }
 
-            if (showHistoryProgressBar) {
+            if (scrollLitePolicy.showHistoryProgressBar && showHistoryProgressBar) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -341,13 +358,14 @@ fun ElegantVideoCard(
                 }
             }
 
-            if (compactStatsOnCover) {
+            if (scrollLitePolicy.showCompactStatsOnCover) {
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 8.dp, bottom = 8.dp, end = 64.dp),
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -356,7 +374,7 @@ fun ElegantVideoCard(
                         Icon(
                             imageVector = CupertinoIcons.Outlined.PlayCircle,
                             contentDescription = null,
-                            modifier = Modifier.size(12.dp),
+                            modifier = Modifier.size(10.dp),
                             tint = Color.White.copy(alpha = 0.92f)
                         )
                         Text(
@@ -380,7 +398,7 @@ fun ElegantVideoCard(
                             Icon(
                                 imageVector = CupertinoIcons.Outlined.BubbleLeft,
                                 contentDescription = null,
-                                modifier = Modifier.size(12.dp),
+                                modifier = Modifier.size(10.dp),
                                 tint = Color.White.copy(alpha = 0.86f)
                             )
                             Text(
@@ -391,31 +409,54 @@ fun ElegantVideoCard(
                             )
                         }
                     }
-                }
-            }
-            
-            //  时长标签 - 右下角 (官方风格)
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(6.dp),
-                shape = RoundedCornerShape(smallCornerRadius),
-                color = Color.Black.copy(alpha = durationBadgeStyle.backgroundAlpha)
-            ) {
-                Text(
-                    text = FormatUtils.formatDuration(video.duration),
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    style = androidx.compose.ui.text.TextStyle(
-                        shadow = Shadow(
-                            color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
-                            offset = Offset(0f, 1f),
-                            blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    //  时长标签 (与播放量/评论数同行对齐)
+                    Surface(
+                        shape = RoundedCornerShape(smallCornerRadius),
+                        color = Color.Black.copy(alpha = durationBadgeStyle.backgroundAlpha)
+                    ) {
+                        Text(
+                            text = FormatUtils.formatDuration(video.duration),
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            style = androidx.compose.ui.text.TextStyle(
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
+                                    offset = Offset(0f, 1f),
+                                    blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
+                                )
+                            ),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                         )
-                    ),
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                )
+                    }
+                }
+            } else {
+                //  非贴封面模式时，时长标签仍独立显示在右下角
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp),
+                    shape = RoundedCornerShape(smallCornerRadius),
+                    color = Color.Black.copy(alpha = durationBadgeStyle.backgroundAlpha)
+                ) {
+                    Text(
+                        text = FormatUtils.formatDuration(video.duration),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        style = androidx.compose.ui.text.TextStyle(
+                            shadow = Shadow(
+                                color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
+                                offset = Offset(0f, 1f),
+                                blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
+                            )
+                        ),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
             }
             
         }
@@ -630,7 +671,7 @@ fun ElegantVideoCard(
             }
         }
 
-        if (!compactStatsOnCover) {
+        if (scrollLitePolicy.showSecondaryStatsRow) {
             Spacer(modifier = Modifier.height(6.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,

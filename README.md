@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-03 · 文档已同步至 v6.5.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-03-04 · 文档已同步至 v6.6.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.5.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.6.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -505,7 +505,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-03-03（v6.5.0）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-03-04（v6.6.0）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -546,11 +546,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v6.5.0 · 2026-03-03)
+### 最近更新 (v6.6.0 · 2026-03-04)
 
-- 🔄 **应用更新体验优化**：进入应用后自动检查更新；设置页支持直接查看最新更新日志。
-- ▶️ **续播提示可控**：新增“续播弹窗提示”开关；同一续播目标默认仅提醒一次，避免重复打扰。
-- 🧪 **策略单测补齐**：新增更新弹窗策略与续播提示策略测试，降低回归风险。
+- 🎬 **字幕链路升级**：字幕默认开启；播放器信息改为 WBI 签名接口；字幕面板与字幕渲染可读性优化。
+- 🎵 **收藏夹听视频修复**：修复顺序/随机模式播完一首即暂停问题，收藏夹队列改为独立连续播放策略。
+- 💬 **体验细节优化**：私信置顶排序与乐观更新、搜索筛选横向滚动、首页卡片信息布局同步优化。
 
 ### 历史版本
 
@@ -601,6 +601,7 @@ cd BiliPai
 | [DanmakuFlameMaster](https://github.com/bilibili/DanmakuFlameMaster) | B 站弹幕引擎 |
 | [DanmakuRenderEngine](https://github.com/bytedance/DanmakuRenderEngine) | 字节跳动高性能弹幕引擎 |
 | [bilibili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) | B 站 API 文档 |
+| [biliSendCommAntifraud](https://github.com/freedom-introvert/biliSendCommAntifraud) | 评论反诈检测参考实现 |
 | [Haze](https://github.com/chrisbanes/haze) | 毛玻璃效果库 |
 | [Backdrop](https://github.com/Kyant0/AndroidLiquidGlass) | 液态玻璃效果 |
 | [Lottie](https://github.com/airbnb/lottie-android) | Airbnb 动画库 |

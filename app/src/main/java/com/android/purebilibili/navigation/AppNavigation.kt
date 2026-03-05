@@ -151,6 +151,7 @@ fun AppNavigation(
     )
     val appearance = remember(homeSettings) { resolveAppNavigationAppearance(homeSettings) }
     val cardTransitionEnabled = appearance.cardTransitionEnabled
+    val predictiveBackAnimationEnabled = appearance.predictiveBackAnimationEnabled
     val isBottomBarBlurEnabled = appearance.bottomBarBlurEnabled
     val bottomBarLabelMode = appearance.bottomBarLabelMode
     val isBottomBarFloating = appearance.bottomBarFloating
@@ -223,8 +224,20 @@ fun AppNavigation(
     //  [修复] 通用单例跳转（防止重复打开相同页面）
     fun navigateTo(route: String) {
         if (!canNavigate()) return
-        // 如果当前已经在目标页面，则不进行跳转
-        if (navController.currentDestination?.route == route) return
+
+        val currentRouteSnapshot = navController.currentBackStackEntry?.destination?.route
+        val hasTargetInPreviousBackStack =
+            navController.previousBackStackEntry?.destination?.route == route
+
+        when (resolveTopLevelNavigationAction(currentRouteSnapshot, route, hasTargetInPreviousBackStack)) {
+            TopLevelNavigationAction.SKIP -> return
+            TopLevelNavigationAction.POP_EXISTING -> {
+                if (navController.popBackStack(route, inclusive = false)) {
+                    return
+                }
+            }
+            TopLevelNavigationAction.NAVIGATE_WITH_RESTORE -> Unit
+        }
 
         navController.navigate(route) {
             // [修复] 弹出到图表的起始目标，以避免在用户选择项目时
@@ -302,14 +315,25 @@ fun AppNavigation(
                 cardTransitionEnabled = cardTransitionEnabled
             )
         }
+        val linkedSettingsBackMotion = remember(predictiveBackAnimationEnabled, cardTransitionEnabled) {
+            shouldUseLinkedSettingsBackMotion(
+                predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
+                cardTransitionEnabled = cardTransitionEnabled
+            )
+        }
         val isSettingsScreen = currentRoute == ScreenRoutes.Settings.route
         val shouldHideBottomBarOnTablet = isTabletLayout && isSettingsScreen
 
         // [UX] 底栏仅在“用户配置为可见的一级入口”显示；Story 始终沉浸式隐藏。
         val isBottomBarDestination = currentRoute != ScreenRoutes.Story.route && currentRoute in visibleBottomBarRoutes
+        val shouldDeferBottomBarReveal = shouldDeferBottomBarRevealOnVideoReturn(
+            isReturningFromDetail = CardPositionManager.isReturningFromDetail,
+            currentRoute = currentRoute
+        )
         val showBottomBar = isBottomBarDestination &&
             !useSideNavigation &&
-            !shouldHideBottomBarOnTablet
+            !shouldHideBottomBarOnTablet &&
+            !shouldDeferBottomBarReveal
         
         // 核心可见性逻辑：
         // 1. 永久隐藏模式 -> 始终隐藏
@@ -407,6 +431,24 @@ fun AppNavigation(
                 val fromRoute = initialState.destination.route
                 val fromVideoDetail = fromRoute?.startsWith("${VideoRoute.base}/") == true
                 val fromSettings = fromRoute == ScreenRoutes.Settings.route
+                val sharedTransitionReady = CardPositionManager.lastClickedCardBounds != null &&
+                    CardPositionManager.isCardFullyVisible
+                val preferOneTakeReturn = fromVideoDetail &&
+                    shouldPreferOneTakeVideoToHomeReturn(
+                        predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
+                        cardTransitionEnabled = cardTransitionEnabled,
+                        sharedTransitionReady = sharedTransitionReady
+                    )
+                val usePredictiveStableBackRouteMotion = fromVideoDetail &&
+                    shouldUsePredictiveStableBackRouteMotion(
+                        predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
+                        cardTransitionEnabled = cardTransitionEnabled
+                    )
+                val useClassicBackRouteMotion = fromVideoDetail &&
+                    shouldUseClassicBackRouteMotion(
+                        predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
+                        cardTransitionEnabled = cardTransitionEnabled
+                    )
                 val useSeamlessBackTransition = shouldUseTabletSeamlessBackTransition(
                     isTabletLayout = isTabletLayout,
                     cardTransitionEnabled = cardTransitionEnabled,
@@ -415,6 +457,18 @@ fun AppNavigation(
                 )
                 if (fromSettings) {
                     slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else if (usePredictiveStableBackRouteMotion) {
+                    slideIntoContainer(
+                        AnimatedContentTransitionScope.SlideDirection.Right,
+                        tween(navMotionSpec.slideDurationMillis)
+                    )
+                } else if (preferOneTakeReturn) {
+                    EnterTransition.None
+                } else if (useClassicBackRouteMotion) {
+                    slideIntoContainer(
+                        AnimatedContentTransitionScope.SlideDirection.Right,
+                        tween(navMotionSpec.slideDurationMillis)
+                    )
                 } else if (!cardTransitionEnabled && fromVideoDetail) {
                     fadeIn(
                         animationSpec = tween(durationMillis = 120, easing = IOS_RETURN_EASING),
@@ -428,7 +482,7 @@ fun AppNavigation(
                         ),
                         initialAlpha = 0.96f
                     )
-                } else if (cardTransitionEnabled && CardPositionManager.isQuickReturnFromDetail) {
+                } else if (!predictiveBackAnimationEnabled && cardTransitionEnabled && CardPositionManager.isQuickReturnFromDetail) {
                     val quickReturnSharedTransitionReady =
                         CardPositionManager.lastClickedCardBounds != null &&
                             CardPositionManager.isCardFullyVisible
@@ -440,11 +494,11 @@ fun AppNavigation(
                     ) {
                         EnterTransition.None
                     } else {
-                        fadeIn(
-                            animationSpec = tween(durationMillis = 170, easing = IOS_RETURN_EASING),
-                            initialAlpha = 0.99f
-                        )
-                    }
+                    fadeIn(
+                        animationSpec = tween(durationMillis = 170, easing = IOS_RETURN_EASING),
+                        initialAlpha = 0.99f
+                    )
+                }
                 } else {
                     fadeIn(
                         animationSpec = tween(
@@ -463,6 +517,18 @@ fun AppNavigation(
                     onSearchClick = { navigateTo(ScreenRoutes.Search.route) },
                     onAvatarClick = { navigateTo(ScreenRoutes.Login.route) },
                     onProfileClick = { navigateTo(ScreenRoutes.Profile.route) },
+                    onLogout = {
+                        coroutineScope.launch {
+                            com.android.purebilibili.core.store.TokenManager.clear(context)
+                            com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
+                                mid = null,
+                                isVip = false,
+                                privacyModeEnabled = SettingsManager.isPrivacyModeEnabledSync(context)
+                            )
+                            com.android.purebilibili.core.util.AnalyticsHelper.logLogout()
+                            homeViewModel.refresh()
+                        }
+                    },
                     onSettingsClick = { navigateTo(ScreenRoutes.Settings.route) },
                     // 🔒 [防抖 + SingleTop] 底栏导航优化
                     onDynamicClick = { navigateTo(ScreenRoutes.Dynamic.route) },
@@ -486,7 +552,8 @@ fun AppNavigation(
                     onDownloadClick = { navigateTo(ScreenRoutes.DownloadList.route) },
                     onInboxClick = { navigateTo(ScreenRoutes.Inbox.route) },
                     onStoryClick = { navigateTo(ScreenRoutes.Story.route) },  //  [新增] 竖屏短视频
-                    globalHazeState = mainHazeState  // [新增] 全局底栏模糊状态
+                    globalHazeState = mainHazeState,  // [新增] 全局底栏模糊状态
+                    predictiveBackAnimationEnabled = predictiveBackAnimationEnabled
                 )
             }
         }
@@ -507,7 +574,7 @@ fun AppNavigation(
             //  进入动画：基于位置的扩散展开 (Scale + Fade)
             enterTransition = { 
                 // [Hero Animation] 如果启用了卡片过渡，使用简单的淡入，让 SharedElement 成为主角
-                if (cardTransitionEnabled) {
+                if (cardTransitionEnabled && !predictiveBackAnimationEnabled) {
                     fadeIn(animationSpec = tween(navMotionSpec.slowFadeDurationMillis))
                 } else {
                     // 未启用卡片过渡时，使用常规的推入动画
@@ -519,18 +586,58 @@ fun AppNavigation(
             },
             //  返回动画：当卡片过渡开启时用淡出（配合共享元素），关闭时用滑出
             popExitTransition = { 
+                val targetRoute = targetState.destination.route
+                val targetIsHome = targetRoute == ScreenRoutes.Home.route
+                val sharedTransitionReady = CardPositionManager.lastClickedCardBounds != null &&
+                    CardPositionManager.isCardFullyVisible
+                val preferOneTakeReturn = targetIsHome &&
+                    shouldPreferOneTakeVideoToHomeReturn(
+                        predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
+                        cardTransitionEnabled = cardTransitionEnabled,
+                        sharedTransitionReady = sharedTransitionReady
+                    )
+                val useClassicBackRouteMotion = targetIsHome &&
+                    shouldUseClassicBackRouteMotion(
+                        predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
+                        cardTransitionEnabled = cardTransitionEnabled
+                    )
+                val usePredictiveStableBackRouteMotion = targetIsHome &&
+                    shouldUsePredictiveStableBackRouteMotion(
+                        predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
+                        cardTransitionEnabled = cardTransitionEnabled
+                    )
                 val useSeamlessBackTransition = shouldUseTabletSeamlessBackTransition(
                     isTabletLayout = isTabletLayout,
                     cardTransitionEnabled = cardTransitionEnabled,
                     fromRoute = initialState.destination.route,
-                    toRoute = targetState.destination.route
+                    toRoute = targetRoute
                 )
-                if (useSeamlessBackTransition) {
+                if (preferOneTakeReturn) {
+                    ExitTransition.None
+                } else if (usePredictiveStableBackRouteMotion) {
+                    slideOutOfContainer(
+                        AnimatedContentTransitionScope.SlideDirection.Right,
+                        tween(navMotionSpec.slideDurationMillis)
+                    )
+                } else if (useSeamlessBackTransition) {
                     fadeOut(
                         animationSpec = tween(durationMillis = 180, easing = IOS_RETURN_EASING),
                         targetAlpha = 0f
                     )
-                } else if (cardTransitionEnabled && CardPositionManager.isQuickReturnFromDetail) {
+                } else if (useClassicBackRouteMotion) {
+                    val direction = when (
+                        resolveVideoPopExitDirection(
+                            targetRoute = targetRoute,
+                            isSingleColumnCard = CardPositionManager.isSingleColumnCard,
+                            lastClickedCardCenterX = CardPositionManager.lastClickedCardCenter?.x
+                        )
+                    ) {
+                        VideoPopExitDirection.LEFT -> AnimatedContentTransitionScope.SlideDirection.Left
+                        VideoPopExitDirection.RIGHT -> AnimatedContentTransitionScope.SlideDirection.Right
+                        VideoPopExitDirection.DOWN -> AnimatedContentTransitionScope.SlideDirection.Down
+                    }
+                    slideOutOfContainer(direction, tween(navMotionSpec.slideDurationMillis))
+                } else if (!predictiveBackAnimationEnabled && cardTransitionEnabled && CardPositionManager.isQuickReturnFromDetail) {
                     val quickReturnSharedTransitionReady =
                         CardPositionManager.lastClickedCardBounds != null &&
                             CardPositionManager.isCardFullyVisible
@@ -560,7 +667,7 @@ fun AppNavigation(
                 } else {
                     val direction = when (
                         resolveVideoPopExitDirection(
-                            targetRoute = targetState.destination.route,
+                            targetRoute = targetRoute,
                             isSingleColumnCard = CardPositionManager.isSingleColumnCard,
                             lastClickedCardCenterX = CardPositionManager.lastClickedCardCenter?.x
                         )
@@ -569,7 +676,6 @@ fun AppNavigation(
                         VideoPopExitDirection.RIGHT -> AnimatedContentTransitionScope.SlideDirection.Right
                         VideoPopExitDirection.DOWN -> AnimatedContentTransitionScope.SlideDirection.Down
                     }
-                    val targetIsHome = targetState.destination.route == ScreenRoutes.Home.route
                     if (targetIsHome) {
                         slideOutOfContainer(
                             direction,
@@ -582,7 +688,7 @@ fun AppNavigation(
             },
             // [新增] 前进退出动画 (A -> B, A is exiting)
             exitTransition = {
-                if (cardTransitionEnabled) {
+                if (cardTransitionEnabled && !predictiveBackAnimationEnabled) {
                      fadeOut(
                          animationSpec = tween(
                              durationMillis = navMotionSpec.slowFadeDurationMillis,
@@ -595,7 +701,7 @@ fun AppNavigation(
             },
             // [新增] 返回进入动画 (B -> A, A is re-entering)
             popEnterTransition = {
-                if (cardTransitionEnabled) {
+                if (cardTransitionEnabled && !predictiveBackAnimationEnabled) {
                      if (CardPositionManager.isQuickReturnFromDetail) {
                          val quickReturnSharedTransitionReady =
                              CardPositionManager.lastClickedCardBounds != null &&
@@ -699,7 +805,8 @@ fun AppNavigation(
                     startInFullscreen = startFullscreen,  //  传递全屏参数
                     startAudioFromRoute = startAudio,
                     autoEnterPortraitFromRoute = autoPortraitFromRoute,
-                    transitionEnabled = cardTransitionEnabled,  //  传递过渡动画开关
+                    transitionEnabled = cardTransitionEnabled && !predictiveBackAnimationEnabled,  // 预测返回优先稳定路由动画
+                    predictiveBackAnimationEnabled = predictiveBackAnimationEnabled,
                     transitionEnterDurationMillis = navMotionSpec.slowFadeDurationMillis,
                     transitionMaxBlurRadiusPx = navMotionSpec.maxBackdropBlurRadius,
                     onBack = { 
@@ -1082,6 +1189,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.Settings.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             SettingsScreen(
@@ -1103,6 +1224,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.TipsSettings.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             com.android.purebilibili.feature.settings.TipsSettingsScreen(
@@ -1175,6 +1310,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.OpenSourceLicenses.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             com.android.purebilibili.feature.settings.OpenSourceLicensesScreen(
@@ -1186,6 +1335,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.AppearanceSettings.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             AppearanceSettingsScreen(
@@ -1202,6 +1365,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.IconSettings.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             com.android.purebilibili.feature.settings.IconSettingsScreen(
@@ -1213,6 +1390,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.AnimationSettings.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             com.android.purebilibili.feature.settings.AnimationSettingsScreen(
@@ -1224,6 +1415,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.PlaybackSettings.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             PlaybackSettingsScreen(
@@ -1235,6 +1440,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.PermissionSettings.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             com.android.purebilibili.feature.settings.PermissionSettingsScreen(
@@ -1253,6 +1472,20 @@ fun AppNavigation(
                 }
             ),
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) { backStackEntry ->
             val initialImportUrl = backStackEntry.arguments
@@ -1268,6 +1501,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.BottomBarSettings.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             com.android.purebilibili.feature.settings.BottomBarSettingsScreen(
@@ -1279,6 +1526,20 @@ fun AppNavigation(
         composable(
             route = ScreenRoutes.WebDavBackup.route,
             enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis)) },
+            exitTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    ExitTransition.None
+                }
+            },
+            popEnterTransition = {
+                if (linkedSettingsBackMotion) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis))
+                } else {
+                    EnterTransition.None
+                }
+            },
             popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(navMotionSpec.slideDurationMillis)) }
         ) {
             com.android.purebilibili.feature.settings.webdav.WebDavBackupScreen(
@@ -1605,6 +1866,8 @@ fun AppNavigation(
                                     itemColorIndices = bottomBarItemColors,
                                     homeSettings = homeSettings,
                                     backdrop = bottomBarBackdrop, // [LayerBackdrop] Real background refraction
+                                    motionTier = com.android.purebilibili.core.ui.adaptive.MotionTier.Normal,
+                                    forceLowBlurBudget = homeSettings.smartVisualGuardEnabled,
                                     onToggleSidebar = {
                                         // [Tablet] Toggle sidebar mode
                                         coroutineScope.launch {
@@ -1627,6 +1890,8 @@ fun AppNavigation(
                                 itemColorIndices = bottomBarItemColors,
                                 homeSettings = homeSettings,
                                 backdrop = bottomBarBackdrop, // [LayerBackdrop] Real background refraction
+                                motionTier = com.android.purebilibili.core.ui.adaptive.MotionTier.Normal,
+                                forceLowBlurBudget = homeSettings.smartVisualGuardEnabled,
                                 onToggleSidebar = {
                                     // [Tablet] Toggle sidebar mode
                                     coroutineScope.launch {

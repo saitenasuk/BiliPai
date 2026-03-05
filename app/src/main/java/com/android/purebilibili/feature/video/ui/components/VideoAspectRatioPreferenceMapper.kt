@@ -8,6 +8,7 @@ internal fun FullscreenAspectRatio.toVideoAspectRatio(): VideoAspectRatio {
         FullscreenAspectRatio.FILL -> VideoAspectRatio.FILL
         FullscreenAspectRatio.RATIO_16_9 -> VideoAspectRatio.RATIO_16_9
         FullscreenAspectRatio.RATIO_4_3 -> VideoAspectRatio.RATIO_4_3
+        FullscreenAspectRatio.STRETCH -> VideoAspectRatio.STRETCH
     }
 }
 
@@ -17,6 +18,6 @@ internal fun VideoAspectRatio.toFullscreenAspectRatio(): FullscreenAspectRatio {
         VideoAspectRatio.FILL -> FullscreenAspectRatio.FILL
         VideoAspectRatio.RATIO_16_9 -> FullscreenAspectRatio.RATIO_16_9
         VideoAspectRatio.RATIO_4_3 -> FullscreenAspectRatio.RATIO_4_3
-        VideoAspectRatio.STRETCH -> FullscreenAspectRatio.FIT
+        VideoAspectRatio.STRETCH -> FullscreenAspectRatio.STRETCH
     }
 }

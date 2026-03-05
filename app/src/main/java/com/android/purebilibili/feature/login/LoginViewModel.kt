@@ -207,7 +207,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private var currentSeccode: String = ""
     private var currentChallenge: String = ""
     private var currentCaptchaKey: String = ""  // 发送短信后返回的 key
-    private var currentPhone: Long = 0
+    private var currentPhone: String = ""
+    private var currentCountryCode: Int = 86
     
     /**
      * 获取极验验证参数
@@ -246,20 +247,22 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * 发送短信验证码
      */
-    fun sendSmsCode(phone: Long) {
+    fun sendSmsCode(phone: String, countryCode: Int) {
         viewModelScope.launch {
             try {
                 _state.value = LoginState.Loading
                 currentPhone = phone
+                currentCountryCode = countryCode
                 
                 val captchaData = currentCaptchaData ?: run {
                     _state.value = LoginState.Error("验证参数丢失，请重试")
                     return@launch
                 }
                 
-                Logger.d("LoginDebug", "发送短信验证码到: $phone")
+                Logger.d("LoginDebug", "发送短信验证码到: +$countryCode $phone")
                 
                 val response = NetworkModule.passportApi.sendSmsCode(
+                    cid = countryCode,
                     tel = phone,
                     token = captchaData.token,
                     challenge = currentChallenge,
@@ -288,9 +291,13 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _state.value = LoginState.Loading
-                Logger.d("LoginDebug", "短信验证码登录: phone=$currentPhone, code=$code")
+                Logger.d(
+                    "LoginDebug",
+                    "短信验证码登录: cid=$currentCountryCode, phone=$currentPhone, code=$code"
+                )
                 
                 val response = NetworkModule.passportApi.loginBySms(
+                    cid = currentCountryCode,
                     tel = currentPhone,
                     code = code,
                     captchaKey = currentCaptchaKey
@@ -314,7 +321,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * 密码登录
      */
-    fun loginByPassword(phone: Long, password: String) {
+    fun loginByPassword(phone: String, password: String) {
         viewModelScope.launch {
             try {
                 _state.value = LoginState.Loading
@@ -416,7 +423,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         currentSeccode = ""
         currentChallenge = ""
         currentCaptchaKey = ""
-        currentPhone = 0
+        currentPhone = ""
+        currentCountryCode = 86
         _state.value = LoginState.PhoneIdle
     }
     

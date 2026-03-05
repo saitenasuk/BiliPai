@@ -1290,10 +1290,16 @@ object VideoRepository {
         }
     }
 
-    // [新增] 获取播放器信息 (BGM/ViewPoints/Etc)
+    // [修复] 获取播放器信息 (BGM/ViewPoints/Etc) — WBI 签名
     suspend fun getPlayerInfo(bvid: String, cid: Long): Result<PlayerInfoData> = withContext(Dispatchers.IO) {
         try {
-            val response = api.getPlayerInfo(bvid, cid)
+            val (imgKey, subKey) = getWbiKeys()
+            val params = mapOf(
+                "bvid" to bvid,
+                "cid" to cid.toString()
+            )
+            val signedParams = WbiUtils.sign(params, imgKey, subKey)
+            val response = api.getPlayerInfo(signedParams)
             if (response.code == 0 && response.data != null) {
                 Result.success(response.data)
             } else {
