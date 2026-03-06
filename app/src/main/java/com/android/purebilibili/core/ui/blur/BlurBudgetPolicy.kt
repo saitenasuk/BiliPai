@@ -57,17 +57,18 @@ internal fun resolveBlurBudget(
     }
 
     if (isScrolling) {
-        maxBlurLevel = minOf(maxBlurLevel, 0)
-        backgroundAlphaMultiplier *= 0.92f
+        if (surfaceType != BlurSurfaceType.HEADER) {
+            maxBlurLevel = minOf(maxBlurLevel, 0)
+            backgroundAlphaMultiplier *= 0.92f
+        }
         allowRealtime = false
     }
 
     if (isTransitionRunning) {
-        maxBlurLevel = minOf(
-            maxBlurLevel,
-            if (surfaceType == BlurSurfaceType.HEADER) 1 else 0
-        )
-        backgroundAlphaMultiplier *= 0.92f
+        if (surfaceType != BlurSurfaceType.HEADER) {
+            maxBlurLevel = minOf(maxBlurLevel, 0)
+            backgroundAlphaMultiplier *= 0.92f
+        }
         allowRealtime = false
     }
 
@@ -91,4 +92,18 @@ internal fun resolveBudgetedBlurIntensity(
     val preferredLevel = blurLevelOrder.indexOf(preferred).coerceAtLeast(0)
     val cappedLevel = minOf(preferredLevel, budget.maxBlurLevel)
     return blurLevelOrder[cappedLevel]
+}
+
+internal fun resolveBlurInputScale(
+    budget: BlurBudget,
+    surfaceType: BlurSurfaceType
+): Float {
+    if (budget.allowRealtime) return 1f
+    return when (surfaceType) {
+        BlurSurfaceType.HEADER -> 0.88f
+        BlurSurfaceType.DRAWER_OR_SHEET -> 0.84f
+        BlurSurfaceType.BOTTOM_BAR -> 0.82f
+        BlurSurfaceType.OVERLAY -> 0.84f
+        BlurSurfaceType.GENERIC -> 0.84f
+    }
 }

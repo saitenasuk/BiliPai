@@ -112,6 +112,15 @@ fun AnimationSettingsContent(
             MotionTier.Enhanced -> "更明显的层级与动势，适合大屏展示"
         }
     }
+    val predictiveBackToggleState = remember(
+        state.cardTransitionEnabled,
+        state.predictiveBackAnimationEnabled
+    ) {
+        resolvePredictiveBackToggleUiState(
+            cardTransitionEnabled = state.cardTransitionEnabled,
+            predictiveBackAnimationEnabled = state.predictiveBackAnimationEnabled
+        )
+    }
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
 
@@ -151,19 +160,15 @@ fun AnimationSettingsContent(
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ArrowLeftArrowRight,
                             title = "预测性返回联动动画",
-                            subtitle = "关闭后改用经典回退动效，减少系统手势冲突",
-                            checked = state.predictiveBackAnimationEnabled,
-                            onCheckedChange = { viewModel.togglePredictiveBackAnimation(it) },
-                            iconTint = iOSBlue
-                        )
-                        Divider()
-                        IOSSwitchItem(
-                            icon = CupertinoIcons.Default.WandAndStars,
-                            title = "智能流畅优先",
-                            subtitle = "检测到持续卡顿时临时降低模糊与动效强度",
-                            checked = state.smartVisualGuardEnabled,
-                            onCheckedChange = { viewModel.toggleSmartVisualGuard(it) },
-                            iconTint = iOSTeal
+                            subtitle = predictiveBackToggleState.subtitle,
+                            checked = predictiveBackToggleState.checked,
+                            onCheckedChange = {
+                                if (predictiveBackToggleState.enabled) {
+                                    viewModel.togglePredictiveBackAnimation(it)
+                                }
+                            },
+                            enabled = predictiveBackToggleState.enabled,
+                            iconTint = if (predictiveBackToggleState.enabled) iOSBlue else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Divider()
                         Column(

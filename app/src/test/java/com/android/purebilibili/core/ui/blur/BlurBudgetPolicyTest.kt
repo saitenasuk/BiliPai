@@ -23,6 +23,19 @@ class BlurBudgetPolicyTest {
     }
 
     @Test
+    fun header_scrolling_keepsVisualBudgetStable_toAvoidBrightnessPulsing() {
+        val budget = resolveBlurBudget(
+            surfaceType = BlurSurfaceType.HEADER,
+            motionTier = MotionTier.Normal,
+            isScrolling = true,
+            isTransitionRunning = false
+        )
+
+        assertEquals(2, budget.maxBlurLevel)
+        assertEquals(1.0f, budget.backgroundAlphaMultiplier)
+    }
+
+    @Test
     fun bottomBar_duringTransition_shouldLowerBudgetAndDisableRealtime() {
         val budget = resolveBlurBudget(
             surfaceType = BlurSurfaceType.BOTTOM_BAR,
@@ -74,5 +87,33 @@ class BlurBudgetPolicyTest {
 
         assertEquals(0, budget.maxBlurLevel)
         assertFalse(budget.allowRealtime)
+    }
+
+    @Test
+    fun blurInputScale_keepsFullQualityWhenRealtimeAllowed() {
+        val scale = resolveBlurInputScale(
+            budget = BlurBudget(
+                maxBlurLevel = 2,
+                backgroundAlphaMultiplier = 1.0f,
+                allowRealtime = true
+            ),
+            surfaceType = BlurSurfaceType.HEADER
+        )
+
+        assertEquals(1.0f, scale)
+    }
+
+    @Test
+    fun blurInputScale_downscalesWhenRealtimeDisabled() {
+        val scale = resolveBlurInputScale(
+            budget = BlurBudget(
+                maxBlurLevel = 2,
+                backgroundAlphaMultiplier = 1.0f,
+                allowRealtime = false
+            ),
+            surfaceType = BlurSurfaceType.HEADER
+        )
+
+        assertEquals(0.88f, scale)
     }
 }
