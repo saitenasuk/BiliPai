@@ -1239,7 +1239,7 @@ private fun LongPressSpeedOptions(
     currentSpeed: Float,
     onSelect: (Float) -> Unit
 ) {
-    val options = listOf(1.5f, 2.0f, 2.5f, 3.0f)
+    val options = listOf(1.25f, 1.5f)
     
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),

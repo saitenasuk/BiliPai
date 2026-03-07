@@ -8,12 +8,21 @@ import kotlinx.coroutines.withContext
 object FavoriteRepository {
     private val api = NetworkModule.api
 
+    data class CollectedFavFoldersPage(
+        val folders: List<FavFolder>,
+        val totalCount: Int
+    )
+
     suspend fun getFavFolders(mid: Long): Result<List<FavFolder>> {
         return withContext(Dispatchers.IO) {
             try {
                 val response = api.getFavFolders(mid)
                 if (response.code == 0) {
-                    Result.success(response.data?.list ?: emptyList())
+                    Result.success(
+                        response.data?.list
+                            ?.map { it.copy(source = FavFolderSource.OWNED) }
+                            ?: emptyList()
+                    )
                 } else {
                     Result.failure(Exception("获取收藏夹失败: ${response.code}"))
                 }
@@ -28,12 +37,19 @@ object FavoriteRepository {
         pn: Int = 1,
         ps: Int = 20,
         platform: String = "web"
-    ): Result<List<FavFolder>> {
+    ): Result<CollectedFavFoldersPage> {
         return withContext(Dispatchers.IO) {
             try {
                 val response = api.getCollectedFavFolders(mid = mid, pn = pn, ps = ps, platform = platform)
                 if (response.code == 0) {
-                    Result.success(response.data?.list ?: emptyList())
+                    Result.success(
+                        CollectedFavFoldersPage(
+                            folders = response.data?.list
+                                ?.map { it.copy(source = FavFolderSource.SUBSCRIBED) }
+                                ?: emptyList(),
+                            totalCount = response.data?.count ?: 0
+                        )
+                    )
                 } else {
                     Result.failure(Exception("获取收藏合集失败: ${response.code}"))
                 }
@@ -43,11 +59,21 @@ object FavoriteRepository {
         }
     }
 
-    suspend fun getFavoriteList(mediaId: Long, pn: Int): Result<FavoriteResourceData> {
+    suspend fun getFavoriteList(
+        mediaId: Long,
+        pn: Int,
+        keyword: String? = null,
+        platform: String = "web"
+    ): Result<FavoriteResourceData> {
         return withContext(Dispatchers.IO) {
             try {
                 // pn defaults to 1 if not passed, but here we pass it
-                val response = api.getFavoriteList(mediaId = mediaId, pn = pn)
+                val response = api.getFavoriteList(
+                    mediaId = mediaId,
+                    pn = pn,
+                    keyword = keyword,
+                    platform = platform
+                )
                 if (response.code == 0 && response.data != null) {
                     Result.success(response.data)
                 } else {

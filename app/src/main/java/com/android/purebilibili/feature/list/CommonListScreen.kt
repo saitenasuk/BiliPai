@@ -21,7 +21,10 @@ import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -66,6 +69,7 @@ import com.android.purebilibili.core.util.rememberResponsiveSpacing
 import com.android.purebilibili.core.util.rememberResponsiveValue
 import com.android.purebilibili.core.util.PinyinUtils
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.space.SeasonSeriesDetailViewModel
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlayMode
 import com.android.purebilibili.feature.video.player.PlaylistManager
@@ -74,6 +78,11 @@ internal enum class FavoriteContentMode {
     BASE_LIST,
     SINGLE_FOLDER,
     PAGER
+}
+
+private enum class FavoriteBrowseSection {
+    OWNED,
+    SUBSCRIBED
 }
 
 internal fun resolveFavoriteContentMode(
@@ -94,11 +103,12 @@ internal fun resolveFavoritePlayAllItems(
     selectedFolderItems: List<VideoItem>,
     singleFolderItems: List<VideoItem>
 ): List<VideoItem> {
-    return when (mode) {
+    val candidateItems = when (mode) {
         FavoriteContentMode.PAGER -> selectedFolderItems.ifEmpty { baseItems }
         FavoriteContentMode.SINGLE_FOLDER -> singleFolderItems.ifEmpty { baseItems }
         FavoriteContentMode.BASE_LIST -> baseItems
     }
+    return candidateItems.filter { !it.isCollectionResource && it.bvid.isNotBlank() }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,7 +116,9 @@ internal fun resolveFavoritePlayAllItems(
 fun CommonListScreen(
     viewModel: BaseListViewModel,
     onBack: () -> Unit,
-    onVideoClick: (String, Long) -> Unit,
+    onVideoClick: (String, Long, String) -> Unit,
+    onCollectionClick: ((Long, Long, String) -> Unit)? = null,
+    onFavoriteFolderClick: ((Long, Long, String) -> Unit)? = null,
     onPlayAllAudioClick: ((String, Long) -> Unit)? = null,
     globalHazeState: HazeState? = null // [新增] 接收全局 HazeState
 ) {
@@ -139,6 +151,7 @@ fun CommonListScreen(
     //  [修复] 分页支持：收藏 + 历史记录
     val favoriteViewModel = viewModel as? FavoriteViewModel
     val historyViewModel = viewModel as? HistoryViewModel
+    val seasonSeriesDetailViewModel = viewModel as? SeasonSeriesDetailViewModel
     val historyDissolvingIds by historyViewModel?.dissolvingIds?.collectAsState()
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet()) }
     var isHistoryBatchMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
@@ -170,10 +183,10 @@ fun CommonListScreen(
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val hasMoreHis by historyViewModel?.hasMoreState?.collectAsState() 
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    
-    //  统一分页状态
-    val isLoadingMore = isLoadingMoreFav || isLoadingMoreHis
-    val hasMore = hasMoreFav || hasMoreHis
+    val isLoadingMoreSeasonDetail by seasonSeriesDetailViewModel?.isLoadingMoreState?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val hasMoreSeasonDetail by seasonSeriesDetailViewModel?.hasMoreState?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     
     //  使用 derivedStateOf 来高效检测滚动位置
     val shouldLoadMore = androidx.compose.runtime.remember {
@@ -182,14 +195,6 @@ fun CommonListScreen(
             val totalItems = layoutInfo.totalItemsCount
             val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             totalItems > 0 && lastVisibleItem >= totalItems - 4  // 提前4个item开始加载
-        }
-    }
-    
-    //  滚动到底部时加载更多
-    LaunchedEffect(shouldLoadMore.value, hasMore, isLoadingMore) {
-        if (shouldLoadMore.value && hasMore && !isLoadingMore) {
-            favoriteViewModel?.loadMore()
-            historyViewModel?.loadMore()  //  历史记录加载更多
         }
     }
     
@@ -242,10 +247,47 @@ fun CommonListScreen(
     // 📁 [新增] 收藏夹切换 Tab
     val foldersState by favoriteViewModel?.folders?.collectAsState() 
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
+    val subscribedFoldersState by favoriteViewModel?.subscribedFolders?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyList()) }
+    val subscribedFolderProgressState by favoriteViewModel?.subscribedFolderProgressState?.collectAsState()
+        ?: androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(FavoriteViewModel.SubscribedFolderProgressState())
+        }
     val selectedFolderIndex by favoriteViewModel?.selectedFolderIndex?.collectAsState() 
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val favoriteDetailProgressState by seasonSeriesDetailViewModel?.favoriteDetailProgressState?.collectAsState()
+        ?: androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(SeasonSeriesDetailViewModel.FavoriteDetailProgressState())
+        }
+    var favoriteBrowseSection by rememberSaveable { androidx.compose.runtime.mutableStateOf(FavoriteBrowseSection.OWNED) }
+    LaunchedEffect(foldersState.size, subscribedFoldersState.size) {
+        favoriteBrowseSection = when {
+            favoriteBrowseSection == FavoriteBrowseSection.SUBSCRIBED && subscribedFoldersState.isNotEmpty() -> FavoriteBrowseSection.SUBSCRIBED
+            foldersState.isNotEmpty() -> FavoriteBrowseSection.OWNED
+            subscribedFoldersState.isNotEmpty() -> FavoriteBrowseSection.SUBSCRIBED
+            else -> FavoriteBrowseSection.OWNED
+        }
+    }
+    val isSubscribedBrowse = favoriteViewModel != null && favoriteBrowseSection == FavoriteBrowseSection.SUBSCRIBED
+    val loadMoreOwner = resolveCommonListLoadMoreOwner(
+        isSubscribedBrowse = isSubscribedBrowse,
+        hasFavoriteViewModel = favoriteViewModel != null,
+        hasHistoryViewModel = historyViewModel != null,
+        hasSeasonSeriesDetailViewModel = seasonSeriesDetailViewModel != null
+    )
+    val paginationSnapshot = resolveCommonListPaginationSnapshot(
+        owner = loadMoreOwner,
+        favoriteHasMore = hasMoreFav,
+        favoriteIsLoadingMore = isLoadingMoreFav,
+        historyHasMore = hasMoreHis,
+        historyIsLoadingMore = isLoadingMoreHis,
+        seasonDetailHasMore = hasMoreSeasonDetail,
+        seasonDetailIsLoadingMore = isLoadingMoreSeasonDetail
+    )
+    val isLoadingMore = paginationSnapshot.isLoadingMore
+    val hasMore = paginationSnapshot.hasMore
     val favoriteContentMode = resolveFavoriteContentMode(
-        isFavoritePage = favoriteViewModel != null,
+        isFavoritePage = favoriteViewModel != null && !isSubscribedBrowse,
         folderCount = foldersState.size
     )
     val selectedFolderUiState by favoriteViewModel
@@ -261,7 +303,39 @@ fun CommonListScreen(
         baseItems = state.items,
         selectedFolderItems = selectedFolderUiState.items,
         singleFolderItems = singleFolderUiState.items
-    )
+    ).takeUnless { isSubscribedBrowse }.orEmpty()
+    val progressBadge = remember(
+        favoriteDetailProgressState,
+        seasonSeriesDetailViewModel
+    ) {
+        if (
+            seasonSeriesDetailViewModel != null &&
+            (favoriteDetailProgressState.expectedCount > 0 || favoriteDetailProgressState.loadedCount > 0)
+        ) {
+            resolveFavoriteDetailProgressBadge(
+                loadedCount = favoriteDetailProgressState.loadedCount,
+                expectedCount = favoriteDetailProgressState.expectedCount,
+                currentPage = favoriteDetailProgressState.currentPage,
+                lastAddedCount = favoriteDetailProgressState.lastAddedCount,
+                invalidCount = favoriteDetailProgressState.invalidCount,
+                hasMore = favoriteDetailProgressState.hasMore
+            )
+        } else {
+            null
+        }
+    }
+
+    //  滚动到底部时加载更多
+    LaunchedEffect(shouldLoadMore.value, hasMore, isLoadingMore, loadMoreOwner) {
+        if (shouldLoadMore.value && hasMore && !isLoadingMore) {
+            when (loadMoreOwner) {
+                CommonListLoadMoreOwner.FAVORITE -> favoriteViewModel?.loadMore()
+                CommonListLoadMoreOwner.HISTORY -> historyViewModel?.loadMore()
+                CommonListLoadMoreOwner.SEASON_SERIES_DETAIL -> seasonSeriesDetailViewModel?.loadMore()
+                CommonListLoadMoreOwner.NONE -> Unit
+            }
+        }
+    }
     
     // [新增] Pager State (仅当有多个文件夹时使用)
     // 尽管 compose 会自动处理 rememberKey，但这里用 foldersState.size 作为 key 确保变化时重置
@@ -301,8 +375,8 @@ fun CommonListScreen(
             .background(MaterialTheme.colorScheme.surface)
     }
 
-    val playFavoriteVideo: (List<VideoItem>, String, Long) -> Unit =
-        { items, bvid, cid ->
+    val playFavoriteVideo: (List<VideoItem>, String, Long, String) -> Unit =
+        { items, bvid, cid, coverUrl ->
             val externalPlaylist = buildExternalPlaylistFromFavorite(
                 items = items,
                 clickedBvid = bvid
@@ -315,7 +389,7 @@ fun CommonListScreen(
                 )
                 PlaylistManager.setPlayMode(PlayMode.SEQUENTIAL)
             }
-            onVideoClick(bvid, cid)
+            onVideoClick(bvid, cid, coverUrl)
         }
 
     Scaffold(
@@ -332,7 +406,36 @@ fun CommonListScreen(
                 .hazeSource(state = localHazeState)
 
             Box(modifier = contentModifier) {
-                when (favoriteContentMode) {
+                if (isSubscribedBrowse) {
+                    FavoriteSubscribedFolderList(
+                        folders = filterFavoriteFoldersByQuery(subscribedFoldersState, searchQuery),
+                        searchQuery = searchQuery,
+                        padding = PaddingValues(
+                            top = headerHeightDp,
+                            bottom = scaffoldPadding.calculateBottomPadding()
+                        ),
+                        spacing = spacing.medium,
+                        hasMore = subscribedFolderProgressState.hasMore,
+                        isLoadingMore = subscribedFolderProgressState.isLoadingMore,
+                        onLoadMore = { favoriteViewModel?.loadMoreSubscribedFolders() },
+                        onFolderClick = { folder ->
+                            val collectionRoute = resolveSubscribedFavoriteCollectionRoute(folder)
+                            if (collectionRoute != null) {
+                                onCollectionClick?.invoke(
+                                    collectionRoute.id,
+                                    collectionRoute.mid,
+                                    collectionRoute.title
+                                )
+                            } else {
+                                onFavoriteFolderClick?.invoke(
+                                    resolveFavoriteFolderMediaId(folder),
+                                    folder.mid,
+                                    folder.title
+                                )
+                            }
+                        }
+                    )
+                } else when (favoriteContentMode) {
                     FavoriteContentMode.PAGER -> {
                         val favoriteVm = requireNotNull(favoriteViewModel)
                         // [Feature] 联动 Pager -> ViewModel
@@ -389,11 +492,16 @@ fun CommonListScreen(
                                 cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                                 cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                                 cardMotionTier = cardMotionTier,
-                                onVideoClick = { bvid, cid ->
-                                    playFavoriteVideo(folderUiState.items, bvid, cid)
+                                onVideoClick = { bvid, cid, coverUrl ->
+                                    playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl)
                                 },
+                                onCollectionClick = onCollectionClick,
                                 onLoadMore = { favoriteVm.loadMoreForFolder(page) },
-                                onUnfavorite = { video -> favoriteVm.removeVideo(video) }
+                                onUnfavorite = if (folderUiState.canRemoveItems) {
+                                    { video -> favoriteVm.removeVideo(video) }
+                                } else {
+                                    null
+                                }
                             )
                         }
                     }
@@ -415,11 +523,16 @@ fun CommonListScreen(
                             cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                             cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                             cardMotionTier = cardMotionTier,
-                            onVideoClick = { bvid, cid ->
-                                playFavoriteVideo(folderUiState.items, bvid, cid)
+                            onVideoClick = { bvid, cid, coverUrl ->
+                                playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl)
                             },
+                            onCollectionClick = onCollectionClick,
                             onLoadMore = { favoriteVm.loadMoreForFolder(0) },
-                            onUnfavorite = { video -> favoriteVm.removeVideo(video) }
+                            onUnfavorite = if (folderUiState.canRemoveItems) {
+                                { video -> favoriteVm.removeVideo(video) }
+                            } else {
+                                null
+                            }
                         )
                     }
 
@@ -434,16 +547,21 @@ fun CommonListScreen(
                         cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                         cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                         cardMotionTier = cardMotionTier,
-                        onVideoClick = { bvid, cid ->
+                        onVideoClick = { bvid, cid, coverUrl ->
                             if (favoriteViewModel != null) {
-                                playFavoriteVideo(state.items, bvid, cid)
+                                playFavoriteVideo(state.items, bvid, cid, coverUrl)
                             } else {
-                                onVideoClick(bvid, cid)
+                                onVideoClick(bvid, cid, coverUrl)
                             }
                         },
+                        onCollectionClick = onCollectionClick,
                         onLoadMore = { 
-                            favoriteViewModel?.loadMore()
-                            historyViewModel?.loadMore()
+                            when (loadMoreOwner) {
+                                CommonListLoadMoreOwner.FAVORITE -> favoriteViewModel?.loadMore()
+                                CommonListLoadMoreOwner.HISTORY -> historyViewModel?.loadMore()
+                                CommonListLoadMoreOwner.SEASON_SERIES_DETAIL -> seasonSeriesDetailViewModel?.loadMore()
+                                CommonListLoadMoreOwner.NONE -> Unit
+                            }
                         },
                         onUnfavorite = if (favoriteViewModel != null) { 
                             { favoriteViewModel.removeVideo(it) } 
@@ -481,6 +599,17 @@ fun CommonListScreen(
                 }
             }
 
+            progressBadge?.let { badge ->
+                FavoriteProgressBadgeCapsule(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 12.dp)
+                        .zIndex(2f),
+                    title = "进度",
+                    badge = badge
+                )
+            }
+
             // 2. 顶层：悬浮顶栏 (使用 onGloballyPositioned 测量高度)
             Box(
                 modifier = topBarBackgroundModifier
@@ -501,7 +630,7 @@ fun CommonListScreen(
                         actions = {
                             if (favoriteViewModel != null) {
                                 IconButton(
-                                    enabled = activeFavoriteItems.isNotEmpty(),
+                                    enabled = activeFavoriteItems.isNotEmpty() && !isSubscribedBrowse,
                                     onClick = {
                                         val externalPlaylist = buildExternalPlaylistFromFavorite(
                                             items = activeFavoriteItems,
@@ -519,7 +648,7 @@ fun CommonListScreen(
                                             .getOrNull(externalPlaylist.startIndex)
                                             ?: return@IconButton
                                         onPlayAllAudioClick?.invoke(startItem.bvid, startItem.cid)
-                                            ?: onVideoClick(startItem.bvid, startItem.cid)
+                                            ?: onVideoClick(startItem.bvid, startItem.cid, startItem.pic)
                                     }
                                 ) {
                                     Icon(
@@ -585,13 +714,38 @@ fun CommonListScreen(
                         com.android.purebilibili.core.ui.components.IOSSearchBar(
                             query = searchQuery,
                             onQueryChange = { searchQuery = it },
-                            placeholder = "搜索视频",
+                            placeholder = if (isSubscribedBrowse) "搜索订阅收藏夹" else "搜索视频",
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                         )
                     }
+
+                    if (favoriteViewModel != null && subscribedFoldersState.isNotEmpty()) {
+                        TabRow(
+                            selectedTabIndex = if (isSubscribedBrowse) 1 else 0,
+                            containerColor = Color.Transparent,
+                            divider = {}
+                        ) {
+                            Tab(
+                                selected = !isSubscribedBrowse,
+                                onClick = {
+                                    favoriteBrowseSection = FavoriteBrowseSection.OWNED
+                                    searchQuery = ""
+                                },
+                                text = { Text("收藏夹") }
+                            )
+                            Tab(
+                                selected = isSubscribedBrowse,
+                                onClick = {
+                                    favoriteBrowseSection = FavoriteBrowseSection.SUBSCRIBED
+                                    searchQuery = ""
+                                },
+                                text = { Text("订阅") }
+                            )
+                        }
+                    }
                     
                     // 📁 [新增] 收藏夹 Tab 栏（仅显示多个收藏夹时）
-                    if (foldersState.size > 1) {
+                    if (!isSubscribedBrowse && foldersState.size > 1) {
                         ScrollableTabRow(
                             selectedTabIndex = selectedFolderIndex,
                             containerColor = Color.Transparent,
@@ -620,7 +774,7 @@ fun CommonListScreen(
                                     },
                                     text = {
                                         Text(
-                                            text = folder.title,
+                                            text = resolveFavoriteFolderTabLabel(folder),
                                             maxLines = 1,
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = if (selectedFolderIndex == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -697,7 +851,8 @@ fun CommonListContent(
     cardAnimationEnabled: Boolean,
     cardTransitionEnabled: Boolean,
     cardMotionTier: MotionTier,
-    onVideoClick: (String, Long) -> Unit,
+    onVideoClick: (String, Long, String) -> Unit,
+    onCollectionClick: ((Long, Long, String) -> Unit)? = null,
     onLoadMore: () -> Unit,
     onUnfavorite: ((com.android.purebilibili.data.model.response.VideoItem) -> Unit)?,
     historyDissolvingIds: Set<String> = emptySet(),
@@ -779,7 +934,10 @@ fun CommonListContent(
             ) {
                  itemsIndexed(
                     items = filteredItems,
-                    key = { _, item -> resolveHistoryItemKey(item) }
+                    key = { _, item -> resolveHistoryItemKey(item) },
+                    span = { _, item ->
+                        if (item.isCollectionResource) GridItemSpan(columns) else GridItemSpan(1)
+                    }
                 ) { index, video ->
                     val historyKey = resolveHistoryItemKey(video)
                     val supportsHistoryDissolve = onHistoryLongDelete != null && onHistoryDissolveComplete != null
@@ -788,24 +946,37 @@ fun CommonListContent(
 
                     val cardContent: @Composable () -> Unit = {
                         Box {
-                            ElegantVideoCard(
-                                video = video,
-                                index = index,
-                                animationEnabled = cardAnimationEnabled,
-                                motionTier = cardMotionTier,
-                                transitionEnabled = cardTransitionEnabled,
-                                onClick = { bvid, cid ->
-                                    if (historyBatchMode) {
-                                        onHistoryToggleSelect?.invoke(historyKey)
-                                    } else {
-                                        onVideoClick(bvid, cid)
+                            if (video.isCollectionResource) {
+                                FavoriteCollectionRow(
+                                    item = video,
+                                    onClick = {
+                                        resolveFavoriteCollectionRoute(video)?.let { route ->
+                                            onCollectionClick?.invoke(route.id, route.mid, route.title)
+                                        }
                                     }
-                                },
-                                onUnfavorite = if (onUnfavorite != null) { { onUnfavorite(video) } } else null,
-                                onLongClick = if (!historyBatchMode && supportsHistoryDissolve) {
-                                    { onHistoryLongDelete?.invoke(historyKey) }
-                                } else null
-                            )
+                                )
+                            } else {
+                                ElegantVideoCard(
+                                    video = video,
+                                    index = index,
+                                    animationEnabled = cardAnimationEnabled,
+                                    motionTier = cardMotionTier,
+                                    transitionEnabled = cardTransitionEnabled,
+                                    onClick = { _, _ ->
+                                        if (historyBatchMode) {
+                                            onHistoryToggleSelect?.invoke(historyKey)
+                                        } else {
+                                            resolveCommonListVideoNavigationRequest(video)?.let { request ->
+                                                onVideoClick(request.bvid, request.cid, request.coverUrl)
+                                            }
+                                        }
+                                    },
+                                    onUnfavorite = if (onUnfavorite != null) { { onUnfavorite(video) } } else null,
+                                    onLongClick = if (!historyBatchMode && supportsHistoryDissolve) {
+                                        { onHistoryLongDelete?.invoke(historyKey) }
+                                    } else null
+                                )
+                            }
 
                             if (historyBatchMode) {
                                 Box(
@@ -860,6 +1031,211 @@ fun CommonListContent(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteSubscribedFolderList(
+    folders: List<com.android.purebilibili.data.model.response.FavFolder>,
+    searchQuery: String,
+    padding: PaddingValues,
+    spacing: androidx.compose.ui.unit.Dp,
+    hasMore: Boolean,
+    isLoadingMore: Boolean,
+    onLoadMore: () -> Unit,
+    onFolderClick: (com.android.purebilibili.data.model.response.FavFolder) -> Unit
+) {
+    if (folders.isEmpty()) {
+        val message = if (searchQuery.isNotBlank()) "没有找到相关订阅" else "暂无订阅收藏夹"
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(text = message, color = Color.Gray)
+        }
+        return
+    }
+
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val shouldLoadMore = androidx.compose.runtime.remember {
+        androidx.compose.runtime.derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val total = layoutInfo.totalItemsCount
+            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            total > 0 && lastVisible >= total - 3
+        }
+    }
+    LaunchedEffect(shouldLoadMore.value, hasMore, isLoadingMore) {
+        if (shouldLoadMore.value && hasMore && !isLoadingMore) {
+            onLoadMore()
+        }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        contentPadding = PaddingValues(
+            start = spacing,
+            end = spacing,
+            top = padding.calculateTopPadding() + spacing,
+            bottom = padding.calculateBottomPadding() + spacing + 24.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(spacing)
+    ) {
+        items(items = folders, key = { "favorite_subscribed_${it.id}_${it.fid}" }) { folder ->
+            FavoriteSubscribedFolderRow(folder = folder, onClick = { onFolderClick(folder) })
+        }
+    }
+}
+
+@Composable
+private fun FavoriteSubscribedFolderRow(
+    folder: com.android.purebilibili.data.model.response.FavFolder,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = CupertinoIcons.Default.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = folder.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${folder.media_count} 个内容",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            AssistChip(
+                onClick = onClick,
+                label = { Text("订阅") }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FavoriteProgressBadgeCapsule(
+    modifier: Modifier = Modifier,
+    title: String,
+    badge: FavoriteProgressBadge
+) {
+    Surface(
+        modifier = modifier.widthIn(min = 104.dp, max = 150.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        tonalElevation = 3.dp,
+        shadowElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = badge.primaryText,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = badge.secondaryText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            badge.footnoteText?.let { footnote ->
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                    thickness = 0.5.dp
+                )
+                Text(
+                    text = footnote,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteCollectionRow(
+    item: com.android.purebilibili.data.model.response.VideoItem,
+    onClick: () -> Unit
+) {
+    val subtitleParts = remember(item.owner.name, item.collectionMediaCount, item.collectionSubtitle) {
+        buildList {
+            item.owner.name.takeIf { it.isNotBlank() }?.let(::add)
+            item.collectionMediaCount.takeIf { it > 0 }?.let { add("${it} 个视频") }
+            item.collectionSubtitle.takeIf { it.isNotBlank() }?.let(::add)
+        }
+    }
+    val subtitle = remember(subtitleParts) { subtitleParts.joinToString(separator = " · ") }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = CupertinoIcons.Default.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+                if (subtitle.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            AssistChip(
+                onClick = onClick,
+                label = { Text("合集") }
+            )
         }
     }
 }

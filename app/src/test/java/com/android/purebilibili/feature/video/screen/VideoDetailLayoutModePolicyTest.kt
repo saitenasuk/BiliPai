@@ -335,6 +335,8 @@ class VideoDetailLayoutModePolicyTest {
                 autoEnterPortraitFromRoute = true,
                 startAudioFromRoute = false,
                 portraitExperienceEnabled = true,
+                useOfficialInlinePortraitDetailExperience = false,
+                isCurrentRouteVideoLoaded = true,
                 isVerticalVideo = true,
                 isPortraitFullscreen = false,
                 hasAutoEnteredPortraitFromRoute = false
@@ -349,6 +351,8 @@ class VideoDetailLayoutModePolicyTest {
                 autoEnterPortraitFromRoute = true,
                 startAudioFromRoute = true,
                 portraitExperienceEnabled = true,
+                useOfficialInlinePortraitDetailExperience = false,
+                isCurrentRouteVideoLoaded = true,
                 isVerticalVideo = true,
                 isPortraitFullscreen = false,
                 hasAutoEnteredPortraitFromRoute = false
@@ -363,7 +367,41 @@ class VideoDetailLayoutModePolicyTest {
                 autoEnterPortraitFromRoute = true,
                 startAudioFromRoute = false,
                 portraitExperienceEnabled = true,
+                useOfficialInlinePortraitDetailExperience = false,
+                isCurrentRouteVideoLoaded = true,
                 isVerticalVideo = false,
+                isPortraitFullscreen = false,
+                hasAutoEnteredPortraitFromRoute = false
+            )
+        )
+    }
+
+    @Test
+    fun autoPortraitRoutePolicy_doesNotEnter_whenCurrentRouteVideoNotLoaded() {
+        assertFalse(
+            shouldAutoEnterPortraitFullscreenFromRoute(
+                autoEnterPortraitFromRoute = true,
+                startAudioFromRoute = false,
+                portraitExperienceEnabled = true,
+                useOfficialInlinePortraitDetailExperience = false,
+                isCurrentRouteVideoLoaded = false,
+                isVerticalVideo = true,
+                isPortraitFullscreen = false,
+                hasAutoEnteredPortraitFromRoute = false
+            )
+        )
+    }
+
+    @Test
+    fun autoPortraitRoutePolicy_doesNotEnter_whenOfficialInlinePortraitModeIsActive() {
+        assertFalse(
+            shouldAutoEnterPortraitFullscreenFromRoute(
+                autoEnterPortraitFromRoute = true,
+                startAudioFromRoute = false,
+                portraitExperienceEnabled = true,
+                useOfficialInlinePortraitDetailExperience = true,
+                isCurrentRouteVideoLoaded = true,
+                isVerticalVideo = true,
                 isPortraitFullscreen = false,
                 hasAutoEnteredPortraitFromRoute = false
             )

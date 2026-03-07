@@ -1,0 +1,75 @@
+package com.android.purebilibili.feature.home.components
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class HomeInteractionMotionBudgetPolicyTest {
+
+    @Test
+    fun activePagerOrFeedMotion_reducesHomeBudget() {
+        assertEquals(
+            HomeInteractionMotionBudget.REDUCED,
+            resolveHomeInteractionMotionBudget(
+                isPagerScrolling = true,
+                isProgrammaticPageSwitchInProgress = false,
+                isFeedScrolling = false
+            )
+        )
+        assertEquals(
+            HomeInteractionMotionBudget.REDUCED,
+            resolveHomeInteractionMotionBudget(
+                isPagerScrolling = false,
+                isProgrammaticPageSwitchInProgress = true,
+                isFeedScrolling = false
+            )
+        )
+        assertEquals(
+            HomeInteractionMotionBudget.REDUCED,
+            resolveHomeInteractionMotionBudget(
+                isPagerScrolling = false,
+                isProgrammaticPageSwitchInProgress = false,
+                isFeedScrolling = true
+            )
+        )
+    }
+
+    @Test
+    fun idleHomeState_keepsFullBudget() {
+        assertEquals(
+            HomeInteractionMotionBudget.FULL,
+            resolveHomeInteractionMotionBudget(
+                isPagerScrolling = false,
+                isProgrammaticPageSwitchInProgress = false,
+                isFeedScrolling = false
+            )
+        )
+    }
+
+    @Test
+    fun reducedBudget_onlyAutoScrollsTabsWhenTargetIsOutOfViewport() {
+        assertFalse(
+            shouldAnimateTopTabAutoScroll(
+                selectedIndex = 2,
+                firstVisibleIndex = 0,
+                lastVisibleIndex = 4,
+                budget = HomeInteractionMotionBudget.REDUCED
+            )
+        )
+        assertTrue(
+            shouldAnimateTopTabAutoScroll(
+                selectedIndex = 5,
+                firstVisibleIndex = 0,
+                lastVisibleIndex = 4,
+                budget = HomeInteractionMotionBudget.REDUCED
+            )
+        )
+    }
+
+    @Test
+    fun topTabTapPolicy_usesImmediatePageSwitchWhenTargetChanges() {
+        assertTrue(shouldSnapHomeTopTabSelection(currentPage = 0, targetPage = 1))
+        assertFalse(shouldSnapHomeTopTabSelection(currentPage = 2, targetPage = 2))
+    }
+}

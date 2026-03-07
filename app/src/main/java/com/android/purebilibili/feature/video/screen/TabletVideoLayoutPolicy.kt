@@ -160,6 +160,24 @@ internal fun resolveCurtainStateAfterAutoBehavior(
     }
 }
 
+internal fun resolveCinemaSideCurtainSelectedTab(
+    currentSelectedTab: Int,
+    replyCount: Int,
+    isRepliesLoading: Boolean,
+    hasRelatedVideos: Boolean
+): Int {
+    return if (
+        currentSelectedTab == 0 &&
+        replyCount == 0 &&
+        !isRepliesLoading &&
+        hasRelatedVideos
+    ) {
+        1
+    } else {
+        currentSelectedTab
+    }
+}
+
 internal fun resolveCinemaMetaPanelContainerColor(
     isDarkTheme: Boolean,
     surfaceColor: Color

@@ -144,6 +144,112 @@ class ImagePreviewTransitionPolicyTest {
     }
 
     @Test
+    fun resolveImagePreviewDismissRectFrame_startsFromDisplayedRect() {
+        val displayed = Rect(
+            left = 180f,
+            top = 220f,
+            right = 900f,
+            bottom = 1500f
+        )
+        val source = Rect(
+            left = 40f,
+            top = 80f,
+            right = 280f,
+            bottom = 440f
+        )
+
+        val frame = resolveImagePreviewDismissRectFrame(
+            transitionProgress = 1f,
+            sourceRect = source,
+            displayedImageRect = displayed
+        ) ?: error("Expected start frame")
+
+        assertEquals(displayed.left, frame.rect.left, 0.0001f)
+        assertEquals(displayed.top, frame.rect.top, 0.0001f)
+        assertEquals(displayed.right, frame.rect.right, 0.0001f)
+        assertEquals(displayed.bottom, frame.rect.bottom, 0.0001f)
+    }
+
+    @Test
+    fun resolveImagePreviewDismissRectFrame_endsAtSourceRect() {
+        val displayed = Rect(
+            left = 180f,
+            top = 220f,
+            right = 900f,
+            bottom = 1500f
+        )
+        val source = Rect(
+            left = 40f,
+            top = 80f,
+            right = 280f,
+            bottom = 440f
+        )
+
+        val frame = resolveImagePreviewDismissRectFrame(
+            transitionProgress = 0f,
+            sourceRect = source,
+            displayedImageRect = displayed
+        ) ?: error("Expected end frame")
+
+        assertEquals(source.left, frame.rect.left, 0.0001f)
+        assertEquals(source.top, frame.rect.top, 0.0001f)
+        assertEquals(source.right, frame.rect.right, 0.0001f)
+        assertEquals(source.bottom, frame.rect.bottom, 0.0001f)
+    }
+
+    @Test
+    fun resolveImagePreviewDismissRectFrame_interpolatesWidthHeightAndCenter() {
+        val displayed = Rect(
+            left = 180f,
+            top = 220f,
+            right = 900f,
+            bottom = 1500f
+        )
+        val source = Rect(
+            left = 40f,
+            top = 80f,
+            right = 280f,
+            bottom = 440f
+        )
+
+        val frame = resolveImagePreviewDismissRectFrame(
+            transitionProgress = 0.5f,
+            sourceRect = source,
+            displayedImageRect = displayed
+        )
+
+        val rect = frame?.rect ?: error("Expected rect frame")
+        assertTrue(rect.width < displayed.width && rect.width > source.width)
+        assertTrue(rect.height < displayed.height && rect.height > source.height)
+        val displayedCenterX = (displayed.left + displayed.right) / 2f
+        val sourceCenterX = (source.left + source.right) / 2f
+        val currentCenterX = (rect.left + rect.right) / 2f
+        assertTrue(currentCenterX < displayedCenterX && currentCenterX > sourceCenterX)
+    }
+
+    @Test
+    fun resolveImagePreviewDraggedDisplayRect_appliesTranslationAndScaleAroundCenter() {
+        val displayed = Rect(
+            left = 180f,
+            top = 220f,
+            right = 900f,
+            bottom = 1500f
+        )
+
+        val dragged = resolveImagePreviewDraggedDisplayRect(
+            displayedImageRect = displayed,
+            translationYPx = 240f,
+            scale = 0.9f
+        ) ?: error("Expected dragged rect")
+
+        assertEquals(displayed.width * 0.9f, dragged.width, 0.0001f)
+        assertEquals(displayed.height * 0.9f, dragged.height, 0.0001f)
+        val draggedCenterY = (dragged.top + dragged.bottom) / 2f
+        val displayedCenterY = (displayed.top + displayed.bottom) / 2f
+        assertEquals(displayedCenterY + 240f, draggedCenterY, 0.0001f)
+    }
+
+    @Test
     fun resolveImagePreviewDismissBackdropAlpha_keepsBackdropLongerThenFades() {
         val start = resolveImagePreviewDismissBackdropAlpha(1f)
         val middle = resolveImagePreviewDismissBackdropAlpha(0.5f)

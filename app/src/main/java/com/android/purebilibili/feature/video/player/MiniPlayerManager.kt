@@ -44,6 +44,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.VideoActivity
@@ -299,6 +300,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
             }
         }
     }
+    private var mediaControlReceiverRegistered = false
+    private var backgroundListenerRegistered = false
     
     init {
         //  注册媒体控制广播接收器
@@ -309,10 +312,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
             filter,
             androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        mediaControlReceiverRegistered = true
         Logger.d(TAG, " 媒体控制广播接收器已注册")
         
         // 🔋 注册后台状态监听
         com.android.purebilibili.core.lifecycle.BackgroundManager.addListener(this)
+        backgroundListenerRegistered = true
         Logger.d(TAG, "🔋 后台状态监听器已注册")
     }
     
@@ -902,7 +907,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
         currentRoomId = 0L
         currentLiveUname = ""
         
+        releaseMediaSession()
         clearPlaybackNotificationArtifacts()
+    }
+
+    private fun releaseMediaSession() {
+        mediaSession?.release()
+        mediaSession = null
     }
 
     private fun clearPlaybackNotificationArtifacts() {
@@ -1179,11 +1190,19 @@ class MiniPlayerManager private constructor(private val context: Context) :
     fun release() {
         Logger.d(TAG, "Releasing all resources")
         dismiss()
-        mediaSession?.release()
-        mediaSession = null
+        if (mediaControlReceiverRegistered) {
+            runCatching { context.unregisterReceiver(mediaControlReceiver) }
+                .onFailure { Logger.w(TAG, "Failed to unregister media control receiver: ${it.message}") }
+            mediaControlReceiverRegistered = false
+        }
+        if (backgroundListenerRegistered) {
+            com.android.purebilibili.core.lifecycle.BackgroundManager.removeListener(this)
+            backgroundListenerRegistered = false
+        }
         _player?.removeListener(playerListener)
         _player?.release()
         _player = null
+        scope.cancel()
         INSTANCE = null
     }
 

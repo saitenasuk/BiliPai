@@ -81,7 +81,7 @@ class VideoPlaybackUseCase(
 
     companion object {
         private val STANDARD_LOW_QUALITIES = listOf(32, 16)
-        private const val API_ONLY_HIGH_QUALITY_FLOOR = 112
+        private const val API_ONLY_VISIBLE_QUALITY_FLOOR = 80
     }
 
     internal data class QualityMergeResult(
@@ -606,9 +606,10 @@ class VideoPlaybackUseCase(
         val normalizedDash = dashVideoIds.distinct().sortedDescending()
         val switchableQualities = if (normalizedDash.isNotEmpty()) normalizedDash else normalizedApi
 
-        // Keep API-only high tiers visible (4K/1080P60/1080P+) so users can trigger re-fetch switching.
+        // Keep API-advertised login-tier qualities visible so users can re-fetch 1080P+ even when
+        // the first DASH payload is temporarily capped at 720P.
         val apiOnlyHighQualities = normalizedApi.filter { qualityId ->
-            qualityId >= API_ONLY_HIGH_QUALITY_FLOOR && qualityId !in normalizedDash
+            qualityId >= API_ONLY_VISIBLE_QUALITY_FLOOR && qualityId !in normalizedDash
         }
 
         val mergedQualityIds = (switchableQualities + apiOnlyHighQualities + STANDARD_LOW_QUALITIES)

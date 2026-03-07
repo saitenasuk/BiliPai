@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 @Composable
 fun VideoTitleSection(
     info: ViewInfo,
+    animateLayout: Boolean = true,
     onUpClick: (Long) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -87,7 +88,7 @@ fun VideoTitleSection(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .weight(1f)
-                    .animateContentSize()
+                    .then(if (animateLayout) Modifier.animateContentSize() else Modifier)
                     .copyOnLongPress(info.title, "视频标题")
             )
             Spacer(Modifier.width(4.dp))
@@ -124,6 +125,7 @@ fun VideoTitleWithDesc(
     videoTags: List<VideoTag> = emptyList(),  //  视频标签
     bgmInfo: BgmInfo? = null, // [新增] BGM 信息
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
+    animateLayout: Boolean = true,
     onBgmClick: (BgmInfo) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -154,7 +156,7 @@ fun VideoTitleWithDesc(
             verticalAlignment = Alignment.Top
         ) {
                 //  共享元素过渡 - 标题
-                var titleModifier = Modifier.animateContentSize()
+                var titleModifier = if (animateLayout) Modifier.animateContentSize() else Modifier
                 
                 //  注意：使用 ExperimentalSharedTransitionApi 注解需要上下文
                 if (metadataSharedEnabled) {
@@ -272,8 +274,16 @@ fun VideoTitleWithDesc(
         //  Description - 默认隐藏，展开后显示
         androidx.compose.animation.AnimatedVisibility(
             visible = expanded && info.desc.isNotBlank(),
-            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+            enter = if (animateLayout) {
+                androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn()
+            } else {
+                androidx.compose.animation.EnterTransition.None
+            },
+            exit = if (animateLayout) {
+                androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+            } else {
+                androidx.compose.animation.ExitTransition.None
+            }
         ) {
             Column {
                 Spacer(Modifier.height(6.dp))
@@ -286,7 +296,7 @@ fun VideoTitleWithDesc(
                             lineHeight = 17.sp
                         ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        modifier = Modifier.animateContentSize()
+                        modifier = if (animateLayout) Modifier.animateContentSize() else Modifier
                     )
                 }
             }
@@ -295,8 +305,16 @@ fun VideoTitleWithDesc(
         //  Tags - 默认隐藏，展开后显示
         androidx.compose.animation.AnimatedVisibility(
             visible = expanded && videoTags.isNotEmpty(),
-            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+            enter = if (animateLayout) {
+                androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn()
+            } else {
+                androidx.compose.animation.EnterTransition.None
+            },
+            exit = if (animateLayout) {
+                androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+            } else {
+                androidx.compose.animation.ExitTransition.None
+            }
         ) {
             Column {
                 Spacer(Modifier.height(8.dp))

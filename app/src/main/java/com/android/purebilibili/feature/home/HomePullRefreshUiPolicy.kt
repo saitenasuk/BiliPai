@@ -3,6 +3,16 @@ package com.android.purebilibili.feature.home
 import kotlin.math.min
 import kotlin.math.max
 
+internal fun resolvePullRefreshThresholdDp(): Float = 56f
+
+internal fun resolveRequiredPullDistanceDp(
+    thresholdDp: Float,
+    dragMultiplier: Float
+): Float {
+    if (dragMultiplier <= 0f) return Float.POSITIVE_INFINITY
+    return thresholdDp / dragMultiplier
+}
+
 internal fun shouldResetToTopOnRefreshStart(
     firstVisibleItemIndex: Int,
     firstVisibleItemScrollOffset: Int
@@ -71,9 +81,5 @@ internal fun resolvePullContentOffsetFraction(
     isRefreshing: Boolean
 ): Float {
     val clampedDistance = distanceFraction.coerceAtMost(2f).coerceAtLeast(0f)
-    return if (isRefreshing) {
-        max(clampedDistance, 1f) * 0.5f
-    } else {
-        clampedDistance * 0.5f
-    }
+    return clampedDistance * 0.5f
 }

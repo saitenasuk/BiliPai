@@ -48,6 +48,7 @@ fun FrostedSideBar(
     onToggleSidebar: (() -> Unit)? = null  // 📱 [平板适配] 切换到底栏
 ) {
     val haptic = rememberHapticFeedback()
+    val scope = rememberCoroutineScope()
     
     // 读取模糊设置
     val blurIntensity = com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity()
@@ -143,11 +144,10 @@ fun FrostedSideBar(
                 val triggerItemClick = {
                     isPending = true
                     haptic(HapticType.LIGHT)
-                    kotlinx.coroutines.MainScope().launch {
-                        kotlinx.coroutines.delay(100)
-                        wobbleAngle = 15f
-                        kotlinx.coroutines.delay(150)
-                        onItemClick(item)
+                    wobbleAngle = 8f
+                    onItemClick(item)
+                    scope.launch {
+                        kotlinx.coroutines.delay(90)
                         isPending = false
                     }
                 }

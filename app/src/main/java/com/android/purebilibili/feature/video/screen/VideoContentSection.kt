@@ -51,6 +51,8 @@ import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
+import com.android.purebilibili.feature.video.ui.section.resolveVideoDetailMotionBudget
+import com.android.purebilibili.feature.video.ui.section.shouldAnimateVideoDetailLayout
 import com.android.purebilibili.feature.video.ui.components.RelatedVideoItem
 import com.android.purebilibili.feature.video.ui.components.CollectionRow
 import com.android.purebilibili.feature.video.ui.components.CollectionSheet
@@ -165,6 +167,11 @@ fun VideoContentSection(
         scrollableState = commentListState,
         stateName = "video_detail:comment_scroll"
     )
+    val videoDetailMotionBudget = resolveVideoDetailMotionBudget(
+        isTabSwitching = pagerState.isScrollInProgress,
+        isContentScrolling = introListState.isScrollInProgress || commentListState.isScrollInProgress
+    )
+    val animateVideoDetailLayout = shouldAnimateVideoDetailLayout(videoDetailMotionBudget)
     
     // 评论图片预览状态
     var showImagePreview by remember { mutableStateOf(false) }
@@ -274,7 +281,8 @@ fun VideoContentSection(
                     bgmInfo = bgmInfo,
                     onTimestampClick = onTimestampClick,
                     onBgmClick = onBgmClick,
-                    showInteractionActions = showInteractionActions
+                    showInteractionActions = showInteractionActions,
+                    animateVideoDetailLayout = animateVideoDetailLayout
                 )
                 1 -> VideoCommentTab(
                     listState = commentListState,
@@ -356,7 +364,8 @@ private fun VideoIntroTab(
     bgmInfo: BgmInfo? = null,
     onTimestampClick: ((Long) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
-    showInteractionActions: Boolean = true
+    showInteractionActions: Boolean = true,
+    animateVideoDetailLayout: Boolean = true
 ) {
     val hasPages = info.pages.size > 1
     LazyColumn(
@@ -394,7 +403,8 @@ private fun VideoIntroTab(
                 bgmInfo = bgmInfo,
                 onTimestampClick = onTimestampClick,
                 onBgmClick = onBgmClick,
-                showInteractionActions = showInteractionActions
+                showInteractionActions = showInteractionActions,
+                animateVideoDetailLayout = animateVideoDetailLayout
             )
         }
         if (hasPages) {
@@ -619,7 +629,8 @@ private fun VideoHeaderContent(
     bgmInfo: BgmInfo? = null,
     onTimestampClick: ((Long) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
-    showInteractionActions: Boolean = true
+    showInteractionActions: Boolean = true,
+    animateVideoDetailLayout: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -645,7 +656,8 @@ private fun VideoHeaderContent(
             videoTags = videoTags,
             transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
             bgmInfo = bgmInfo,
-            onBgmClick = onBgmClick
+            onBgmClick = onBgmClick,
+            animateLayout = animateVideoDetailLayout
         )
 
         // [新增] AI Summary

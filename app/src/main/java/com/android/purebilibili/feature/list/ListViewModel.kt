@@ -15,7 +15,8 @@ data class ListUiState(
     val title: String = "",
     val items: List<VideoItem> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val canRemoveItems: Boolean = true
 )
 
 // 基类 ViewModel
@@ -401,9 +402,14 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
     // 分页状态
     private var currentPage = 1
     private var hasMore = true
-    private var allFolderIds: List<Long> = emptyList()  //  所有收藏夹 ID
+    private var allFolderIds: List<Long> = emptyList()  //  自建收藏夹 media_id
     private var currentFolderIndex = 0  //  当前正在加载的收藏夹索引
     private var isLoadingMore = false
+    private var currentUserMid: Long = 0L
+    private var subscribedCurrentPage = 0
+    private var subscribedHasMore = true
+    private var isLoadingSubscribedMore = false
+    private val subscribedPageSize = 40
     
     //  暴露加载更多状态
     private val _isLoadingMoreState = MutableStateFlow(false)
@@ -412,9 +418,25 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
     private val _hasMoreState = MutableStateFlow(true)
     val hasMoreState = _hasMoreState.asStateFlow()
     
-    // 📁 [新增] 收藏夹列表
+    // 📁 [新增] 自建收藏夹列表
     private val _folders = MutableStateFlow<List<com.android.purebilibili.data.model.response.FavFolder>>(emptyList())
     val folders = _folders.asStateFlow()
+
+    // 📁 [新增] 订阅收藏夹列表
+    private val _subscribedFolders = MutableStateFlow<List<com.android.purebilibili.data.model.response.FavFolder>>(emptyList())
+    val subscribedFolders = _subscribedFolders.asStateFlow()
+
+    data class SubscribedFolderProgressState(
+        val loadedCount: Int = 0,
+        val totalCount: Int = 0,
+        val currentPage: Int = 1,
+        val lastAddedCount: Int = 0,
+        val hasMore: Boolean = false,
+        val isLoadingMore: Boolean = false
+    )
+
+    private val _subscribedFolderProgressState = MutableStateFlow(SubscribedFolderProgressState())
+    val subscribedFolderProgressState = _subscribedFolderProgressState.asStateFlow()
     
     // 📁 [新增] 当前选中的收藏夹索引
     private val _selectedFolderIndex = MutableStateFlow(0)
@@ -487,10 +509,16 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                     val resultData = listResult.getOrNull()
                     val items = resultData?.medias?.map { it.toVideoItem() } ?: emptyList()
                     
-                     // Update Title if possible
+                    // Update Title if possible
                     val title = if (index < _folders.value.size) _folders.value[index].title else currentState.title
+                    val canRemoveItems = _folders.value.getOrNull(index)?.source != com.android.purebilibili.data.model.response.FavFolderSource.SUBSCRIBED
 
-                    stateFlow.value = currentState.copy(isLoading = false, items = items, title = title)
+                    stateFlow.value = currentState.copy(
+                        isLoading = false,
+                        items = items,
+                        title = title,
+                        canRemoveItems = canRemoveItems
+                    )
                     com.android.purebilibili.core.util.Logger.d("FavoriteVM", "📁 Loaded folder $index ($title): ${items.size} items")
                 } else {
                      // Index still out of bounds (maybe empty folders?)
@@ -508,16 +536,82 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
     }
     
     private suspend fun fetchFolders() {
-        val api = NetworkModule.api
-        val navResp = api.getNavInfo()
-        val mid = navResp.data?.mid
-        if (mid != null && mid != 0L) {
-             val foldersResult = com.android.purebilibili.data.repository.FavoriteRepository.getFavFolders(mid)
-             val foldersList = foldersResult.getOrNull()
-             if (!foldersList.isNullOrEmpty()) {
-                 _folders.value = foldersList
-                 allFolderIds = foldersList.map { it.id }
-             }
+        val mid = ensureCurrentUserMid()
+        if (mid == 0L) return
+
+        if (_folders.value.isEmpty()) {
+            val ownedFolders = com.android.purebilibili.data.repository.FavoriteRepository.getFavFolders(mid)
+                .getOrNull()
+                .orEmpty()
+            _folders.value = ownedFolders
+            allFolderIds = ownedFolders.map(::resolveFavoriteFolderMediaId)
+        }
+
+        if (_subscribedFolders.value.isEmpty() && subscribedCurrentPage == 0) {
+            loadSubscribedFoldersPage(reset = true)
+        }
+    }
+
+    private suspend fun ensureCurrentUserMid(): Long {
+        if (currentUserMid > 0L) return currentUserMid
+        val navResp = NetworkModule.api.getNavInfo()
+        currentUserMid = navResp.data?.mid ?: 0L
+        return currentUserMid
+    }
+
+    private suspend fun loadSubscribedFoldersPage(reset: Boolean) {
+        val mid = ensureCurrentUserMid()
+        if (mid == 0L) return
+        if (!reset && (!subscribedHasMore || isLoadingSubscribedMore)) return
+
+        val nextPage = if (reset) 1 else subscribedCurrentPage + 1
+        isLoadingSubscribedMore = true
+        _subscribedFolderProgressState.value = _subscribedFolderProgressState.value.copy(
+            isLoadingMore = true
+        )
+        try {
+            val page = com.android.purebilibili.data.repository.FavoriteRepository.getCollectedFavFolders(
+                mid = mid,
+                pn = nextPage,
+                ps = subscribedPageSize,
+                platform = "web"
+            ).getOrNull()
+
+            val existing = if (reset) emptyList() else _subscribedFolders.value
+            val existingKeys = existing.map { "${it.id}_${it.fid}" }.toHashSet()
+            val uniqueNewFolders = page?.folders
+                .orEmpty()
+                .filter { existingKeys.add("${it.id}_${it.fid}") }
+            val merged = if (reset) uniqueNewFolders else existing + uniqueNewFolders
+
+            _subscribedFolders.value = merged
+            subscribedCurrentPage = if (page != null) nextPage else subscribedCurrentPage
+            val totalCount = page?.totalCount ?: _subscribedFolderProgressState.value.totalCount
+            subscribedHasMore = when {
+                page == null -> false
+                totalCount > 0 -> merged.size < totalCount
+                else -> uniqueNewFolders.size >= subscribedPageSize
+            }
+            _subscribedFolderProgressState.value = SubscribedFolderProgressState(
+                loadedCount = merged.size,
+                totalCount = totalCount,
+                currentPage = subscribedCurrentPage.coerceAtLeast(1),
+                lastAddedCount = uniqueNewFolders.size,
+                hasMore = subscribedHasMore,
+                isLoadingMore = false
+            )
+        } finally {
+            isLoadingSubscribedMore = false
+            _subscribedFolderProgressState.value = _subscribedFolderProgressState.value.copy(
+                isLoadingMore = false
+            )
+        }
+    }
+
+    fun loadMoreSubscribedFolders() {
+        if (isLoadingSubscribedMore || !subscribedHasMore) return
+        viewModelScope.launch {
+            loadSubscribedFoldersPage(reset = false)
         }
     }
 

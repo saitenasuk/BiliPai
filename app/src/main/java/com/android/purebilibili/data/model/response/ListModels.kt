@@ -149,7 +149,12 @@ data class VideoItem(
     val progress: Int = -1,
     val view_at: Long = 0,
     val pubdate: Long = 0,
-    val isVertical: Boolean = false  //  是否为竖屏视频
+    val isVertical: Boolean = false,  //  是否为竖屏视频
+    val isCollectionResource: Boolean = false,
+    val collectionId: Long = 0,
+    val collectionMid: Long = 0,
+    val collectionMediaCount: Int = 0,
+    val collectionSubtitle: String = ""
 )
 
 @Serializable

@@ -1,5 +1,48 @@
 # Changelog
 
+## v6.8.0 (2026-03-06)
+
+### 版本信息
+- 版本号从 `6.7.2` 升级到 `6.8.0`，`versionCode` 升级到 `100`。
+- 本次为“收藏夹订阅链路补全 + 动态图片预览交互优化 + 首页/个人页细节打磨 + 播放与更新体验修复”的综合更新版本。
+
+### 收藏夹、订阅与列表能力
+- 补齐收藏夹“订阅”数据映射与聚合策略，修复部分订阅项进入后详情为空、无法正确识别合集/系列的问题。
+- 收藏列表页与 ViewModel 的跳转/展示链路同步收敛，订阅项与普通收藏夹的打开行为更一致。
+- 相关播放入口策略补强，降低列表来源切换时的空态与误跳转概率。
+
+### 动态图片预览与手势交互
+- 重做动态图片预览关闭与过渡策略，补齐缩放图、拖拽关闭、回弹与手势边界处理。
+- 优化 `ZoomableImage` 与预览弹窗的联动，减少预览态切换时的跳变和误触。
+- 补齐图片预览转场策略测试，方便后续继续调动画时回归。
+
+### 首页、侧栏、搜索与个人页细节
+- 修复首页下拉刷新区域的顶部留白/间距问题，头部与刷新体验更稳定。
+- 首页头部、TopBar、侧边栏与部分入口视觉继续收敛，信息层级和点击区域更统一。
+- 搜索页、消息页、关注页与个人页若干布局细节优化；个人页壁纸操作区与资料展示层级进一步整理。
+- 底栏设置与若干导航入口细节同步打磨，减少设置项与实际呈现不一致的情况。
+
+### 更新弹窗可读性修复
+- 修复深色模式下“发现新版本 / 更新日志”弹窗正文对比度过低的问题。
+- 启动时自动更新提示与设置页中的更新日志弹窗统一改为高对比文案样式，避免深色背景与半透明弹窗叠加后看不清文字。
+
+### 视频详情、平板布局与播放体验
+- 视频详情页、内容区与信息区的若干布局策略继续优化，竖屏分页和详情呈现更稳。
+- 平板影院布局与相关策略补强，减少大屏场景下布局切换时的错位与留白问题。
+- Mini Player 管理链路继续收敛，降低回收不及时与状态残留的风险。
+
+### 视频画质体验修复
+- 修复已登录非大会员场景下，更新后的首包能力与画质菜单展示不一致的问题。
+- 保留服务端已广告的 `1080P` 选项，并统一首播与切档的取流策略，减少“最高只能看到 720P”的误判。
+
+### 工程化与回归测试
+- 补齐首页下拉刷新、图片预览转场、收藏播放策略、视频详情布局、竖屏分页、路由与画质等多组策略测试。
+- 更新弹窗新增独立的视觉策略测试，确保深色模式下的文案对比度不会再次回退。
+
+### 验证
+- `./gradlew testDebugUnitTest --tests 'com.android.purebilibili.feature.settings.AppUpdateDialogVisualPolicyTest' --tests 'com.android.purebilibili.feature.settings.AppUpdateCheckerTest' --tests 'com.android.purebilibili.feature.settings.AppUpdateReleaseNotesPolicyTest' --tests 'com.android.purebilibili.feature.settings.AppUpdateUiPolicyTest'`
+- `./gradlew testDebugUnitTest --tests 'com.android.purebilibili.feature.video.usecase.VideoPlaybackUseCaseQualitySwitchTest' --tests 'com.android.purebilibili.data.repository.VideoLoadPolicyTest'`
+
 ## v6.7.2 (2026-03-05)
 
 ### 版本信息

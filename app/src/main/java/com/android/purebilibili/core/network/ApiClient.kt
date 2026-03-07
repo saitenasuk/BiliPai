@@ -102,7 +102,9 @@ interface BilibiliApi {
     suspend fun getFavoriteList(
         @Query("media_id") mediaId: Long, 
         @Query("pn") pn: Int = 1,
-        @Query("ps") ps: Int = 20
+        @Query("ps") ps: Int = 20,
+        @Query("keyword") keyword: String? = null,
+        @Query("platform") platform: String = "web"
     ): FavoriteResourceResponse
 
     // [新增] 批量删除收藏资源 (取消收藏)

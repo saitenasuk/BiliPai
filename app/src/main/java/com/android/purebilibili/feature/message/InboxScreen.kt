@@ -12,7 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.data.model.response.SessionItem
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -98,7 +98,7 @@ fun InboxScreen(
                     )
                 }
                 else -> {
-                    PullToRefreshBox(
+                    ComfortablePullToRefreshBox(
                         isRefreshing = uiState.isRefreshing,
                         onRefresh = { viewModel.refresh() }
                     ) {

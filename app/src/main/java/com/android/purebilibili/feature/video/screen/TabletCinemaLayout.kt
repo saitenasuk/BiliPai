@@ -148,10 +148,13 @@ fun TabletCinemaLayout(
         label = "cinemaCurtainWidth"
     )
 
-    LaunchedEffect(success?.related?.size, commentState.replyCount) {
-        if (selectedTab == 0 && commentState.replyCount == 0 && !success?.related.isNullOrEmpty()) {
-            selectedTab = 1
-        }
+    LaunchedEffect(success?.related?.size, commentState.replyCount, commentState.isRepliesLoading) {
+        selectedTab = resolveCinemaSideCurtainSelectedTab(
+            currentSelectedTab = selectedTab,
+            replyCount = commentState.replyCount,
+            isRepliesLoading = commentState.isRepliesLoading,
+            hasRelatedVideos = !success?.related.isNullOrEmpty()
+        )
     }
 
     Box(

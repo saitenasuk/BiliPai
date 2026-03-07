@@ -32,6 +32,13 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
+private enum class ZoomableImageGestureMode {
+    UNDECIDED,
+    HORIZONTAL_PAGER,
+    IMAGE_INTERACTION,
+    VERTICAL_DISMISS
+}
+
 /**
  * 可缩放的图片组件
  * - 支持双指缩放
@@ -47,6 +54,10 @@ fun ZoomableImage(
     contentDescription: String? = null,
     onZoomChange: (Float) -> Unit = {},
     onDisplayRectChange: (Rect?) -> Unit = {},
+    onVerticalDismissDragStart: () -> Unit = {},
+    onVerticalDismissDrag: (Float) -> Unit = {},
+    onVerticalDismissDragEnd: () -> Unit = {},
+    onVerticalDismissDragCancel: () -> Unit = {},
     onClick: () -> Unit = {}
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
@@ -142,16 +153,21 @@ fun ZoomableImage(
                     var pan = Offset.Zero
                     var pastTouchSlop = false
                     val touchSlop = viewConfiguration.touchSlop
-                    var isMultiTouch = false  // 🔧 [新增] 标记是否为多指手势
+                    var isMultiTouch = false
+                    var gestureMode = ZoomableImageGestureMode.UNDECIDED
+                    var verticalDismissStarted = false
+                    var gestureCanceled = false
                     
                     awaitFirstDown(requireUnconsumed = false)
                     
                     do {
                         val event = awaitPointerEvent()
                         val canceled = event.changes.any { it.isConsumed }
-                        if (canceled) break
+                        if (canceled) {
+                            gestureCanceled = true
+                            break
+                        }
 
-                        // 🔧 [修复] 检测是否为多指手势
                         if (event.changes.size > 1) {
                             isMultiTouch = true
                         }
@@ -171,66 +187,92 @@ fun ZoomableImage(
                                 panMotion > touchSlop
                             ) {
                                 pastTouchSlop = true
+                                gestureMode = when {
+                                    isMultiTouch || !shouldEnableImagePreviewVerticalDismiss(scale) || zoomMotion > panMotion -> {
+                                        ZoomableImageGestureMode.IMAGE_INTERACTION
+                                    }
+                                    abs(pan.y) > abs(pan.x) * 1.12f -> {
+                                        ZoomableImageGestureMode.VERTICAL_DISMISS
+                                    }
+                                    else -> ZoomableImageGestureMode.HORIZONTAL_PAGER
+                                }
+
+                                if (gestureMode == ZoomableImageGestureMode.VERTICAL_DISMISS) {
+                                    verticalDismissStarted = true
+                                    onVerticalDismissDragStart()
+                                }
                             }
                         }
 
                         if (pastTouchSlop) {
-                            val centroid = event.calculateCentroid(useCurrent = false)
-                            if (zoomChange != 1f || panChange != Offset.Zero) {
-                                // 处理缩放
-                                val oldScale = scale
-                                scale = (scale * zoomChange).coerceIn(1f, 5f)
-                                
-                                // 根据缩放中心点调整偏移，保持视觉连贯
-                                if (oldScale != scale) {
-                                     val zoomFactor = scale / oldScale
-                                     val dx = (1 - zoomFactor) * (centroid.x - containerSize.width / 2f - offsetX)
-                                     val dy = (1 - zoomFactor) * (centroid.y - containerSize.height / 2f - offsetY)
-                                     offsetX += dx
-                                     offsetY += dy
-                                }
-                                
-                                // 处理平移
-                                offsetX += panChange.x
-                                offsetY += panChange.y
-                                
-                                // 边界限制逻辑
-                                if (containerSize != IntSize.Zero && imageSize != IntSize.Zero) {
-                                    // 计算图片当前显示的实际尺寸
-                                    // 基础缩放比例 (Fit Center)
-                                    val fitScale = min(
-                                        containerSize.width.toFloat() / imageSize.width,
-                                        containerSize.height.toFloat() / imageSize.height
-                                    )
-                                    
-                                    val displayWidth = imageSize.width * fitScale * scale
-                                    val displayHeight = imageSize.height * fitScale * scale
-                                    
-                                    // 计算允许的最大偏移量
-                                    // 如果图片显示的尺寸大于容器，允许偏移；否则居中（偏移为0）
-                                    val maxOffsetX = max(0f, (displayWidth - containerSize.width) / 2f)
-                                    val maxOffsetY = max(0f, (displayHeight - containerSize.height) / 2f)
-                                    
-                                    offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
-                                    offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
-                                }
-                                
-                                onZoomChange(scale)
-                            }
-                            
-                            // 🔧 [关键修复] 只在以下情况消费事件：
-                            // 1. 多指手势（缩放操作）
-                            // 2. 图片已缩放（scale > 1）时的拖拽
-                            // 这样 scale=1 时的水平滑动可以传递给 HorizontalPager
-                            if (isMultiTouch || scale > 1.01f) {
-                                event.changes.forEach {
-                                    if (it.position != it.previousPosition) {
-                                        it.consume()
+                            when (gestureMode) {
+                                ZoomableImageGestureMode.VERTICAL_DISMISS -> {
+                                    if (panChange.y != 0f) {
+                                        onVerticalDismissDrag(panChange.y)
+                                    }
+                                    event.changes.forEach {
+                                        if (it.position != it.previousPosition) {
+                                            it.consume()
+                                        }
                                     }
                                 }
+                                ZoomableImageGestureMode.IMAGE_INTERACTION -> {
+                                    val centroid = event.calculateCentroid(useCurrent = false)
+                                    if (zoomChange != 1f || panChange != Offset.Zero) {
+                                        val oldScale = scale
+                                        scale = (scale * zoomChange).coerceIn(1f, 5f)
+
+                                        if (oldScale != scale) {
+                                            val zoomFactor = scale / oldScale
+                                            val dx = (1 - zoomFactor) * (centroid.x - containerSize.width / 2f - offsetX)
+                                            val dy = (1 - zoomFactor) * (centroid.y - containerSize.height / 2f - offsetY)
+                                            offsetX += dx
+                                            offsetY += dy
+                                        }
+
+                                        offsetX += panChange.x
+                                        offsetY += panChange.y
+
+                                        if (containerSize != IntSize.Zero && imageSize != IntSize.Zero) {
+                                            val fitScale = min(
+                                                containerSize.width.toFloat() / imageSize.width,
+                                                containerSize.height.toFloat() / imageSize.height
+                                            )
+
+                                            val displayWidth = imageSize.width * fitScale * scale
+                                            val displayHeight = imageSize.height * fitScale * scale
+
+                                            val maxOffsetX = max(0f, (displayWidth - containerSize.width) / 2f)
+                                            val maxOffsetY = max(0f, (displayHeight - containerSize.height) / 2f)
+
+                                            offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
+                                            offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
+                                        }
+
+                                        onZoomChange(scale)
+                                    }
+
+                                    if (isMultiTouch || scale > 1.01f) {
+                                        event.changes.forEach {
+                                            if (it.position != it.previousPosition) {
+                                                it.consume()
+                                            }
+                                        }
+                                    }
+                                }
+                                ZoomableImageGestureMode.HORIZONTAL_PAGER,
+                                ZoomableImageGestureMode.UNDECIDED -> Unit
                             }
                         }
-                    } while (!canceled && event.changes.any { it.pressed })
+                    } while (!gestureCanceled && event.changes.any { it.pressed })
+
+                    if (verticalDismissStarted) {
+                        if (gestureCanceled) {
+                            onVerticalDismissDragCancel()
+                        } else {
+                            onVerticalDismissDragEnd()
+                        }
+                    }
                 }
             }
     ) {

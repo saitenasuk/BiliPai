@@ -89,7 +89,14 @@ fun MineSideDrawer(
     val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
     val blurActive = hazeState != null && isBlurEnabled
-    val palette = resolveDrawerGlassPalette(isDark = isDark, blurEnabled = blurActive)
+    val drawerMotionBudget = resolveDrawerMotionBudget(
+        isDrawerTransitionRunning = drawerState.currentValue != drawerState.targetValue
+    )
+    val effectiveBlurActive = shouldEnableDrawerBlur(
+        blurActive = blurActive,
+        budget = drawerMotionBudget
+    )
+    val palette = resolveDrawerGlassPalette(isDark = isDark, blurEnabled = effectiveBlurActive)
 
     // 动态文字颜色
     val activeContentColor = if (isDark) Color(0xFFF8FAFF) else Color(0xFF101114)
@@ -118,7 +125,7 @@ fun MineSideDrawer(
             .fillMaxHeight()
             .width(drawerWidth)
             .then(
-                if (blurActive) {
+                if (effectiveBlurActive) {
                     Modifier.unifiedBlur(
                         hazeState = requireNotNull(hazeState),
                         enabled = true,

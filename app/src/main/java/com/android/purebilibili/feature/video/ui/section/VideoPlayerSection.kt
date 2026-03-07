@@ -26,6 +26,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.view.LayoutInflater
+import android.view.View
 import android.media.AudioManager
 import android.provider.Settings
 import android.widget.Toast
@@ -130,8 +131,20 @@ internal fun resolveEffectiveLongPressSpeed(
     hiResSpeedLimit: Float = HI_RES_LONG_PRESS_SPEED_LIMIT
 ): Float {
     val normalized = requestedSpeed.coerceAtLeast(0.1f)
-    if (currentAudioQuality != HI_RES_AUDIO_QUALITY_ID) return normalized
     return normalized.coerceAtMost(hiResSpeedLimit)
+}
+
+internal fun resolveLongPressPlaybackParameters(
+    requestedSpeed: Float,
+    currentAudioQuality: Int
+): PlaybackParameters {
+    return PlaybackParameters(
+        resolveEffectiveLongPressSpeed(
+            requestedSpeed = requestedSpeed,
+            currentAudioQuality = currentAudioQuality
+        ),
+        1.0f
+    )
 }
 
 internal fun resolveVerticalGestureMode(
@@ -433,6 +446,18 @@ internal fun shouldHidePlayerSurfaceDuringForcedReturn(
     forceCoverDuringReturnAnimation: Boolean
 ): Boolean {
     return forceCoverDuringReturnAnimation
+}
+
+internal fun shouldKeepInlinePlayerContentOnReset(
+    isPortraitFullscreen: Boolean
+): Boolean {
+    return !isPortraitFullscreen
+}
+
+internal fun shouldShowInlinePlayerView(
+    isPortraitFullscreen: Boolean
+): Boolean {
+    return !isPortraitFullscreen
 }
 
 internal fun shouldEnableCoverImageCrossfade(
@@ -1238,23 +1263,17 @@ fun VideoPlayerSection(
                         //  长按开始：保存原速度并应用长按倍速
                         val player = playerState.player
                         originalPlaybackParameters = player.playbackParameters
-                        effectiveLongPressSpeed = resolveEffectiveLongPressSpeed(
+                        val longPressPlaybackParameters = resolveLongPressPlaybackParameters(
                             requestedSpeed = longPressSpeed,
                             currentAudioQuality = currentAudioQuality
                         )
-                        player.playbackParameters = PlaybackParameters(
-                            effectiveLongPressSpeed,
-                            1.0f
-                        )
-                        if (
-                            currentAudioQuality == HI_RES_AUDIO_QUALITY_ID &&
-                            effectiveLongPressSpeed < longPressSpeed &&
-                            !hasShownHiResCompatHint
-                        ) {
+                        effectiveLongPressSpeed = longPressPlaybackParameters.speed
+                        player.playbackParameters = longPressPlaybackParameters
+                        if (effectiveLongPressSpeed < longPressSpeed && !hasShownHiResCompatHint) {
                             hasShownHiResCompatHint = true
                             Toast.makeText(
                                 context,
-                                "Hi-Res 音源长按倍速最高 1.5x，以降低失真",
+                                "长按倍速最高 1.5x，以降低失真",
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -1656,18 +1675,37 @@ fun VideoPlayerSection(
                     basePlayerView.apply {
                         playerViewRef = this
                         player = if (isPortraitFullscreen) null else playerState.player
-                        setKeepContentOnPlayerReset(true)
+                        setKeepContentOnPlayerReset(
+                            shouldKeepInlinePlayerContentOnReset(
+                                isPortraitFullscreen = isPortraitFullscreen
+                            )
+                        )
                         setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                         setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)  // 禁用系统缓冲指示器，使用自定义iOS风格加载动画
                         useController = false
                         keepScreenOn = true
                         resizeMode = currentAspectRatio.resizeMode
+                        visibility = if (shouldShowInlinePlayerView(isPortraitFullscreen)) {
+                            View.VISIBLE
+                        } else {
+                            View.INVISIBLE
+                        }
                     }
                 },
                 update = { playerView ->
                     playerViewRef = playerView
                     playerView.player = if (isPortraitFullscreen) null else playerState.player
+                    playerView.setKeepContentOnPlayerReset(
+                        shouldKeepInlinePlayerContentOnReset(
+                            isPortraitFullscreen = isPortraitFullscreen
+                        )
+                    )
                     playerView.resizeMode = currentAspectRatio.resizeMode
+                    playerView.visibility = if (shouldShowInlinePlayerView(isPortraitFullscreen)) {
+                        View.VISIBLE
+                    } else {
+                        View.INVISIBLE
+                    }
                 },
                 modifier = Modifier
                     .fillMaxSize()

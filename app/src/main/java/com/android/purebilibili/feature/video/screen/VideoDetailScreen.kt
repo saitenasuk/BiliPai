@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
@@ -357,6 +358,8 @@ internal fun shouldAutoEnterPortraitFullscreenFromRoute(
     autoEnterPortraitFromRoute: Boolean,
     startAudioFromRoute: Boolean,
     portraitExperienceEnabled: Boolean,
+    useOfficialInlinePortraitDetailExperience: Boolean,
+    isCurrentRouteVideoLoaded: Boolean,
     isVerticalVideo: Boolean,
     isPortraitFullscreen: Boolean,
     hasAutoEnteredPortraitFromRoute: Boolean
@@ -364,6 +367,8 @@ internal fun shouldAutoEnterPortraitFullscreenFromRoute(
     return autoEnterPortraitFromRoute &&
         !startAudioFromRoute &&
         portraitExperienceEnabled &&
+        !useOfficialInlinePortraitDetailExperience &&
+        isCurrentRouteVideoLoaded &&
         isVerticalVideo &&
         !isPortraitFullscreen &&
         !hasAutoEnteredPortraitFromRoute
@@ -988,7 +993,7 @@ fun VideoDetailScreen(
 
     // 📱 [修复] 提升竖屏全屏状态到 Screen 级别，防止 VideoPlayerState 重建时状态丢失
     var isPortraitFullscreen by rememberSaveable { mutableStateOf(false) }
-    val useSharedPortraitPlayer = true
+    val useSharedPortraitPlayer = shouldUseSharedPlayerForPortraitFullscreen()
     var portraitSyncSnapshotBvid by rememberSaveable { mutableStateOf<String?>(null) }
     var portraitSyncSnapshotCid by remember { mutableLongStateOf(0L) }
     var portraitSyncSnapshotPositionMs by remember { mutableLongStateOf(0L) }
@@ -1088,8 +1093,19 @@ fun VideoDetailScreen(
         )
     }
     val portraitExperienceEnabled = shouldEnablePortraitExperience()
+    val useOfficialInlinePortraitDetailExperience = shouldUseOfficialInlinePortraitDetailExperience(
+        useTabletLayout = useTabletLayout,
+        isVerticalVideo = isVerticalVideo,
+        portraitExperienceEnabled = portraitExperienceEnabled
+    )
+    val allowStandalonePortraitExperience = portraitExperienceEnabled &&
+        !useOfficialInlinePortraitDetailExperience
+    val isCurrentRouteVideoLoaded = remember(uiState, currentBvid) {
+        val success = uiState as? PlayerUiState.Success
+        success?.info?.bvid == currentBvid
+    }
     val enterPortraitFullscreen = {
-        if (portraitExperienceEnabled) {
+        if (shouldActivatePortraitFullscreenState(portraitExperienceEnabled)) {
             portraitSyncSnapshotBvid = (uiState as? PlayerUiState.Success)?.info?.bvid
             portraitSyncSnapshotCid = (uiState as? PlayerUiState.Success)?.info?.cid ?: 0L
             portraitSyncSnapshotPositionMs = playerState.player.currentPosition.coerceAtLeast(0L)
@@ -1101,6 +1117,8 @@ fun VideoDetailScreen(
         autoEnterPortraitFromRoute,
         startAudioFromRoute,
         portraitExperienceEnabled,
+        useOfficialInlinePortraitDetailExperience,
+        isCurrentRouteVideoLoaded,
         isVerticalVideo,
         isPortraitFullscreen,
         hasAutoEnteredPortraitFromRoute
@@ -1110,6 +1128,8 @@ fun VideoDetailScreen(
                 autoEnterPortraitFromRoute = autoEnterPortraitFromRoute,
                 startAudioFromRoute = startAudioFromRoute,
                 portraitExperienceEnabled = portraitExperienceEnabled,
+                useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience,
+                isCurrentRouteVideoLoaded = isCurrentRouteVideoLoaded,
                 isVerticalVideo = isVerticalVideo,
                 isPortraitFullscreen = isPortraitFullscreen,
                 hasAutoEnteredPortraitFromRoute = hasAutoEnteredPortraitFromRoute
@@ -1521,10 +1541,10 @@ fun VideoDetailScreen(
                     // 📖 [新增] 视频章节数据
                     viewPoints = viewPoints,
                 // 📱 [新增] 竖屏全屏模式
-                isVerticalVideo = isVerticalVideo && portraitExperienceEnabled,
+                isVerticalVideo = isVerticalVideo && allowStandalonePortraitExperience,
                 isPortraitFullscreen = isPortraitFullscreen,
                 onPortraitFullscreen = {
-                    if (portraitExperienceEnabled) {
+                    if (allowStandalonePortraitExperience) {
                         if (!isPortraitFullscreen) {
                             if (isFullscreenMode) {
                                 toggleFullscreen()
@@ -1642,38 +1662,65 @@ fun VideoDetailScreen(
                     // 📱 手机竖屏：原有单列布局
                     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                     val screenWidthDp = configuration.screenWidthDp.dp
+                    val screenHeightDp = configuration.screenHeightDp.dp
                     val videoHeight = screenWidthDp * 9f / 16f  // 16:9 比例
 
                     //  读取上滑隐藏播放器设置
                     val swipeHidePlayerEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getSwipeHidePlayerEnabled(context).collectAsState(initial = false)
+                    val inlinePortraitScrollEnabled = shouldEnableInlinePortraitScrollTransform(
+                        swipeHidePlayerEnabled = swipeHidePlayerEnabled,
+                        useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience
+                    )
                     
                     // 📏 [Collapsing Player] 上滑隐藏播放器逻辑
-                    val videoHeightPx = with(LocalDensity.current) { videoHeight.toPx() }
+                    val expandedPortraitInlineSpec = remember(configuration.screenWidthDp, configuration.screenHeightDp) {
+                        resolvePortraitInlinePlayerLayoutSpec(
+                            screenWidthDp = configuration.screenWidthDp.toFloat(),
+                            screenHeightDp = configuration.screenHeightDp.toFloat(),
+                            isCollapsed = false
+                        )
+                    }
+                    val collapsedPortraitInlineSpec = remember(configuration.screenWidthDp, configuration.screenHeightDp) {
+                        resolvePortraitInlinePlayerLayoutSpec(
+                            screenWidthDp = configuration.screenWidthDp.toFloat(),
+                            screenHeightDp = configuration.screenHeightDp.toFloat(),
+                            isCollapsed = true
+                        )
+                    }
+                    val collapseRangePx = with(LocalDensity.current) {
+                        if (useOfficialInlinePortraitDetailExperience) {
+                            (expandedPortraitInlineSpec.heightDp.dp - collapsedPortraitInlineSpec.heightDp.dp)
+                                .toPx()
+                                .coerceAtLeast(0f)
+                        } else {
+                            videoHeight.toPx()
+                        }
+                    }
                     var playerHeightOffsetPx by remember { mutableFloatStateOf(0f) }
                     TrackJankStateFlag(
                         stateName = "video_detail:player_swipe_collapse",
-                        isActive = swipeHidePlayerEnabled && abs(playerHeightOffsetPx) > 0.5f
+                        isActive = inlinePortraitScrollEnabled && abs(playerHeightOffsetPx) > 0.5f
                     )
-                    val isPlayerCollapsed by remember(swipeHidePlayerEnabled, videoHeightPx) {
+                    val isPlayerCollapsed by remember(inlinePortraitScrollEnabled, collapseRangePx) {
                         derivedStateOf {
                             resolveIsPlayerCollapsed(
-                                swipeHidePlayerEnabled = swipeHidePlayerEnabled,
+                                swipeHidePlayerEnabled = inlinePortraitScrollEnabled,
                                 playerHeightOffsetPx = playerHeightOffsetPx,
-                                videoHeightPx = videoHeightPx
+                                videoHeightPx = collapseRangePx
                             )
                         }
                     }
                     
                     // 当设置关闭时，重置高度
-                    LaunchedEffect(swipeHidePlayerEnabled) {
-                        if (!swipeHidePlayerEnabled) playerHeightOffsetPx = 0f
+                    LaunchedEffect(inlinePortraitScrollEnabled) {
+                        if (!inlinePortraitScrollEnabled) playerHeightOffsetPx = 0f
                     }
 
-                    val nestedScrollConnection = remember(swipeHidePlayerEnabled, isPortraitFullscreen) {
+                    val nestedScrollConnection = remember(inlinePortraitScrollEnabled, isPortraitFullscreen) {
                         object : NestedScrollConnection {
                             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                                if (!swipeHidePlayerEnabled || isPortraitFullscreen) return Offset.Zero
+                                if (!inlinePortraitScrollEnabled || isPortraitFullscreen) return Offset.Zero
                                 
                                 val delta = available.y
                                 // 上滑 (delta < 0)：隐藏播放器，消费滚动
@@ -1681,7 +1728,7 @@ fun VideoDetailScreen(
                                     val nextOffset = resolveNextPlayerHeightOffset(
                                         currentOffsetPx = playerHeightOffsetPx,
                                         deltaPx = delta,
-                                        minOffsetPx = -videoHeightPx
+                                        minOffsetPx = -collapseRangePx
                                     ) ?: return Offset.Zero
                                     val consumed = nextOffset - playerHeightOffsetPx
                                     playerHeightOffsetPx = nextOffset
@@ -1691,7 +1738,7 @@ fun VideoDetailScreen(
                             }
 
                             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                                if (!swipeHidePlayerEnabled || isPortraitFullscreen) return Offset.Zero
+                                if (!inlinePortraitScrollEnabled || isPortraitFullscreen) return Offset.Zero
                                 
                                 val delta = available.y
                                 // 下滑 (delta > 0)：显示播放器 (且 available > 0 说明内容已滚到顶)
@@ -1699,7 +1746,7 @@ fun VideoDetailScreen(
                                      val nextOffset = resolveNextPlayerHeightOffset(
                                          currentOffsetPx = playerHeightOffsetPx,
                                          deltaPx = delta,
-                                         minOffsetPx = -videoHeightPx
+                                         minOffsetPx = -collapseRangePx
                                      ) ?: return Offset.Zero
                                      val consumedDelta = nextOffset - playerHeightOffsetPx
                                      playerHeightOffsetPx = nextOffset
@@ -1721,7 +1768,42 @@ fun VideoDetailScreen(
                     //  当 playerHeightOffsetPx 为 -videoHeightPx 时，高度只剩 statusBarHeight
                     //  [Fix] 竖屏全屏模式下强制高度不受偏移影响
                     val playerHeightOffset = if (isPortraitFullscreen) 0f else playerHeightOffsetPx
-                    val animatedPlayerHeight = videoHeight + statusBarHeight + with(LocalDensity.current) { playerHeightOffset.toDp() }
+                    val collapseProgress = if (collapseRangePx > 0f) {
+                        (abs(playerHeightOffset) / collapseRangePx).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                    val expandedViewportHeight = if (useOfficialInlinePortraitDetailExperience) {
+                        expandedPortraitInlineSpec.heightDp.dp
+                    } else {
+                        videoHeight
+                    }
+                    val collapsedViewportHeight = if (useOfficialInlinePortraitDetailExperience) {
+                        collapsedPortraitInlineSpec.heightDp.dp
+                    } else {
+                        0.dp
+                    }
+                    val animatedViewportHeight = lerp(
+                        expandedViewportHeight,
+                        collapsedViewportHeight,
+                        collapseProgress
+                    )
+                    val expandedViewportWidth = if (useOfficialInlinePortraitDetailExperience) {
+                        expandedPortraitInlineSpec.widthDp.dp
+                    } else {
+                        screenWidthDp
+                    }
+                    val collapsedViewportWidth = if (useOfficialInlinePortraitDetailExperience) {
+                        collapsedPortraitInlineSpec.widthDp.dp
+                    } else {
+                        screenWidthDp
+                    }
+                    val animatedViewportWidth = lerp(
+                        expandedViewportWidth,
+                        collapsedViewportWidth,
+                        collapseProgress
+                    )
+                    val animatedPlayerHeight = animatedViewportHeight + statusBarHeight
                     
                     //  注意：移除了状态栏黑色 Spacer
                     // 播放器将延伸到状态栏下方，共享元素过渡更流畅
@@ -1783,14 +1865,16 @@ fun VideoDetailScreen(
                                 videoPlayerBounds = nextBounds
                             }
                     ) {
-                        //  播放器内部使用 padding 避开状态栏
-                        //  [关键] 即使高度为0也保持播放器渲染，避免重载
-                        //  [修复] 高度需要包含statusBarHeight，扣除padding后视频内容才是完整的16:9
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(videoHeight + statusBarHeight)  //  修复：包含状态栏高度
-                                .padding(top = statusBarHeight)  //  顶部 padding 避开状态栏
+                                .fillMaxSize()
+                                .padding(top = statusBarHeight)
+                        ) {
+                        Box(
+                            modifier = Modifier
+                                .width(animatedViewportWidth)
+                                .height(animatedViewportHeight)
+                                .align(Alignment.TopCenter)
                                 // [Fix] 竖屏全屏时隐藏底层播放器，防止 UI (如 00:00 进度条) 透出
                                 .alpha(if (isPortraitFullscreen) 0f else 1f)
                         ) {
@@ -1835,8 +1919,18 @@ fun VideoDetailScreen(
                         viewPoints = viewPoints,
                         
                         // 📱 [新增] 竖屏全屏模式
-                        isVerticalVideo = isVerticalVideo && portraitExperienceEnabled,
-                        onPortraitFullscreen = enterPortraitFullscreen,
+                        isVerticalVideo = isVerticalVideo && (allowStandalonePortraitExperience || useOfficialInlinePortraitDetailExperience),
+                        onPortraitFullscreen = {
+                            when (
+                                resolvePortraitFullscreenButtonAction(
+                                    useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience
+                                )
+                            ) {
+                                PortraitFullscreenButtonAction.ENTER_PORTRAIT_FULLSCREEN -> {
+                                    enterPortraitFullscreen()
+                                }
+                            }
+                        },
                         isPortraitFullscreen = isPortraitFullscreen,
 
                                 // 📲 [修复] 小窗模式 - 转移到应用内小窗而非直接进入系统 PiP
@@ -1862,6 +1956,7 @@ fun VideoDetailScreen(
                                 // onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
                                 // onSponsorDismiss = { viewModel.dismissSponsorSkipButton() }
                             )
+                        }
                         }
                     }
                     
@@ -2192,9 +2287,12 @@ fun VideoDetailScreen(
         // 📱 [新增] 竖屏全屏覆盖层
         // [修复] 在 Loading 状态时也保持竖屏全屏，使用上一个成功状态的数据
         // [修复] 移除 !isLandscape 限制，允许用户强制进入（例如在平板或特殊设备上）
-        val showPortraitFullscreen = portraitExperienceEnabled &&
-            isPortraitFullscreen &&
-            (uiState is PlayerUiState.Success || uiState is PlayerUiState.Loading)
+        val showPortraitFullscreen = shouldShowStandalonePortraitPager(
+            portraitExperienceEnabled = portraitExperienceEnabled,
+            isPortraitFullscreen = isPortraitFullscreen,
+            useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience,
+            hasPlayableState = uiState is PlayerUiState.Success || uiState is PlayerUiState.Loading
+        )
         
         // 缓存上一个成功状态以在 Loading 时使用
         var cachedSuccess by remember { mutableStateOf<PlayerUiState.Success?>(null) }
@@ -2297,7 +2395,16 @@ fun VideoDetailScreen(
                 },
                 onRotateToLandscape = {
                     isPortraitFullscreen = false
-                    toggleFullscreen()
+                    val activity = context.findActivity()
+                    val targetOrientation = resolvePortraitRotateTargetOrientation(
+                        isOrientationDrivenFullscreen = isOrientationDrivenFullscreen
+                    )
+                    if (activity != null && targetOrientation != null) {
+                        userRequestedFullscreen = true
+                        activity.requestedOrientation = targetOrientation
+                    } else {
+                        toggleFullscreen()
+                    }
                 }
             )
         }
@@ -3338,6 +3445,16 @@ internal fun shouldEnterPortraitFullscreenOnFullscreenToggle(
     portraitExperienceEnabled: Boolean
 ): Boolean {
     return portraitExperienceEnabled && targetOrientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+}
+
+internal fun resolvePortraitRotateTargetOrientation(
+    isOrientationDrivenFullscreen: Boolean
+): Int? {
+    return if (isOrientationDrivenFullscreen) {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    } else {
+        null
+    }
 }
 
 internal fun shouldEnableVideoCoverSharedTransition(

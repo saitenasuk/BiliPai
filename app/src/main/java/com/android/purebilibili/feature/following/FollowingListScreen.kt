@@ -15,7 +15,6 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +33,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.FollowingCacheStore
+import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.data.model.response.RelationTagItem
@@ -695,7 +695,7 @@ fun FollowingListScreen(
                         val selectedCount = selectedMids.size
                         val hasSelection = selectedCount > 0
 
-                        PullToRefreshBox(
+                        ComfortablePullToRefreshBox(
                             isRefreshing = isPullRefreshing,
                             onRefresh = {
                                 if (!isPullRefreshing) {

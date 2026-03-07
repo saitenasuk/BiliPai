@@ -127,13 +127,13 @@ internal fun shouldShowTopTabText(mode: Int): Boolean {
 internal fun resolveTopTabCategoryIcon(category: String): ImageVector {
     return when (category) {
         "推荐" -> CupertinoIcons.Default.House
-        "关注" -> CupertinoIcons.Default.Bell
-        "热门" -> CupertinoIcons.Default.Newspaper
+        "关注" -> CupertinoIcons.Default.PersonCropCircleBadgePlus
+        "热门" -> CupertinoIcons.Default.ChartBar
         "直播" -> CupertinoIcons.Default.Video
         "追番" -> CupertinoIcons.Default.Tv
         "游戏" -> CupertinoIcons.Default.PlayCircle
-        "知识" -> CupertinoIcons.Default.Character
-        "科技" -> CupertinoIcons.Default.Gearshape
+        "知识" -> CupertinoIcons.Default.Lightbulb
+        "科技" -> CupertinoIcons.Default.Cpu
         else -> CupertinoIcons.Default.ListBullet
     }
 }
@@ -293,11 +293,13 @@ fun CategoryTabRow(
     isLiquidGlassEnabled: Boolean = false,
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC,
     backdrop: LayerBackdrop? = null,
-    isFloatingStyle: Boolean = false
+    isFloatingStyle: Boolean = false,
+    interactionBudget: HomeInteractionMotionBudget = HomeInteractionMotionBudget.FULL
 ) {
     val visualTuning = remember { resolveTopTabVisualTuning() }
     val primaryColor = MaterialTheme.colorScheme.primary
     val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+    val effectiveLiquidGlassEnabled = isLiquidGlassEnabled && interactionBudget == HomeInteractionMotionBudget.FULL
 
     //  [交互优化] 触觉反馈
     val haptic = com.android.purebilibili.core.util.rememberHapticFeedback()
@@ -361,8 +363,27 @@ fun CategoryTabRow(
             var velocityDecayJob by remember { mutableStateOf<Job?>(null) }
             
             // 同步滚动位置：当选中索引变化时，自动滚动到可见区域
-            LaunchedEffect(selectedIndex) {
-                tabListState.animateScrollToItem(selectedIndex.coerceIn(0, categories.size - 1))
+            val firstVisibleIndex by remember {
+                derivedStateOf {
+                    tabListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0
+                }
+            }
+            val lastVisibleIndex by remember {
+                derivedStateOf {
+                    tabListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                }
+            }
+
+            LaunchedEffect(selectedIndex, interactionBudget, firstVisibleIndex, lastVisibleIndex) {
+                val targetIndex = selectedIndex.coerceIn(0, categories.size - 1)
+                if (!shouldAnimateTopTabAutoScroll(targetIndex, firstVisibleIndex, lastVisibleIndex, interactionBudget)) {
+                    return@LaunchedEffect
+                }
+                if (interactionBudget == HomeInteractionMotionBudget.REDUCED) {
+                    tabListState.scrollToItem(targetIndex)
+                } else {
+                    tabListState.animateScrollToItem(targetIndex)
+                }
             }
 
             // [修复] 从 layoutInfo 中获取第一个 Tab 的实际物理宽度
@@ -445,7 +466,7 @@ fun CategoryTabRow(
                     velocityPxPerSecond = indicatorVelocityPxPerSecond
                 )
                 val indicatorBackdrop = if (shouldRefract) {
-                    if (isLiquidGlassEnabled) tabContentBackdrop else backdrop
+                    if (effectiveLiquidGlassEnabled) tabContentBackdrop else backdrop
                 } else {
                     null
                 }
@@ -553,12 +574,6 @@ fun CategoryTabRow(
                                         if (shouldRouteTopTabToLivePage(category)) {
                                             onLiveClick()
                                         } else {
-                                            // [核心修复] 点击时让 Pager 滚动，指示器会自动跟随
-                                            if (pagerState != null) {
-                                                coroutineScope.launch {
-                                                    pagerState.animateScrollToPage(index)
-                                                }
-                                            }
                                             onCategorySelected(index)
                                         }
                                         haptic(com.android.purebilibili.core.util.HapticType.LIGHT)

@@ -4,6 +4,8 @@ import com.android.purebilibili.data.model.response.RelatedVideo
 import androidx.media3.common.Player
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PortraitVideoPagerPolicyTest {
 
@@ -47,5 +49,81 @@ class PortraitVideoPagerPolicyTest {
     @Test
     fun resolvePortraitPagerRepeatMode_defaultsToOffForOrderedPlayback() {
         assertEquals(Player.REPEAT_MODE_OFF, resolvePortraitPagerRepeatMode())
+    }
+
+    @Test
+    fun sharedPlayerSurfaceRebindPolicy_requiresCurrentReadyPageWithVideoFrame() {
+        assertTrue(
+            shouldRebindSharedPlayerSurfaceOnAttach(
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+                hasPlayerView = true,
+                videoWidth = 720,
+                videoHeight = 1280
+            )
+        )
+    }
+
+    @Test
+    fun sharedPlayerSurfaceRebindPolicy_allowsCurrentPageRebindBeforeVideoSizeAvailable() {
+        assertTrue(
+            shouldRebindSharedPlayerSurfaceOnAttach(
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+                hasPlayerView = true,
+                videoWidth = 0,
+                videoHeight = 1280
+            )
+        )
+    }
+
+    @Test
+    fun sharedPlayerSurfaceRebindPolicy_skipsWhenPageIsNotReady() {
+        assertFalse(
+            shouldRebindSharedPlayerSurfaceOnAttach(
+                isCurrentPage = false,
+                isPlayerReadyForThisVideo = true,
+                hasPlayerView = true,
+                videoWidth = 720,
+                videoHeight = 1280
+            )
+        )
+    }
+
+    @Test
+    fun initialAspectRatio_resetsToPortraitFallbackWhenTargetVideoNotReady() {
+        assertEquals(
+            9f / 16f,
+            resolvePortraitInitialVideoAspectRatio(
+                itemBvid = "BV_NEXT",
+                currentPlayingBvid = "BV_PREV",
+                playerVideoWidth = 1920,
+                playerVideoHeight = 1080
+            )
+        )
+    }
+
+    @Test
+    fun initialAspectRatio_usesPlayerVideoSizeWhenTargetVideoAlreadyReady() {
+        assertEquals(
+            9f / 16f,
+            resolvePortraitInitialVideoAspectRatio(
+                itemBvid = "BV_CURRENT",
+                currentPlayingBvid = "BV_CURRENT",
+                playerVideoWidth = 720,
+                playerVideoHeight = 1280
+            )
+        )
+    }
+
+    @Test
+    fun sharedPlayerEntry_reusesExistingFrameWhenSharedPlayerAlreadyHasVideoSize() {
+        assertEquals(
+            0,
+            resolvePortraitInitialRenderedFirstFrameGeneration(
+                useSharedPlayer = true,
+                sharedPlayerHasFrameAtEntry = true
+            )
+        )
     }
 }

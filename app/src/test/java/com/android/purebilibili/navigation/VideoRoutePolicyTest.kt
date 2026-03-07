@@ -36,4 +36,29 @@ class VideoRoutePolicyTest {
             route
         )
     }
+
+    @Test
+    fun standardVideoRoute_disablesAutoPortraitByDefault() {
+        assertEquals(
+            "video/BV1std?cid=77&cover=https%3A%2F%2Fimg.test%2Fcover.jpg&startAudio=false&autoPortrait=false",
+            resolveStandardVideoRoute(
+                bvid = "BV1std",
+                cid = 77L,
+                coverUrl = "https://img.test/cover.jpg"
+            )
+        )
+    }
+
+    @Test
+    fun standardVideoRoute_keepsAudioModeWithoutAutoPortrait() {
+        assertEquals(
+            "video/BV1audio?cid=9&cover=&startAudio=true&autoPortrait=false",
+            resolveStandardVideoRoute(
+                bvid = "BV1audio",
+                cid = 9L,
+                coverUrl = "",
+                startAudio = true
+            )
+        )
+    }
 }

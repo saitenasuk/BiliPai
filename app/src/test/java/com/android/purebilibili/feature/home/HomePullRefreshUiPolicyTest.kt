@@ -8,6 +8,22 @@ import org.junit.Test
 class HomePullRefreshUiPolicyTest {
 
     @Test
+    fun `resolvePullRefreshThresholdDp returns comfortable trigger distance`() {
+        assertEquals(56f, resolvePullRefreshThresholdDp(), 0.001f)
+    }
+
+    @Test
+    fun `comfortable pull refresh threshold reduces required finger travel from material default`() {
+        val requiredFingerTravelDp = resolveRequiredPullDistanceDp(
+            thresholdDp = resolvePullRefreshThresholdDp(),
+            dragMultiplier = 0.5f
+        )
+
+        assertEquals(112f, requiredFingerTravelDp, 0.001f)
+        assertTrue(requiredFingerTravelDp < 160f)
+    }
+
+    @Test
     fun `shouldResetToTopOnRefreshStart returns false when already at top`() {
         assertFalse(shouldResetToTopOnRefreshStart(firstVisibleItemIndex = 0, firstVisibleItemScrollOffset = 0))
     }
@@ -130,9 +146,9 @@ class HomePullRefreshUiPolicyTest {
     }
 
     @Test
-    fun `resolvePullContentOffsetFraction keeps gap while refreshing`() {
+    fun `resolvePullContentOffsetFraction clears extra gap once refreshing is active`() {
         assertEquals(
-            0.5f,
+            0f,
             resolvePullContentOffsetFraction(
                 distanceFraction = 0f,
                 isRefreshing = true

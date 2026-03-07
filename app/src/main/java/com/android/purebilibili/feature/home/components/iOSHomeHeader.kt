@@ -77,6 +77,13 @@ internal fun shouldEnableTopTabSecondaryBlur(
     return true
 }
 
+internal fun resolveHomeHeaderTabBorderAlpha(
+    isTabFloating: Boolean,
+    isTabGlassEnabled: Boolean
+): Float {
+    return 0f
+}
+
 /**
  *  简洁版首页头部 (带滚动隐藏/显示动画)
  * 
@@ -109,7 +116,8 @@ fun iOSHomeHeader(
     motionTier: MotionTier = MotionTier.Normal,
     isScrolling: Boolean = false,
     isTransitionRunning: Boolean = false,
-    forceLowBlurBudget: Boolean = false
+    forceLowBlurBudget: Boolean = false,
+    interactionBudget: HomeInteractionMotionBudget = HomeInteractionMotionBudget.FULL
 ) {
     val haptic = rememberHapticFeedback()
     val density = LocalDensity.current
@@ -201,8 +209,14 @@ fun iOSHomeHeader(
         animationSpec = tween(240),
         label = "tabShadowElevation"
     )
+    val effectiveTabShadowElevation = if (interactionBudget == HomeInteractionMotionBudget.REDUCED) 0.dp else tabShadowElevation
+    val effectiveTabMaterialMode = if (interactionBudget == HomeInteractionMotionBudget.REDUCED) {
+        TopTabMaterialMode.PLAIN
+    } else {
+        topTabStyle.materialMode
+    }
     val tabOverlayAlpha by animateFloatAsState(
-        targetValue = when (topTabStyle.materialMode) {
+        targetValue = when (effectiveTabMaterialMode) {
             TopTabMaterialMode.PLAIN -> if (isTabFloating) 0.95f else 1f
             TopTabMaterialMode.BLUR -> 0.72f
             TopTabMaterialMode.LIQUID_GLASS -> 0.22f
@@ -216,7 +230,10 @@ fun iOSHomeHeader(
         label = "tabContentAlpha"
     )
     val tabBorderAlpha by animateFloatAsState(
-        targetValue = if (!isTabFloating) 0f else if (isTabGlassEnabled) 0.56f else 0.35f,
+        targetValue = resolveHomeHeaderTabBorderAlpha(
+            isTabFloating = isTabFloating,
+            isTabGlassEnabled = isTabGlassEnabled
+        ),
         animationSpec = tween(220),
         label = "tabBorderAlpha"
     )
@@ -392,7 +409,7 @@ fun iOSHomeHeader(
                     .then(
                         if (isTabFloating) {
                             Modifier.shadow(
-                                elevation = tabShadowElevation,
+                                elevation = effectiveTabShadowElevation,
                                 shape = tabShape,
                                 ambientColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                                 spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
@@ -463,10 +480,11 @@ fun iOSHomeHeader(
                         pagerState = pagerState,
                         labelMode = homeSettings?.topTabLabelMode
                             ?: com.android.purebilibili.core.store.SettingsManager.TopTabLabelMode.TEXT_ONLY,
-                        isLiquidGlassEnabled = isTabGlassEnabled && isGlassSupported,
+                        isLiquidGlassEnabled = effectiveTabMaterialMode == TopTabMaterialMode.LIQUID_GLASS && isGlassSupported,
                         liquidGlassStyle = liquidStyle,
                         backdrop = backdrop,
-                        isFloatingStyle = isTabFloating
+                        isFloatingStyle = isTabFloating,
+                        interactionBudget = interactionBudget
                     )
                 }
             }

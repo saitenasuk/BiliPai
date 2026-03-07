@@ -33,6 +33,22 @@ internal data class ImagePreviewDismissTransform(
     val translationYPx: Float
 )
 
+internal data class ImagePreviewDismissRectFrame(
+    val rect: Rect,
+    val dismissFraction: Float
+)
+
+internal data class ImagePreviewVerticalDragFrame(
+    val progress: Float,
+    val scale: Float,
+    val backdropAlphaMultiplier: Float
+)
+
+internal enum class ImagePreviewVerticalDismissDecision {
+    DISMISS,
+    SNAP_BACK
+}
+
 enum class ImagePreviewTextPlacement {
     OVERLAY_BOTTOM,
     TOP_BAR
@@ -145,6 +161,82 @@ internal fun resolveImagePreviewDismissTransform(
     )
 }
 
+internal fun resolveImagePreviewDismissRectFrame(
+    transitionProgress: Float,
+    sourceRect: Rect?,
+    displayedImageRect: Rect?
+): ImagePreviewDismissRectFrame? {
+    if (sourceRect == null || displayedImageRect == null) return null
+
+    val dismissFraction = resolveImagePreviewDismissFraction(transitionProgress)
+    val displayedCenterX = (displayedImageRect.left + displayedImageRect.right) / 2f
+    val displayedCenterY = (displayedImageRect.top + displayedImageRect.bottom) / 2f
+    val sourceCenterX = (sourceRect.left + sourceRect.right) / 2f
+    val sourceCenterY = (sourceRect.top + sourceRect.bottom) / 2f
+    val width = lerpFloat(displayedImageRect.width, sourceRect.width, dismissFraction)
+    val height = lerpFloat(displayedImageRect.height, sourceRect.height, dismissFraction)
+    val centerX = lerpFloat(displayedCenterX, sourceCenterX, dismissFraction)
+    val centerY = lerpFloat(displayedCenterY, sourceCenterY, dismissFraction)
+
+    return ImagePreviewDismissRectFrame(
+        rect = Rect(
+            left = centerX - width / 2f,
+            top = centerY - height / 2f,
+            right = centerX + width / 2f,
+            bottom = centerY + height / 2f
+        ),
+        dismissFraction = dismissFraction
+    )
+}
+
+internal fun resolveImagePreviewDraggedDisplayRect(
+    displayedImageRect: Rect?,
+    translationYPx: Float,
+    scale: Float
+): Rect? {
+    if (displayedImageRect == null) return null
+    val safeScale = scale.coerceAtLeast(0.01f)
+    val width = displayedImageRect.width * safeScale
+    val height = displayedImageRect.height * safeScale
+    val centerX = (displayedImageRect.left + displayedImageRect.right) / 2f
+    val centerY = (displayedImageRect.top + displayedImageRect.bottom) / 2f + translationYPx
+    return Rect(
+        left = centerX - width / 2f,
+        top = centerY - height / 2f,
+        right = centerX + width / 2f,
+        bottom = centerY + height / 2f
+    )
+}
+
+internal fun shouldEnableImagePreviewVerticalDismiss(zoomScale: Float): Boolean {
+    return zoomScale <= 1.01f
+}
+
+internal fun resolveImagePreviewVerticalDragFrame(
+    dragOffsetYPx: Float,
+    containerHeightPx: Float
+): ImagePreviewVerticalDragFrame {
+    val denominator = (containerHeightPx.coerceAtLeast(1f) * 0.28f).coerceAtLeast(120f)
+    val progress = (kotlin.math.abs(dragOffsetYPx) / denominator).coerceIn(0f, 1f)
+    return ImagePreviewVerticalDragFrame(
+        progress = progress,
+        scale = lerpFloat(1f, 0.9f, progress),
+        backdropAlphaMultiplier = lerpFloat(1f, 0.18f, progress)
+    )
+}
+
+internal fun resolveImagePreviewVerticalDismissDecision(
+    dragOffsetYPx: Float,
+    containerHeightPx: Float
+): ImagePreviewVerticalDismissDecision {
+    val threshold = maxOf(120f, containerHeightPx.coerceAtLeast(1f) * 0.14f)
+    return if (kotlin.math.abs(dragOffsetYPx) >= threshold) {
+        ImagePreviewVerticalDismissDecision.DISMISS
+    } else {
+        ImagePreviewVerticalDismissDecision.SNAP_BACK
+    }
+}
+
 internal fun resolveImagePreviewDismissBackdropAlpha(
     visualProgress: Float
 ): Float {
@@ -197,4 +289,15 @@ internal fun resolveImagePreviewTextTransform(pageOffsetFraction: Float): ImageP
 
 private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {
     return start + (stop - start) * fraction
+}
+
+private fun resolveImagePreviewDismissFraction(transitionProgress: Float): Float {
+    val clampedProgress = transitionProgress.coerceIn(LAYOUT_PROGRESS_MIN, 1f)
+    val baseDismiss = (1f - clampedProgress.coerceIn(0f, 1f)).pow(1.6f)
+    val overshoot = if (clampedProgress < 0f) {
+        ((-clampedProgress) / (-LAYOUT_PROGRESS_MIN)) * DISMISS_OVERSHOOT_FACTOR
+    } else {
+        0f
+    }
+    return baseDismiss + overshoot
 }

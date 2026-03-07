@@ -8,6 +8,12 @@ import kotlinx.serialization.Serializable
  * 从 ListModels.kt 拆分出来，提高代码可维护性
  */
 
+@Serializable
+enum class FavFolderSource {
+    OWNED,
+    SUBSCRIBED
+}
+
 // --- 收藏夹列表响应 ---
 @Serializable
 data class FavFolderResponse(
@@ -44,6 +50,7 @@ data class FavoriteInfo(
 
 @Serializable
 data class FavFolderList(
+    val count: Int = 0,
     val list: List<FavFolder>? = null
 )
 
@@ -54,15 +61,22 @@ data class FavFolder(
     val mid: Long = 0,
     val title: String = "",
     val media_count: Int = 0,
-    val fav_state: Int = 0
+    val fav_state: Int = 0,
+    val type: Int = 0,
+    val source: FavFolderSource = FavFolderSource.OWNED
 )
 
 // --- 收藏夹内容单项 ---
 @Serializable
 data class FavoriteData(
     val id: Long = 0,
+    val type: Int = 0,
+    val attr: Int = 0,
     val title: String = "",
     val cover: String = "",
+    val intro: String = "",
+    val media_count: Int = 0,
+    val season_id: Long = 0,
     val bv_id: String = "",
     val bvid: String = "",
     val duration: Int = 0,
@@ -71,6 +85,21 @@ data class FavoriteData(
     val ugc: FavoriteUgc? = null
 ) {
     fun toVideoItem(): VideoItem {
+        if (type == 21) {
+            val resolvedCollectionId = season_id.takeIf { it > 0L } ?: id
+            return VideoItem(
+                id = id,
+                title = title,
+                pic = cover,
+                owner = Owner(mid = upper?.mid ?: 0, name = upper?.name ?: "", face = upper?.face ?: ""),
+                stat = Stat(favorite = cnt_info?.collect ?: 0),
+                isCollectionResource = true,
+                collectionId = resolvedCollectionId,
+                collectionMid = upper?.mid ?: 0,
+                collectionMediaCount = media_count,
+                collectionSubtitle = intro
+            )
+        }
         val resolvedBvid = bvid.ifBlank { bv_id }
         return VideoItem(
             id = id,

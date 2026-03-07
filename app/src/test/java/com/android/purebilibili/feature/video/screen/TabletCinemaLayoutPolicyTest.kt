@@ -115,6 +115,58 @@ class TabletCinemaLayoutPolicyTest {
     }
 
     @Test
+    fun commentsTab_doesNotAutoSwitchWhileCommentsAreReloading() {
+        assertEquals(
+            0,
+            resolveCinemaSideCurtainSelectedTab(
+                currentSelectedTab = 0,
+                replyCount = 0,
+                isRepliesLoading = true,
+                hasRelatedVideos = true
+            )
+        )
+    }
+
+    @Test
+    fun commentsTab_autoSwitchesToRelatedAfterLoadedEmptyComments() {
+        assertEquals(
+            1,
+            resolveCinemaSideCurtainSelectedTab(
+                currentSelectedTab = 0,
+                replyCount = 0,
+                isRepliesLoading = false,
+                hasRelatedVideos = true
+            )
+        )
+    }
+
+    @Test
+    fun commentsTab_staysOnCommentsWhenRepliesExist() {
+        assertEquals(
+            0,
+            resolveCinemaSideCurtainSelectedTab(
+                currentSelectedTab = 0,
+                replyCount = 12,
+                isRepliesLoading = false,
+                hasRelatedVideos = true
+            )
+        )
+    }
+
+    @Test
+    fun relatedTab_keepsCurrentSelection() {
+        assertEquals(
+            1,
+            resolveCinemaSideCurtainSelectedTab(
+                currentSelectedTab = 1,
+                replyCount = 0,
+                isRepliesLoading = false,
+                hasRelatedVideos = true
+            )
+        )
+    }
+
+    @Test
     fun cinemaMetaBlocksIncludeUpInfoWhenOwnerIsAvailable() {
         val blocks = resolveCinemaMetaPanelBlocks(hasOwner = true)
 

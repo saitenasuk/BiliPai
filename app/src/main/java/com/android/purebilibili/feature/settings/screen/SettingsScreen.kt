@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.AnalyticsHelper
@@ -382,20 +383,33 @@ fun SettingsScreen(
         val resolvedReleaseNotes = remember(info.releaseNotes) {
             resolveUpdateReleaseNotesText(info.releaseNotes)
         }
+        val isDialogDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        val dialogTextColors = remember(isDialogDarkTheme) {
+            resolveAppUpdateDialogTextColors(
+                isDarkTheme = isDialogDarkTheme
+            )
+        }
         val releaseNotesScrollState = rememberScrollState()
         com.android.purebilibili.core.ui.IOSAlertDialog(
             onDismissRequest = { updateCheckResult = null },
-            title = { Text("发现新版本 v${info.latestVersion}") },
+            title = {
+                Text(
+                    text = "发现新版本 v${info.latestVersion}",
+                    color = dialogTextColors.titleColor
+                )
+            },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = "当前版本 v${info.currentVersion}",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = dialogTextColors.currentVersionColor
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = resolvedReleaseNotes,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = dialogTextColors.releaseNotesColor,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 280.dp)
@@ -421,20 +435,33 @@ fun SettingsScreen(
         val resolvedReleaseNotes = remember(info.releaseNotes) {
             resolveUpdateReleaseNotesText(info.releaseNotes)
         }
+        val isDialogDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        val dialogTextColors = remember(isDialogDarkTheme) {
+            resolveAppUpdateDialogTextColors(
+                isDarkTheme = isDialogDarkTheme
+            )
+        }
         val releaseNotesScrollState = rememberScrollState()
         com.android.purebilibili.core.ui.IOSAlertDialog(
             onDismissRequest = { changelogCheckResult = null },
-            title = { Text("更新日志 v${info.latestVersion}") },
+            title = {
+                Text(
+                    text = "更新日志 v${info.latestVersion}",
+                    color = dialogTextColors.titleColor
+                )
+            },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = "当前版本 v${info.currentVersion}",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = dialogTextColors.currentVersionColor
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = resolvedReleaseNotes,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = dialogTextColors.releaseNotesColor,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 280.dp)

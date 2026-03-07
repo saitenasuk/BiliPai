@@ -1,10 +1,40 @@
 package com.android.purebilibili.feature.video.ui.section
 
+import androidx.media3.common.PlaybackParameters
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VideoPlayerSectionPolicyTest {
+
+    @Test
+    fun inlinePlayerTakeover_disablesKeepingLastFrame_whenPortraitFullscreenOwnsPlayback() {
+        assertFalse(
+            shouldKeepInlinePlayerContentOnReset(
+                isPortraitFullscreen = true
+            )
+        )
+        assertTrue(
+            shouldKeepInlinePlayerContentOnReset(
+                isPortraitFullscreen = false
+            )
+        )
+    }
+
+    @Test
+    fun inlinePlayerTakeover_hidesInlinePlayerView_whenPortraitFullscreenOwnsPlayback() {
+        assertFalse(
+            shouldShowInlinePlayerView(
+                isPortraitFullscreen = true
+            )
+        )
+        assertTrue(
+            shouldShowInlinePlayerView(
+                isPortraitFullscreen = false
+            )
+        )
+    }
 
     @Test
     fun livePlayerSharedElement_enabledOnlyWhenAllGuardsPass() {
@@ -94,12 +124,43 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
-    fun longPressSpeed_keepsRequestedSpeedForNonHiRes() {
+    fun longPressSpeed_clampsStandardAudioToCompatibilityLimit() {
         val effective = resolveEffectiveLongPressSpeed(
             requestedSpeed = 2.0f,
             currentAudioQuality = 30280
         )
 
-        assertTrue(effective == 2.0f)
+        assertTrue(effective == 1.5f)
+    }
+
+    @Test
+    fun longPressSpeed_keepsRequestedSpeedWithinCompatibilityLimit() {
+        val effective = resolveEffectiveLongPressSpeed(
+            requestedSpeed = 1.25f,
+            currentAudioQuality = 30280
+        )
+
+        assertTrue(effective == 1.25f)
+    }
+
+    @Test
+    fun longPressPlaybackParameters_forceNaturalPitch() {
+        val parameters = resolveLongPressPlaybackParameters(
+            requestedSpeed = 1.25f,
+            currentAudioQuality = 30280
+        )
+
+        assertEquals(1.25f, parameters.speed)
+        assertEquals(1.0f, parameters.pitch)
+    }
+
+    @Test
+    fun longPressPlaybackParameters_clampHiResSpeedBeforeApplyingPitchSafePlayback() {
+        val parameters = resolveLongPressPlaybackParameters(
+            requestedSpeed = 2.0f,
+            currentAudioQuality = 30251
+        )
+
+        assertEquals(PlaybackParameters(1.5f, 1.0f), parameters)
     }
 }

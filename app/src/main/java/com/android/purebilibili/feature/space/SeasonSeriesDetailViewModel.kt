@@ -32,11 +32,24 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
     private val _hasMoreState = MutableStateFlow(true)
     val hasMoreState = _hasMoreState.asStateFlow()
 
+    data class FavoriteDetailProgressState(
+        val loadedCount: Int = 0,
+        val expectedCount: Int = 0,
+        val currentPage: Int = 1,
+        val lastAddedCount: Int = 0,
+        val invalidCount: Int = 0,
+        val hasMore: Boolean = false
+    )
+
+    private val _favoriteDetailProgressState = MutableStateFlow(FavoriteDetailProgressState())
+    val favoriteDetailProgressState = _favoriteDetailProgressState.asStateFlow()
+
     fun init(type: String, id: Long, mid: Long, title: String) {
         this.type = type
         this.id = id
         this.mid = mid
         this.pageTitle = title
+        _favoriteDetailProgressState.value = FavoriteDetailProgressState()
         
         // Update Title via UI State update (a bit tricky since BaseListViewModel sets it in init)
         // We trigger a reload which resets title in loadData() -> fetchItems() ? No.
@@ -128,10 +141,18 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
             val response = FavoriteRepository.getFavoriteList(mediaId = id, pn = currentPage).getOrNull()
             hasMore = response?.has_more == true
             _hasMoreState.value = hasMore
-            response?.medias
+            val mediaItems = response?.medias.orEmpty()
+            _favoriteDetailProgressState.value = FavoriteDetailProgressState(
+                loadedCount = mediaItems.size,
+                expectedCount = response?.info?.media_count ?: 0,
+                currentPage = currentPage,
+                lastAddedCount = mediaItems.size,
+                invalidCount = mediaItems.count { it.attr != 0 },
+                hasMore = hasMore
+            )
+            mediaItems
                 .orEmpty()
                 .map { it.toVideoItem() }
-                .filter { it.bvid.isNotBlank() } // 收藏夹里可能有合集资源，当前列表页仅展示可播放视频
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -185,10 +206,19 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                     val response = FavoriteRepository.getFavoriteList(mediaId = id, pn = currentPage).getOrNull()
                     hasMore = response?.has_more == true
                     _hasMoreState.value = hasMore
-                    newItems = response?.medias
-                        .orEmpty()
-                        .map { it.toVideoItem() }
-                        .filter { it.bvid.isNotBlank() }
+                    val mediaItems = response?.medias.orEmpty()
+                    newItems = mediaItems.map { it.toVideoItem() }
+                    val currentLoadedCount = _uiState.value.items.size + newItems.size
+                    _favoriteDetailProgressState.value = _favoriteDetailProgressState.value.copy(
+                        loadedCount = currentLoadedCount,
+                        expectedCount = response?.info?.media_count
+                            ?: _favoriteDetailProgressState.value.expectedCount,
+                        currentPage = currentPage,
+                        lastAddedCount = mediaItems.size,
+                        invalidCount = _favoriteDetailProgressState.value.invalidCount +
+                            mediaItems.count { it.attr != 0 },
+                        hasMore = hasMore
+                    )
                 }
                 
                 if (newItems.isNotEmpty()) {

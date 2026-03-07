@@ -62,32 +62,61 @@ data class TopTabConfig(
     val fixedVisible: Boolean = false
 )
 
+internal fun resolveBottomBarTabIcon(id: String): ImageVector {
+    return when (id) {
+        "HOME" -> CupertinoIcons.Default.House
+        "DYNAMIC" -> CupertinoIcons.Default.RectangleStack
+        "STORY" -> CupertinoIcons.Default.PlayCircle
+        "HISTORY" -> CupertinoIcons.Default.Clock
+        "PROFILE" -> CupertinoIcons.Default.PersonCircle
+        "FAVORITE" -> CupertinoIcons.Default.Star
+        "LIVE" -> CupertinoIcons.Default.Video
+        "WATCHLATER" -> CupertinoIcons.Default.Bookmark
+        "SETTINGS" -> CupertinoIcons.Default.Gearshape
+        else -> CupertinoIcons.Default.House
+    }
+}
+
+internal fun resolveTopTabIcon(id: String): ImageVector {
+    return when (id) {
+        "RECOMMEND" -> CupertinoIcons.Default.House
+        "FOLLOW" -> CupertinoIcons.Default.PersonCropCircleBadgePlus
+        "POPULAR" -> CupertinoIcons.Default.ChartBar
+        "LIVE" -> CupertinoIcons.Default.Video
+        "ANIME" -> CupertinoIcons.Default.Tv
+        "GAME" -> CupertinoIcons.Default.PlayCircle
+        "KNOWLEDGE" -> CupertinoIcons.Default.Lightbulb
+        "TECH" -> CupertinoIcons.Default.Cpu
+        else -> CupertinoIcons.Default.House
+    }
+}
+
 /**
  * 所有可用的底栏项目
  */
 val allBottomBarTabs = listOf(
-    BottomBarTabConfig("HOME", "首页", CupertinoIcons.Default.House, isDefault = true),
-    BottomBarTabConfig("DYNAMIC", "动态", CupertinoIcons.Default.Newspaper, isDefault = true),
-    BottomBarTabConfig("STORY", "短视频", CupertinoIcons.Default.PlayCircle, isDefault = false),  //  竖屏短视频
-    BottomBarTabConfig("HISTORY", "历史", CupertinoIcons.Default.Clock, isDefault = true),
-    BottomBarTabConfig("PROFILE", "我的", CupertinoIcons.Default.PersonCircle, isDefault = true),
-    BottomBarTabConfig("FAVORITE", "收藏", CupertinoIcons.Default.HandThumbsup, isDefault = false),
-    BottomBarTabConfig("LIVE", "直播", CupertinoIcons.Default.Tv, isDefault = false),
-    BottomBarTabConfig("WATCHLATER", "稍后看", CupertinoIcons.Default.Clock, isDefault = false),
-    BottomBarTabConfig("SETTINGS", "设置", CupertinoIcons.Default.Gearshape, isDefault = false)
+    BottomBarTabConfig("HOME", "首页", resolveBottomBarTabIcon("HOME"), isDefault = true),
+    BottomBarTabConfig("DYNAMIC", "动态", resolveBottomBarTabIcon("DYNAMIC"), isDefault = true),
+    BottomBarTabConfig("STORY", "短视频", resolveBottomBarTabIcon("STORY"), isDefault = false),
+    BottomBarTabConfig("HISTORY", "历史", resolveBottomBarTabIcon("HISTORY"), isDefault = true),
+    BottomBarTabConfig("PROFILE", "我的", resolveBottomBarTabIcon("PROFILE"), isDefault = true),
+    BottomBarTabConfig("FAVORITE", "收藏", resolveBottomBarTabIcon("FAVORITE"), isDefault = false),
+    BottomBarTabConfig("LIVE", "直播", resolveBottomBarTabIcon("LIVE"), isDefault = false),
+    BottomBarTabConfig("WATCHLATER", "稍后看", resolveBottomBarTabIcon("WATCHLATER"), isDefault = false),
+    BottomBarTabConfig("SETTINGS", "设置", resolveBottomBarTabIcon("SETTINGS"), isDefault = false)
 )
 
 private val defaultTopTabIds = listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME")
 
 val allTopTabs = listOf(
-    TopTabConfig("RECOMMEND", "推荐", CupertinoIcons.Default.House, fixedVisible = true),
-    TopTabConfig("FOLLOW", "关注", CupertinoIcons.Default.Bell),
-    TopTabConfig("POPULAR", "热门", CupertinoIcons.Default.Newspaper),
-    TopTabConfig("LIVE", "直播", CupertinoIcons.Default.Video),
-    TopTabConfig("ANIME", "追番", CupertinoIcons.Default.Tv),
-    TopTabConfig("GAME", "游戏", CupertinoIcons.Default.PlayCircle),
-    TopTabConfig("KNOWLEDGE", "知识", CupertinoIcons.Default.Character),
-    TopTabConfig("TECH", "科技", CupertinoIcons.Default.Gearshape)
+    TopTabConfig("RECOMMEND", "推荐", resolveTopTabIcon("RECOMMEND"), fixedVisible = true),
+    TopTabConfig("FOLLOW", "关注", resolveTopTabIcon("FOLLOW")),
+    TopTabConfig("POPULAR", "热门", resolveTopTabIcon("POPULAR")),
+    TopTabConfig("LIVE", "直播", resolveTopTabIcon("LIVE")),
+    TopTabConfig("ANIME", "追番", resolveTopTabIcon("ANIME")),
+    TopTabConfig("GAME", "游戏", resolveTopTabIcon("GAME")),
+    TopTabConfig("KNOWLEDGE", "知识", resolveTopTabIcon("KNOWLEDGE")),
+    TopTabConfig("TECH", "科技", resolveTopTabIcon("TECH"))
 )
 
 /**

@@ -30,9 +30,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -83,6 +85,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
+
+internal fun shouldEnableProfileHeaderLoginClick(isLogin: Boolean): Boolean = !isLogin
+
+internal fun resolveProfileWallpaperActionColumnCount(screenWidthDp: Int): Int {
+    return if (screenWidthDp < 360) 1 else 2
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -670,10 +678,53 @@ fun MobileProfileContent(
     
     // [New] State for Official Wallpaper Sheet
     var showWallpaperSheet by remember { mutableStateOf(false) }
+    var showPhotoPickerDialog by remember { mutableStateOf(false) }
     
     // [New] Sheet
     if (showWallpaperSheet) {
         OfficialWallpaperSheet(viewModel = viewModel, onDismiss = { showWallpaperSheet = false })
+    }
+
+    if (showPhotoPickerDialog) {
+        AlertDialog(
+            onDismissRequest = { showPhotoPickerDialog = false },
+            icon = {
+                Icon(
+                    CupertinoIcons.Default.Photo,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text("选择照片", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "将打开系统相册选择一张照片作为背景。\n\n" +
+                        "📸 仅获取您选中照片的访问权限\n" +
+                        "🔒 不会访问您的其他照片",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPhotoPickerDialog = false
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }
+                ) {
+                    Text("选择照片")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPhotoPickerDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
     
     val isImmersive = user.topPhoto.isNotEmpty()
@@ -724,113 +775,20 @@ fun MobileProfileContent(
             item { 
                 Column {
                     // [UI优化] 移除背景色，透明显示下方 Header 图
-                    UserInfoSection(user, transparent = isImmersive) 
-                    
-                    // [Fixed] 壁纸选项行 - 独立于用户信息，避免重叠
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp), // Increased margin
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Glassy Button Style Helper
-                        val glassyModifier = Modifier
-                            .clip(RoundedCornerShape(50)) // Capsule shape
-                            .background(Color.Black.copy(alpha = 0.3f)) // Semi-transparent dark base
-                            .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(50)) // Subtle frost border
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-
-                        // 官方壁纸
-                        Row(
-                            modifier = glassyModifier.clickable { showWallpaperSheet = true },
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = CupertinoIcons.Default.Photo,
-                                contentDescription = "官方壁纸",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = "官方壁纸",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White
-                            )
+                    UserInfoSection(
+                        user = user,
+                        transparent = isImmersive,
+                        onClick = if (shouldEnableProfileHeaderLoginClick(user.isLogin)) {
+                            onHeaderClick
+                        } else {
+                            {}
                         }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        // 🖼️ 本地相册说明弹窗状态
-                        var showPhotoPickerDialog by remember { mutableStateOf(false) }
-                        
-                        // 本地相册
-                        Row(
-                            modifier = glassyModifier.clickable {
-                                showPhotoPickerDialog = true
-                            },
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = CupertinoIcons.Default.Folder,
-                                contentDescription = "本地相册",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = "本地相册",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White
-                            )
-                        }
-                        
-                        // 📋 本地相册说明弹窗
-                        if (showPhotoPickerDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showPhotoPickerDialog = false },
-                                icon = {
-                                    Icon(
-                                        CupertinoIcons.Default.Photo,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(32.dp)
-                                    )
-                                },
-                                title = {
-                                    Text("选择照片", fontWeight = FontWeight.Bold)
-                                },
-                                text = {
-                                    Text(
-                                        "将打开系统相册选择一张照片作为背景。\n\n" +
-                                        "📸 仅获取您选中照片的访问权限\n" +
-                                        "🔒 不会访问您的其他照片",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                },
-                                confirmButton = {
-                                    Button(
-                                        onClick = {
-                                            showPhotoPickerDialog = false
-                                            photoPickerLauncher.launch(
-                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                            )
-                                        }
-                                    ) {
-                                        Text("选择照片")
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showPhotoPickerDialog = false }) {
-                                        Text("取消")
-                                    }
-                                }
-                            )
-                        }
-                    }
+                    )
+                    ProfileWallpaperActionCard(
+                        isImmersive = isImmersive,
+                        onOfficialWallpaperClick = { showWallpaperSheet = true },
+                        onLocalAlbumClick = { showPhotoPickerDialog = true }
+                    )
                 }
             }
             if (user.isLogin) {
@@ -1057,6 +1015,187 @@ fun UserInfoSection(
     if (centered) {
          Column(horizontalAlignment = Alignment.CenterHorizontally) {
             UserInfoText(user, centered = true)
+        }
+    }
+}
+
+@Composable
+private fun ProfileWallpaperActionCard(
+    isImmersive: Boolean,
+    onOfficialWallpaperClick: () -> Unit,
+    onLocalAlbumClick: () -> Unit
+) {
+    val configuration = LocalConfiguration.current
+    val columnCount = remember(configuration.screenWidthDp) {
+        resolveProfileWallpaperActionColumnCount(configuration.screenWidthDp)
+    }
+    val sectionLabelColor = if (isImmersive) {
+        Color.White.copy(alpha = 0.76f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val cardColor = if (isImmersive) {
+        Color.White.copy(alpha = 0.14f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+    }
+    val borderColor = if (isImmersive) {
+        Color.White.copy(alpha = 0.18f)
+    } else {
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+    }
+    val buttonColor = if (isImmersive) {
+        Color.White.copy(alpha = 0.10f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+    }
+    val contentColor = if (isImmersive) Color.White else MaterialTheme.colorScheme.onSurface
+    val secondaryColor = if (isImmersive) {
+        Color.White.copy(alpha = 0.68f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = "背景装扮",
+            style = MaterialTheme.typography.labelMedium,
+            color = sectionLabelColor,
+            modifier = Modifier.padding(start = 4.dp, bottom = 10.dp)
+        )
+
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = cardColor,
+            border = BorderStroke(0.5.dp, borderColor),
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp
+        ) {
+            if (columnCount == 2) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ProfileWallpaperActionButton(
+                        modifier = Modifier.weight(1f),
+                        title = "官方壁纸",
+                        subtitle = "精选背景",
+                        icon = CupertinoIcons.Default.Photo,
+                        containerColor = buttonColor,
+                        contentColor = contentColor,
+                        secondaryColor = secondaryColor,
+                        onClick = onOfficialWallpaperClick
+                    )
+                    ProfileWallpaperActionButton(
+                        modifier = Modifier.weight(1f),
+                        title = "本地相册",
+                        subtitle = "自定义照片",
+                        icon = CupertinoIcons.Default.Folder,
+                        containerColor = buttonColor,
+                        contentColor = contentColor,
+                        secondaryColor = secondaryColor,
+                        onClick = onLocalAlbumClick
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ProfileWallpaperActionButton(
+                        title = "官方壁纸",
+                        subtitle = "精选背景",
+                        icon = CupertinoIcons.Default.Photo,
+                        containerColor = buttonColor,
+                        contentColor = contentColor,
+                        secondaryColor = secondaryColor,
+                        onClick = onOfficialWallpaperClick
+                    )
+                    ProfileWallpaperActionButton(
+                        title = "本地相册",
+                        subtitle = "自定义照片",
+                        icon = CupertinoIcons.Default.Folder,
+                        containerColor = buttonColor,
+                        contentColor = contentColor,
+                        secondaryColor = secondaryColor,
+                        onClick = onLocalAlbumClick
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileWallpaperActionButton(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    containerColor: Color,
+    contentColor: Color,
+    secondaryColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = containerColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 54.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                color = Color.White.copy(alpha = if (contentColor == Color.White) 0.16f else 0.55f),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = contentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = contentColor
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = secondaryColor
+                )
+            }
         }
     }
 }

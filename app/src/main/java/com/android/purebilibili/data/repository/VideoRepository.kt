@@ -686,15 +686,19 @@ object VideoRepository {
     }
 
     suspend fun getPlayUrlData(bvid: String, cid: Long, qn: Int, audioLang: String? = null): PlayUrlData? = withContext(Dispatchers.IO) {
-        //  [新增] 对于高画质请求 (>=112) 或定向流量模式，优先尝试 APP API
-        val isHighQuality = qn >= 112
         val directedTrafficMode = isDirectedTrafficModeActive()
         val accessToken = TokenManager.accessTokenCache
-        
-        if ((isHighQuality || directedTrafficMode) && !accessToken.isNullOrEmpty()) {
+        val hasSessionCookie = !TokenManager.sessDataCache.isNullOrEmpty()
+        val shouldTryAppApi = shouldTryAppApiForTargetQuality(
+            targetQn = qn,
+            hasSessionCookie = hasSessionCookie,
+            directedTrafficMode = directedTrafficMode
+        )
+
+        if (shouldTryAppApi && !accessToken.isNullOrEmpty()) {
             com.android.purebilibili.core.util.Logger.d(
                 "VideoRepo",
-                " APP API preflight: qn=$qn, highQuality=$isHighQuality, directedTrafficMode=$directedTrafficMode"
+                " APP API preflight: qn=$qn, hasSessionCookie=$hasSessionCookie, directedTrafficMode=$directedTrafficMode"
             )
             val appResult = fetchPlayUrlWithAccessToken(bvid, cid, qn, audioLang = audioLang)
             if (appResult != null && hasPlayableStreams(appResult)) {

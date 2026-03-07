@@ -72,4 +72,24 @@ class iOSHomeHeaderVisualPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `floating top tabs no longer use highlighted border`() {
+        assertEquals(
+            0f,
+            resolveHomeHeaderTabBorderAlpha(
+                isTabFloating = true,
+                isTabGlassEnabled = true
+            ),
+            0.0001f
+        )
+        assertEquals(
+            0f,
+            resolveHomeHeaderTabBorderAlpha(
+                isTabFloating = true,
+                isTabGlassEnabled = false
+            ),
+            0.0001f
+        )
+    }
 }

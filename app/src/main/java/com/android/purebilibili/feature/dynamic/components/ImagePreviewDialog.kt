@@ -197,6 +197,9 @@ private fun ImagePreviewOverlayContent(
     var isDismissing by remember { mutableStateOf(false) }
     var currentImageDisplayRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var dismissImageDisplayRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var activeZoomScale by remember { mutableFloatStateOf(1f) }
+    var isVerticalDismissDragging by remember { mutableStateOf(false) }
+    val verticalDismissOffsetYPx = remember { androidx.compose.animation.core.Animatable(0f) }
     
     // 启动入场动画 - 使用轻阻尼弹簧，保留自然惯性
     LaunchedEffect(Unit) {
@@ -208,11 +211,13 @@ private fun ImagePreviewOverlayContent(
     }
     
     // 触发退场动画
-    fun triggerDismiss() {
+    fun triggerDismiss(startRect: androidx.compose.ui.geometry.Rect? = currentImageDisplayRect) {
         if (isDismissing) return
-        dismissImageDisplayRect = currentImageDisplayRect
+        dismissImageDisplayRect = startRect
+        isVerticalDismissDragging = false
         isDismissing = true
         scope.launch {
+            verticalDismissOffsetYPx.snapTo(0f)
             val dismissMotion = imagePreviewDismissMotion()
             animateTrigger.animateTo(
                 targetValue = dismissMotion.overshootTarget,
@@ -252,6 +257,14 @@ private fun ImagePreviewOverlayContent(
         initialPage = initialIndex,
         pageCount = { images.size }
     )
+
+    LaunchedEffect(pagerState.currentPage) {
+        activeZoomScale = 1f
+        if (!isDismissing) {
+            isVerticalDismissDragging = false
+            verticalDismissOffsetYPx.snapTo(0f)
+        }
+    }
     
     //  存储权限状态（Android 9 及以下需要）
     var pendingSaveUrl by remember { mutableStateOf<String?>(null) }
@@ -285,9 +298,14 @@ private fun ImagePreviewOverlayContent(
             val constraints = this
             val fullWidth = constraints.maxWidth
             val fullHeight = constraints.maxHeight
+            val fullHeightPx = with(density) { fullHeight.toPx() }
             val maxBlurRadiusPx = with(density) { 18.dp.toPx() }
             
             val rawProgress = animateTrigger.value
+            val verticalDragFrame = resolveImagePreviewVerticalDragFrame(
+                dragOffsetYPx = verticalDismissOffsetYPx.value,
+                containerHeightPx = fullHeightPx
+            )
             
             //  计算容器位置和大小
             // 如果切走了或者没有源矩形，则全屏显示（仅淡入淡出）
@@ -306,9 +324,9 @@ private fun ImagePreviewOverlayContent(
             val backdropAlpha = if (isDismissing) {
                 resolveImagePreviewDismissBackdropAlpha(transitionFrame.visualProgress)
             } else {
-                visualFrame.backdropAlpha
+                visualFrame.backdropAlpha * verticalDragFrame.backdropAlphaMultiplier
             }
-            val dismissTransform = resolveImagePreviewDismissTransform(
+            val dismissRectFrame = resolveImagePreviewDismissRectFrame(
                 transitionProgress = transitionFrame.layoutProgress,
                 sourceRect = if (shouldUseRectAnim && isDismissing) sourceRect else null,
                 displayedImageRect = if (shouldUseRectAnim && isDismissing) dismissImageDisplayRect else null
@@ -320,10 +338,11 @@ private fun ImagePreviewOverlayContent(
             val targetHeight = fullHeight
             
             val (currentLeft, currentTop, currentWidth, currentHeight) = if (shouldUseRectAnim) {
-                val sourceLeft = with(density) { sourceRect!!.left.toDp() }
-                val sourceTop = with(density) { sourceRect!!.top.toDp() }
-                val sourceWidth = with(density) { sourceRect!!.width.toDp() }
-                val sourceHeight = with(density) { sourceRect!!.height.toDp() }
+                val source = sourceRect
+                val sourceLeft = with(density) { source.left.toDp() }
+                val sourceTop = with(density) { source.top.toDp() }
+                val sourceWidth = with(density) { source.width.toDp() }
+                val sourceHeight = with(density) { source.height.toDp() }
                 
                 val l = androidx.compose.ui.unit.lerp(sourceLeft, targetLeft, transitionFrame.layoutProgress)
                 val t = androidx.compose.ui.unit.lerp(sourceTop, targetTop, transitionFrame.layoutProgress)
@@ -348,31 +367,20 @@ private fun ImagePreviewOverlayContent(
             )
             
             // 2. 内容层 (缩放位移)
-            val contentModifier = if (isDismissing && shouldUseRectAnim) {
-                val activeDisplayRect = dismissImageDisplayRect
-                    ?: androidx.compose.ui.geometry.Rect(
-                        left = 0f,
-                        top = 0f,
-                        right = with(density) { fullWidth.toPx() },
-                        bottom = with(density) { fullHeight.toPx() }
-                    )
+            val contentModifier = if (isDismissing && shouldUseRectAnim && dismissRectFrame != null) {
                 Modifier
                     .offset(
-                        x = with(density) { activeDisplayRect.left.toDp() },
-                        y = with(density) { activeDisplayRect.top.toDp() }
+                        x = with(density) { dismissRectFrame.rect.left.toDp() },
+                        y = with(density) { dismissRectFrame.rect.top.toDp() }
                     )
                     .size(
-                        width = with(density) { activeDisplayRect.width.toDp() },
-                        height = with(density) { activeDisplayRect.height.toDp() }
+                        width = with(density) { dismissRectFrame.rect.width.toDp() },
+                        height = with(density) { dismissRectFrame.rect.height.toDp() }
                     )
+                    .clip(RoundedCornerShape(transitionFrame.cornerRadiusDp.dp))
                     .graphicsLayer {
                         alpha = visualFrame.contentAlpha
                         renderEffect = null
-                        scaleX = dismissTransform.scale
-                        scaleY = dismissTransform.scale
-                        translationX = dismissTransform.translationXPx
-                        translationY = dismissTransform.translationYPx
-                        transformOrigin = TransformOrigin.Center
                     }
             } else {
                 Modifier
@@ -395,6 +403,13 @@ private fun ImagePreviewOverlayContent(
                         if (!shouldUseRectAnim) {
                             scaleX = transitionFrame.fallbackScale
                             scaleY = transitionFrame.fallbackScale
+                        }
+                        if (!isDismissing) {
+                            translationY = verticalDismissOffsetYPx.value
+                            val dragScale = verticalDragFrame.scale
+                            scaleX *= dragScale
+                            scaleY *= dragScale
+                            transformOrigin = TransformOrigin.Center
                         }
                     }
             }
@@ -465,16 +480,77 @@ private fun ImagePreviewOverlayContent(
                             imageLoader = gifImageLoader,  //  使用 GIF 加载器
                             modifier = Modifier.fillMaxSize(),
                             onZoomChange = {
-                                // 当放大时，ZoomableImage 内部会消费手势，HorizontalPager 将自然停止切页
+                                activeZoomScale = it
                             },
                             onDisplayRectChange = { rect ->
                                 if (!isDismissing && page == pagerState.currentPage) {
                                     currentImageDisplayRect = rect
                                 }
                             },
+                            onVerticalDismissDragStart = {
+                                if (page == pagerState.currentPage &&
+                                    !isDismissing &&
+                                    shouldEnableImagePreviewVerticalDismiss(activeZoomScale)
+                                ) {
+                                    isVerticalDismissDragging = true
+                                    scope.launch {
+                                        verticalDismissOffsetYPx.stop()
+                                    }
+                                }
+                            },
+                            onVerticalDismissDrag = { dragDelta ->
+                                if (page == pagerState.currentPage && !isDismissing && isVerticalDismissDragging) {
+                                    scope.launch {
+                                        verticalDismissOffsetYPx.snapTo(verticalDismissOffsetYPx.value + dragDelta)
+                                    }
+                                }
+                            },
+                            onVerticalDismissDragEnd = {
+                                if (page == pagerState.currentPage && !isDismissing && isVerticalDismissDragging) {
+                                    isVerticalDismissDragging = false
+                                    val draggedRect = resolveImagePreviewDraggedDisplayRect(
+                                        displayedImageRect = currentImageDisplayRect,
+                                        translationYPx = verticalDismissOffsetYPx.value,
+                                        scale = verticalDragFrame.scale
+                                    )
+                                    when (
+                                        resolveImagePreviewVerticalDismissDecision(
+                                            dragOffsetYPx = verticalDismissOffsetYPx.value,
+                                            containerHeightPx = fullHeightPx
+                                        )
+                                    ) {
+                                        ImagePreviewVerticalDismissDecision.DISMISS -> triggerDismiss(draggedRect)
+                                        ImagePreviewVerticalDismissDecision.SNAP_BACK -> {
+                                            scope.launch {
+                                                verticalDismissOffsetYPx.animateTo(
+                                                    targetValue = 0f,
+                                                    animationSpec = spring(
+                                                        dampingRatio = 0.78f,
+                                                        stiffness = 420f
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            onVerticalDismissDragCancel = {
+                                if (page == pagerState.currentPage && !isDismissing) {
+                                    isVerticalDismissDragging = false
+                                    scope.launch {
+                                        verticalDismissOffsetYPx.animateTo(
+                                            targetValue = 0f,
+                                            animationSpec = spring(
+                                                dampingRatio = 0.78f,
+                                                stiffness = 420f
+                                            )
+                                        )
+                                    }
+                                }
+                            },
                             onClick = {
                                 // 点击图片关闭预览
-                                triggerDismiss()
+                                 triggerDismiss()
                             }
                         )
                     }

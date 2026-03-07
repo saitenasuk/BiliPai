@@ -63,6 +63,19 @@ class VideoPlaybackUseCaseQualitySwitchTest {
     }
 
     @Test
+    fun `mergeQualityOptions keeps api advertised 1080P when dash list is capped at 720P`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.mergeQualityOptions(
+            apiQualities = listOf(80, 64, 32, 16),
+            dashVideoIds = listOf(64, 32, 16)
+        )
+
+        assertEquals(listOf(80, 64, 32, 16), result.mergedQualityIds)
+        assertEquals(listOf(80), result.apiOnlyHighQualities)
+    }
+
+    @Test
     fun `mergeQualityOptions uses dash list when api list is empty`() {
         val useCase = VideoPlaybackUseCase()
 

@@ -21,7 +21,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,6 +45,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.feature.settings.GITHUB_URL
 import com.android.purebilibili.core.store.SettingsManager //  引入 SettingsManager
@@ -56,7 +56,10 @@ import com.android.purebilibili.feature.home.components.FrostedSideBar
 import com.android.purebilibili.feature.home.components.CategoryTabRow
 import com.android.purebilibili.feature.home.components.iOSHomeHeader  //  iOS 大标题头部
 import com.android.purebilibili.feature.home.components.iOSRefreshIndicator  //  iOS 下拉刷新指示器
+import com.android.purebilibili.feature.home.components.HomeInteractionMotionBudget
+import com.android.purebilibili.feature.home.components.resolveHomeInteractionMotionBudget
 import com.android.purebilibili.feature.home.components.resolveHomeDrawerScrimAlpha
+import com.android.purebilibili.feature.home.components.shouldSnapHomeTopTabSelection
 import com.android.purebilibili.feature.home.components.resolveTopTabStyle
 //  从 cards 子包导入卡片组件
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
@@ -208,6 +211,7 @@ fun HomeScreen(
     val initialPage = resolveHomeTopTabIndex(state.currentCategory, topCategories)
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topCategories.size }
     var hasSyncedPagerWithState by remember(topCategories) { mutableStateOf(false) }
+    var programmaticPageSwitchInProgress by remember { mutableStateOf(false) }
     TrackJankStateFlag(
         stateName = "home:pager_swipe",
         isActive = pagerState.isScrollInProgress
@@ -261,7 +265,11 @@ fun HomeScreen(
             hasSyncedPagerWithState = true
             return@LaunchedEffect
         }
-        if (targetPage != pagerState.currentPage && !pagerState.isScrollInProgress) {
+        if (
+            targetPage != pagerState.currentPage &&
+            !pagerState.isScrollInProgress &&
+            !programmaticPageSwitchInProgress
+        ) {
             pagerState.animateScrollToPage(targetPage)
         }
     }
@@ -1010,7 +1018,7 @@ fun HomeScreen(
                         
                         //  把 GridState 提升给父级用于控制 Header? 
                         
-                        PullToRefreshBox(
+                        ComfortablePullToRefreshBox(
                             isRefreshing = isRefreshing && state.currentCategory == category,
                             onRefresh = { viewModel.refresh() },
                             state = pullRefreshState,
@@ -1165,6 +1173,11 @@ fun HomeScreen(
         val isFeedScrollInProgress by remember(activeGridState) {
             derivedStateOf { activeGridState?.isScrollInProgress == true }
         }
+        val homeInteractionMotionBudget = resolveHomeInteractionMotionBudget(
+            isPagerScrolling = pagerState.isScrollInProgress,
+            isProgrammaticPageSwitchInProgress = programmaticPageSwitchInProgress,
+            isFeedScrolling = isFeedScrollInProgress
+        )
         val isHeaderTransitionRunning by remember(pagerState) {
             derivedStateOf {
                 kotlin.math.abs(headerOffsetHeightPx) > 0.5f || pagerState.isScrollInProgress
@@ -1174,7 +1187,7 @@ fun HomeScreen(
             stateName = "home:header_transition",
             isActive = isHeaderTransitionRunning
         )
-        val forceLowBlurBudget = false
+        val forceLowBlurBudget = homeInteractionMotionBudget == HomeInteractionMotionBudget.REDUCED
         
         // Calculate parameters based on scroll
         // 1. Search Bar Collapse (First phase)
@@ -1196,6 +1209,13 @@ fun HomeScreen(
             onCategorySelected = { index ->
                 viewModel.updateDisplayedTabIndex(index)
                 topCategories.getOrNull(index)?.let { selectedCategory ->
+                    if (shouldSnapHomeTopTabSelection(pagerState.currentPage, index)) {
+                        coroutineScope.launch {
+                            programmaticPageSwitchInProgress = true
+                            pagerState.scrollToPage(index)
+                            programmaticPageSwitchInProgress = false
+                        }
+                    }
                     viewModel.switchCategory(selectedCategory)
                 }
             },
@@ -1222,7 +1242,8 @@ fun HomeScreen(
             motionTier = deviceUiProfile.motionTier,
             isScrolling = isFeedScrollInProgress,
             isTransitionRunning = isHeaderTransitionRunning,
-            forceLowBlurBudget = forceLowBlurBudget
+            forceLowBlurBudget = forceLowBlurBudget,
+            interactionBudget = homeInteractionMotionBudget
         )
 
         AnimatedVisibility(

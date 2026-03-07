@@ -8,6 +8,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -110,6 +111,7 @@ fun SearchScreen(
     // 1. 滚动状态监听 (用于列表)
     val historyListState = rememberLazyListState()
     val resultGridState = rememberLazyGridState()
+    val resultListState = rememberLazyListState()
 
     // ✨ Haze State
     val hazeState = remember { HazeState() }
@@ -133,6 +135,25 @@ fun SearchScreen(
         animationEnabled = cardAnimationEnabled
     )
     val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = false)
+    val isSearchResultsScrolling by remember(historyListState, resultGridState, resultListState) {
+        derivedStateOf {
+            historyListState.isScrollInProgress ||
+                resultGridState.isScrollInProgress ||
+                resultListState.isScrollInProgress
+        }
+    }
+    val searchMotionBudget by remember(state.query, state.isSearching, isSearchResultsScrolling) {
+        derivedStateOf {
+            resolveSearchMotionBudget(
+                hasQuery = state.query.isNotBlank(),
+                isSearching = state.isSearching,
+                isScrolling = isSearchResultsScrolling
+            )
+        }
+    }
+    val searchHazeEnabled = shouldEnableSearchHazeSource(searchMotionBudget)
+    val effectiveCardTransitionEnabled =
+        cardTransitionEnabled && searchMotionBudget == SearchMotionBudget.FULL
     
     //  [埋点] 页面浏览追踪
     LaunchedEffect(Unit) {
@@ -210,7 +231,7 @@ fun SearchScreen(
                                     verticalArrangement = Arrangement.spacedBy(searchLayoutPolicy.resultGridSpacingDp.dp),
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .hazeSource(state = hazeState)
+                                    .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier)
                         ) {
                                     // ✨ Filter Bar inside Grid
                                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -240,7 +261,7 @@ fun SearchScreen(
                                             index = index,
                                             animationEnabled = cardAnimationEnabled,
                                             motionTier = cardMotionTier,
-                                            transitionEnabled = cardTransitionEnabled,
+                                            transitionEnabled = effectiveCardTransitionEnabled,
                                             showPublishTime = true,
                                             modifier = Modifier,
                                             //  [交互优化] 传递 onWatchLater 用于显示菜单选项
@@ -321,7 +342,10 @@ fun SearchScreen(
                                 LazyColumn(
                                     contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
+                                    state = resultListState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier)
                                 ) {
                                     item {
                                         SearchFilterBar(
@@ -396,7 +420,10 @@ fun SearchScreen(
                                 LazyColumn(
                                     contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
+                                    state = resultListState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier)
                                 ) {
                                     item {
                                         SearchFilterBar(
@@ -457,7 +484,10 @@ fun SearchScreen(
                                 LazyColumn(
                                     contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)
+                                    state = resultListState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier)
                                 ) {
                                     item {
                                         SearchFilterBar(
@@ -540,7 +570,7 @@ fun SearchScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .hazeSource(state = hazeState)
+                            .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier)
                     ) {
                         // 左侧栏：发现 + 历史
                         LazyColumn(
@@ -600,7 +630,7 @@ fun SearchScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .responsiveContentWidth()
-                            .hazeSource(state = hazeState),
+                            .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier),
                         state = historyListState,
                         contentPadding = PaddingValues(
                             top = contentTopPadding + 16.dp,
@@ -649,10 +679,15 @@ fun SearchScreen(
                 onClearQuery = { viewModel.onQueryChange("") },
                 focusRequester = searchFocusRequester,  //  传递 focusRequester
                 placeholder = state.defaultSearchHint.ifBlank { "搜索视频、UP主..." },
+                reducedMotionBudget = searchMotionBudget == SearchMotionBudget.REDUCED,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .unifiedBlur(
-                        hazeState = hazeState
+                    .then(
+                        if (searchHazeEnabled) {
+                            Modifier.unifiedBlur(hazeState = hazeState)
+                        } else {
+                            Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+                        }
                     )
             )
             
@@ -715,6 +750,7 @@ fun SearchTopBar(
     onClearQuery: () -> Unit,
     placeholder: String = "搜索视频、UP主...",
     focusRequester: androidx.compose.ui.focus.FocusRequester = remember { androidx.compose.ui.focus.FocusRequester() },
+    reducedMotionBudget: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     //  Focus 状态追踪
@@ -731,14 +767,14 @@ fun SearchTopBar(
     //  边框宽度动画
     val borderWidth by animateDpAsState(
         targetValue = if (isFocused) 2.dp else 0.dp,
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = if (reducedMotionBudget) snap() else tween(durationMillis = 200),
         label = "borderWidth"
     )
     
     //  搜索图标颜色动画
     val searchIconColor by animateColorAsState(
         targetValue = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = if (reducedMotionBudget) snap() else tween(durationMillis = 200),
         label = "iconColor"
     )
 

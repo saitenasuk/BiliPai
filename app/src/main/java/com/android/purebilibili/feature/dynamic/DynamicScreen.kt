@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +42,7 @@ import coil.compose.AsyncImage
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import com.android.purebilibili.core.ui.BiliGradientButton
+import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.ui.EmptyState
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.util.responsiveContentWidth
@@ -334,7 +334,7 @@ fun DynamicScreen(
                         )
                         
                         // 右侧内容区
-                        PullToRefreshBox(
+                        ComfortablePullToRefreshBox(
                             isRefreshing = isRefreshing,
                             onRefresh = { viewModel.refresh() },
                             state = pullRefreshState,
@@ -395,7 +395,7 @@ fun DynamicScreen(
                 
                 DynamicDisplayMode.HORIZONTAL -> {
                     // 横向模式（UP 主列表在顶部）
-                    PullToRefreshBox(
+                    ComfortablePullToRefreshBox(
                         isRefreshing = isRefreshing,
                         onRefresh = { viewModel.refresh() },
                         state = pullRefreshState,

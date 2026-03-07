@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -67,6 +68,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -94,9 +96,12 @@ import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.overlay.PortraitFullscreenOverlay
+import com.android.purebilibili.feature.video.ui.section.resolveLongPressPlaybackParameters
+import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
 import com.android.purebilibili.feature.video.viewmodel.PlaybackEndAction
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
+import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.viewmodel.resolvePlaybackEndAction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
@@ -114,7 +119,6 @@ import kotlinx.coroutines.withTimeoutOrNull
  * @param onBack 返回回调
  * @param onVideoChange 切换视频回调 (当滑动到新视频时通知外部)
  */
-import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 
 @UnstableApi
 @Composable
@@ -315,7 +319,12 @@ fun PortraitVideoPager(
     var hasConsumedInitialSeek by remember(useSharedPlayer) { mutableStateOf(useSharedPlayer) }
     var pendingAutoPlayGeneration by remember { mutableIntStateOf(-1) }
     var renderedFirstFrameGeneration by remember(useSharedPlayer, sharedPlayerHasFrameAtEntry) {
-        mutableIntStateOf(if (sharedPlayerHasFrameAtEntry) 0 else -1)
+        mutableIntStateOf(
+            resolvePortraitInitialRenderedFirstFrameGeneration(
+                useSharedPlayer = useSharedPlayer,
+                sharedPlayerHasFrameAtEntry = sharedPlayerHasFrameAtEntry
+            )
+        )
     }
     var lastAutoAdvancedBvid by remember { mutableStateOf<String?>(null) }
     var pendingUserSpaceNavigation by rememberSaveable { mutableStateOf(false) }
@@ -776,15 +785,20 @@ private fun VideoPageItem(
     val longPressSpeed by SettingsManager
         .getLongPressSpeed(context)
         .collectAsState(initial = 1.75f)
+    val currentAudioQuality by viewModel.audioQualityPreference.collectAsState(initial = -1)
+    val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
+    val aid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid.toLong()
     
     // [修复] 手动监听 ExoPlayer 播放状态，确保 UI 及时更新
     var isPlaying by remember { mutableStateOf(exoPlayer.isPlaying) }
-    var currentVideoAspect by remember {
+    var currentVideoAspect by remember(bvid, currentPlayingBvid) {
         mutableFloatStateOf(
-            exoPlayer.videoSize
-                .takeIf { it.width > 0 && it.height > 0 }
-                ?.let { it.width.toFloat() / it.height.toFloat() }
-                ?: (16f / 9f)
+            resolvePortraitInitialVideoAspectRatio(
+                itemBvid = bvid,
+                currentPlayingBvid = currentPlayingBvid,
+                playerVideoWidth = exoPlayer.videoSize.width,
+                playerVideoHeight = exoPlayer.videoSize.height
+            )
         )
     }
     
@@ -805,10 +819,7 @@ private fun VideoPageItem(
             exoPlayer.removeListener(listener)
         }
     }
-    
-    // 提取信息
-    val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
-    val aid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid.toLong()
+
     // [逻辑] 只有当播放器正在播放当前视频时，才显示 PlayerView
     val isPlayerReadyForThisVideo = bvid == currentPlayingBvid
     val snapshotCid = if (isPlayerReadyForThisVideo && currentPlayingCid > 0L) {
@@ -816,6 +827,30 @@ private fun VideoPageItem(
     } else {
         0L
     }
+
+    LaunchedEffect(
+        playerViewRef,
+        isCurrentPage,
+        isPlayerReadyForThisVideo,
+        currentPlayingBvid,
+        exoPlayer.videoSize
+    ) {
+        val view = playerViewRef ?: return@LaunchedEffect
+        if (!shouldRebindSharedPlayerSurfaceOnAttach(
+                isCurrentPage = isCurrentPage,
+                isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
+                hasPlayerView = true,
+                videoWidth = exoPlayer.videoSize.width,
+                videoHeight = exoPlayer.videoSize.height
+            )
+        ) {
+            return@LaunchedEffect
+        }
+
+        // Force the shared player to hand over its surface to the portrait pager view.
+        rebindPlayerSurfaceIfNeeded(playerView = view, player = exoPlayer)
+    }
+
     val title = if (item is ViewInfo) item.title else (item as RelatedVideo).title
     val cover = if (item is ViewInfo) item.pic else (item as RelatedVideo).pic
     val authorName = if (item is ViewInfo) item.owner.name else (item as RelatedVideo).owner.name
@@ -883,7 +918,8 @@ private fun VideoPageItem(
     var seekStartPosition by remember { mutableFloatStateOf(0f) }
     var seekTargetPosition by remember { mutableFloatStateOf(0f) }
     var isLongPressing by remember { mutableStateOf(false) }
-    var longPressOriginSpeed by remember { mutableFloatStateOf(1f) }
+    var longPressOriginPlaybackParameters by remember { mutableStateOf(PlaybackParameters.DEFAULT) }
+    var effectiveLongPressSpeed by remember { mutableFloatStateOf(longPressSpeed) }
     var showLongPressSpeedFeedback by remember { mutableStateOf(false) }
 
     LaunchedEffect(
@@ -942,7 +978,7 @@ private fun VideoPageItem(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(longPressSpeed, currentAudioQuality, isCurrentPage) {
                 detectTapGestures(
                     onTap = { isOverlayVisible = !isOverlayVisible },
                     onDoubleTap = {
@@ -952,15 +988,20 @@ private fun VideoPageItem(
                     },
                     onLongPress = {
                         if (!isCurrentPage) return@detectTapGestures
-                        longPressOriginSpeed = exoPlayer.playbackParameters.speed
-                        exoPlayer.setPlaybackSpeed(longPressSpeed)
+                        longPressOriginPlaybackParameters = exoPlayer.playbackParameters
+                        val longPressPlaybackParameters = resolveLongPressPlaybackParameters(
+                            requestedSpeed = longPressSpeed,
+                            currentAudioQuality = currentAudioQuality
+                        )
+                        effectiveLongPressSpeed = longPressPlaybackParameters.speed
+                        exoPlayer.playbackParameters = longPressPlaybackParameters
                         isLongPressing = true
                         showLongPressSpeedFeedback = true
                     },
                     onPress = {
                         tryAwaitRelease()
                         if (isLongPressing) {
-                            exoPlayer.setPlaybackSpeed(longPressOriginSpeed)
+                            exoPlayer.playbackParameters = longPressOriginPlaybackParameters
                             isLongPressing = false
                             showLongPressSpeedFeedback = false
                         }
@@ -999,34 +1040,10 @@ private fun VideoPageItem(
         // 否则显示封面
         
         if (isCurrentPage && isPlayerReadyForThisVideo) {
-            BoxWithConstraints(
+            PortraitVideoViewportContainer(
+                currentVideoAspect = currentVideoAspect,
                 modifier = Modifier.fillMaxSize()
             ) {
-                val safeAspect = currentVideoAspect.coerceAtLeast(0.1f)
-                val containerAspect = if (maxHeight.value > 0f) {
-                    maxWidth.value / maxHeight.value
-                } else {
-                    safeAspect
-                }
-                val viewportHeight = if (safeAspect > containerAspect) {
-                    maxWidth / safeAspect
-                } else {
-                    maxHeight
-                }
-                val viewportWidth = if (safeAspect > containerAspect) {
-                    maxWidth
-                } else {
-                    maxHeight * safeAspect
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(
-                            width = viewportWidth.coerceAtMost(maxWidth),
-                            height = viewportHeight.coerceAtMost(maxHeight)
-                        )
-                        .align(Alignment.Center)
-                ) {
                     key(currentPlayingBvid, bvid) {
                         AndroidView(
                             factory = { ctx ->
@@ -1082,7 +1099,6 @@ private fun VideoPageItem(
                             )
                         }
                     }
-                }
             }
         }
 
@@ -1240,7 +1256,7 @@ private fun VideoPageItem(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "${longPressSpeed}x",
+                    text = "${effectiveLongPressSpeed}x",
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
@@ -1461,3 +1477,72 @@ internal fun resolvePortraitInitialPageIndex(
 }
 
 internal fun resolvePortraitPagerRepeatMode(): Int = Player.REPEAT_MODE_OFF
+
+@Composable
+internal fun PortraitVideoViewportContainer(
+    currentVideoAspect: Float,
+    modifier: Modifier = Modifier,
+    viewportModifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit
+) {
+    BoxWithConstraints(modifier = modifier) {
+        val safeAspect = currentVideoAspect.coerceAtLeast(0.1f)
+        val containerAspect = if (maxHeight.value > 0f) {
+            maxWidth.value / maxHeight.value
+        } else {
+            safeAspect
+        }
+        val viewportHeight = if (safeAspect > containerAspect) {
+            maxWidth / safeAspect
+        } else {
+            maxHeight
+        }
+        val viewportWidth = if (safeAspect > containerAspect) {
+            maxWidth
+        } else {
+            maxHeight * safeAspect
+        }
+
+        Box(
+            modifier = viewportModifier
+                .size(
+                    width = viewportWidth.coerceAtMost(maxWidth),
+                    height = viewportHeight.coerceAtMost(maxHeight)
+                )
+                .align(Alignment.Center)
+        ) {
+            content()
+        }
+    }
+}
+
+internal fun resolvePortraitInitialVideoAspectRatio(
+    itemBvid: String,
+    currentPlayingBvid: String?,
+    playerVideoWidth: Int,
+    playerVideoHeight: Int
+): Float {
+    val hasValidPlayerSize = playerVideoWidth > 0 && playerVideoHeight > 0
+    return if (itemBvid == currentPlayingBvid && hasValidPlayerSize) {
+        playerVideoWidth.toFloat() / playerVideoHeight.toFloat()
+    } else {
+        9f / 16f
+    }
+}
+
+internal fun resolvePortraitInitialRenderedFirstFrameGeneration(
+    useSharedPlayer: Boolean,
+    sharedPlayerHasFrameAtEntry: Boolean
+): Int {
+    return if (useSharedPlayer && sharedPlayerHasFrameAtEntry) 0 else -1
+}
+
+internal fun shouldRebindSharedPlayerSurfaceOnAttach(
+    isCurrentPage: Boolean,
+    isPlayerReadyForThisVideo: Boolean,
+    hasPlayerView: Boolean,
+    videoWidth: Int,
+    videoHeight: Int
+): Boolean {
+    return isCurrentPage && isPlayerReadyForThisVideo && hasPlayerView
+}

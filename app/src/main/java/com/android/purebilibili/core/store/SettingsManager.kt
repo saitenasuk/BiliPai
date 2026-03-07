@@ -573,13 +573,13 @@ object SettingsManager {
         }
     }
 
-    //  [新增] --- 长按倍速 (默认 2.0x) ---
+    //  [新增] --- 长按倍速 (默认 1.5x，兼容更稳定) ---
     fun getLongPressSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_LONG_PRESS_SPEED] ?: 2.0f }
+        .map { preferences -> (preferences[KEY_LONG_PRESS_SPEED] ?: 1.5f).coerceIn(1.25f, 1.5f) }
 
     suspend fun setLongPressSpeed(context: Context, speed: Float) {
         context.settingsDataStore.edit { preferences -> 
-            preferences[KEY_LONG_PRESS_SPEED] = speed.coerceIn(1.5f, 3.0f)
+            preferences[KEY_LONG_PRESS_SPEED] = speed.coerceIn(1.25f, 1.5f)
         }
     }
 

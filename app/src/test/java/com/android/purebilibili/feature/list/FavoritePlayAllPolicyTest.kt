@@ -43,4 +43,19 @@ class FavoritePlayAllPolicyTest {
 
         assertEquals(listOf("BV_single"), result.map { it.bvid })
     }
+
+    @Test
+    fun resolveFavoritePlayAllItems_filtersOutCollectionResources() {
+        val result = resolveFavoritePlayAllItems(
+            mode = FavoriteContentMode.PAGER,
+            baseItems = emptyList(),
+            selectedFolderItems = listOf(
+                VideoItem(title = "合集", isCollectionResource = true, collectionId = 1L),
+                video("BV_selected")
+            ),
+            singleFolderItems = emptyList()
+        )
+
+        assertEquals(listOf("BV_selected"), result.map { it.bvid })
+    }
 }
