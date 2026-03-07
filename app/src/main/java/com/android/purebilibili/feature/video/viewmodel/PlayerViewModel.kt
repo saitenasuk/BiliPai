@@ -57,6 +57,7 @@ import com.android.purebilibili.feature.video.interaction.applyInteractiveNative
 import com.android.purebilibili.feature.video.interaction.evaluateInteractiveChoiceCondition
 import com.android.purebilibili.feature.video.interaction.shouldTriggerInteractiveQuestion
 import com.android.purebilibili.feature.video.policy.resolveFavoriteFolderMediaId
+import com.android.purebilibili.feature.video.ui.feedback.resolveTripleActionFeedbackMessage
 import com.android.purebilibili.feature.video.subtitle.SubtitleCue
 import com.android.purebilibili.feature.video.subtitle.SubtitleTrackMeta
 import com.android.purebilibili.feature.video.subtitle.isSubtitleFeatureEnabledForUser
@@ -2288,7 +2289,7 @@ class PlayerViewModel : ViewModel() {
                     lastSavedFavoriteFolderIds = emptySet()
                     _favoriteSelectedFolderIds.value = emptySet()
                 }
-                toast(if (favorited) "收藏成功" else "已取消收藏")
+                toast(if (favorited) "已收藏" else "已取消收藏")
             }.onFailure { e ->
                 toast(e.message ?: "收藏操作失败")
             }
@@ -2307,7 +2308,7 @@ class PlayerViewModel : ViewModel() {
                     val message = if (it && appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
                         com.android.purebilibili.core.util.EasterEggs.getLikeMessage()
                     } else {
-                        if (it) "点赞成功" else "已取消点赞"
+                        if (it) "已点赞" else "已取消点赞"
                     }
                     toast(message)
                 }
@@ -3918,7 +3919,7 @@ class PlayerViewModel : ViewModel() {
     fun doTripleAction() {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         viewModelScope.launch {
-            toast("\u6b63\u5728\u4e09\u8fde...")
+            toast("正在三连")
             interactionUseCase.doTripleAction(current.info.aid)
                 .onSuccess { result ->
                     var newState = current
@@ -3927,7 +3928,14 @@ class PlayerViewModel : ViewModel() {
                     if (result.favoriteSuccess) newState = newState.copy(isFavorited = true)
                     _uiState.value = newState
                     if (result.allSuccess) _tripleCelebrationVisible.value = true
-                    toast(result.toSummaryMessage())
+                    toast(
+                        resolveTripleActionFeedbackMessage(
+                            likeSuccess = result.likeSuccess,
+                            coinSuccess = result.coinSuccess,
+                            favoriteSuccess = result.favoriteSuccess,
+                            coinFailureMessage = result.coinMessage
+                        )
+                    )
 
                     // [New] Easter Egg: Auto Jump after Triple Action
                     viewModelScope.launch {

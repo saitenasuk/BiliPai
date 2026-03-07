@@ -50,6 +50,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import com.android.purebilibili.feature.video.ui.feedback.resolveVideoActionCountTint
+import com.android.purebilibili.feature.video.ui.feedback.resolveVideoActionTint
 
 /**
  * Video Action Section Components
@@ -82,6 +84,7 @@ fun ActionButtonsRow(
     onWatchLaterClick: () -> Unit = {},  //  稍后再看点击
     onFavoriteLongClick: () -> Unit = {} // [New] 长按收藏
 ) {
+    val primaryActionColor = MaterialTheme.colorScheme.primary
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -102,7 +105,7 @@ fun ActionButtonsRow(
                 icon = if (isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
                 text = FormatUtils.formatStat(info.stat.like.toLong()),
                 isActive = isLiked,
-                activeColor = MaterialTheme.colorScheme.primary,
+                activeColor = primaryActionColor,
                 onClick = onLikeClick,
                 onLongClick = onTripleClick
             )
@@ -119,7 +122,7 @@ fun ActionButtonsRow(
                 icon = AppIcons.BiliCoin,
                 text = FormatUtils.formatStat(info.stat.coin.toLong()),
                 isActive = coinCount > 0,
-                activeColor = Color(0xFFFFB300),
+                activeColor = primaryActionColor,
                 onClick = onCoinClick
             )
         }
@@ -135,7 +138,7 @@ fun ActionButtonsRow(
                 icon = if (isFavorited) Icons.Rounded.Star else Icons.Outlined.StarBorder,
                 text = FormatUtils.formatStat(info.stat.favorite.toLong()),
                 isActive = isFavorited,
-                activeColor = Color(0xFFFFC107),
+                activeColor = primaryActionColor,
                 onClick = onFavoriteClick,
                 onLongClick = onFavoriteLongClick
             )
@@ -272,7 +275,7 @@ private fun TripleLikeActionButton(
                 icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
                 text = coinCount,
                 progress = longPressProgress,
-                progressColor = Color(0xFFFFB300),
+                progressColor = MaterialTheme.colorScheme.primary,
                 isActive = hasCoin
             )
         }
@@ -287,7 +290,7 @@ private fun TripleLikeActionButton(
                 icon = if (isFavorited) CupertinoIcons.Filled.Bookmark else CupertinoIcons.Default.Bookmark,
                 text = favoriteCount,
                 progress = longPressProgress,
-                progressColor = Color(0xFFFFC107),
+                progressColor = MaterialTheme.colorScheme.primary,
                 isActive = isFavorited
             )
         }
@@ -306,6 +309,17 @@ fun TripleProgressIcon(
     isActive: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val inactiveTint = MaterialTheme.colorScheme.onSurfaceVariant
+    val iconTint = resolveVideoActionTint(
+        isActive = isActive,
+        activeColor = progressColor,
+        inactiveColor = inactiveTint
+    )
+    val textTint = resolveVideoActionCountTint(
+        isActive = isActive,
+        activeColor = progressColor,
+        inactiveColor = inactiveTint
+    )
     val iconSize = 24.dp
     val ringSize = iconSize
     val strokeWidth = 2.dp
@@ -353,7 +367,7 @@ fun TripleProgressIcon(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isActive) progressColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = iconTint,
                 modifier = Modifier.size(iconSize)
             )
         }
@@ -362,7 +376,7 @@ fun TripleProgressIcon(
         Text(
             text = text,
             fontSize = 11.sp,
-            color = if (isActive) progressColor else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = textTint,
             fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal,
             maxLines = 1
         )
@@ -412,7 +426,17 @@ private fun BiliActionButton(
         if (enableActivePulse && isActive) shouldPulse = true
     }
     
-    val contentColor = if (isActive) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+    val inactiveTint = MaterialTheme.colorScheme.onSurfaceVariant
+    val iconTint = resolveVideoActionTint(
+        isActive = isActive,
+        activeColor = activeColor,
+        inactiveColor = inactiveTint
+    )
+    val textTint = resolveVideoActionCountTint(
+        isActive = isActive,
+        activeColor = activeColor,
+        inactiveColor = inactiveTint
+    )
     
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -435,14 +459,14 @@ private fun BiliActionButton(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = contentColor,
+            tint = iconTint,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = text,
             fontSize = 11.sp,
-            color = contentColor,
+            color = textTint,
             fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal,
             maxLines = 1
         )

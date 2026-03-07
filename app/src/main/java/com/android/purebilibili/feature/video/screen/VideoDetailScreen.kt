@@ -110,6 +110,7 @@ import com.android.purebilibili.feature.video.viewmodel.CommentSortMode  //  新
 import com.android.purebilibili.feature.video.ui.components.LikeBurstAnimation
 import com.android.purebilibili.feature.video.ui.components.TripleSuccessAnimation
 import com.android.purebilibili.feature.video.ui.components.VideoDetailSkeleton
+import com.android.purebilibili.feature.video.ui.components.VideoActionFeedbackHost
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog  //  评论图片预览
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
@@ -148,6 +149,8 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import com.android.purebilibili.feature.video.ui.components.DanmakuContextMenu
 import com.android.purebilibili.feature.video.ui.components.InteractiveChoiceOverlay
+import com.android.purebilibili.feature.video.ui.feedback.VideoFeedbackAnchor
+import com.android.purebilibili.feature.video.ui.feedback.resolveVideoFeedbackPlacement
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -767,6 +770,8 @@ fun VideoDetailScreen(
     // 🔄 [新增] 自动横竖屏切换 - 跟随手机传感器方向
     val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAutoRotateEnabled(context).collectAsState(initial = false)
+    val cardAnimationEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getCardAnimationEnabled(context).collectAsState(initial = true)
     
     DisposableEffect(activity, isScreenActive) {
         if (!isScreenActive || activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
@@ -929,6 +934,21 @@ fun VideoDetailScreen(
         com.android.purebilibili.core.store.SettingsManager.getMiniPlayerModeSync(context) == 
             com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP
     }
+    val feedbackBottomInsetDp = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+        .value
+        .roundToInt() + if (isFullscreenMode) 24 else 20
+    val feedbackPlacement = resolveVideoFeedbackPlacement(
+        isFullscreen = isFullscreenMode,
+        isLandscape = isLandscape,
+        bottomInsetDp = feedbackBottomInsetDp
+    )
+    val feedbackAnchorAlignment = when (feedbackPlacement.anchor) {
+        VideoFeedbackAnchor.BottomCenter -> Alignment.BottomCenter
+        VideoFeedbackAnchor.BottomTrailing -> Alignment.BottomEnd
+    }
+    val isReducedActionMotion = !cardAnimationEnabled
     
     // 🔧 [性能优化] 记录上次设置的 PiP bounds，避免重复设置
     var lastPipBounds by remember { mutableStateOf<android.graphics.Rect?>(null) }
@@ -2939,11 +2959,15 @@ fun VideoDetailScreen(
         if (likeBurstVisible) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(y = (-50).dp)
+                    .align(feedbackAnchorAlignment)
+                    .padding(
+                        end = if (feedbackPlacement.anchor == VideoFeedbackAnchor.BottomTrailing) feedbackPlacement.sideInsetDp.dp else 0.dp,
+                        bottom = (feedbackPlacement.bottomInsetDp + 56).dp
+                    )
             ) {
                 LikeBurstAnimation(
                     visible = true,
+                    reducedMotion = isReducedActionMotion,
                     onAnimationEnd = { viewModel.dismissLikeBurst() }
                 )
             }
@@ -2953,36 +2977,28 @@ fun VideoDetailScreen(
         val tripleCelebrationVisible by viewModel.tripleCelebrationVisible.collectAsState()
         if (tripleCelebrationVisible) {
             Box(
-                modifier = Modifier.align(Alignment.Center)
+                modifier = Modifier
+                    .align(feedbackAnchorAlignment)
+                    .padding(
+                        end = if (feedbackPlacement.anchor == VideoFeedbackAnchor.BottomTrailing) feedbackPlacement.sideInsetDp.dp else 0.dp,
+                        bottom = (feedbackPlacement.bottomInsetDp + 90).dp
+                    )
             ) {
                 TripleSuccessAnimation(
                     visible = true,
+                    isCompact = isFullscreenMode || isLandscape,
+                    reducedMotion = isReducedActionMotion,
                     onAnimationEnd = { viewModel.dismissTripleCelebration() }
                 )
             }
         }
         
-        //  居中弹窗提示（关注/收藏反馈）
-        androidx.compose.animation.AnimatedVisibility(
+        VideoActionFeedbackHost(
+            message = popupMessage,
             visible = popupMessage != null,
-            enter = fadeIn() + scaleIn(initialScale = 0.8f),
-            exit = fadeOut() + scaleOut(targetScale = 0.8f),
-            modifier = Modifier.align(Alignment.Center)
-        ) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.85f),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                tonalElevation = 8.dp
-            ) {
-                Text(
-                    text = popupMessage ?: "",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
-                )
-            }
-        }
+            placement = feedbackPlacement,
+            hazeState = hazeState
+        )
 
         resumePlaybackSuggestion?.let { suggestion ->
             AlertDialog(
