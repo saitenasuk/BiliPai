@@ -32,6 +32,14 @@
   <a href="https://x.com/YangY_0x00"><img src="https://img.shields.io/badge/X-Follow-000000?style=flat-square&logo=x" alt="X"></a>
 </p>
 
+## 🚀 快速导航
+
+| 类别 | 入口 |
+| --- | --- |
+| 开始使用 | [下载 Releases](https://github.com/jay3-yy/BiliPai/releases) · [更新日志](CHANGELOG.md) |
+| 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
+| 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
+
 > [!IMPORTANT]
 > 应用内默认设置为通用场景，可能不适合所有用户。建议进入 **设置** 按个人习惯手动调整（如外观、动画、播放设置等）。
 
