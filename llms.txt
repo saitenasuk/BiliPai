@@ -52,12 +52,14 @@ When sources disagree, use this order.
 
 ## Freshness Notes / 时效注记
 
-- `README.md` and `README_EN.md` both reference 2026-03-07 / v6.9.1 in their header text.
-- `README.md` 与 `README_EN.md` 的页头均标注为 2026-03-07 / v6.9.1。
-- `docs/wiki/ARCHITECTURE.md`, `docs/wiki/QA.md`, and `docs/wiki/RELEASE_WORKFLOW.md` show 2026-02-25 / v6.3.0 in their header text.
-- `docs/wiki/ARCHITECTURE.md`、`docs/wiki/QA.md`、`docs/wiki/RELEASE_WORKFLOW.md` 的页头仍标注 2026-02-25 / v6.3.0。
-- Treat those wiki files as structure/process guides, not as sole evidence of current release behavior.
-- 应将这些 Wiki 文件视为结构/流程指南，而不是当前版本行为的唯一证据。
+- `README.md` and `README_EN.md` both reference 2026-03-07 / v6.9.2 in their header text.
+- `README.md` 与 `README_EN.md` 的页头均标注为 2026-03-07 / v6.9.2。
+- `docs/wiki/ARCHITECTURE.md`, `docs/wiki/QA.md`, and `docs/wiki/RELEASE_WORKFLOW.md` are now dated 2026-03-07 and describe the current main-branch structure/process view.
+- `docs/wiki/ARCHITECTURE.md`、`docs/wiki/QA.md`、`docs/wiki/RELEASE_WORKFLOW.md` 现已更新为 2026-03-07，并按当前 main 分支结构 / 流程校对。
+- `CHANGELOG.md`, `README.md`, and `README_EN.md` now align with `versionName = "6.9.2"` in `app/build.gradle.kts`.
+- `CHANGELOG.md`、`README.md` 与 `README_EN.md` 现已与 `app/build.gradle.kts` 中的 `versionName = "6.9.2"` 对齐。
+- Treat wiki pages as current structure/process guides; treat release-specific answers as `CHANGELOG.md` + code verification.
+- Wiki 可作为当前结构 / 流程入口；涉及具体版本发布行为时，应以 `CHANGELOG.md` + 代码核验为准。
 
 ## Verification Rules / 核验规则
 

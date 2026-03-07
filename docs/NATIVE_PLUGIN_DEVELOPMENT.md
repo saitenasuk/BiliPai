@@ -3,6 +3,9 @@
 本文档面向有 Kotlin/Android 开发经验的开发者，详细介绍如何开发 BiliPai 原生插件。
 
 > ⚠️ **注意**：原生插件需要修改源码并重新编译 APK。如果你只需要简单的内容过滤，请使用 [JSON 规则插件](PLUGIN_DEVELOPMENT.md)。
+>
+> 当前插件生态仍处于早期阶段：主仓库以内置插件与示例为主，第三方原生插件并未形成稳定生态。
+> 编写或接入原生插件时，请以 `core/plugin/`、`core/plugin/json/` 与 `PureApplication.kt` 的当前实现为准，不要假设接口在后续版本中保持不变。
 
 ---
 
@@ -29,10 +32,10 @@
 
 ### 必备条件
 
-- Android Studio Hedgehog (2023.1.1) 或更高版本
+- Android Studio 2024.1 或更高版本
 - Kotlin 1.9+
 - Gradle 8.0+
-- Android SDK 34
+- Android SDK 36（Compile SDK）
 
 ### 克隆项目
 
@@ -112,16 +115,14 @@ class MyPlugin : Plugin {
 
 ### 2. 注册插件
 
-在 `BiliPaiApp.kt` 中添加：
+在 `PureApplication.kt` 的插件初始化区域中添加：
 
 ```kotlin
-class BiliPaiApp : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        PluginManager.initialize(this)
-        PluginManager.register(SponsorBlockPlugin())
-        PluginManager.register(MyPlugin())  // 添加这行
-    }
+Looper.myQueue().addIdleHandler {
+    PluginManager.initialize(this)
+    PluginManager.register(SponsorBlockPlugin())
+    PluginManager.register(MyPlugin())  // 添加这行
+    false
 }
 ```
 
@@ -508,25 +509,22 @@ override fun SettingsContent() {
 
 ## 📋 注册插件
 
-在 `BiliPaiApp.kt` 中注册：
+在 `PureApplication.kt` 的插件初始化区域注册：
 
 ```kotlin
-// 文件: BiliPaiApp.kt
-class BiliPaiApp : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        
-        // 初始化插件系统
-        PluginManager.initialize(this)
-        
-        // 注册内置插件
-        PluginManager.register(SponsorBlockPlugin())
-        PluginManager.register(AdFilterPlugin())
-        PluginManager.register(DanmakuEnhancePlugin())
-        
-        // 注册你的插件
-        PluginManager.register(MyCustomPlugin())
-    }
+// 文件: PureApplication.kt
+Looper.myQueue().addIdleHandler {
+    // 初始化插件系统
+    PluginManager.initialize(this)
+
+    // 注册内置插件
+    PluginManager.register(SponsorBlockPlugin())
+    PluginManager.register(AdFilterPlugin())
+    PluginManager.register(DanmakuEnhancePlugin())
+
+    // 注册你的插件
+    PluginManager.register(MyCustomPlugin())
+    false
 }
 ```
 
@@ -648,7 +646,7 @@ fun `filter should hide short videos`() {
 
 **Q: 插件注册后没显示？**
 
-A: 确保在 `BiliPaiApp.kt` 中调用了 `PluginManager.register()`
+A: 确保在 `PureApplication.kt` 的插件初始化区域中调用了 `PluginManager.register()`
 
 **Q: 配置没保存？**
 

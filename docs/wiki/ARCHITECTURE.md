@@ -1,6 +1,6 @@
 # 架构说明
 
-最后更新：2026-02-25（v6.3.0）
+最后更新：2026-03-07（按当前 main 分支结构校对）
 
 ## 代码分层
 
@@ -12,6 +12,19 @@
 - `domain/`：用例层（UseCase）
 - `feature/`：按业务场景拆分的 UI 与交互
 - `navigation/`：路由定义与页面导航编排
+
+## 插件体系
+
+- 内置插件接口与管理器位于 `core/plugin/`
+- 外部 JSON 规则插件位于 `core/plugin/json/`
+- 内置插件实现位于 `feature/plugin/`
+- 当前应用入口 `PureApplication.kt` 会初始化 5 个内置插件，并初始化 `JsonPluginManager`
+
+## 当前结构关注点
+
+- `feature/` 仍是体量最大的业务层目录，新增功能优先沿现有场景拆分，而不是继续往 `core/` 挤压
+- 插件体系已经具备内置插件与 JSON 规则插件双轨能力，但第三方生态仍早期，文档与示例应以“当前实现”为准
+- 回答“当前行为”问题时，不应只依赖本页，还应回到 `CHANGELOG.md` 与实际 Kotlin 源码核验
 
 ## 播放主链路（简版）
 
@@ -32,3 +45,4 @@
 - 版本与构建：`app/build.gradle.kts`
 - 更新日志：`CHANGELOG.md`
 - 产品文档入口：`README.md` / `README_EN.md`
+- AI 入口：`llms.txt` / `docs/wiki/AI.md`

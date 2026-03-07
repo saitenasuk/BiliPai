@@ -66,12 +66,14 @@ Verified path map for repository reading.
 
 ## Document Freshness / 文档时效
 
-- `README.md` and `README_EN.md` header text: 2026-03-07 / v6.9.1
-- `README.md` 与 `README_EN.md` 页头：2026-03-07 / v6.9.1
-- `ARCHITECTURE.md`, `QA.md`, `RELEASE_WORKFLOW.md` header text: 2026-02-25 / v6.3.0
-- `ARCHITECTURE.md`、`QA.md`、`RELEASE_WORKFLOW.md` 页头：2026-02-25 / v6.3.0
-- Use code and `CHANGELOG.md` to verify current behavior before relying on those wiki files alone.
-- 在单独依赖这些 Wiki 文件之前，先用代码与 `CHANGELOG.md` 核验当前行为。
+- `README.md` and `README_EN.md` header text: 2026-03-07 / v6.9.2
+- `README.md` 与 `README_EN.md` 页头：2026-03-07 / v6.9.2
+- `ARCHITECTURE.md`, `QA.md`, `RELEASE_WORKFLOW.md` header text: 2026-03-07
+- `ARCHITECTURE.md`、`QA.md`、`RELEASE_WORKFLOW.md` 页头：2026-03-07
+- `CHANGELOG.md`, `README.md`, and `README_EN.md` align with `versionName = "6.9.2"` in `app/build.gradle.kts`
+- `CHANGELOG.md`、`README.md` 与 `README_EN.md` 已与 `app/build.gradle.kts` 中的 `versionName = "6.9.2"` 对齐
+- Use code and `CHANGELOG.md` to verify release-specific answers.
+- 涉及具体版本发布答案时，使用代码与 `CHANGELOG.md` 共同核验。
 
 ## Constraints / 约束
 
