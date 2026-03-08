@@ -460,6 +460,10 @@ interface BilibiliApi {
     // 评论主列表 (需 WBI 签名)
     @GET("x/v2/reply/wbi/main")
     suspend fun getReplyList(@QueryMap params: Map<String, String>): ReplyResponse
+
+    // 评论主列表兼容链路
+    @GET("x/v2/reply/main")
+    suspend fun getReplyListMain(@QueryMap params: Map<String, String>): ReplyResponse
     
     //  [新增] 旧版评论 API - 用于时间排序 (sort=0)
     // 此 API 不需要 WBI 签名，分页更稳定

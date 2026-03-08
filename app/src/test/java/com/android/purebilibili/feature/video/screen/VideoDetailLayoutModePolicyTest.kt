@@ -281,6 +281,26 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
+    fun videoDetailDispose_restoresOriginalRequestedOrientationWhenPresent() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolveVideoDetailExitRequestedOrientation(
+                originalRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            )
+        )
+    }
+
+    @Test
+    fun videoDetailDispose_defaultsToUnspecifiedWhenNoOriginalOrientationExists() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+            resolveVideoDetailExitRequestedOrientation(
+                originalRequestedOrientation = null
+            )
+        )
+    }
+
+    @Test
     fun phoneEnterOrientationPolicy_autoMode_usesVideoDirection() {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,

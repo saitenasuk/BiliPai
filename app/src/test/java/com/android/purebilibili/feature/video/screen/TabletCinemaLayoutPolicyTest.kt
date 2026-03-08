@@ -168,7 +168,11 @@ class TabletCinemaLayoutPolicyTest {
 
     @Test
     fun cinemaMetaBlocksIncludeUpInfoWhenOwnerIsAvailable() {
-        val blocks = resolveCinemaMetaPanelBlocks(hasOwner = true)
+        val blocks = resolveCinemaMetaPanelBlocks(
+            hasOwner = true,
+            hasCollection = false,
+            hasMultiplePages = false
+        )
 
         assertEquals(
             listOf(
@@ -182,13 +186,55 @@ class TabletCinemaLayoutPolicyTest {
 
     @Test
     fun cinemaMetaBlocksSkipUpInfoWhenOwnerIsMissing() {
-        val blocks = resolveCinemaMetaPanelBlocks(hasOwner = false)
+        val blocks = resolveCinemaMetaPanelBlocks(
+            hasOwner = false,
+            hasCollection = false,
+            hasMultiplePages = false
+        )
 
         assertFalse(blocks.contains(CinemaMetaPanelBlock.UP_INFO))
         assertEquals(
             listOf(
                 CinemaMetaPanelBlock.ACTIONS,
                 CinemaMetaPanelBlock.INTRO
+            ),
+            blocks
+        )
+    }
+
+    @Test
+    fun cinemaMetaBlocksAppendCollectionAndPagesWhenAvailable() {
+        val blocks = resolveCinemaMetaPanelBlocks(
+            hasOwner = true,
+            hasCollection = true,
+            hasMultiplePages = true
+        )
+
+        assertEquals(
+            listOf(
+                CinemaMetaPanelBlock.ACTIONS,
+                CinemaMetaPanelBlock.UP_INFO,
+                CinemaMetaPanelBlock.INTRO,
+                CinemaMetaPanelBlock.COLLECTION,
+                CinemaMetaPanelBlock.PAGES
+            ),
+            blocks
+        )
+    }
+
+    @Test
+    fun cinemaMetaBlocksOnlyAppendAvailableSupplementalSections() {
+        val blocks = resolveCinemaMetaPanelBlocks(
+            hasOwner = false,
+            hasCollection = true,
+            hasMultiplePages = false
+        )
+
+        assertEquals(
+            listOf(
+                CinemaMetaPanelBlock.ACTIONS,
+                CinemaMetaPanelBlock.INTRO,
+                CinemaMetaPanelBlock.COLLECTION
             ),
             blocks
         )

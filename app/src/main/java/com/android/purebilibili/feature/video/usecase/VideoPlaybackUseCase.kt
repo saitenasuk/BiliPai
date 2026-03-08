@@ -183,66 +183,42 @@ class VideoPlaybackUseCase(
             
             return detailResult.fold(
                 onSuccess = { (info, playData) ->
+                    val isLogin = com.android.purebilibili.data.repository.resolveVideoPlaybackAuthState(
+                        hasSessionCookie = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty(),
+                        hasAccessToken = !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty()
+                    )
+                    var isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
+                    if (isLogin && !isVip && com.android.purebilibili.data.repository.shouldRefreshVipStatusOnVideoLoad()) {
+                        try {
+                            val navResult = VideoRepository.getNavInfo()
+                            navResult.onSuccess { navData ->
+                                isVip = navData.vip.status == 1
+                                com.android.purebilibili.core.store.TokenManager.isVipCache = isVip
+                                Logger.d("VideoPlaybackUseCase", " Refreshed VIP status: $isVip")
+                            }
+                        } catch (e: Exception) {
+                            Logger.d("VideoPlaybackUseCase", " Failed to refresh VIP status: ${e.message}")
+                        }
+                    }
+
                     //  [网络感知] 使用 API 返回的画质或传入的默认画质
                     // 🚀 [修复] 当 defaultQuality >= 127 时（自动最高画质），选择 accept_quality 中的最高画质
                     val targetQn = if (defaultQuality >= 127) {
-                        // 自动最高画质：使用 API 返回的 accept_quality 列表
-                        val acceptQualities = playData.accept_quality ?: emptyList()
-                        
-                        // 检测设备 HDR 支持能力
                         val isHdrSupported = isHdrSupportedOverride
                             ?: com.android.purebilibili.core.util.MediaUtils.isHdrSupported()
                         val isDolbyVisionSupported = isDolbyVisionSupportedOverride
                             ?: com.android.purebilibili.core.util.MediaUtils.isDolbyVisionSupported()
-                        
-                        // 根据设备能力过滤画质（不再硬编码 <= 120）
-                        val deviceSafeQualities = acceptQualities.filter { qn ->
-                            when (qn) {
-                                127 -> true  // 8K - 大多数设备可以软解或降级
-                                126 -> isDolbyVisionSupported  // 杜比视界需要硬件支持
-                                125 -> isHdrSupported  // HDR 需要硬件支持
-                                else -> true  // 其他画质都支持
-                            }
-                        }
-                        
-                        // 使用自定义优先级排序：考虑 HDR/60帧等特性
-                        // 优先级（从高到低）：8K > 杜比 > HDR > 4K > 1080P60 > 1080P+ > 1080P > 720P60 > 720P > 480P > 360P
-                        val qualityPriority = mapOf(
-                            127 to 100,  // 8K
-                            126 to 95,   // 杜比视界
-                            125 to 90,   // HDR
-                            120 to 85,   // 4K
-                            116 to 80,   // 1080P60
-                            112 to 75,   // 1080P+
-                            70 to 70,    // 1080P
-                            80 to 70,    // 1080P (fix duplicate key if any)
-                            74 to 65,    // 720P60
-                            64 to 60,    // 720P
-                            32 to 50,    // 480P
-                            16 to 40     // 360P
+                        val maxAccept = resolveAutoHighestTargetQuality(
+                            acceptQualities = playData.accept_quality,
+                            isLoggedIn = isLogin,
+                            isVip = isVip,
+                            isHdrSupported = isHdrSupported,
+                            isDolbyVisionSupported = isDolbyVisionSupported
                         )
-                        
-                        // Fix map creation if duplicate keys exist (e.g. strict mapOf). 
-                        // Actually let's keep it simple.
-                        
-                        val maxAccept = deviceSafeQualities.maxByOrNull { 
-                             // Simplified priority check
-                             when(it) {
-                                 127 -> 100
-                                 126 -> 95
-                                 125 -> 90
-                                 120 -> 85
-                                 116 -> 80
-                                 112 -> 75
-                                 80 -> 70
-                                 74 -> 65
-                                 64 -> 60
-                                 32 -> 50
-                                 16 -> 40
-                                 else -> 0
-                             }
-                        } ?: 80
-                        Logger.d("VideoPlaybackUseCase", "🚀 自动最高画质: accept_quality=$acceptQualities, 设备支持HDR=$isHdrSupported, 杜比=$isDolbyVisionSupported, 选择 $maxAccept")
+                        Logger.d(
+                            "VideoPlaybackUseCase",
+                            "🚀 自动最高画质: accept_quality=${playData.accept_quality}, isLoggedIn=$isLogin, isVip=$isVip, 设备支持HDR=$isHdrSupported, 杜比=$isDolbyVisionSupported, 选择 $maxAccept"
+                        )
                         maxAccept
                     } else {
                         // 🚀 [修复] 优先使用用户设置的 defaultQuality，而不是 API 返回的 playData.quality
@@ -274,25 +250,6 @@ class VideoPlaybackUseCase(
                     
                     PlaybackCooldownManager.recordSuccess(bvid)
                     
-                    val isLogin = com.android.purebilibili.data.repository.resolveVideoPlaybackAuthState(
-                        hasSessionCookie = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty(),
-                        hasAccessToken = !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty()
-                    )
-                    
-                    var isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
-                    if (isLogin && !isVip && com.android.purebilibili.data.repository.shouldRefreshVipStatusOnVideoLoad()) {
-                        try {
-                            val navResult = VideoRepository.getNavInfo()
-                            navResult.onSuccess { navData ->
-                                isVip = navData.vip.status == 1
-                                com.android.purebilibili.core.store.TokenManager.isVipCache = isVip
-                                Logger.d("VideoPlaybackUseCase", " Refreshed VIP status: $isVip")
-                            }
-                        } catch (e: Exception) {
-                            Logger.d("VideoPlaybackUseCase", " Failed to refresh VIP status: ${e.message}")
-                        }
-                    }
-
                     // [New] 本地强制解锁 VIP 状态 - REVERTED
                     // val isUnlockHighQuality = ...
                     
@@ -300,7 +257,7 @@ class VideoPlaybackUseCase(
                     // if (isUnlockHighQuality) ...
                     
                     //  [修复] 画质列表优先使用 DASH 实际轨道，避免展示“可选但不可切”的画质。
-                    val apiQualities = playData.accept_quality ?: emptyList()
+                    val apiQualities = playData.accept_quality
                     val dashVideoIds = playData.dash?.video?.map { it.id }?.distinct() ?: emptyList()
 
                     val qualityMergeResult = mergeQualityOptions(apiQualities, dashVideoIds)
@@ -314,6 +271,20 @@ class VideoPlaybackUseCase(
                     Logger.d(
                         "VideoPlaybackUseCase",
                         " Quality merge: api=$apiQualities, dash=$dashVideoIds, switchable=${qualityMergeResult.switchableQualities}, apiOnlyHigh=${qualityMergeResult.apiOnlyHighQualities}, merged=$mergedQualityIds"
+                    )
+                    Logger.d(
+                        "VideoPlaybackUseCase",
+                        buildPlaybackSelectionSummary(
+                            bvid = info.bvid.ifBlank { bvid },
+                            cid = info.cid,
+                            defaultQuality = defaultQuality,
+                            targetQuality = targetQn,
+                            returnedQuality = playData.quality,
+                            selectedDashQuality = dashVideo?.id,
+                            mergedQualityIds = mergedQualityIds,
+                            isLoggedIn = isLogin,
+                            isVip = isEffectiveVip
+                        )
                     )
                     
                     // 首帧优先：交互状态默认值先返回，延后到 ViewModel 后台刷新。
@@ -556,7 +527,7 @@ class VideoPlaybackUseCase(
             playVideo(videoUrl, currentPos, playWhenReady = true)
         }
         
-        val actualQuality = dashVideo?.id ?: playUrlData.quality ?: qualityId
+        val actualQuality = dashVideo?.id ?: playUrlData.quality
         Logger.d("VideoPlaybackUseCase", " Quality switch result: target=$qualityId, actual=$actualQuality")
         
         return QualitySwitchResult(
@@ -621,6 +592,46 @@ class VideoPlaybackUseCase(
             apiOnlyHighQualities = apiOnlyHighQualities,
             mergedQualityIds = mergedQualityIds
         )
+    }
+
+    internal fun resolveAutoHighestTargetQuality(
+        acceptQualities: List<Int>,
+        isLoggedIn: Boolean,
+        isVip: Boolean,
+        isHdrSupported: Boolean,
+        isDolbyVisionSupported: Boolean
+    ): Int {
+        val capabilityCeiling = when {
+            isVip -> Int.MAX_VALUE
+            isLoggedIn -> 80
+            else -> 64
+        }
+        val deviceSafeQualities = acceptQualities.filter { qn ->
+            when (qn) {
+                126 -> isDolbyVisionSupported
+                125 -> isHdrSupported
+                else -> true
+            }
+        }
+        val playable = deviceSafeQualities.filter { it <= capabilityCeiling }
+        return playable.maxOrNull()
+            ?: if (isLoggedIn) 80 else 64
+    }
+
+    internal fun buildPlaybackSelectionSummary(
+        bvid: String,
+        cid: Long,
+        defaultQuality: Int,
+        targetQuality: Int,
+        returnedQuality: Int,
+        selectedDashQuality: Int?,
+        mergedQualityIds: List<Int>,
+        isLoggedIn: Boolean,
+        isVip: Boolean
+    ): String {
+        return "PLAY_DIAG playback_selection bvid=$bvid cid=$cid default=$defaultQuality target=$targetQuality " +
+            "returned=$returnedQuality selectedDash=${selectedDashQuality ?: "null"} " +
+            "merged=$mergedQualityIds isLoggedIn=$isLoggedIn isVip=$isVip"
     }
 }
 

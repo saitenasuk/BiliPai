@@ -438,15 +438,26 @@ fun PrivacySection(
 fun DataStorageSection(
     customDownloadPath: String?,
     cacheSize: String,
+    onSettingsShareClick: () -> Unit,
     onWebDavBackupClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
     onClearCacheClick: () -> Unit
 ) {
+    val settingsShareVisual = resolveSettingsEntryVisual(SettingsSearchTarget.SETTINGS_SHARE)
     val webDavVisual = resolveSettingsEntryVisual(SettingsSearchTarget.WEBDAV_BACKUP)
     val downloadPathVisual = resolveSettingsEntryVisual(SettingsSearchTarget.DOWNLOAD_PATH)
     val clearCacheVisual = resolveSettingsEntryVisual(SettingsSearchTarget.CLEAR_CACHE)
 
     SettingsCardGroup {
+        SettingClickableItem(
+            icon = settingsShareVisual.icon,
+            iconPainter = settingsShareVisual.iconResId?.let { painterResource(id = it) },
+            title = "设置分享",
+            value = "导出并导入可分享设置",
+            onClick = onSettingsShareClick,
+            iconTint = settingsShareVisual.iconTint
+        )
+        SettingsDivider(startIndent = 66.dp)
         // WebDAV 是“备份副本”场景，使用双文档图标比链路图标更贴合语义。
         SettingClickableItem(
             icon = webDavVisual.icon,

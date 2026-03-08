@@ -57,6 +57,8 @@ import com.android.purebilibili.feature.video.interaction.applyInteractiveNative
 import com.android.purebilibili.feature.video.interaction.evaluateInteractiveChoiceCondition
 import com.android.purebilibili.feature.video.interaction.shouldTriggerInteractiveQuestion
 import com.android.purebilibili.feature.video.policy.resolveFavoriteFolderMediaId
+import com.android.purebilibili.feature.video.ui.feedback.resolveTripleActionFeedbackMessage
+import com.android.purebilibili.feature.video.ui.feedback.resolveTripleActionVisualState
 import com.android.purebilibili.feature.video.subtitle.SubtitleCue
 import com.android.purebilibili.feature.video.subtitle.SubtitleTrackMeta
 import com.android.purebilibili.feature.video.subtitle.isSubtitleFeatureEnabledForUser
@@ -113,6 +115,7 @@ sealed class PlayerUiState {
         val onlineCount: String = "",
         // [新增] AI Summary & BGM
         val aiSummary: AiSummaryData? = null,
+        val aiSummaryPrompt: AiSummaryPromptState? = null,
         val bgmInfo: BgmInfo? = null,
         // [New] AI Audio Translation
         val aiAudio: AiAudioInfo? = null,
@@ -619,7 +622,7 @@ class PlayerViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<PlayerUiState>(PlayerUiState.Loading.Initial)
     val uiState = _uiState.asStateFlow()
     
-    private val _toastEvent = Channel<String>()
+    private val _toastEvent = Channel<PlayerToastMessage>()
     val toastEvent = _toastEvent.receiveAsFlow()
 
     private val _resumePlaybackSuggestion = MutableStateFlow<ResumePlaybackSuggestion?>(null)
@@ -814,6 +817,7 @@ class PlayerViewModel : ViewModel() {
     private var currentLoadRequestToken: Long = 0L
     private var activeLoadJob: Job? = null
     private var playerInfoJob: Job? = null
+    private var aiSummaryJob: Job? = null
     
     //  Public Player Accessor
     val currentPlayer: Player?
@@ -1482,6 +1486,16 @@ class PlayerViewModel : ViewModel() {
              }
         }
     }
+
+    fun retryAiSummary() {
+        val current = _uiState.value as? PlayerUiState.Success ?: return
+        if (current.aiSummary != null) return
+        loadAiSummary(
+            bvid = current.info.bvid,
+            cid = current.info.cid,
+            upMid = current.info.owner.mid
+        )
+    }
     
     // [修复] 添加 aid 参数支持，用于移动端推荐流（可能只返回 aid）
     // [Added] autoPlay override: null = use settings, true/false = force
@@ -1497,6 +1511,7 @@ class PlayerViewModel : ViewModel() {
         if (bvid.isBlank()) return
         _resumePlaybackSuggestion.value = null
         bootstrapContextIfNeeded()
+        aiSummaryJob?.cancel()
         Logger.d(
             "PlayerVM",
             "SUB_DBG loadVideo start: request=$bvid/$cid, aid=$aid, force=$force, current=$currentBvid/$currentCid, ui=${(_uiState.value as? PlayerUiState.Success)?.info?.bvid}/${(_uiState.value as? PlayerUiState.Success)?.info?.cid}"
@@ -1608,7 +1623,14 @@ class PlayerViewModel : ViewModel() {
             }
             _uiState.value = PlayerUiState.Loading.Initial
             
-                val defaultQuality = appContext?.let { NetworkUtils.getDefaultQualityId(it) } ?: 64
+                val defaultQuality = appContext?.let {
+                    NetworkUtils.getPlayableDefaultQualityId(
+                        context = it,
+                        isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty() ||
+                            !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty(),
+                        isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
+                    )
+                } ?: 64
                 //  [新增] 获取音频/视频偏好
                 val audioQualityPreference = appContext?.let { 
                     com.android.purebilibili.core.store.SettingsManager.getAudioQualitySync(it) 
@@ -2041,7 +2063,14 @@ class PlayerViewModel : ViewModel() {
                     }
                     
                     // 获取默认画质
-                    val defaultQuality = appContext?.let { com.android.purebilibili.core.util.NetworkUtils.getDefaultQualityId(it) } ?: 64
+                    val defaultQuality = appContext?.let {
+                        com.android.purebilibili.core.util.NetworkUtils.getPlayableDefaultQualityId(
+                            context = it,
+                            isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty() ||
+                                !com.android.purebilibili.core.store.TokenManager.accessTokenCache.isNullOrEmpty(),
+                            isVip = com.android.purebilibili.core.store.TokenManager.isVipCache
+                        )
+                    } ?: 64
                     
                     // 预加载 PlayUrl（会自动缓存到 PlayUrlCache）
                     com.android.purebilibili.data.repository.VideoRepository.getPlayUrlData(
@@ -2288,7 +2317,7 @@ class PlayerViewModel : ViewModel() {
                     lastSavedFavoriteFolderIds = emptySet()
                     _favoriteSelectedFolderIds.value = emptySet()
                 }
-                toast(if (favorited) "收藏成功" else "已取消收藏")
+                toast(if (favorited) "已收藏" else "已取消收藏")
             }.onFailure { e ->
                 toast(e.message ?: "收藏操作失败")
             }
@@ -2307,7 +2336,7 @@ class PlayerViewModel : ViewModel() {
                     val message = if (it && appContext?.let { ctx -> com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(ctx) } == true) {
                         com.android.purebilibili.core.util.EasterEggs.getLikeMessage()
                     } else {
-                        if (it) "点赞成功" else "已取消点赞"
+                        if (it) "已点赞" else "已取消点赞"
                     }
                     toast(message)
                 }
@@ -3859,28 +3888,130 @@ class PlayerViewModel : ViewModel() {
     }
 
     // [新增] 加载 AI 视频总结
-    private fun loadAiSummary(bvid: String, cid: Long, upMid: Long) {
-        viewModelScope.launch {
-            try {
-                val result = VideoRepository.getAiSummary(bvid, cid, upMid)
-                result.onSuccess { response ->
-                    if (response.code == 0 && response.data != null) {
-                         // 过滤：如果有 model_result 才更新
-                         val hasResult = response.data.modelResult != null
-                         if (hasResult) {
-                             _uiState.update { current ->
-                                 if (current is PlayerUiState.Success && current.info.bvid == bvid) {
-                                     current.copy(aiSummary = response.data)
-                                 } else current
-                             }
-                             Logger.d("PlayerVM", "🤖 Loaded AI Summary")
-                         } else {
-                             Logger.d("PlayerVM", "🤖 AI Summary empty (code=0)")
-                         }
+    private fun loadAiSummary(
+        bvid: String,
+        cid: Long,
+        upMid: Long
+    ) {
+        aiSummaryJob?.cancel()
+        aiSummaryJob = viewModelScope.launch {
+            var queuedRetryCount = 0
+            val loadingPrompt = initialAiSummaryPromptState()
+            _uiState.update { current ->
+                if (
+                    current is PlayerUiState.Success &&
+                    current.info.bvid == bvid &&
+                    current.aiSummary?.modelResult == null
+                ) {
+                    current.copy(aiSummaryPrompt = loadingPrompt)
+                } else current
+            }
+
+            while (true) {
+                try {
+                    val result = VideoRepository.getAiSummary(bvid, cid, upMid)
+                    var shouldPollAgain = false
+                    var nextDelayMs = 0L
+
+                    result.onSuccess { response ->
+                        val diagnosis =
+                            com.android.purebilibili.data.repository.diagnoseAiSummaryResponse(response)
+                        when {
+                            diagnosis.status ==
+                                com.android.purebilibili.data.repository.AiSummaryFetchStatus.AVAILABLE &&
+                                response.data != null -> {
+                                _uiState.update { current ->
+                                    if (current is PlayerUiState.Success && current.info.bvid == bvid) {
+                                        current.copy(
+                                            aiSummary = response.data,
+                                            aiSummaryPrompt = null
+                                        )
+                                    } else current
+                                }
+                                Logger.i(
+                                    "PlayerVM",
+                                    "🤖 Loaded AI Summary: bvid=$bvid cid=$cid status=${diagnosis.status}"
+                                )
+                            }
+
+                            shouldContinueAiSummaryAutoRetry(
+                                status = diagnosis.status,
+                                queuedRetryCount = queuedRetryCount
+                            ) && diagnosis.shouldRetryLater -> {
+                                val prompt = resolveAiSummaryPromptState(diagnosis)
+                                _uiState.update { current ->
+                                    if (current is PlayerUiState.Success && current.info.bvid == bvid) {
+                                        current.copy(aiSummaryPrompt = prompt)
+                                    } else current
+                                }
+                                nextDelayMs = resolveAiSummaryRetryDelayMs(queuedRetryCount)
+                                shouldPollAgain = true
+                                Logger.i(
+                                    "PlayerVM",
+                                    "🤖 AI Summary queued, retry later: bvid=$bvid cid=$cid stid=${diagnosis.stid ?: ""} retryInMs=$nextDelayMs retryCount=$queuedRetryCount"
+                                )
+                            }
+
+                            diagnosis.status ==
+                                com.android.purebilibili.data.repository.AiSummaryFetchStatus.QUEUED -> {
+                                val prompt = queuedAiSummaryPendingPromptState()
+                                _uiState.update { current ->
+                                    if (current is PlayerUiState.Success && current.info.bvid == bvid) {
+                                        current.copy(aiSummaryPrompt = prompt)
+                                    } else current
+                                }
+                                Logger.i(
+                                    "PlayerVM",
+                                    "🤖 AI Summary still queued after auto retries: bvid=$bvid cid=$cid stid=${diagnosis.stid ?: ""} retryCount=$queuedRetryCount"
+                                )
+                            }
+
+                            else -> {
+                                val prompt = resolveAiSummaryPromptState(diagnosis)
+                                _uiState.update { current ->
+                                    if (current is PlayerUiState.Success && current.info.bvid == bvid) {
+                                        current.copy(aiSummaryPrompt = prompt)
+                                    } else current
+                                }
+                                Logger.i(
+                                    "PlayerVM",
+                                    "🤖 AI Summary unavailable: bvid=$bvid cid=$cid status=${diagnosis.status} reason=${diagnosis.reason} rootCode=${diagnosis.rootCode} dataCode=${diagnosis.dataCode} stid=${diagnosis.stid ?: ""}"
+                                )
+                            }
+                        }
+                    }.onFailure { throwable ->
+                        val diagnosis =
+                            com.android.purebilibili.data.repository.diagnoseAiSummaryFailure(throwable)
+                        val prompt = resolveAiSummaryPromptState(diagnosis)
+                        _uiState.update { current ->
+                            if (current is PlayerUiState.Success && current.info.bvid == bvid) {
+                                current.copy(aiSummaryPrompt = prompt)
+                            } else current
+                        }
+                        Logger.w(
+                            "PlayerVM",
+                            "🤖 Failed to load AI Summary: bvid=$bvid cid=$cid status=${diagnosis.status} reason=${diagnosis.reason}"
+                        )
                     }
+
+                    if (!shouldPollAgain) {
+                        return@launch
+                    }
+
+                    queuedRetryCount += 1
+                    delay(nextDelayMs)
+                    val currentSuccess = _uiState.value as? PlayerUiState.Success
+                    if (
+                        currentSuccess?.info?.bvid != bvid ||
+                        currentSuccess.info.cid != cid ||
+                        currentSuccess.aiSummary?.modelResult != null
+                    ) {
+                        return@launch
+                    }
+                } catch (e: Exception) {
+                    Logger.d("PlayerVM", "🤖 Failed to load AI Summary: ${e.message}")
+                    return@launch
                 }
-            } catch (e: Exception) {
-                Logger.d("PlayerVM", "🤖 Failed to load AI Summary: ${e.message}")
             }
         }
     }
@@ -3918,16 +4049,32 @@ class PlayerViewModel : ViewModel() {
     fun doTripleAction() {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         viewModelScope.launch {
-            toast("\u6b63\u5728\u4e09\u8fde...")
+            toast("正在三连")
             interactionUseCase.doTripleAction(current.info.aid)
                 .onSuccess { result ->
-                    var newState = current
-                    if (result.likeSuccess) newState = newState.copy(isLiked = true)
-                    if (result.coinSuccess) newState = newState.copy(coinCount = 2)
-                    if (result.favoriteSuccess) newState = newState.copy(isFavorited = true)
-                    _uiState.value = newState
+                    val visualState = resolveTripleActionVisualState(
+                        currentLiked = current.isLiked,
+                        currentCoinCount = current.coinCount,
+                        currentFavorited = current.isFavorited,
+                        likeSuccess = result.likeSuccess,
+                        coinSuccess = result.coinSuccess,
+                        coinFailureMessage = result.coinMessage,
+                        favoriteSuccess = result.favoriteSuccess
+                    )
+                    _uiState.value = current.copy(
+                        isLiked = visualState.isLiked,
+                        coinCount = visualState.coinCount,
+                        isFavorited = visualState.isFavorited
+                    )
                     if (result.allSuccess) _tripleCelebrationVisible.value = true
-                    toast(result.toSummaryMessage())
+                    toast(
+                        resolveTripleActionFeedbackMessage(
+                            likeSuccess = result.likeSuccess,
+                            coinSuccess = result.coinSuccess,
+                            favoriteSuccess = result.favoriteSuccess,
+                            coinFailureMessage = result.coinMessage
+                        )
+                    )
 
                     // [New] Easter Egg: Auto Jump after Triple Action
                     viewModelScope.launch {
@@ -4033,8 +4180,14 @@ class PlayerViewModel : ViewModel() {
     
     fun changeQuality(qualityId: Int, currentPos: Long) {
         val current = _uiState.value as? PlayerUiState.Success ?: return
-        if (current.isQualitySwitching) { toast("正在切换中..."); return }
-        if (current.currentQuality == qualityId) { toast("已是当前清晰度"); return }
+        if (current.isQualitySwitching) {
+            toast("正在切换中...", PlayerToastPresentation.CenteredHighlight)
+            return
+        }
+        if (current.currentQuality == qualityId) {
+            toast("已是当前清晰度", PlayerToastPresentation.CenteredHighlight)
+            return
+        }
 
         val isHdrSupported = appContext?.let {
             com.android.purebilibili.core.util.MediaUtils.isHdrSupported(it)
@@ -4055,7 +4208,7 @@ class PlayerViewModel : ViewModel() {
         
         when (permissionResult) {
             is QualityPermissionResult.RequiresVip -> {
-                toast("${permissionResult.qualityLabel} 需要大会员")
+                toast("${permissionResult.qualityLabel} 需要大会员", PlayerToastPresentation.CenteredHighlight)
                 // 自动降级到最高可用画质
                 val fallbackQuality = qualityManager.getMaxAvailableQuality(
                     availableQualities = current.qualityIds,
@@ -4070,11 +4223,11 @@ class PlayerViewModel : ViewModel() {
                 return
             }
             is QualityPermissionResult.RequiresLogin -> {
-                toast("${permissionResult.qualityLabel} 需要登录")
+                toast("${permissionResult.qualityLabel} 需要登录", PlayerToastPresentation.CenteredHighlight)
                 return
             }
             is QualityPermissionResult.UnsupportedByDevice -> {
-                toast("${permissionResult.qualityLabel} 当前设备不支持")
+                toast("${permissionResult.qualityLabel} 当前设备不支持", PlayerToastPresentation.CenteredHighlight)
                 val fallbackQuality = qualityManager.getMaxAvailableQuality(
                     availableQualities = current.qualityIds,
                     isLoggedIn = current.isLoggedIn,
@@ -4119,13 +4272,14 @@ class PlayerViewModel : ViewModel() {
                         "目标清晰度不可用，已切换至 $label"
                     } else {
                         "✓ 已切换至 $label"
-                    }
+                    },
+                    PlayerToastPresentation.CenteredHighlight
                 )
                 //  记录画质切换事件
                 AnalyticsHelper.logQualityChange(currentBvid, current.currentQuality, result.actualQuality)
             } else {
                 _uiState.value = current.copy(isQualitySwitching = false, requestedQuality = null)
-                toast("清晰度切换失败")
+                toast("清晰度切换失败", PlayerToastPresentation.CenteredHighlight)
             }
         }
     }
@@ -4464,7 +4618,19 @@ class PlayerViewModel : ViewModel() {
         )
     }
     
-    fun toast(msg: String) { viewModelScope.launch { _toastEvent.send(msg) } }
+    fun toast(
+        msg: String,
+        presentation: PlayerToastPresentation = PlayerToastPresentation.Standard
+    ) {
+        viewModelScope.launch {
+            val payload = if (presentation == PlayerToastPresentation.CenteredHighlight) {
+                buildQualityToastMessage(msg)
+            } else {
+                buildPlayerToastMessage(msg)
+            }
+            _toastEvent.send(payload)
+        }
+    }
     
     override fun onCleared() {
         super.onCleared()
@@ -4472,6 +4638,7 @@ class PlayerViewModel : ViewModel() {
         heartbeatJob?.cancel()
         pluginCheckJob?.cancel()
         onlineCountJob?.cancel()  // 👀 取消在线人数轮询
+        aiSummaryJob?.cancel()
         activeLoadJob?.cancel()
         playerInfoJob?.cancel()
         appContext?.let { context ->

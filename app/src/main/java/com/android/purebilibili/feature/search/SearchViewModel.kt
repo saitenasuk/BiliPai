@@ -63,7 +63,8 @@ data class SearchUiState(
     val currentPage: Int = 1,
     val totalPages: Int = 1,
     val hasMoreResults: Boolean = false,
-    val isLoadingMore: Boolean = false
+    val isLoadingMore: Boolean = false,
+    val emptyStateReason: SearchEmptyStateReason = SearchEmptyStateReason.NONE
 )
 
 class SearchViewModel(application: Application) : AndroidViewModel(application) {
@@ -95,7 +96,22 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         it.copy(
                             searchResults = newVideos,
                             upResults = newUps,
-                            liveResults = newLives
+                            liveResults = newLives,
+                            emptyStateReason = when (it.searchType) {
+                                SearchType.VIDEO -> resolveSearchEmptyStateReason(
+                                    rawResultCount = it.searchResults.size,
+                                    visibleResultCount = newVideos.size
+                                )
+                                SearchType.UP -> resolveSearchEmptyStateReason(
+                                    rawResultCount = it.upResults.size,
+                                    visibleResultCount = newUps.size
+                                )
+                                SearchType.LIVE -> resolveSearchEmptyStateReason(
+                                    rawResultCount = it.liveResults.size,
+                                    visibleResultCount = newLives.size
+                                )
+                                else -> it.emptyStateReason
+                            }
                         ) 
                     }
                 }
@@ -109,7 +125,14 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun onQueryChange(newQuery: String) {
         _uiState.update { it.copy(query = newQuery) }
         if (newQuery.isEmpty()) {
-            _uiState.update { it.copy(showResults = false, suggestions = emptyList(), error = null) }
+            _uiState.update {
+                it.copy(
+                    showResults = false,
+                    suggestions = emptyList(),
+                    error = null,
+                    emptyStateReason = SearchEmptyStateReason.NONE
+                )
+            }
         } else {
             //  触发搜索建议（防抖 300ms）
             loadSuggestions(newQuery)
@@ -209,7 +232,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 easterEggMessage = easterEggMessage,
                 currentPage = 1,  // [新增] 重置分页
                 hasMoreResults = false,
-                isLoadingMore = false
+                isLoadingMore = false,
+                emptyStateReason = SearchEmptyStateReason.NONE
             ) 
         }
         saveHistory(keyword)
@@ -242,11 +266,21 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                                 liveResults = emptyList(),
                                 currentPage = pageInfo.currentPage,
                                 totalPages = pageInfo.totalPages,
-                                hasMoreResults = pageInfo.hasMore
+                                hasMoreResults = pageInfo.hasMore,
+                                emptyStateReason = resolveSearchEmptyStateReason(
+                                    rawResultCount = videos.size,
+                                    visibleResultCount = filteredVideos.size
+                                )
                             ) 
                         }
                     }.onFailure { e ->
-                        _uiState.update { it.copy(isSearching = false, error = e.message ?: "搜索失败") }
+                        _uiState.update {
+                            it.copy(
+                                isSearching = false,
+                                error = e.message ?: "搜索失败",
+                                emptyStateReason = SearchEmptyStateReason.NONE
+                            )
+                        }
                     }
                 }
                 SearchType.UP -> {
@@ -268,11 +302,21 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                                 liveResults = emptyList(),
                                 currentPage = pageInfo.currentPage,
                                 totalPages = pageInfo.totalPages,
-                                hasMoreResults = pageInfo.hasMore
+                                hasMoreResults = pageInfo.hasMore,
+                                emptyStateReason = resolveSearchEmptyStateReason(
+                                    rawResultCount = ups.size,
+                                    visibleResultCount = filteredUps.size
+                                )
                             ) 
                         }
                     }.onFailure { e ->
-                        _uiState.update { it.copy(isSearching = false, error = e.message ?: "搜索失败") }
+                        _uiState.update {
+                            it.copy(
+                                isSearching = false,
+                                error = e.message ?: "搜索失败",
+                                emptyStateReason = SearchEmptyStateReason.NONE
+                            )
+                        }
                     }
                 }
                 SearchType.BANGUMI -> {
@@ -287,11 +331,21 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                                 liveResults = emptyList(),
                                 currentPage = pageInfo.currentPage,
                                 totalPages = pageInfo.totalPages,
-                                hasMoreResults = pageInfo.hasMore
+                                hasMoreResults = pageInfo.hasMore,
+                                emptyStateReason = resolveSearchEmptyStateReason(
+                                    rawResultCount = bangumis.size,
+                                    visibleResultCount = bangumis.size
+                                )
                             ) 
                         }
                     }.onFailure { e ->
-                        _uiState.update { it.copy(isSearching = false, error = e.message ?: "搜索失败") }
+                        _uiState.update {
+                            it.copy(
+                                isSearching = false,
+                                error = e.message ?: "搜索失败",
+                                emptyStateReason = SearchEmptyStateReason.NONE
+                            )
+                        }
                     }
                 }
                 SearchType.MEDIA_FT -> {
@@ -306,11 +360,21 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                                 liveResults = emptyList(),
                                 currentPage = pageInfo.currentPage,
                                 totalPages = pageInfo.totalPages,
-                                hasMoreResults = pageInfo.hasMore
+                                hasMoreResults = pageInfo.hasMore,
+                                emptyStateReason = resolveSearchEmptyStateReason(
+                                    rawResultCount = items.size,
+                                    visibleResultCount = items.size
+                                )
                             )
                         }
                     }.onFailure { e ->
-                        _uiState.update { it.copy(isSearching = false, error = e.message ?: "搜索失败") }
+                        _uiState.update {
+                            it.copy(
+                                isSearching = false,
+                                error = e.message ?: "搜索失败",
+                                emptyStateReason = SearchEmptyStateReason.NONE
+                            )
+                        }
                     }
                 }
                 SearchType.LIVE -> {
@@ -330,11 +394,21 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                                 bangumiResults = emptyList(),
                                 currentPage = pageInfo.currentPage,
                                 totalPages = pageInfo.totalPages,
-                                hasMoreResults = pageInfo.hasMore
+                                hasMoreResults = pageInfo.hasMore,
+                                emptyStateReason = resolveSearchEmptyStateReason(
+                                    rawResultCount = liveRooms.size,
+                                    visibleResultCount = filteredLive.size
+                                )
                             ) 
                         }
                     }.onFailure { e ->
-                        _uiState.update { it.copy(isSearching = false, error = e.message ?: "搜索失败") }
+                        _uiState.update {
+                            it.copy(
+                                isSearching = false,
+                                error = e.message ?: "搜索失败",
+                                emptyStateReason = SearchEmptyStateReason.NONE
+                            )
+                        }
                     }
                 }
             }

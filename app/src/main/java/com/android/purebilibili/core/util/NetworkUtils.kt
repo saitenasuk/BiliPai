@@ -56,6 +56,30 @@ object NetworkUtils {
         Logger.d("NetworkUtils", " 获取默认画质: isWifi=$isOnWifi, quality=$quality")
         return quality
     }
+
+    /**
+     * 获取当前账号实际可用于首播的默认清晰度。
+     *
+     * 持久化配置保留用户原始选择，但在首播时需要规避
+     * 1080P60 / 4K / HDR 等高权限档位对非 VIP 场景的误伤。
+     */
+    fun getPlayableDefaultQualityId(
+        context: Context,
+        isLoggedIn: Boolean,
+        isVip: Boolean
+    ): Int {
+        val storedQuality = getDefaultQualityId(context)
+        val effectiveQuality = resolvePlayableDefaultQualityId(
+            storedQuality = storedQuality,
+            isLoggedIn = isLoggedIn,
+            isVip = isVip
+        )
+        Logger.d(
+            "NetworkUtils",
+            " 获取有效默认画质: stored=$storedQuality, effective=$effectiveQuality, isLoggedIn=$isLoggedIn, isVip=$isVip"
+        )
+        return effectiveQuality
+    }
     
     /**
      * 获取网络类型描述
@@ -66,5 +90,19 @@ object NetworkUtils {
             isMobileData(context) -> "移动数据"
             else -> "未连接"
         }
+    }
+}
+
+internal fun resolvePlayableDefaultQualityId(
+    storedQuality: Int,
+    isLoggedIn: Boolean,
+    isVip: Boolean
+): Int {
+    if (isVip) return storedQuality
+
+    return when {
+        isLoggedIn && storedQuality > 80 -> 80
+        !isLoggedIn && storedQuality > 64 -> 64
+        else -> storedQuality
     }
 }

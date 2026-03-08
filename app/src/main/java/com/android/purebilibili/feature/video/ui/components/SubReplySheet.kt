@@ -34,6 +34,7 @@ import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 @Composable
 fun SubReplySheet(
     state: SubReplyUiState,
+    showUpFlag: Boolean = false,
     emoteMap: Map<String, String>,
     onDismiss: () -> Unit,
     onLoadMore: () -> Unit,
@@ -63,6 +64,7 @@ fun SubReplySheet(
                 onLoadMore = onLoadMore,
                 onTimestampClick = onTimestampClick,
                 upMid = state.upMid,
+                showUpFlag = showUpFlag,
                 onImagePreview = onImagePreview,
                 onReplyClick = onReplyClick,
                 // [新增] 消散动画相关
@@ -89,6 +91,7 @@ fun SubReplyList(
     onLoadMore: () -> Unit,
     onTimestampClick: ((Long) -> Unit)? = null,
     upMid: Long = 0,
+    showUpFlag: Boolean = false,
     onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)? = null,
     onReplyClick: ((ReplyItem) -> Unit)? = null,
     // [新增] 消散动画相关
@@ -131,6 +134,7 @@ fun SubReplyList(
                 ReplyItemView(
                     item = rootReply,
                     upMid = upMid,
+                    showUpFlag = showUpFlag,
                     emoteMap = emoteMap, 
                     onClick = { onReplyClick?.invoke(rootReply) },
                     onSubClick = {},
@@ -150,7 +154,11 @@ fun SubReplyList(
                 )
                 HorizontalDivider(thickness = 8.dp, color = MaterialTheme.colorScheme.surfaceContainerHigh)
             }
-            items(subReplies, key = { it.rpid }) { item ->
+            items(
+                items = subReplies,
+                key = { it.rpid },
+                contentType = { resolveReplyItemContentType(it) }
+            ) { item ->
                 // [新增] 使用 DissolvableVideoCard 添加消散动画
                 com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
                     isDissolving = item.rpid in dissolvingIds,
@@ -161,6 +169,7 @@ fun SubReplyList(
                     ReplyItemView(
                         item = item,
                         upMid = upMid,
+                        showUpFlag = showUpFlag,
                         emoteMap = emoteMap, 
                         onClick = { onReplyClick?.invoke(item) },
                         onSubClick = {},

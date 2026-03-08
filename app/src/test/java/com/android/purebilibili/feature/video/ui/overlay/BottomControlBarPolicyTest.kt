@@ -155,6 +155,24 @@ class BottomControlBarPolicyTest {
     }
 
     @Test
+    fun fullscreenBottomBar_doesNotConsumeNavigationBarPadding() {
+        assertFalse(
+            shouldApplyNavigationBarPaddingToBottomControlBar(
+                isFullscreen = true
+            )
+        )
+    }
+
+    @Test
+    fun inlineBottomBar_doesNotConsumeNavigationBarPaddingEither() {
+        assertFalse(
+            shouldApplyNavigationBarPaddingToBottomControlBar(
+                isFullscreen = false
+            )
+        )
+    }
+
+    @Test
     fun floatingPanelMinWidthScalesWithLandscapeWidth() {
         assertEquals(176, resolveFloatingControlPanelMinWidthDp(widthDp = 560))
         assertEquals(196, resolveFloatingControlPanelMinWidthDp(widthDp = 720))

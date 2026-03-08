@@ -154,6 +154,16 @@ fun SearchScreen(
     val searchHazeEnabled = shouldEnableSearchHazeSource(searchMotionBudget)
     val effectiveCardTransitionEnabled =
         cardTransitionEnabled && searchMotionBudget == SearchMotionBudget.FULL
+    val emptyStateCopy = remember(state.emptyStateReason, state.searchType) {
+        if (state.emptyStateReason == SearchEmptyStateReason.NONE) {
+            null
+        } else {
+            resolveSearchEmptyStateCopy(
+                reason = state.emptyStateReason,
+                searchType = state.searchType
+            )
+        }
+    }
     
     //  [埋点] 页面浏览追踪
     LaunchedEffect(Unit) {
@@ -278,7 +288,7 @@ fun SearchScreen(
                                     }
                                     
                                     // [新增] 空状态提示 (提示可能被屏蔽)
-                                    if (!state.isSearching && state.searchResults.isEmpty() && state.error == null) {
+                                    if (!state.isSearching && state.searchResults.isEmpty() && state.error == null && emptyStateCopy != null) {
                                         item(span = { GridItemSpan(maxLineSpan) }) {
                                             Box(
                                                 modifier = Modifier
@@ -288,14 +298,14 @@ fun SearchScreen(
                                             ) {
                                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                                     Text(
-                                                        text = "未找到相关视频",
+                                                        text = emptyStateCopy.title,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                         fontSize = 15.sp,
                                                         fontWeight = FontWeight.Medium
                                                     )
                                                     Spacer(modifier = Modifier.height(8.dp))
                                                     Text(
-                                                        text = "(已屏蔽的内容将不会显示)",
+                                                        text = emptyStateCopy.subtitle,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                                         fontSize = 13.sp
                                                     )
@@ -381,18 +391,27 @@ fun SearchScreen(
                                     }
                                     
                                      // [新增] 空状态提示
-                                    if (!state.isSearching && state.upResults.isEmpty() && state.error == null) {
+                                    if (!state.isSearching && state.upResults.isEmpty() && state.error == null && emptyStateCopy != null) {
                                         item {
                                             Box(
                                                 modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Text(
-                                                     text = "未找到相关UP主\n(已屏蔽的内容将不会显示)",
-                                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                     fontSize = 13.sp,
-                                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                )
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Text(
+                                                        text = emptyStateCopy.title,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Text(
+                                                        text = emptyStateCopy.subtitle,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                        fontSize = 13.sp,
+                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -523,18 +542,27 @@ fun SearchScreen(
                                     }
                                     
                                     // [新增] 空状态提示
-                                    if (!state.isSearching && state.liveResults.isEmpty() && state.error == null) {
+                                    if (!state.isSearching && state.liveResults.isEmpty() && state.error == null && emptyStateCopy != null) {
                                         item {
                                             Box(
                                                 modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Text(
-                                                     text = "未找到相关直播\n(已屏蔽的内容将不会显示)",
-                                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                     fontSize = 13.sp,
-                                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                )
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Text(
+                                                        text = emptyStateCopy.title,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Text(
+                                                        text = emptyStateCopy.subtitle,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                        fontSize = 13.sp,
+                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                    )
+                                                }
                                             }
                                         }
                                     }

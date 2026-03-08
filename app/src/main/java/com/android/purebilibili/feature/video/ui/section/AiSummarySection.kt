@@ -13,11 +13,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.data.model.response.AiSummaryData
-import com.android.purebilibili.data.model.response.AiOutline
-import com.android.purebilibili.data.model.response.AiPartOutline
+import com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState
+import com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptTone
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -31,94 +32,190 @@ fun AiSummaryCard(
     onTimestampClick: ((Long) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    if (aiSummary == null || aiSummary.code != 0 || aiSummary.modelResult == null) return
+    if (!hasAiSummaryContent(aiSummary)) return
 
-    val hasContent = aiSummary.modelResult.summary.isNotEmpty() ||
-            aiSummary.modelResult.outline.isNotEmpty()
+    val modelResult = requireNotNull(aiSummary?.modelResult)
+    val collapsedPreview = remember(modelResult.summary, modelResult.outline) {
+        modelResult.summary.takeIf { it.isNotBlank() } ?: "查看分段总结和时间点"
+    }
+    var expanded by remember { mutableStateOf(false) }
 
-    if (!hasContent) return
-
-    var expanded by remember { mutableStateOf(false) } // Default collapsed or expanded? Let's say collapsed if long.
-    // However, usually AI summary is a feature user wants to see. Let's start collapsed to save space?
-    // Bilibili official might show a preview.
-    // Let's keep it collapsed by default but show a "AI Generated Summary" header.
-
-    Column(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .animateContentSize()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .animateContentSize(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (expanded) 0.46f else 0.32f),
+        shape = RoundedCornerShape(18.dp)
     ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = !expanded }
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = CupertinoIcons.Default.Sparkles,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "AI 视频总结",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Icon(
-                imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-
-        if (expanded) {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                
-                // Summary Text
-                if (aiSummary.modelResult.summary.isNotEmpty()) {
-                    Text(
-                        text = aiSummary.modelResult.summary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 12.dp)
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.Sparkles,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
-
-                // Outline
-                if (aiSummary.modelResult.outline.isNotEmpty()) {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "AI 总结",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    
-                    aiSummary.modelResult.outline.forEach { outlineItem ->
-                        OutlineItemRow(
-                            title = outlineItem.title,
-                            timestamp = outlineItem.timestamp,
-                            onClick = { onTimestampClick?.invoke(outlineItem.timestamp * 1000L) }
+                    Text(
+                        text = collapsedPreview,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Icon(
+                    imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)
+                ) {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    if (modelResult.summary.isNotBlank()) {
+                        Text(
+                            text = modelResult.summary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = if (modelResult.outline.isNotEmpty()) 12.dp else 0.dp)
                         )
-                        
-                        // Part Outlines (if any)
-                        outlineItem.partOutline.forEach { part ->
-                             OutlineItemRow(
-                                title = part.content,
-                                timestamp = part.timestamp,
-                                isSubItem = true,
-                                onClick = { onTimestampClick?.invoke(part.timestamp * 1000L) }
+                    }
+
+                    if (modelResult.outline.isNotEmpty()) {
+                        modelResult.outline.forEach { outlineItem ->
+                            OutlineItemRow(
+                                title = outlineItem.title,
+                                timestamp = outlineItem.timestamp,
+                                onClick = { onTimestampClick?.invoke(outlineItem.timestamp * 1000L) }
                             )
+
+                            outlineItem.partOutline.forEach { part ->
+                                OutlineItemRow(
+                                    title = part.content,
+                                    timestamp = part.timestamp,
+                                    isSubItem = true,
+                                    onClick = { onTimestampClick?.invoke(part.timestamp * 1000L) }
+                                )
+                            }
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AiSummaryPromptCard(
+    promptState: AiSummaryPromptState,
+    onActionClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val containerColor = when (promptState.tone) {
+        AiSummaryPromptTone.INFO -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+        AiSummaryPromptTone.MUTED -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+        AiSummaryPromptTone.WARNING -> MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
+    }
+    val accentColor = when (promptState.tone) {
+        AiSummaryPromptTone.INFO -> MaterialTheme.colorScheme.primary
+        AiSummaryPromptTone.MUTED -> MaterialTheme.colorScheme.onSurfaceVariant
+        AiSummaryPromptTone.WARNING -> MaterialTheme.colorScheme.error
+    }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        color = containerColor,
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accentColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (promptState.tone == AiSummaryPromptTone.INFO) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = accentColor
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (promptState.tone == AiSummaryPromptTone.WARNING) {
+                                CupertinoIcons.Default.ExclamationmarkCircle
+                            } else {
+                                CupertinoIcons.Default.InfoCircle
+                            },
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = promptState.title,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = promptState.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (!promptState.actionLabel.isNullOrBlank() && onActionClick != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                TextButton(
+                    onClick = onActionClick,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(promptState.actionLabel)
                 }
             }
         }

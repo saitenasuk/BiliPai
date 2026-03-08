@@ -1,0 +1,77 @@
+# BiliPai Repository - LLM Entry / BiliPai 仓库 - LLM 入口
+
+Verified entrypoint index for this repository.
+本仓库的已核实入口索引。
+
+## Verified Entry Files / 已核实入口文件
+
+| File | Verified Role |
+| --- | --- |
+| `README.md` | Chinese overview / 中文总览 |
+| `README_EN.md` | English overview / 英文总览 |
+| `CHANGELOG.md` | release history / 版本记录 |
+| `docs/wiki/README.md` | wiki index / Wiki 索引 |
+| `docs/wiki/ARCHITECTURE.md` | architecture / 架构说明 |
+| `docs/wiki/QA.md` | QA checklist / QA 清单 |
+| `docs/wiki/RELEASE_WORKFLOW.md` | release workflow / 发布流程 |
+| `docs/wiki/AI.md` | AI source map / AI 事实导航 |
+| `docs/PLUGIN_DEVELOPMENT.md` | JSON plugin guide / JSON 插件指南 |
+| `docs/NATIVE_PLUGIN_DEVELOPMENT.md` | native plugin guide / 原生插件指南 |
+| `plugins/samples/` | sample plugins / 示例插件 |
+| `plugins/community/README.md` | community plugin index / 社区插件索引 |
+| `STRUCTURE_GUIDELINES.adoc` | structure rules / 结构约束 |
+
+## Task Routing / 任务路由
+
+| Task | First File |
+| --- | --- |
+| project overview / 项目总览 | `README.md` or `README_EN.md` |
+| latest changes / 最新变更 | `CHANGELOG.md` |
+| architecture / 架构 | `docs/wiki/ARCHITECTURE.md` |
+| QA or regression / QA 与回归 | `docs/wiki/QA.md` |
+| release workflow / 发布流程 | `docs/wiki/RELEASE_WORKFLOW.md` |
+| AI repository map / AI 仓库导航 | `docs/wiki/AI.md` |
+| JSON plugins / JSON 插件 | `docs/PLUGIN_DEVELOPMENT.md` |
+| native plugins / 原生插件 | `docs/NATIVE_PLUGIN_DEVELOPMENT.md` |
+
+## Source Priority / 事实优先级
+
+When sources disagree, use this order.
+多个来源冲突时，按以下顺序处理。
+
+1. Source code and build files
+1. 源码与构建文件
+2. `CHANGELOG.md`
+2. `CHANGELOG.md`
+3. Files under `docs/wiki/`
+3. `docs/wiki/` 下的文档
+4. `README.md` and `README_EN.md`
+4. `README.md` 与 `README_EN.md`
+5. Files under `docs/plans/`
+5. `docs/plans/` 下的文件
+
+## Freshness Notes / 时效注记
+
+- `README.md` and `README_EN.md` both reference 2026-03-07 / v6.9.2 in their header text.
+- `README.md` 与 `README_EN.md` 的页头均标注为 2026-03-07 / v6.9.2。
+- `docs/wiki/ARCHITECTURE.md`, `docs/wiki/QA.md`, and `docs/wiki/RELEASE_WORKFLOW.md` are now dated 2026-03-07 and describe the current main-branch structure/process view.
+- `docs/wiki/ARCHITECTURE.md`、`docs/wiki/QA.md`、`docs/wiki/RELEASE_WORKFLOW.md` 现已更新为 2026-03-07，并按当前 main 分支结构 / 流程校对。
+- `CHANGELOG.md`, `README.md`, and `README_EN.md` now align with `versionName = "6.9.2"` in `app/build.gradle.kts`.
+- `CHANGELOG.md`、`README.md` 与 `README_EN.md` 现已与 `app/build.gradle.kts` 中的 `versionName = "6.9.2"` 对齐。
+- Treat wiki pages as current structure/process guides; treat release-specific answers as `CHANGELOG.md` + code verification.
+- Wiki 可作为当前结构 / 流程入口；涉及具体版本发布行为时，应以 `CHANGELOG.md` + 代码核验为准。
+
+## Verification Rules / 核验规则
+
+- For current behavior, verify with code and `CHANGELOG.md`.
+- 当前行为以代码和 `CHANGELOG.md` 共同核验。
+- `docs/plans/*.md` require code confirmation before use as evidence.
+- `docs/plans/*.md` 用作证据前必须经过代码确认。
+- If a listed path no longer exists, use the current repository tree.
+- 如果列出的路径已不存在，以当前仓库文件树为准。
+
+## Non-Goals / 非目标
+
+- Not a feature summary / 不是功能总结
+- Not an API reference / 不是 API 手册
+- Not a replacement for source inspection / 不替代源码核查

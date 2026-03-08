@@ -131,12 +131,41 @@ object CommentRepository {
                 params["oid"] = aid.toString()
                 params["type"] = "1"
                 params["mode"] = "3"
-                params["next"] = page.toString()
                 params["ps"] = ps.toString()
+                params["plat"] = "1"
+                params["web_location"] = "1315875"
+                if (page <= 1) {
+                    params["seek_rpid"] = "0"
+                    params["pagination_str"] = """{"offset":""}"""
+                } else {
+                    params["next"] = page.toString()
+                }
                 val signedParams = WbiUtils.sign(params, imgKey, subKey)
                 apiClient.getReplyList(signedParams)
             }
         }
+    }
+
+    private suspend fun fetchGuestHotCommentsCompat(
+        aid: Long,
+        page: Int,
+        ps: Int
+    ): ReplyResponse {
+        Logger.d("CommentRepo", " getComments (CompatMain): aid=$aid, page=$page, mode=3 (热度)")
+        val params = TreeMap<String, String>()
+        params["oid"] = aid.toString()
+        params["type"] = "1"
+        params["mode"] = "3"
+        params["ps"] = ps.toString()
+        params["plat"] = "1"
+        params["web_location"] = "1315875"
+        if (page <= 1) {
+            params["seek_rpid"] = "0"
+            params["pagination_str"] = """{"offset":""}"""
+        } else {
+            params["next"] = page.toString()
+        }
+        return guestApi.getReplyListMain(params)
     }
 
     /**
@@ -159,6 +188,44 @@ object CommentRepository {
                 mode = mode
             )
             val finalResponse = if (
+                shouldFallbackGuestHotCommentReadOnEmptySuccess(
+                    primaryMode = primaryMode,
+                    page = page,
+                    mode = mode,
+                    responseCode = primaryResponse.code,
+                    data = primaryResponse.data
+                )
+            ) {
+                Logger.w(
+                    "CommentRepo",
+                    "getComments empty-success fallback triggered: from=$primaryMode to=compat-main, aid=$aid, page=$page, mode=$mode, total=${primaryResponse.data?.getAllCount() ?: 0}"
+                )
+                val compatResponse = fetchGuestHotCommentsCompat(
+                    aid = aid,
+                    page = page,
+                    ps = ps
+                )
+                if (
+                    compatResponse.code != 0 &&
+                    readPlan.fallback != null &&
+                    shouldFallbackCommentRead(compatResponse.code)
+                ) {
+                    val fallbackMode = readPlan.fallback
+                    Logger.w(
+                        "CommentRepo",
+                        "getComments compat fallback triggered: code=${compatResponse.code}, from=compat-main to=$fallbackMode, aid=$aid, page=$page, mode=$mode"
+                    )
+                    fetchCommentsByApi(
+                        apiClient = resolveReadApi(fallbackMode),
+                        aid = aid,
+                        page = page,
+                        ps = ps,
+                        mode = mode
+                    )
+                } else {
+                    compatResponse
+                }
+            } else if (
                 primaryResponse.code != 0 &&
                 readPlan.fallback != null &&
                 shouldFallbackCommentRead(primaryResponse.code)

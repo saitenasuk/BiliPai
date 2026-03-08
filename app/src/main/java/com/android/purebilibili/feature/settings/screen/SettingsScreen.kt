@@ -71,6 +71,7 @@ fun SettingsScreen(
     onPlaybackClick: () -> Unit = {},
     onPermissionClick: () -> Unit = {},
     onPluginsClick: () -> Unit = {},
+    onSettingsShareClick: () -> Unit = {},
     onWebDavBackupClick: () -> Unit = {},
     onNavigateToBottomBarSettings: () -> Unit = {},
     onTipsClick: () -> Unit = {}, // [Feature] Tips
@@ -513,6 +514,7 @@ fun SettingsScreen(
             SettingsSearchTarget.BOTTOM_BAR -> onNavigateToBottomBarSettings()
             SettingsSearchTarget.PERMISSION -> onPermissionClick()
             SettingsSearchTarget.BLOCKED_LIST -> onBlockedListClickAction()
+            SettingsSearchTarget.SETTINGS_SHARE -> onSettingsShareClick()
             SettingsSearchTarget.WEBDAV_BACKUP -> onWebDavBackupClick()
             SettingsSearchTarget.DOWNLOAD_PATH -> onDownloadPathAction()
             SettingsSearchTarget.CLEAR_CACHE -> onClearCacheAction()
@@ -560,6 +562,7 @@ fun SettingsScreen(
                     onTipsClick = onTipsClick, // [Feature]
                     onTelegramClick = onTelegramClick,
                     onTwitterClick = onTwitterClick,
+                    onSettingsShareClick = onSettingsShareClick,
                     onWebDavBackupClick = onWebDavBackupClick,
                     onDownloadPathClick = onDownloadPathAction,
                     onClearCacheClick = onClearCacheAction,
@@ -625,6 +628,7 @@ fun SettingsScreen(
                     onReplayOnboardingClick = onReplayOnboardingClick,
                     onTelegramClick = onTelegramClick,
                     onTwitterClick = onTwitterClick,
+                    onSettingsShareClick = onSettingsShareClick,
                     onWebDavBackupClick = onWebDavBackupClick,
                     onDownloadPathClick = onDownloadPathAction,
                     onClearCacheClick = onClearCacheAction,
@@ -740,6 +744,7 @@ private fun MobileSettingsLayout(
     onReplayOnboardingClick: () -> Unit,
     onTelegramClick: () -> Unit,
     onTwitterClick: () -> Unit,
+    onSettingsShareClick: () -> Unit,
     onWebDavBackupClick: () -> Unit,
     onDownloadPathClick: () -> Unit,
     onClearCacheClick: () -> Unit,
@@ -891,6 +896,7 @@ private fun MobileSettingsLayout(
                                     DataStorageSection(
                                         customDownloadPath = customDownloadPath,
                                         cacheSize = cacheSize,
+                                        onSettingsShareClick = onSettingsShareClick,
                                         onWebDavBackupClick = onWebDavBackupClick,
                                         onDownloadPathClick = onDownloadPathClick,
                                         onClearCacheClick = onClearCacheClick

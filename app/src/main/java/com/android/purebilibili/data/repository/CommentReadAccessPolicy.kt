@@ -1,5 +1,7 @@
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.data.model.response.ReplyData
+
 internal enum class CommentReadApiMode {
     AUTH,
     GUEST
@@ -26,6 +28,29 @@ internal fun resolveCommentReadPlan(hasSession: Boolean): CommentReadPlan {
 
 internal fun shouldFallbackCommentRead(code: Int): Boolean {
     return code in setOf(-101, -111, -352, -412)
+}
+
+internal fun hasRenderableCommentPayload(data: ReplyData?): Boolean {
+    if (data == null) return false
+    return data.replies.orEmpty().isNotEmpty() ||
+        data.hots.orEmpty().isNotEmpty() ||
+        data.collectTopReplies().isNotEmpty()
+}
+
+internal fun shouldFallbackGuestHotCommentReadOnEmptySuccess(
+    primaryMode: CommentReadApiMode,
+    page: Int,
+    mode: Int,
+    responseCode: Int,
+    data: ReplyData?
+): Boolean {
+    return primaryMode == CommentReadApiMode.GUEST &&
+        page == 1 &&
+        mode == 3 &&
+        responseCode == 0 &&
+        data != null &&
+        data.getAllCount() > 0 &&
+        !hasRenderableCommentPayload(data)
 }
 
 internal fun resolveCommentReadErrorMessage(code: Int): String {

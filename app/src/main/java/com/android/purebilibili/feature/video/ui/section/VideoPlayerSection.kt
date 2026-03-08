@@ -233,6 +233,12 @@ internal fun shouldTriggerFullscreenBySwipe(
     }
 }
 
+internal fun shouldAllowPlaybackStateAutoFullscreen(
+    smallestScreenWidthDp: Int
+): Boolean {
+    return smallestScreenWidthDp < 600
+}
+
 internal fun resolveGestureIndicatorLabel(mode: VideoGestureMode): String {
     return when (mode) {
         VideoGestureMode.Brightness -> "亮度"
@@ -793,6 +799,11 @@ fun VideoPlayerSection(
     val autoExitFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAutoExitFullscreen(context)
         .collectAsState(initial = true)
+    val allowPlaybackStateAutoFullscreen = remember(configuration.smallestScreenWidthDp) {
+        shouldAllowPlaybackStateAutoFullscreen(
+            smallestScreenWidthDp = configuration.smallestScreenWidthDp
+        )
+    }
     val fixedFullscreenAspectRatio by com.android.purebilibili.core.store.SettingsManager
         .getFullscreenAspectRatio(context)
         .collectAsState(initial = FullscreenAspectRatio.FIT)
@@ -837,11 +848,13 @@ fun VideoPlayerSection(
         playerState.player,
         autoEnterFullscreenEnabled,
         autoExitFullscreenEnabled,
+        allowPlaybackStateAutoFullscreen,
         bvid
     ) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (
+                    allowPlaybackStateAutoFullscreen &&
                     playbackState == Player.STATE_READY &&
                     autoEnterFullscreenEnabled &&
                     !hasAutoEnteredFullscreen &&
@@ -852,6 +865,7 @@ fun VideoPlayerSection(
                     latestOnToggleFullscreen()
                 }
                 if (
+                    allowPlaybackStateAutoFullscreen &&
                     playbackState == Player.STATE_ENDED &&
                     autoExitFullscreenEnabled &&
                     latestIsFullscreen

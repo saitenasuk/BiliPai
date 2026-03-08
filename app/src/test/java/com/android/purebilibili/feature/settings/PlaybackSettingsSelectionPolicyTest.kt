@@ -47,6 +47,45 @@ class PlaybackSettingsSelectionPolicyTest {
     }
 
     @Test
+    fun `resolveDefaultQualitySubtitle should warn non vip users about automatic 1080p fallback`() {
+        assertEquals(
+            "非大会员将自动以 1080P 起播",
+            resolveDefaultQualitySubtitle(
+                rawQuality = 116,
+                fallbackSubtitle = "仅 WiFi 环境生效",
+                isLoggedIn = true,
+                isVip = false
+            )
+        )
+    }
+
+    @Test
+    fun `resolveDefaultQualitySubtitle should warn guests about automatic 720p fallback`() {
+        assertEquals(
+            "未登录时将自动以 720P 起播",
+            resolveDefaultQualitySubtitle(
+                rawQuality = 116,
+                fallbackSubtitle = "仅 WiFi 环境生效",
+                isLoggedIn = false,
+                isVip = false
+            )
+        )
+    }
+
+    @Test
+    fun `resolveDefaultQualitySubtitle should keep fallback subtitle for playable tiers`() {
+        assertEquals(
+            "仅 WiFi 环境生效",
+            resolveDefaultQualitySubtitle(
+                rawQuality = 80,
+                fallbackSubtitle = "仅 WiFi 环境生效",
+                isLoggedIn = true,
+                isVip = false
+            )
+        )
+    }
+
+    @Test
     fun `resolveSegmentedSwipeTargetIndex should switch to adjacent option when drag exceeds threshold`() {
         assertEquals(
             3,

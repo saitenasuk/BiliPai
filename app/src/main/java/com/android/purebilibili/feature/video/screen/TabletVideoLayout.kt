@@ -477,7 +477,8 @@ private fun TabletSecondaryContent(
                         // 评论列表
                         items(
                             items = commentState.replies,
-                            key = { "reply_${it.rpid}" }
+                            key = { "reply_${it.rpid}" },
+                            contentType = { resolveReplyItemContentType(it) }
                         ) { reply ->
                             // [新增] 使用 DissolvableVideoCard 包裹 (平板端也需要)
                             com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
@@ -490,6 +491,7 @@ private fun TabletSecondaryContent(
                                     item = reply,
                                     emoteMap = success.emoteMap,
                                     upMid = success.info.owner.mid,
+                                    showUpFlag = commentState.showUpFlag,
                                     onClick = {},
                                     onSubClick = { commentViewModel.openSubReply(it) },
                                     onTimestampClick = { positionMs ->

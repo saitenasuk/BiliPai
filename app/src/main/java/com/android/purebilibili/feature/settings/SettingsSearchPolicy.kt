@@ -6,6 +6,7 @@ enum class SettingsSearchTarget {
     BOTTOM_BAR,
     PERMISSION,
     BLOCKED_LIST,
+    SETTINGS_SHARE,
     WEBDAV_BACKUP,
     DOWNLOAD_PATH,
     CLEAR_CACHE,
@@ -52,7 +53,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = "播放设置",
         subtitle = "解码、手势、后台播放",
         section = "常规",
-        aliases = listOf("播放", "解码", "手势", "后台播放")
+        aliases = listOf("播放", "解码", "手势", "后台播放", "ai总结", "ai 总结", "视频总结", "总结")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.BOTTOM_BAR,
@@ -74,6 +75,13 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         subtitle = "管理已屏蔽的 UP 主",
         section = "隐私与安全",
         aliases = listOf("黑名单", "屏蔽", "up")
+    ),
+    SettingsSearchEntry(
+        target = SettingsSearchTarget.SETTINGS_SHARE,
+        title = "设置分享",
+        subtitle = "导出并导入可分享设置",
+        section = "数据与存储",
+        aliases = listOf("设置分享", "分享设置", "导入", "导出", "json", "配置分享", "设置包")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.WEBDAV_BACKUP,

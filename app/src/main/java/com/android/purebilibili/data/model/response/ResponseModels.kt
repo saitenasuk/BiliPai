@@ -32,6 +32,8 @@ data class ReplyData(
     val cursor: ReplyCursor = ReplyCursor(),
     //  旧版 API 使用 page
     val page: ReplyPage = ReplyPage(),
+    //  桌面端评论配置
+    val config: ReplyConfig? = null,
     //  普通评论列表
     val replies: List<ReplyItem>? = emptyList(),
     //  [新增] 置顶评论列表 (WBI API)
@@ -47,7 +49,11 @@ data class ReplyData(
     val control: ReplyPageControl? = null
 ) {
     //  统一获取总评论数
-    fun getAllCount(): Int = if (cursor.allCount > 0) cursor.allCount else page.count
+    fun getAllCount(): Int = when {
+        cursor.allCount > 0 -> cursor.allCount
+        page.acount > 0 -> page.acount
+        else -> page.count
+    }
     //  统一获取是否结束
     fun getIsEnd(currentPage: Int, currentSize: Int): Boolean {
         return if (cursor.allCount > 0) {
@@ -86,6 +92,13 @@ data class ReplyPageControl(
     val canUploadPicture: Boolean
         get() = uploadPictureIconState == 1 && !inputDisable
 }
+
+@Serializable
+data class ReplyConfig(
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    @SerialName("show_up_flag")
+    val showUpFlag: Boolean = false
+)
 
 //  [新增] UP 主信息
 @Serializable
@@ -140,6 +153,9 @@ data class ReplyItem(
     val content: ReplyContent = ReplyContent(),
 
     val replies: List<ReplyItem>? = null,
+
+    @SerialName("card_label")
+    val cardLabels: List<ReplyCardLabel>? = null,
     
     //  UP主操作信息（UP觉得很赞/UP回复了）
     @SerialName("up_action")
@@ -155,6 +171,19 @@ data class ReplyItem(
 data class ReplyUpAction(
     val like: Boolean = false,  // UP主觉得很赞
     val reply: Boolean = false  // UP主回复了
+)
+
+@Serializable
+data class ReplyCardLabel(
+    @Serializable(with = FlexibleStringSerializer::class)
+    @SerialName("text_content")
+    val textContent: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    @SerialName("label_color")
+    val labelColor: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    @SerialName("jump_url")
+    val jumpUrl: String = ""
 )
 
 object ReplyMemberOrDefaultSerializer : KSerializer<ReplyMember> {
@@ -423,6 +452,27 @@ object FlexibleFlagIntSerializer : KSerializer<Int> {
             "true" -> 1
             "false" -> 0
             else -> content.toIntOrNull() ?: content.toDoubleOrNull()?.toInt() ?: 0
+        }
+    }
+}
+
+object FlexibleBooleanSerializer : KSerializer<Boolean> {
+    override val descriptor: SerialDescriptor = FlexibleIntSerializer.descriptor
+
+    override fun serialize(encoder: Encoder, value: Boolean) {
+        encoder.encodeBoolean(value)
+    }
+
+    override fun deserialize(decoder: Decoder): Boolean {
+        if (decoder !is JsonDecoder) return decoder.decodeBoolean()
+        val element = decoder.decodeJsonElement()
+        val primitive = element as? JsonPrimitive ?: return false
+        primitive.booleanOrNull?.let { return it }
+        val content = runCatching { primitive.content }.getOrNull() ?: return false
+        return when (content.lowercase()) {
+            "true", "1" -> true
+            "false", "0" -> false
+            else -> content.toIntOrNull()?.let { it != 0 } ?: false
         }
     }
 }

@@ -1436,6 +1436,7 @@ private fun VideoPageItem(
             commentViewModel = commentViewModel,
             aid = aid,
             upMid = authorMid,
+            expectedReplyCount = if (isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.reply else stat.reply,
             onUserClick = onUserClick
         )
         

@@ -374,17 +374,18 @@ fun UpInfoSection(
         followerCount = followerCount,
         videoCount = videoCount
     )
+    val showInlineOwnerIdentity = shouldShowInlineOwnerIdentity(showOwnerAvatar = showOwnerAvatar)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
             .clickable { onUpClick(info.owner.mid) }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (showOwnerAvatar) {
             var avatarModifier = Modifier
-                .size(40.dp)
+                .size(44.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
 
@@ -401,26 +402,41 @@ fun UpInfoSection(
                 }
             }
 
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(info.owner.face))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                modifier = avatarModifier
-            )
+            if (info.owner.face.isNotBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(FormatUtils.fixImageUrl(info.owner.face))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "UP主头像",
+                    modifier = avatarModifier,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = avatarModifier,
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.PersonCropCircle,
+                        contentDescription = "UP主标识",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         } else {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
-                    .height(28.dp)
-                    .widthIn(min = 38.dp)
+                    .height(34.dp)
+                    .widthIn(min = 40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = "UP",
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -452,35 +468,37 @@ fun UpInfoSection(
                 //  添加交互修饰符 (放在 sharedBounds 之后，使其包含在 sharedBounds 内部)
                 upNameModifier = upNameModifier.copyOnLongPress(info.owner.name, "UP主名称")
 
-                if (info.owner.face.isNotBlank()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(FormatUtils.fixImageUrl(info.owner.face))
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "UP主头像",
-                        modifier = Modifier
-                            .padding(horizontal = 2.dp)
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        imageVector = CupertinoIcons.Default.PersonCropCircle,
-                        contentDescription = "UP主标识",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(horizontal = 2.dp)
-                            .size(13.dp)
-                    )
+                if (showInlineOwnerIdentity) {
+                    if (info.owner.face.isNotBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(FormatUtils.fixImageUrl(info.owner.face))
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "UP主头像",
+                            modifier = Modifier
+                                .padding(horizontal = 2.dp)
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = CupertinoIcons.Default.PersonCropCircle,
+                            contentDescription = "UP主标识",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(horizontal = 2.dp)
+                                .size(13.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
                 }
-                Spacer(Modifier.width(4.dp))
                 Text(
                     text = info.owner.name,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -492,14 +510,14 @@ fun UpInfoSection(
                 Text(
                     text = upStatsText,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
         }
         
-        var followActionModifier = Modifier.height(32.dp)
+        var followActionModifier = Modifier.height(36.dp)
         if (metadataSharedEnabled) {
             with(requireNotNull(sharedTransitionScope)) {
                 followActionModifier = followActionModifier.sharedBounds(
@@ -517,12 +535,12 @@ fun UpInfoSection(
         Surface(
             onClick = onFollowClick,
             color = if (isFollowing) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(18.dp),
             modifier = followActionModifier
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 14.dp)
+                modifier = Modifier.padding(horizontal = 16.dp)
             ) {
                 if (!isFollowing) {
                     Icon(

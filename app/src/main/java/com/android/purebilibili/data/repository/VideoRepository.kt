@@ -554,7 +554,20 @@ object VideoRepository {
                 isVip = isVip,
                 auto1080pEnabled = auto1080pEnabled
             )
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", " Selected startQuality=$startQuality (userSetting=$targetQuality, isAutoHighest=$isAutoHighestQuality, isLogin=$isLogin, isVip=$isVip)")
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoRepo",
+                buildStartQualityDecisionSummary(
+                    bvid = cacheBvid.ifBlank { bvid },
+                    cid = cid,
+                    userSettingQuality = targetQuality,
+                    startQuality = startQuality,
+                    isAutoHighestQuality = isAutoHighestQuality,
+                    isLoggedIn = isLogin,
+                    isVip = isVip,
+                    auto1080pEnabled = auto1080pEnabled,
+                    audioLang = audioLang
+                )
+            )
 
             // [优化] 默认语言优先走缓存；自动最高画质仅对大会员跳过缓存以追求极限流。
             if (!shouldSkipPlayUrlCache(isAutoHighestQuality, isVip, audioLang)) {
@@ -585,6 +598,23 @@ object VideoRepository {
             //  支持 DASH 和 durl 两种格式
             val hasDash = !playData.dash?.video.isNullOrEmpty()
             val hasDurl = !playData.durl.isNullOrEmpty()
+            val dashVideoIds = playData.dash?.video?.map { it.id }?.distinct()?.sortedDescending() ?: emptyList()
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoRepo",
+                buildPlayUrlFetchSummary(
+                    bvid = playUrlBvid,
+                    cid = cid,
+                    source = fetchResult.source,
+                    requestedQuality = startQuality,
+                    returnedQuality = playData.quality,
+                    acceptQualities = playData.accept_quality,
+                    dashVideoIds = dashVideoIds,
+                    hasDurl = hasDurl,
+                    isLoggedIn = isLogin,
+                    isVip = isVip,
+                    audioLang = audioLang
+                )
+            )
             if (!hasDash && !hasDurl) throw Exception("播放地址解析失败 (无 dash/durl)")
 
             //  [优化] 缓存结果 (仅默认语言缓存)
@@ -615,28 +645,118 @@ object VideoRepository {
 
     // [新增] 获取 AI 视频总结
     suspend fun getAiSummary(bvid: String, cid: Long, upMid: Long): Result<AiSummaryResponse> = withContext(Dispatchers.IO) {
-        try {
-            val (imgKey, subKey) = getWbiKeys()
-            val params = mapOf(
-                "bvid" to bvid,
-                "cid" to cid.toString(),
-                "up_mid" to upMid.toString()
-            )
-            val signedParams = WbiUtils.sign(params, imgKey, subKey)
-            
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", " Fetching AI Summary for bvid=$bvid")
-            val response = api.getAiConclusion(signedParams)
-            
-            if (response.code == 0) {
-                Result.success(response)
-            } else {
-                Result.failure(Exception("AI Summary API error: code=${response.code}, msg=${response.message}"))
+        ensureBuvid3FromSpi()
+        logAiSummaryPreflight(
+            bvid = bvid,
+            cid = cid,
+            upMid = upMid
+        )
+
+        var attempt = 1
+        var lastError: Throwable? = null
+
+        while (attempt <= 2) {
+            try {
+                if (attempt > 1) {
+                    wbiKeysCache = null
+                    wbiKeysTimestamp = 0
+                    kotlinx.coroutines.delay(350L)
+                }
+
+                val (imgKey, subKey) = getWbiKeys()
+                val params = buildAiSummaryParams(
+                    bvid = bvid,
+                    cid = cid,
+                    upMid = upMid
+                )
+                val signedParams = WbiUtils.sign(params, imgKey, subKey)
+
+                com.android.purebilibili.core.util.Logger.d(
+                    "VideoRepo",
+                    "🤖 AI Summary request: attempt=$attempt bvid=$bvid cid=$cid upMidPresent=${upMid > 0L}"
+                )
+                val response = api.getAiConclusion(signedParams)
+                val diagnosis = diagnoseAiSummaryResponse(response)
+                logAiSummaryResponse(
+                    bvid = bvid,
+                    cid = cid,
+                    attempt = attempt,
+                    diagnosis = diagnosis,
+                    hasModelResult = response.data?.modelResult != null,
+                    summaryLength = response.data?.modelResult?.summary?.length ?: 0,
+                    outlineCount = response.data?.modelResult?.outline?.size ?: 0
+                )
+
+                return@withContext if (response.code == 0) {
+                    Result.success(response)
+                } else {
+                    Result.failure(Exception("AI Summary API error: code=${response.code}, msg=${response.message}"))
+                }
+            } catch (e: Exception) {
+                lastError = e
+                val diagnosis = diagnoseAiSummaryFailure(e)
+                com.android.purebilibili.core.util.Logger.w(
+                    "VideoRepo",
+                    "🤖 AI Summary request failed: attempt=$attempt bvid=$bvid cid=$cid status=${diagnosis.status} reason=${diagnosis.reason} retryable=${diagnosis.shouldRetryRequest}"
+                )
+                if (attempt == 1 && diagnosis.shouldRetryRequest) {
+                    com.android.purebilibili.core.util.Logger.i(
+                        "VideoRepo",
+                        "🤖 AI Summary retry scheduled: bvid=$bvid cid=$cid reason=${diagnosis.reason}"
+                    )
+                    attempt++
+                    continue
+                }
+                return@withContext Result.failure(e)
             }
-        } catch (e: Exception) {
-             // 静默失败，不打印堆栈，仅记录
-             com.android.purebilibili.core.util.Logger.w("VideoRepo", " AI Summary failed: ${e.message}")
-             Result.failure(e)
         }
+
+        Result.failure(lastError ?: IllegalStateException("AI Summary unknown failure"))
+    }
+
+    private fun buildAiSummaryParams(
+        bvid: String,
+        cid: Long,
+        upMid: Long
+    ): Map<String, String> {
+        val params = linkedMapOf(
+            "bvid" to bvid,
+            "cid" to cid.toString()
+        )
+        if (upMid > 0L) {
+            params["up_mid"] = upMid.toString()
+        }
+        return params
+    }
+
+    private fun logAiSummaryPreflight(
+        bvid: String,
+        cid: Long,
+        upMid: Long
+    ) {
+        val hasSess = !TokenManager.sessDataCache.isNullOrEmpty()
+        val hasCsrf = !TokenManager.csrfCache.isNullOrEmpty()
+        val hasBuvid = !TokenManager.buvid3Cache.isNullOrEmpty()
+        val hasAccessToken = !TokenManager.accessTokenCache.isNullOrEmpty()
+        com.android.purebilibili.core.util.Logger.i(
+            "VideoRepo",
+            "🤖 AI Summary preflight: bvid=$bvid cid=$cid upMidPresent=${upMid > 0L} hasSess=$hasSess hasCsrf=$hasCsrf hasBuvid=$hasBuvid hasAccessToken=$hasAccessToken buvidInitialized=$buvidInitialized"
+        )
+    }
+
+    private fun logAiSummaryResponse(
+        bvid: String,
+        cid: Long,
+        attempt: Int,
+        diagnosis: AiSummaryFetchDiagnosis,
+        hasModelResult: Boolean,
+        summaryLength: Int,
+        outlineCount: Int
+    ) {
+        com.android.purebilibili.core.util.Logger.i(
+            "VideoRepo",
+            "🤖 AI Summary response: attempt=$attempt bvid=$bvid cid=$cid status=${diagnosis.status} reason=${diagnosis.reason} rootCode=${diagnosis.rootCode} dataCode=${diagnosis.dataCode} stid=${diagnosis.stid ?: ""} hasModelResult=$hasModelResult summaryLength=$summaryLength outlineCount=$outlineCount retryLater=${diagnosis.shouldRetryLater}"
+        )
     }
 
     //  [优化] WBI Key 缓存
@@ -871,11 +991,26 @@ object VideoRepository {
                 try {
                     val data = fetchPlayUrlWithWbiInternal(bvid, cid, dashQn, audioLang)
                     if (hasPlayableStreams(data)) {
+                        val payload = data ?: continue
+                        val dashVideoIds = payload.dash?.video?.map { it.id }?.distinct() ?: emptyList()
+                        val shouldRetryTrackRecovery = shouldRetryDashTrackRecovery(
+                            targetQn = dashQn,
+                            returnedQuality = payload.quality,
+                            acceptQualities = payload.accept_quality,
+                            dashVideoIds = dashVideoIds
+                        )
+                        if (shouldRetryTrackRecovery && attempt < retryDelays.lastIndex) {
+                            com.android.purebilibili.core.util.Logger.d(
+                                "VideoRepo",
+                                " [LoggedIn] DASH track recovery retry: requestedQn=$dashQn, returnedQuality=${payload.quality}, accept=${payload.accept_quality}, dashIds=$dashVideoIds"
+                            )
+                            continue
+                        }
                         com.android.purebilibili.core.util.Logger.d(
                             "VideoRepo",
-                            " [LoggedIn] DASH success: quality=${data?.quality}, requestedQn=$dashQn"
+                            " [LoggedIn] DASH success: quality=${payload.quality}, requestedQn=$dashQn"
                         )
-                        return data?.let { PlayUrlFetchResult(it, PlayUrlSource.DASH) }
+                        return PlayUrlFetchResult(payload, PlayUrlSource.DASH)
                     }
                     android.util.Log.w("VideoRepo", " DASH qn=$dashQn attempt=${attempt + 1}: data is null or empty")
                     if (attempt < retryDelays.lastIndex) {

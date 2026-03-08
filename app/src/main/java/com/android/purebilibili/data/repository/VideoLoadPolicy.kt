@@ -97,6 +97,54 @@ internal fun resolveDashRetryDelays(targetQn: Int): List<Long> {
     return if (targetQn <= 80) listOf(0L, 450L) else listOf(0L)
 }
 
+internal fun shouldRetryDashTrackRecovery(
+    targetQn: Int,
+    returnedQuality: Int,
+    acceptQualities: List<Int>,
+    dashVideoIds: List<Int>
+): Boolean {
+    if (targetQn <= 0 || targetQn > 80) return false
+    if (returnedQuality >= targetQn) return false
+    if (targetQn !in acceptQualities) return false
+    return targetQn !in dashVideoIds
+}
+
+internal fun buildStartQualityDecisionSummary(
+    bvid: String,
+    cid: Long,
+    userSettingQuality: Int?,
+    startQuality: Int,
+    isAutoHighestQuality: Boolean,
+    isLoggedIn: Boolean,
+    isVip: Boolean,
+    auto1080pEnabled: Boolean,
+    audioLang: String?
+): String {
+    return "PLAY_DIAG start_quality bvid=$bvid cid=$cid userSetting=${userSettingQuality ?: "null"} " +
+        "start=$startQuality autoHighest=$isAutoHighestQuality " +
+        "isLoggedIn=$isLoggedIn isVip=$isVip auto1080p=$auto1080pEnabled " +
+        "audioLang=${audioLang ?: "default"}"
+}
+
+internal fun buildPlayUrlFetchSummary(
+    bvid: String,
+    cid: Long,
+    source: PlayUrlSource,
+    requestedQuality: Int,
+    returnedQuality: Int,
+    acceptQualities: List<Int>,
+    dashVideoIds: List<Int>,
+    hasDurl: Boolean,
+    isLoggedIn: Boolean,
+    isVip: Boolean,
+    audioLang: String?
+): String {
+    return "PLAY_DIAG fetch_result bvid=$bvid cid=$cid source=$source requested=$requestedQuality " +
+        "returned=$returnedQuality accept=$acceptQualities dash=$dashVideoIds " +
+        "hasDurl=$hasDurl isLoggedIn=$isLoggedIn isVip=$isVip " +
+        "audioLang=${audioLang ?: "default"}"
+}
+
 internal fun shouldCallAccessTokenApi(
     nowMs: Long,
     cooldownUntilMs: Long,

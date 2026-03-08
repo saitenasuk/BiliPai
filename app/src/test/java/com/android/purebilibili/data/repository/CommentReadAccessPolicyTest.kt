@@ -1,5 +1,8 @@
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.data.model.response.ReplyCursor
+import com.android.purebilibili.data.model.response.ReplyData
+import com.android.purebilibili.data.model.response.ReplyItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -35,6 +38,50 @@ class CommentReadAccessPolicyTest {
         assertEquals(
             "评论加载失败，请稍后重试或切换排序",
             resolveCommentReadErrorMessage(-101)
+        )
+    }
+
+    @Test
+    fun `guest hot comment read falls back when success payload is empty but count exists`() {
+        assertTrue(
+            shouldFallbackGuestHotCommentReadOnEmptySuccess(
+                primaryMode = CommentReadApiMode.GUEST,
+                page = 1,
+                mode = 3,
+                responseCode = 0,
+                data = ReplyData(
+                    cursor = ReplyCursor(allCount = 6118, isEnd = true, next = 0),
+                    replies = emptyList(),
+                    hots = emptyList()
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `guest hot comment read keeps payload when renderable comments exist`() {
+        assertFalse(
+            shouldFallbackGuestHotCommentReadOnEmptySuccess(
+                primaryMode = CommentReadApiMode.GUEST,
+                page = 1,
+                mode = 3,
+                responseCode = 0,
+                data = ReplyData(
+                    cursor = ReplyCursor(allCount = 6118, isEnd = false, next = 2),
+                    replies = listOf(ReplyItem(rpid = 1L))
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `hasRenderableCommentPayload counts top or hot comments as visible content`() {
+        assertTrue(
+            hasRenderableCommentPayload(
+                ReplyData(
+                    hots = listOf(ReplyItem(rpid = 1L))
+                )
+            )
         )
     }
 }

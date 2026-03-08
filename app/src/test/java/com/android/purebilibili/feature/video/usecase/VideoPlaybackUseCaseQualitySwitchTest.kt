@@ -87,4 +87,71 @@ class VideoPlaybackUseCaseQualitySwitchTest {
         assertEquals(listOf(80, 64, 32, 16), result.mergedQualityIds)
         assertTrue(result.apiOnlyHighQualities.isEmpty())
     }
+
+    @Test
+    fun `resolveAutoHighestTargetQuality caps non vip users at 1080p`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.resolveAutoHighestTargetQuality(
+            acceptQualities = listOf(120, 116, 112, 80, 64, 32),
+            isLoggedIn = true,
+            isVip = false,
+            isHdrSupported = true,
+            isDolbyVisionSupported = true
+        )
+
+        assertEquals(80, result)
+    }
+
+    @Test
+    fun `resolveAutoHighestTargetQuality caps guests at 720p`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.resolveAutoHighestTargetQuality(
+            acceptQualities = listOf(116, 80, 64, 32),
+            isLoggedIn = false,
+            isVip = false,
+            isHdrSupported = true,
+            isDolbyVisionSupported = true
+        )
+
+        assertEquals(64, result)
+    }
+
+    @Test
+    fun `resolveAutoHighestTargetQuality keeps vip highest playable tier`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.resolveAutoHighestTargetQuality(
+            acceptQualities = listOf(120, 116, 112, 80, 64),
+            isLoggedIn = true,
+            isVip = true,
+            isHdrSupported = true,
+            isDolbyVisionSupported = true
+        )
+
+        assertEquals(120, result)
+    }
+
+    @Test
+    fun `buildPlaybackSelectionSummary describes final selection context`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.buildPlaybackSelectionSummary(
+            bvid = "BV1TEST12345",
+            cid = 9527L,
+            defaultQuality = 80,
+            targetQuality = 80,
+            returnedQuality = 64,
+            selectedDashQuality = 80,
+            mergedQualityIds = listOf(80, 64, 32, 16),
+            isLoggedIn = true,
+            isVip = false
+        )
+
+        assertEquals(
+            "PLAY_DIAG playback_selection bvid=BV1TEST12345 cid=9527 default=80 target=80 returned=64 selectedDash=80 merged=[80, 64, 32, 16] isLoggedIn=true isVip=false",
+            result
+        )
+    }
 }

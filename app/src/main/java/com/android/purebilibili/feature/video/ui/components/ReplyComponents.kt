@@ -34,17 +34,17 @@ import androidx.compose.ui.unit.*
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.ImageLoader
-import coil.decode.GifDecoder
-import coil.decode.ImageDecoderDecoder
-import android.os.Build
+import coil.imageLoader
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ReplyFansDetail
+import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.data.model.response.ReplySailingCardBg
 import com.android.purebilibili.data.model.response.ReplySailingFan
+import com.android.purebilibili.data.model.response.ReplyUpAction
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextPlacement
 import androidx.compose.ui.layout.ContentScale
@@ -85,6 +85,72 @@ internal fun shouldEnableRichCommentSelection(
     hasInteractiveAnnotations: Boolean
 ): Boolean {
     return !hasRenderableEmotes && !hasInteractiveAnnotations
+}
+
+internal fun shouldShowReplyAncillaryDecorations(
+    lightweightMode: Boolean
+): Boolean = !lightweightMode
+
+internal fun shouldShowReplySubPreview(
+    hideSubPreview: Boolean,
+    lightweightMode: Boolean
+): Boolean = !hideSubPreview && !lightweightMode
+
+internal fun resolveReplySpecialLabelText(
+    cardLabels: List<ReplyCardLabel>?,
+    showUpFlag: Boolean,
+    upAction: ReplyUpAction?
+): String? {
+    val serverLabel = cardLabels.orEmpty()
+        .asSequence()
+        .map { it.textContent.trim() }
+        .firstOrNull { it.isNotEmpty() }
+    if (!serverLabel.isNullOrEmpty()) return serverLabel
+    return if (showUpFlag && upAction?.like == true) "UP主觉得很赞" else null
+}
+
+internal fun resolveReplyDisplayLikeCount(
+    baseLikeCount: Int,
+    initialAction: Int,
+    isLiked: Boolean
+): Int {
+    return when {
+        isLiked && initialAction != 1 -> baseLikeCount + 1
+        !isLiked && initialAction == 1 -> baseLikeCount - 1
+        else -> baseLikeCount
+    }
+}
+
+internal fun resolveReplyLocationText(location: String?): String? {
+    if (location.isNullOrBlank()) return null
+    val cleanLocation = location
+        .removePrefix("IP属地：")
+        .removePrefix("IP属地")
+        .trim()
+    return if (cleanLocation.isNotEmpty()) "IP归属地：$cleanLocation" else null
+}
+
+internal fun buildSubReplyPreviewPrefix(
+    userName: String,
+    isUpComment: Boolean
+): List<String> {
+    return buildList {
+        add(userName)
+        if (isUpComment) {
+            add(" ")
+            add("[UP]")
+        }
+        add(": ")
+    }
+}
+
+internal fun resolveReplyItemContentType(item: ReplyItem): String {
+    return when {
+        !item.cardLabels.isNullOrEmpty() -> "reply_labeled"
+        !item.content.pictures.isNullOrEmpty() -> "reply_media"
+        !item.replies.isNullOrEmpty() || item.rcount > 0 -> "reply_thread"
+        else -> "reply_plain"
+    }
 }
 
 internal data class FanGroupTagVisual(
@@ -196,8 +262,10 @@ fun ReplyHeader(count: Int) {
 fun ReplyItemView(
     item: ReplyItem,
     upMid: Long = 0,
+    showUpFlag: Boolean = false,
     isPinned: Boolean = false,
     emoteMap: Map<String, String> = emptyMap(),
+    lightweightMode: Boolean = false,
     onClick: () -> Unit,
     onSubClick: (ReplyItem) -> Unit,
     onTimestampClick: ((Long) -> Unit)? = null,
@@ -213,35 +281,68 @@ fun ReplyItemView(
     onAvatarClick: (String) -> Unit
 ) {
     val isUpComment = upMid > 0 && item.mid == upMid
+    val showAncillaryDecorations = shouldShowReplyAncillaryDecorations(lightweightMode)
+    val showSubPreview = shouldShowReplySubPreview(
+        hideSubPreview = hideSubPreview,
+        lightweightMode = lightweightMode
+    )
     val localEmoteMap = remember(item.content.emote, emoteMap) {
-        val mergedMap = emoteMap.toMutableMap()
-        item.content.emote?.forEach { (key, value) -> mergedMap[key] = value.url }
-        mergedMap
+        val inlineEmotes = item.content.emote.orEmpty()
+        if (inlineEmotes.isEmpty()) {
+            emoteMap
+        } else {
+            buildMap(emoteMap.size + inlineEmotes.size) {
+                putAll(emoteMap)
+                inlineEmotes.forEach { (key, value) -> put(key, value.url) }
+            }
+        }
     }
-    
-    // [优化] IP 属地显示逻辑
     val displayLocation = remember(location) {
-        if (!location.isNullOrEmpty()) {
-            // 移除旧的前缀（如果有），统一添加 "IP归属地："
-            val cleanLocation = location.removePrefix("IP属地：").removePrefix("IP属地")
-            "IP归属地：$cleanLocation"
-        } else null
+        resolveReplyLocationText(location)
     }
-    val fansDetail = item.member.fansDetail
-        ?.takeIf { it.medalName.isNotBlank() && it.level > 0 }
-    val nameplateImage = item.member.nameplate
-        ?.imageSmall
-        ?.takeIf { it.isNotBlank() }
-    val sailingCardBgs = listOfNotNull(
-        item.member.userSailing?.cardBg,
-        item.member.userSailing?.cardBgWithFocus,
-        item.member.userSailingV2?.cardBg,
-        item.member.userSailingV2?.cardBgWithFocus
-    )
-    val fanGroupVisual = resolveFanGroupVisualFromMemberAndSailing(
-        member = item.member,
-        cardBgs = sailingCardBgs
-    )
+    val specialLabelText = remember(item.cardLabels, showUpFlag, item.upAction, showAncillaryDecorations) {
+        if (!showAncillaryDecorations) return@remember null
+        resolveReplySpecialLabelText(
+            cardLabels = item.cardLabels,
+            showUpFlag = showUpFlag,
+            upAction = item.upAction
+        )
+    }
+    val displayLikeCount = remember(item.like, item.action, isLiked) {
+        resolveReplyDisplayLikeCount(
+            baseLikeCount = item.like,
+            initialAction = item.action,
+            isLiked = isLiked
+        )
+    }
+    val fansDetail = if (showAncillaryDecorations) {
+        item.member.fansDetail?.takeIf { it.medalName.isNotBlank() && it.level > 0 }
+    } else {
+        null
+    }
+    val nameplateImage = if (showAncillaryDecorations) {
+        item.member.nameplate?.imageSmall?.takeIf { it.isNotBlank() }
+    } else {
+        null
+    }
+    val sailingCardBgs = if (showAncillaryDecorations) {
+        listOfNotNull(
+            item.member.userSailing?.cardBg,
+            item.member.userSailing?.cardBgWithFocus,
+            item.member.userSailingV2?.cardBg,
+            item.member.userSailingV2?.cardBgWithFocus
+        )
+    } else {
+        emptyList()
+    }
+    val fanGroupVisual = if (showAncillaryDecorations) {
+        resolveFanGroupVisualFromMemberAndSailing(
+            member = item.member,
+            cardBgs = sailingCardBgs
+        )
+    } else {
+        null
+    }
     val piliPlusDecoration = fanGroupVisual
         ?.takeIf { !it.cardBgImageUrl.isNullOrBlank() }
 
@@ -260,7 +361,7 @@ fun ReplyItemView(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(FormatUtils.fixImageUrl(item.member.avatar))
-                    .crossfade(true)
+                    .crossfade(!lightweightMode)
                     .build(),
                 contentDescription = null,
                 modifier = Modifier
@@ -348,6 +449,11 @@ fun ReplyItemView(
                         )
                     }
 
+                    if (!specialLabelText.isNullOrEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ReplySpecialLabelChip(text = specialLabelText)
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Footer Actions
@@ -379,17 +485,6 @@ fun ReplyItemView(
                             tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
-                        // [修复] 计算乐观更新后的点赞数
-                        val displayLikeCount = remember(item.like, item.action, isLiked) {
-                            var count = item.like
-                            if (isLiked && item.action != 1) {
-                                count++
-                            } else if (!isLiked && item.action == 1) {
-                                count--
-                            }
-                            count
-                        }
-
                         if (displayLikeCount > 0) {
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
@@ -439,7 +534,7 @@ fun ReplyItemView(
                 }
 
                 // Sub-comments (Threaded view)
-                if (!hideSubPreview && (!item.replies.isNullOrEmpty() || item.rcount > 0)) {
+                if (showSubPreview && (!item.replies.isNullOrEmpty() || item.rcount > 0)) {
                     Spacer(modifier = Modifier.height(12.dp))
                     // No background container, just cleaner list
                     Column(
@@ -449,24 +544,56 @@ fun ReplyItemView(
                     ) {
                         item.replies?.take(3)?.forEach { subReply ->
                             val subEmoteMap = remember(subReply.content.emote, emoteMap) {
-                                val map = emoteMap.toMutableMap()
-                                subReply.content.emote?.forEach { (key, value) -> map[key] = value.url }
-                                map
-                            }
-                            
-                            //  [修复] 将子评论改为行内显示 (用户名: 内容)
-                            val prefix = buildAnnotatedString {
-                                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))) {
-                                    append(subReply.member.uname)
-                                }
-                                if (subReply.member.mid == upMid.toString()) {
-                                    append(" ") 
-                                }
-                                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                                    append(": ")
+                                val inlineEmotes = subReply.content.emote.orEmpty()
+                                if (inlineEmotes.isEmpty()) {
+                                    emoteMap
+                                } else {
+                                    buildMap(emoteMap.size + inlineEmotes.size) {
+                                        putAll(emoteMap)
+                                        inlineEmotes.forEach { (key, value) -> put(key, value.url) }
+                                    }
                                 }
                             }
-                            
+
+                            val prefixTokens = remember(subReply.member.uname, upMid, subReply.mid) {
+                                buildSubReplyPreviewPrefix(
+                                    userName = subReply.member.uname,
+                                    isUpComment = upMid > 0 && subReply.mid == upMid
+                                )
+                            }
+                            val prefixTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            val prefixSeparatorColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            val upTagColor = MaterialTheme.colorScheme.primary
+                            val prefix = remember(prefixTokens, prefixTextColor, prefixSeparatorColor, upTagColor) {
+                                buildAnnotatedString {
+                                    prefixTokens.forEach { token ->
+                                        when (token) {
+                                            "[UP]" -> withStyle(
+                                                SpanStyle(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = upTagColor
+                                                )
+                                            ) {
+                                                append(token)
+                                            }
+                                            ": " -> withStyle(
+                                                SpanStyle(color = prefixSeparatorColor)
+                                            ) {
+                                                append(token)
+                                            }
+                                            else -> withStyle(
+                                                SpanStyle(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = prefixTextColor
+                                                )
+                                            ) {
+                                                append(token)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             RichCommentText(
                                 text = subReply.content.message,
                                 fontSize = 13.sp,
@@ -953,6 +1080,16 @@ fun formatTime(timestamp: Long): String {
     return sdf.format(date)
 }
 
+@Composable
+private fun ReplySpecialLabelChip(text: String) {
+    Text(
+        text = text,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.primary
+    )
+}
+
 //  UP 标签 - iOS Pill Style
 @Composable
 fun UpTag() {
@@ -1030,18 +1167,7 @@ fun CommentPictures(
     val totalCount = pictures.size  //  [优化] 保存总图片数用于角标显示
     
     //  GIF 图片加载器
-    val gifImageLoader = remember {
-        ImageLoader.Builder(context)
-            .components {
-                if (Build.VERSION.SDK_INT >= 28) {
-                    add(ImageDecoderDecoder.Factory())
-                } else {
-                    add(GifDecoder.Factory())
-                }
-            }
-            .crossfade(true)
-            .build()
-    }
+    val gifImageLoader = context.imageLoader
     
     // 检测是否是 GIF
     fun isGif(url: String) = url.contains(".gif", ignoreCase = true)

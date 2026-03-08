@@ -1291,6 +1291,7 @@ fun AppNavigation(
                 onPlaybackClick = { navController.navigate(ScreenRoutes.PlaybackSettings.route) },
                 onPermissionClick = { navController.navigate(ScreenRoutes.PermissionSettings.route) },
                 onPluginsClick = { navController.navigate(ScreenRoutes.PluginsSettings.createRoute()) },
+                onSettingsShareClick = { navController.navigate(ScreenRoutes.SettingsShare.route) },
                 onWebDavBackupClick = { navController.navigate(ScreenRoutes.WebDavBackup.route) },
                 onNavigateToBottomBarSettings = { navController.navigate(ScreenRoutes.BottomBarSettings.route) },
                 onTipsClick = { navController.navigate(ScreenRoutes.TipsSettings.route) }, // [Feature] Tips
@@ -1489,6 +1490,19 @@ fun AppNavigation(
             popExitTransition = settingsPopExitTransition
         ) {
             com.android.purebilibili.feature.settings.BottomBarSettingsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // --- WebDAV 备份中心 ---
+        composable(
+            route = ScreenRoutes.SettingsShare.route,
+            enterTransition = settingsEnterTransition,
+            exitTransition = settingsExitTransition,
+            popEnterTransition = settingsPopEnterTransition,
+            popExitTransition = settingsPopExitTransition
+        ) {
+            com.android.purebilibili.feature.settings.share.SettingsShareScreen(
                 onBack = { navController.popBackStack() }
             )
         }

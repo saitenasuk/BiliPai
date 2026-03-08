@@ -64,7 +64,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,17 +72,24 @@ import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
-import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
+import com.android.purebilibili.feature.video.ui.components.CollectionRow
+import com.android.purebilibili.feature.video.ui.components.CollectionSheet
+import com.android.purebilibili.feature.video.ui.components.PagesSelector
 import com.android.purebilibili.feature.video.ui.components.RelatedVideoItem
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
+import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
+import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
+import com.android.purebilibili.feature.video.ui.section.AiSummaryPromptCard
+import com.android.purebilibili.feature.video.ui.section.shouldShowAiSummaryEntry
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
@@ -227,7 +233,10 @@ fun TabletCinemaLayout(
                         onOpenComments = {
                             selectedTab = 0
                             curtainStateName = TabletSideCurtainState.OPEN.name
-                        }
+                        },
+                        onCollectionEpisodeClick = onRelatedVideoClick,
+                        onPageSelect = { pageIndex -> viewModel.switchPage(pageIndex) },
+                        onRetryAiSummary = viewModel::retryAiSummary
                     )
                 } else {
                     Surface(
@@ -425,9 +434,38 @@ private fun CinemaMetaPanel(
     onTripleClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
-    onOpenComments: () -> Unit
+    onOpenComments: () -> Unit,
+    onCollectionEpisodeClick: (String, android.os.Bundle?) -> Unit,
+    onPageSelect: (Int) -> Unit,
+    onRetryAiSummary: () -> Unit
 ) {
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val currentPageIndex = remember(success.info.cid, success.info.pages) {
+        success.info.pages.indexOfFirst { it.cid == success.info.cid }.coerceAtLeast(0)
+    }
+    var showCollectionSheet by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
+
+    success.info.ugc_season?.let { season ->
+        if (showCollectionSheet) {
+            CollectionSheet(
+                ugcSeason = season,
+                currentBvid = success.info.bvid,
+                onDismiss = { showCollectionSheet = false },
+                onEpisodeClick = { episode ->
+                    showCollectionSheet = false
+                    val navOptions = if (episode.cid > 0L) {
+                        android.os.Bundle().apply {
+                            putLong(VIDEO_NAV_TARGET_CID_KEY, episode.cid)
+                        }
+                    } else {
+                        null
+                    }
+                    onCollectionEpisodeClick(episode.bvid, navOptions)
+                }
+            )
+        }
+    }
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -438,9 +476,16 @@ private fun CinemaMetaPanel(
             surfaceColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        val metaBlocks = remember(success.info.owner.mid, success.info.owner.name) {
+        val metaBlocks = remember(
+            success.info.owner.mid,
+            success.info.owner.name,
+            success.info.ugc_season,
+            success.info.pages.size
+        ) {
             resolveCinemaMetaPanelBlocks(
-                hasOwner = success.info.owner.mid > 0L || success.info.owner.name.isNotBlank()
+                hasOwner = success.info.owner.mid > 0L || success.info.owner.name.isNotBlank(),
+                hasCollection = success.info.ugc_season != null,
+                hasMultiplePages = success.info.pages.size > 1
             )
         }
         LazyColumn(
@@ -483,7 +528,29 @@ private fun CinemaMetaPanel(
                         )
                     }
                     CinemaMetaPanelBlock.INTRO -> {
-                        CinemaVideoIntroSection(success = success)
+                        CinemaVideoIntroSection(
+                            success = success,
+                            onRetryAiSummary = onRetryAiSummary
+                        )
+                    }
+                    CinemaMetaPanelBlock.COLLECTION -> {
+                        success.info.ugc_season?.let { season ->
+                            CollectionRow(
+                                ugcSeason = season,
+                                currentBvid = success.info.bvid,
+                                onClick = { showCollectionSheet = true }
+                            )
+                        }
+                    }
+                    CinemaMetaPanelBlock.PAGES -> {
+                        if (success.info.pages.size > 1) {
+                            PagesSelector(
+                                pages = success.info.pages,
+                                currentPageIndex = currentPageIndex,
+                                onPageSelect = onPageSelect,
+                                forceGridMode = true
+                            )
+                        }
                     }
                 }
             }
@@ -493,11 +560,14 @@ private fun CinemaMetaPanel(
 
 @Composable
 private fun CinemaVideoIntroSection(
-    success: PlayerUiState.Success
+    success: PlayerUiState.Success,
+    onRetryAiSummary: () -> Unit = {}
 ) {
-    var expanded by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
-    val descriptionText = success.info.desc.takeIf { it.isNotBlank() } ?: "暂无简介"
+    val context = LocalContext.current
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val videoAiSummaryEntryEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getVideoAiSummaryEntryEnabled(context)
+        .collectAsState(initial = true)
 
     Surface(
         modifier = Modifier
@@ -510,35 +580,38 @@ private fun CinemaVideoIntroSection(
         )
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.padding(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = success.info.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+            VideoTitleWithDesc(
+                info = success.info,
+                videoTags = success.videoTags,
+                bgmInfo = success.bgmInfo
             )
-            Text(
-                text = "${FormatUtils.formatStat(success.info.stat.view.toLong())} 播放 · " +
-                    "${FormatUtils.formatStat(success.info.stat.danmaku.toLong())} 弹幕",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = descriptionText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = if (expanded) Int.MAX_VALUE else 3,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = if (expanded) "收起简介" else "展开简介",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { expanded = !expanded }
-            )
+            if (shouldShowAiSummaryEntry(
+                    aiSummary = success.aiSummary,
+                    isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
+                )
+            ) {
+                AiSummaryCard(
+                    aiSummary = success.aiSummary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            } else if (videoAiSummaryEntryEnabled && success.aiSummaryPrompt != null) {
+                AiSummaryPromptCard(
+                    promptState = success.aiSummaryPrompt,
+                    onActionClick = onRetryAiSummary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
+            if (success.info.desc.isBlank()) {
+                Text(
+                    text = "暂无简介",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+            }
         }
     }
 }
@@ -773,11 +846,13 @@ private fun CinemaCommentsPane(
             }
             items(
                 items = commentState.replies,
-                key = { "curtain_reply_${it.rpid}" }
+                key = { "curtain_reply_${it.rpid}" },
+                contentType = { resolveReplyItemContentType(it) }
             ) { reply ->
                 ReplyItemView(
                     item = reply,
                     upMid = success.info.owner.mid,
+                    showUpFlag = commentState.showUpFlag,
                     emoteMap = success.emoteMap,
                     onClick = {},
                     onSubClick = { commentViewModel.openSubReply(it) },

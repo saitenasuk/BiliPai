@@ -31,6 +31,8 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PhotoCamera
+import com.android.purebilibili.core.ui.components.DefaultPlaybackSpeedPreferenceControl
+import com.android.purebilibili.core.ui.components.formatDefaultPlaybackSpeed
 import com.android.purebilibili.data.model.response.AiAudioInfo
 
 /**
@@ -750,7 +752,7 @@ fun VideoSettingsPanel(
                                 text = if (rememberLastPlaybackSpeed) {
                                     "已开启记忆上次速度（当前优先）"
                                 } else {
-                                    "当前默认 ${defaultPlaybackSpeed}x"
+                                    "当前默认 ${formatDefaultPlaybackSpeed(defaultPlaybackSpeed)}"
                                 },
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -770,14 +772,17 @@ fun VideoSettingsPanel(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    SpeedOptions(
+                    DefaultPlaybackSpeedPreferenceControl(
                         currentSpeed = defaultPlaybackSpeed,
-                        onSelect = { speed ->
+                        onSpeedChange = { speed ->
                             scope.launch {
                                 com.android.purebilibili.core.store.SettingsManager
                                     .setDefaultPlaybackSpeed(context, speed)
                             }
-                        }
+                        },
+                        title = null,
+                        subtitle = null,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
                 SettingsDivider()

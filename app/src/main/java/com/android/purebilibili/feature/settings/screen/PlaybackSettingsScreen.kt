@@ -39,6 +39,7 @@ import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
 import com.android.purebilibili.feature.video.subtitle.isSubtitleFeatureEnabledForUser
 import kotlinx.coroutines.launch
@@ -300,29 +301,17 @@ fun PlaybackSettingsContent(
                                 .padding(horizontal = 16.dp, vertical = 10.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = "默认播放速度",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            val speedOptions = listOf(
-                                PlaybackSegmentOption(0.5f, "0.5x"),
-                                PlaybackSegmentOption(0.75f, "0.75x"),
-                                PlaybackSegmentOption(1.0f, "1x"),
-                                PlaybackSegmentOption(1.25f, "1.25x"),
-                                PlaybackSegmentOption(1.3f, "1.3x"),
-                                PlaybackSegmentOption(1.5f, "1.5x"),
-                                PlaybackSegmentOption(2.0f, "2x")
-                            )
-                            IOSSlidingSegmentedControl(
-                                options = speedOptions,
-                                selectedValue = defaultPlaybackSpeed,
-                                onSelectionChange = { speed ->
+                            DefaultPlaybackSpeedPreferenceControl(
+                                currentSpeed = defaultPlaybackSpeed,
+                                onSpeedChange = { speed ->
                                     scope.launch {
                                         com.android.purebilibili.core.store.SettingsManager
                                             .setDefaultPlaybackSpeed(context, speed)
                                     }
-                                }
+                                },
+                                title = "默认播放速度",
+                                subtitle = "拖动滑杆自定义，常用档位可一键选择",
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
@@ -576,6 +565,9 @@ fun PlaybackSettingsContent(
                     val subtitleAutoPreference by com.android.purebilibili.core.store.SettingsManager
                         .getSubtitleAutoPreference(context)
                         .collectAsState(initial = SubtitleAutoPreference.OFF)
+                    val videoAiSummaryEntryEnabled by com.android.purebilibili.core.store.SettingsManager
+                        .getVideoAiSummaryEntryEnabled(context)
+                        .collectAsState(initial = true)
                     val subtitlePreferenceDescription = when (subtitleAutoPreference) {
                         SubtitleAutoPreference.OFF -> "默认关闭字幕"
                         SubtitleAutoPreference.ON -> "默认开启（优先当前可用轨道）"
@@ -694,6 +686,24 @@ fun PlaybackSettingsContent(
                             )
                             Divider()
                         }
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Sparkles,
+                            title = "显示 AI 总结入口",
+                            subtitle = if (videoAiSummaryEntryEnabled) {
+                                "视频简介区展示 AI 总结按钮，点按后展开内容"
+                            } else {
+                                "关闭后隐藏视频简介区的 AI 总结入口"
+                            },
+                            checked = videoAiSummaryEntryEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setVideoAiSummaryEntryEnabled(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSPurple
+                        )
+                        Divider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.HandThumbsup,
                             title = "双击点赞",
@@ -869,6 +879,8 @@ fun PlaybackSettingsContent(
                             .getShowFullscreenScreenshotButton(context).collectAsState(initial = true)
                         val showFullscreenBatteryLevel by com.android.purebilibili.core.store.SettingsManager
                             .getShowFullscreenBatteryLevel(context).collectAsState(initial = true)
+                        val showFullscreenTime by com.android.purebilibili.core.store.SettingsManager
+                            .getShowFullscreenTime(context).collectAsState(initial = true)
                         val showFullscreenActionItems by com.android.purebilibili.core.store.SettingsManager
                             .getShowFullscreenActionItems(context).collectAsState(initial = true)
                         val showOnlineCount by com.android.purebilibili.core.store.SettingsManager
@@ -1024,7 +1036,7 @@ fun PlaybackSettingsContent(
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Battery100,
                             title = "全屏显示电量",
-                            subtitle = "在横屏顶部展示当前电量百分比",
+                            subtitle = "在横屏左上角展示电池图标和电量百分比",
                             checked = showFullscreenBatteryLevel,
                             onCheckedChange = {
                                 scope.launch {
@@ -1033,6 +1045,20 @@ fun PlaybackSettingsContent(
                                 }
                             },
                             iconTint = iOSGreen
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Clock,
+                            title = "全屏显示时间",
+                            subtitle = "在横屏左上角单独展示当前时间",
+                            checked = showFullscreenTime,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setShowFullscreenTime(context, it)
+                                }
+                            },
+                            iconTint = iOSTeal
                         )
                         Divider()
                         IOSSwitchItem(
@@ -1107,6 +1133,9 @@ fun PlaybackSettingsContent(
                         .getMobileQuality(context).collectAsState(initial = 64)
                     val directedTrafficEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getBiliDirectedTrafficEnabled(context).collectAsState(initial = false)
+                    val isLoggedIn = !TokenManager.sessDataCache.isNullOrEmpty() ||
+                        !TokenManager.accessTokenCache.isNullOrEmpty()
+                    val isVip = TokenManager.isVipCache
                     
                     val qualityOptions = resolveDefaultPlaybackQualityOptions()
                     
@@ -1139,7 +1168,12 @@ fun PlaybackSettingsContent(
 
                         IOSSlidingSegmentedSetting(
                             title = "WiFi 默认画质：${getQualityLabel(wifiQuality)}",
-                            subtitle = "仅 WiFi 环境生效",
+                            subtitle = resolveDefaultQualitySubtitle(
+                                rawQuality = wifiQuality,
+                                fallbackSubtitle = "仅 WiFi 环境生效",
+                                isLoggedIn = isLoggedIn,
+                                isVip = isVip
+                            ),
                             options = qualityOptions,
                             selectedValue = wifiQuality,
                             onSelectionChange = { qualityId ->
@@ -1169,7 +1203,12 @@ fun PlaybackSettingsContent(
                             subtitle = when {
                                 isDataSaverActive && mobileQuality > effectiveQuality ->
                                     "省流量模式当前实际最高为 $effectiveQualityLabel"
-                                else -> "仅移动网络环境生效"
+                                else -> resolveDefaultQualitySubtitle(
+                                    rawQuality = mobileQuality,
+                                    fallbackSubtitle = "仅移动网络环境生效",
+                                    isLoggedIn = isLoggedIn,
+                                    isVip = isVip
+                                )
                             },
                             options = qualityOptions,
                             selectedValue = mobileQuality,

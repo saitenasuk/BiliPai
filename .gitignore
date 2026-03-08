@@ -78,6 +78,7 @@ docs/
 docs/plans/
 **/docs/plans/
 *.md
+!llms.txt
 !README.md
 !README_EN.md
 !AGENTS.md

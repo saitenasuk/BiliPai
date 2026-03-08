@@ -40,4 +40,11 @@ class SettingsSearchPolicyTest {
 
         assertEquals(3, results.size)
     }
+
+    @Test
+    fun queryByShareKeyword_hitsSettingsShareEntry() {
+        val results = resolveSettingsSearchResults("导入")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.SETTINGS_SHARE })
+    }
 }

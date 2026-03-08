@@ -21,8 +21,10 @@ class CommentPaginationPolicyTest {
         val resolution = resolveCommentPageResolution(
             data = data,
             pageToLoad = 1,
+            previousRepliesSize = 0,
             combinedRepliesSize = 1,
-            newRepliesSize = 0
+            newRepliesSize = 0,
+            fallbackCount = 0
         )
 
         assertEquals(1, resolution.totalCount)
@@ -39,8 +41,10 @@ class CommentPaginationPolicyTest {
         val resolution = resolveCommentPageResolution(
             data = data,
             pageToLoad = 2,
+            previousRepliesSize = 1,
             combinedRepliesSize = 1,
-            newRepliesSize = 0
+            newRepliesSize = 0,
+            fallbackCount = 0
         )
 
         assertTrue(resolution.isEnd)
@@ -56,11 +60,64 @@ class CommentPaginationPolicyTest {
         val resolution = resolveCommentPageResolution(
             data = data,
             pageToLoad = 1,
+            previousRepliesSize = 0,
             combinedRepliesSize = 1,
-            newRepliesSize = 1
+            newRepliesSize = 1,
+            fallbackCount = 0
         )
 
         assertEquals(56, resolution.totalCount)
         assertFalse(resolution.isEnd)
+    }
+
+    @Test
+    fun `pagination should end when fetched page adds no unique replies`() {
+        val data = ReplyData(
+            cursor = ReplyCursor(allCount = 100, isEnd = false, next = 3),
+            replies = listOf(ReplyItem(rpid = 1L), ReplyItem(rpid = 2L))
+        )
+
+        val resolution = resolveCommentPageResolution(
+            data = data,
+            pageToLoad = 2,
+            previousRepliesSize = 2,
+            combinedRepliesSize = 2,
+            newRepliesSize = 2,
+            fallbackCount = 0
+        )
+
+        assertTrue(resolution.isEnd)
+    }
+
+    @Test
+    fun `pagination should keep detail reply count when guest api returns zero total`() {
+        val data = ReplyData(
+            cursor = ReplyCursor(allCount = 0, isEnd = false, next = 2),
+            replies = listOf(ReplyItem(rpid = 1L))
+        )
+
+        val resolution = resolveCommentPageResolution(
+            data = data,
+            pageToLoad = 1,
+            previousRepliesSize = 0,
+            combinedRepliesSize = 1,
+            newRepliesSize = 1,
+            fallbackCount = 128
+        )
+
+        assertEquals(128, resolution.totalCount)
+        assertFalse(resolution.isEnd)
+    }
+
+    @Test
+    fun `reply data prefers legacy acount over root count when available`() {
+        val data = ReplyData(
+            page = com.android.purebilibili.data.model.response.ReplyPage(
+                count = 12,
+                acount = 34
+            )
+        )
+
+        assertEquals(34, data.getAllCount())
     }
 }

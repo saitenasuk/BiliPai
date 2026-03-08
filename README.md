@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-05 · 文档已同步至 v6.7.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-03-07 · 文档已同步至 v6.9.2（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.7.1-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.9.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -31,6 +31,14 @@
   <a href="https://t.me/BiliPai"><img src="https://img.shields.io/badge/Telegram-频道-2CA5E0?style=flat-square&logo=telegram" alt="Telegram Channel"></a>
   <a href="https://x.com/YangY_0x00"><img src="https://img.shields.io/badge/X-Follow-000000?style=flat-square&logo=x" alt="X"></a>
 </p>
+
+## 🚀 快速导航
+
+| 类别 | 入口 |
+| --- | --- |
+| 开始使用 | [下载 Releases](https://github.com/jay3-yy/BiliPai/releases) · [更新日志](CHANGELOG.md) |
+| 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
+| 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
 > [!IMPORTANT]
 > 应用内默认设置为通用场景，可能不适合所有用户。建议进入 **设置** 按个人习惯手动调整（如外观、动画、播放设置等）。
@@ -494,6 +502,8 @@ app/src/main/java/com/android/purebilibili
 
 ## 📚 Wiki
 
+- AI / LLM 入口：[`llms.txt`](llms.txt)
+- AI 导航指南：[`docs/wiki/AI.md`](docs/wiki/AI.md)
 - Wiki 首页：[`docs/wiki/README.md`](docs/wiki/README.md)
 - 功能矩阵：[`docs/wiki/FEATURE_MATRIX.md`](docs/wiki/FEATURE_MATRIX.md)
 - 架构说明：[`docs/wiki/ARCHITECTURE.md`](docs/wiki/ARCHITECTURE.md)
@@ -546,11 +556,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v6.7.1 · 2026-03-05)
+### 最近更新 (v6.9.2 · 2026-03-07)
 
-- 🎞️ **返回动画稳定性提升**：修复详情返回列表时的路由层干扰，卡片回位更稳定、形变更少。
-- 🔁 **相关推荐链路优化**：优化“详情 -> 推荐视频 -> 返回详情”整条动画链路，减少跳变和抖动。
-- 📶 **系统栏恢复修复**：修复特定返回路径下状态栏图标/通知下拉异常隐藏问题。
+- 🚀 **评论区边播边刷更顺滑**：评论分页改为接近底部再触发，播放中自动启用轻量评论渲染，优先保证滑动帧率。
+- 🎬 **播放器稳定性继续补强**：小窗、后台播放、控制条与弹幕设置联动继续收敛，减少叠层和状态切换时的异常。
+- 🛠️ **动态页与空间页修复**：动态页支持再次点击已选 UP 回到全部关注动态，空间页“播放全部”图标显示恢复完整。
 
 ### 历史版本
 

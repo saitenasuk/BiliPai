@@ -7,6 +7,11 @@
 | **JSON 规则插件** | ⭐ 简单 | 内容过滤、弹幕净化、关键词屏蔽 |
 | **原生 Kotlin 插件** | ⭐⭐⭐ 进阶 | 复杂功能、API 集成、自定义 UI |
 
+> [!CAUTION]
+> 当前仓库已内置 5 个内置插件，并支持通过 URL 导入外部 JSON 规则插件；但插件生态仍处于早期阶段。
+> `plugins/community/` 目前仅包含 1 个演示插件，社区规模和兼容性样本都还有限。
+> 引入第三方插件前请自行审阅规则内容、验证兼容性，并假设规则能力与导入体验会继续随版本迭代。
+
 ---
 
 ## 📋 目录
@@ -332,17 +337,14 @@ interface DanmakuPlugin : Plugin {
 
 ### 注册插件
 
-在 `BiliPaiApp.kt` 中注册：
+在 `PureApplication.kt` 的插件初始化区域注册：
 
 ```kotlin
-class BiliPaiApp : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        
-        PluginManager.initialize(this)
-        PluginManager.register(SponsorBlockPlugin())
-        PluginManager.register(YourCustomPlugin())  // 添加你的插件
-    }
+Looper.myQueue().addIdleHandler {
+    PluginManager.initialize(this)
+    PluginManager.register(SponsorBlockPlugin())
+    PluginManager.register(YourCustomPlugin())  // 添加你的插件
+    false
 }
 ```
 

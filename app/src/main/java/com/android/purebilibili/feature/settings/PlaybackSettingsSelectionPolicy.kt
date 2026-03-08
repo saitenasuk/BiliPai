@@ -60,6 +60,19 @@ internal fun resolveDefaultPlaybackQualityOptions(): List<PlaybackSegmentOption<
     )
 }
 
+internal fun resolveDefaultQualitySubtitle(
+    rawQuality: Int,
+    fallbackSubtitle: String,
+    isLoggedIn: Boolean,
+    isVip: Boolean
+): String {
+    return when {
+        !isVip && isLoggedIn && rawQuality > 80 -> "非大会员将自动以 1080P 起播"
+        !isLoggedIn && rawQuality > 64 -> "未登录时将自动以 720P 起播"
+        else -> fallbackSubtitle
+    }
+}
+
 internal fun resolveFeedApiSegmentOptions(
     entries: List<SettingsManager.FeedApiType> = SettingsManager.FeedApiType.entries
 ): List<PlaybackSegmentOption<SettingsManager.FeedApiType>> {

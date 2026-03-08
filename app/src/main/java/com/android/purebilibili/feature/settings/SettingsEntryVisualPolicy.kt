@@ -63,6 +63,10 @@ internal fun resolveSettingsEntryVisual(target: SettingsSearchTarget): SettingsE
             icon = CupertinoIcons.Default.XmarkCircle,
             iconTint = iOSRed
         )
+        SettingsSearchTarget.SETTINGS_SHARE -> SettingsEntryVisual(
+            icon = CupertinoIcons.Default.ListBullet,
+            iconTint = iOSGreen
+        )
         SettingsSearchTarget.WEBDAV_BACKUP -> SettingsEntryVisual(
             icon = CupertinoIcons.Default.DocOnDoc,
             iconTint = iOSBlue

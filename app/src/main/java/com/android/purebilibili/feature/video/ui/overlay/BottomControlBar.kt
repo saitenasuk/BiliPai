@@ -98,6 +98,10 @@ internal fun shouldShowMoreActionsButtonInControlBar(
         )
 }
 
+internal fun shouldApplyNavigationBarPaddingToBottomControlBar(
+    isFullscreen: Boolean
+): Boolean = false
+
 internal fun resolveFloatingControlPanelMinWidthDp(widthDp: Int): Int {
     return when {
         widthDp >= 840 -> 216
@@ -352,7 +356,13 @@ fun BottomControlBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(bottom = layoutPolicy.bottomPaddingDp.dp)
-            .let { if (isFullscreen) it.navigationBarsPadding() else it }
+            .then(
+                if (shouldApplyNavigationBarPaddingToBottomControlBar(isFullscreen = isFullscreen)) {
+                    Modifier.navigationBarsPadding()
+                } else {
+                    Modifier
+                }
+            )
     ) {
         // 1. Progress Bar (Top of controls)
         VideoProgressBar(

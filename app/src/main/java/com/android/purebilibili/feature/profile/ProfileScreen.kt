@@ -92,6 +92,27 @@ internal fun resolveProfileWallpaperActionColumnCount(screenWidthDp: Int): Int {
     return if (screenWidthDp < 360) 1 else 2
 }
 
+internal fun resolveProfileTopBarScrimAlpha(
+    isImmersive: Boolean,
+    collapsedFraction: Float
+): Float {
+    if (!isImmersive) return 0f
+    // Immersive profile pages already have a wallpaper gradient behind the top bar.
+    // Adding another black scrim on scroll creates the visible dark band regression.
+    return 0f
+}
+
+internal fun resolveProfileLightStatusBars(
+    isImmersive: Boolean,
+    useSplitLayout: Boolean,
+    isDarkTheme: Boolean
+): Boolean {
+    if (!useSplitLayout && isImmersive) return false
+    return !isDarkTheme
+}
+
+internal fun shouldPinProfileTopBarOnScroll(useSplitLayout: Boolean): Boolean = true
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
@@ -113,39 +134,50 @@ fun ProfileScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val windowSizeClass = LocalWindowSizeClass.current
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val isLoggedOut = state is ProfileUiState.LoggedOut
+    val isImmersiveMobileProfile = !windowSizeClass.shouldUseSplitLayout &&
+        (state as? ProfileUiState.Success)?.user?.topPhoto?.isNotEmpty() == true
+    val shouldControlSystemBars = isLoggedOut || isImmersiveMobileProfile
+    val lightStatusBars = resolveProfileLightStatusBars(
+        isImmersive = shouldControlSystemBars,
+        useSplitLayout = windowSizeClass.shouldUseSplitLayout,
+        isDarkTheme = isDarkTheme
+    )
     
     // [Blur] Haze State
     val hazeState = remember { HazeState() }
 
     //  设置沉浸式状态栏和导航栏（进入时修改，离开时恢复）
-    DisposableEffect(state) {
+    DisposableEffect(shouldControlSystemBars, lightStatusBars) {
         val window = (context as? Activity)?.window
         val insetsController = if (window != null) {
             WindowInsetsControllerCompat(window, view)
         } else null
-        val isLoggedOut = state is ProfileUiState.LoggedOut
         
         // 保存原始配置
         val originalStatusBarColor = window?.statusBarColor ?: android.graphics.Color.TRANSPARENT
         val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
         val originalLightStatusBars = insetsController?.isAppearanceLightStatusBars ?: true
+        val originalLightNavigationBars = insetsController?.isAppearanceLightNavigationBars ?: true
         val originalDecorFits = window?.decorView?.fitsSystemWindows ?: true
         
-        if (isLoggedOut && window != null) {
+        if (shouldControlSystemBars && window != null) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             window.statusBarColor = Color.Transparent.toArgb()
             window.navigationBarColor = Color.Transparent.toArgb()
-            insetsController?.isAppearanceLightStatusBars = false
-            insetsController?.isAppearanceLightNavigationBars = false
+            insetsController?.isAppearanceLightStatusBars = lightStatusBars
+            insetsController?.isAppearanceLightNavigationBars = lightStatusBars
         }
         
         onDispose {
             // 离开时恢复原始配置
-            if (isLoggedOut && window != null && insetsController != null) {
+            if (shouldControlSystemBars && window != null && insetsController != null) {
                 WindowCompat.setDecorFitsSystemWindows(window, originalDecorFits)
                 window.statusBarColor = originalStatusBarColor
                 window.navigationBarColor = originalNavBarColor
                 insetsController.isAppearanceLightStatusBars = originalLightStatusBars
+                insetsController.isAppearanceLightNavigationBars = originalLightNavigationBars
             }
         }
     }
@@ -197,7 +229,11 @@ fun ProfileScreen(
                     onWatchLaterClick = onGoToLogin,
                     onInboxClick = onGoToLogin,  //  [新增] 游客点击需登录
                     onVideoClick = { },  // 游客模式不显示三连
-                    scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(),
+                    scrollBehavior = if (shouldPinProfileTopBarOnScroll(useSplitLayout = false)) {
+                        TopAppBarDefaults.pinnedScrollBehavior()
+                    } else {
+                        TopAppBarDefaults.enterAlwaysScrollBehavior()
+                    },
                     onBack = onBack,
                     onSettingsClick = onSettingsClick,
                     hazeState = hazeState,
@@ -278,7 +314,11 @@ fun ProfileScreen(
             }
         }
         is ProfileUiState.Success -> {
-            val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+            val scrollBehavior = if (shouldPinProfileTopBarOnScroll(windowSizeClass.shouldUseSplitLayout)) {
+                TopAppBarDefaults.pinnedScrollBehavior()
+            } else {
+                TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+            }
             
             Scaffold(
                 modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -729,6 +769,18 @@ fun MobileProfileContent(
     
     val isImmersive = user.topPhoto.isNotEmpty()
     val contentColor = if (isImmersive) Color.White else MaterialTheme.colorScheme.onSurface
+    val collapsedFraction = scrollBehavior.state.collapsedFraction.coerceIn(0f, 1f)
+    val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val topBarScrimColor = if (isImmersive) {
+        Color.Black.copy(
+            alpha = resolveProfileTopBarScrimAlpha(
+                isImmersive = true,
+                collapsedFraction = collapsedFraction
+            )
+        )
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = collapsedFraction)
+    }
 
         // [Modified] Background logic moved to ProfileBackground()
         // No need to duplicate here, but MobileProfileContent is called separately in Split Layout?
@@ -840,6 +892,13 @@ fun MobileProfileContent(
         }
         
         // 🏗️ 沉浸式 TopBar (Standard)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(statusBarTopPadding + 64.dp)
+                .background(topBarScrimColor)
+        )
         CenterAlignedTopAppBar(
             title = { Text("我的", fontWeight = FontWeight.Bold) },
             navigationIcon = {
@@ -855,9 +914,7 @@ fun MobileProfileContent(
             scrollBehavior = scrollBehavior,
             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                 containerColor = Color.Transparent,
-                // [Style] 滚动后变为半透明黑底 (配合白色文字)，或保持透明?
-                // 建议使用深色背景以保证文字清晰
-                scrolledContainerColor = if (isImmersive) Color.Black.copy(alpha = 0.7f) else MaterialTheme.colorScheme.surface,
+                scrolledContainerColor = Color.Transparent,
                 titleContentColor = contentColor,
                 actionIconContentColor = contentColor,
                 navigationIconContentColor = contentColor
@@ -1458,6 +1515,7 @@ fun ProfileTripleActionEntry(
     var isLongPressing by remember { mutableStateOf(false) }
     var longPressProgress by remember { mutableFloatStateOf(0f) }
     var showDialog by remember { mutableStateOf(false) }
+    var showCelebration by remember { mutableStateOf(false) }
     val progressDuration = 1500 // 1.5 秒
     
     val haptic = com.android.purebilibili.core.util.rememberHapticFeedback()
@@ -1474,7 +1532,7 @@ fun ProfileTripleActionEntry(
         finishedListener = { progress ->
             if (progress >= 1f && isLongPressing) {
                 haptic(com.android.purebilibili.core.util.HapticType.MEDIUM)
-                showDialog = true
+                showCelebration = true
                 isLongPressing = false
             }
         }
@@ -1514,48 +1572,68 @@ fun ProfileTripleActionEntry(
             }
         )
     }
-    
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isLongPressing = true
-                        val released = tryAwaitRelease()
-                        isLongPressing = false
+
+    Box(
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            isLongPressing = true
+                            tryAwaitRelease()
+                            isLongPressing = false
+                        }
+                    )
+                },
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 点赞图标 (带进度环)
+            com.android.purebilibili.feature.video.ui.section.TripleProgressIcon(
+                icon = CupertinoIcons.Outlined.HandThumbsup,
+                text = "149",
+                progress = longPressProgress,
+                progressColor = MaterialTheme.colorScheme.primary,
+                isActive = false
+            )
+
+            // 投币图标
+            com.android.purebilibili.feature.video.ui.section.TripleProgressIcon(
+                icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
+                text = "25",
+                progress = longPressProgress,
+                progressColor = MaterialTheme.colorScheme.primary,
+                isActive = false
+            )
+
+            // 收藏图标
+            com.android.purebilibili.feature.video.ui.section.TripleProgressIcon(
+                icon = CupertinoIcons.Outlined.Bookmark,
+                text = "7",
+                progress = longPressProgress,
+                progressColor = MaterialTheme.colorScheme.primary,
+                isActive = false
+            )
+        }
+
+        if (showCelebration) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                com.android.purebilibili.feature.video.ui.components.TripleSuccessAnimation(
+                    visible = true,
+                    reducedMotion = false,
+                    onAnimationEnd = {
+                        showCelebration = false
+                        showDialog = true
                     }
                 )
-            },
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // 点赞图标 (带进度环)
-        com.android.purebilibili.feature.video.ui.section.TripleProgressIcon(
-            icon = CupertinoIcons.Outlined.HandThumbsup,
-            text = "149",
-            progress = longPressProgress,
-            progressColor = MaterialTheme.colorScheme.primary,
-            isActive = false
-        )
-        
-        // 投币图标
-        com.android.purebilibili.feature.video.ui.section.TripleProgressIcon(
-            icon = com.android.purebilibili.core.ui.AppIcons.BiliCoin,
-            text = "25",
-            progress = longPressProgress,
-            progressColor = Color(0xFFFFB300),
-            isActive = false
-        )
-        
-        // 收藏图标
-        com.android.purebilibili.feature.video.ui.section.TripleProgressIcon(
-            icon = CupertinoIcons.Outlined.Bookmark,
-            text = "7",
-            progress = longPressProgress,
-            progressColor = Color(0xFFFFC107),
-            isActive = false
-        )
+            }
+        }
     }
 }

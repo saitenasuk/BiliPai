@@ -87,6 +87,80 @@ class VideoLoadPolicyTest {
     }
 
     @Test
+    fun `shouldRetryDashTrackRecovery retries when api advertises 1080p but first dash payload is capped at 720p`() {
+        assertTrue(
+            shouldRetryDashTrackRecovery(
+                targetQn = 80,
+                returnedQuality = 64,
+                acceptQualities = listOf(80, 64, 32),
+                dashVideoIds = listOf(64, 32)
+            )
+        )
+    }
+
+    @Test
+    fun `shouldRetryDashTrackRecovery skips retry when target quality track already exists`() {
+        assertFalse(
+            shouldRetryDashTrackRecovery(
+                targetQn = 80,
+                returnedQuality = 80,
+                acceptQualities = listOf(80, 64, 32),
+                dashVideoIds = listOf(80, 64, 32)
+            )
+        )
+    }
+
+    @Test
+    fun `shouldRetryDashTrackRecovery skips retry when api never advertised target quality`() {
+        assertFalse(
+            shouldRetryDashTrackRecovery(
+                targetQn = 80,
+                returnedQuality = 64,
+                acceptQualities = listOf(64, 32),
+                dashVideoIds = listOf(64, 32)
+            )
+        )
+    }
+
+    @Test
+    fun `buildStartQualityDecisionSummary includes auth and quality context`() {
+        assertEquals(
+            "PLAY_DIAG start_quality bvid=BV1TEST12345 cid=9527 userSetting=116 start=80 autoHighest=false isLoggedIn=true isVip=false auto1080p=true audioLang=default",
+            buildStartQualityDecisionSummary(
+                bvid = "BV1TEST12345",
+                cid = 9527L,
+                userSettingQuality = 116,
+                startQuality = 80,
+                isAutoHighestQuality = false,
+                isLoggedIn = true,
+                isVip = false,
+                auto1080pEnabled = true,
+                audioLang = null
+            )
+        )
+    }
+
+    @Test
+    fun `buildPlayUrlFetchSummary includes source result and advertised tracks`() {
+        assertEquals(
+            "PLAY_DIAG fetch_result bvid=BV1TEST12345 cid=9527 source=DASH requested=80 returned=64 accept=[80, 64, 32] dash=[64, 32] hasDurl=false isLoggedIn=true isVip=false audioLang=default",
+            buildPlayUrlFetchSummary(
+                bvid = "BV1TEST12345",
+                cid = 9527L,
+                source = PlayUrlSource.DASH,
+                requestedQuality = 80,
+                returnedQuality = 64,
+                acceptQualities = listOf(80, 64, 32),
+                dashVideoIds = listOf(64, 32),
+                hasDurl = false,
+                isLoggedIn = true,
+                isVip = false,
+                audioLang = null
+            )
+        )
+    }
+
+    @Test
     fun `shouldCallAccessTokenApi respects cooldown`() {
         val now = 1_000L
         assertFalse(shouldCallAccessTokenApi(nowMs = now, cooldownUntilMs = 2_000L, hasAccessToken = true))

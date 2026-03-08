@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-04 · Synced to v6.6.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-07 · Synced to v6.9.2 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.6.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.9.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -26,6 +26,14 @@
   <a href="https://t.me/BiliPai"><img src="https://img.shields.io/badge/Telegram-Join-2CA5E0?style=flat-square&logo=telegram" alt="Telegram"></a>
   <a href="https://x.com/YangY_0x00"><img src="https://img.shields.io/badge/X-Follow-000000?style=flat-square&logo=x" alt="X"></a>
 </p>
+
+## 🚀 Quick Links
+
+| Category | Entry |
+| --- | --- |
+| Get Started | [Download Releases](https://github.com/jay3-yy/BiliPai/releases) · [Changelog](CHANGELOG.md) |
+| Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
+| Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
 ## 📸 Preview
 
@@ -347,6 +355,8 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ## 📚 Wiki
 
+- AI / LLM Entry: [`llms.txt`](llms.txt)
+- AI Navigation Guide: [`docs/wiki/AI.md`](docs/wiki/AI.md)
 - Wiki Home: [`docs/wiki/README.md`](docs/wiki/README.md)
 - Feature Matrix: [`docs/wiki/FEATURE_MATRIX.md`](docs/wiki/FEATURE_MATRIX.md)
 - Architecture: [`docs/wiki/ARCHITECTURE.md`](docs/wiki/ARCHITECTURE.md)
@@ -393,11 +403,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v6.6.0 · 2026-03-04)
+### Latest (v6.9.2 · 2026-03-07)
 
-- 🎬 **Subtitle Pipeline Upgrade**: Subtitles enabled by default, player info switched to WBI-signed endpoint, and subtitle panel/readability improved.
-- 🎵 **Favorites Audio Queue Fix**: Fixed stop-after-one issue in sequential/shuffle modes; favorites queue now follows its own continuous playback strategy.
-- 💬 **UX Improvements**: Inbox pin-first sorting and optimistic updates, horizontal scrolling filter bar in search, and cleaner info layout on home video cards.
+- 🚀 **Smoother Comment Scrolling While Playing**: Comment pagination now waits until the user is near the bottom, and playback automatically switches comment rows into a lighter rendering mode.
+- 🎬 **Player Stability Improvements**: Mini-player, background playback, top controls, and danmaku settings coordination were tightened to reduce edge-case state glitches.
+- 🛠️ **Dynamic and Space Fixes**: Re-tapping a selected followed user now returns to the full dynamic feed, and the Space page `Play all` icon no longer renders clipped.
 
 ---
 

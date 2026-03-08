@@ -1,8 +1,14 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.data.model.response.ReplyMember
+import com.android.purebilibili.data.model.response.ReplyCardLabel
+import com.android.purebilibili.data.model.response.ReplyContent
+import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplySailingCardBg
 import com.android.purebilibili.data.model.response.ReplySailingFan
+import com.android.purebilibili.data.model.response.ReplyPicture
+import com.android.purebilibili.data.model.response.ReplyUpAction
+import kotlin.test.assertContentEquals
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -11,6 +17,132 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ReplyComponentsPolicyTest {
+
+    @Test
+    fun `resolveReplySpecialLabelText prefers server label over fallback`() {
+        val text = resolveReplySpecialLabelText(
+            cardLabels = listOf(
+                ReplyCardLabel(
+                    textContent = "UP主觉得很赞",
+                    labelColor = "#FB7299",
+                    jumpUrl = ""
+                )
+            ),
+            showUpFlag = true,
+            upAction = ReplyUpAction(like = true, reply = false)
+        )
+
+        assertEquals("UP主觉得很赞", text)
+    }
+
+    @Test
+    fun `resolveReplySpecialLabelText falls back only when config allows it`() {
+        assertEquals(
+            "UP主觉得很赞",
+            resolveReplySpecialLabelText(
+                cardLabels = emptyList(),
+                showUpFlag = true,
+                upAction = ReplyUpAction(like = true, reply = false)
+            )
+        )
+        assertNull(
+            resolveReplySpecialLabelText(
+                cardLabels = emptyList(),
+                showUpFlag = false,
+                upAction = ReplyUpAction(like = true, reply = false)
+            )
+        )
+    }
+
+    @Test
+    fun `resolveReplySpecialLabelText ignores blank server labels`() {
+        assertNull(
+            resolveReplySpecialLabelText(
+                cardLabels = listOf(
+                    ReplyCardLabel(
+                        textContent = "   ",
+                        labelColor = "",
+                        jumpUrl = ""
+                    )
+                ),
+                showUpFlag = false,
+                upAction = ReplyUpAction(like = false, reply = false)
+            )
+        )
+    }
+
+    @Test
+    fun `resolveReplyDisplayLikeCount applies optimistic state only when needed`() {
+        assertEquals(8, resolveReplyDisplayLikeCount(baseLikeCount = 7, initialAction = 0, isLiked = true))
+        assertEquals(6, resolveReplyDisplayLikeCount(baseLikeCount = 7, initialAction = 1, isLiked = false))
+        assertEquals(7, resolveReplyDisplayLikeCount(baseLikeCount = 7, initialAction = 1, isLiked = true))
+    }
+
+    @Test
+    fun `resolveReplyLocationText normalizes non empty values`() {
+        assertEquals("IP归属地：上海", resolveReplyLocationText("IP属地：上海"))
+        assertEquals("IP归属地：北京", resolveReplyLocationText("北京"))
+        assertNull(resolveReplyLocationText(""))
+    }
+
+    @Test
+    fun `buildSubReplyPreviewPrefix includes separator and optional up tag`() {
+        assertContentEquals(
+            listOf("测试用户", " ", "[UP]", ": "),
+            buildSubReplyPreviewPrefix(
+                userName = "测试用户",
+                isUpComment = true
+            )
+        )
+        assertContentEquals(
+            listOf("路人", ": "),
+            buildSubReplyPreviewPrefix(
+                userName = "路人",
+                isUpComment = false
+            )
+        )
+    }
+
+    @Test
+    fun `resolveReplyItemContentType distinguishes media label and thread variants`() {
+        assertEquals(
+            "reply_labeled",
+            resolveReplyItemContentType(
+                ReplyItem(
+                    cardLabels = listOf(ReplyCardLabel(textContent = "UP主觉得很赞")),
+                    content = ReplyContent(message = "special")
+                )
+            )
+        )
+        assertEquals(
+            "reply_media",
+            resolveReplyItemContentType(
+                ReplyItem(
+                    content = ReplyContent(
+                        message = "media",
+                        pictures = listOf(ReplyPicture(imgSrc = "https://example.com/1.jpg"))
+                    )
+                )
+            )
+        )
+        assertEquals(
+            "reply_thread",
+            resolveReplyItemContentType(
+                ReplyItem(
+                    rcount = 2,
+                    content = ReplyContent(message = "thread")
+                )
+            )
+        )
+        assertEquals(
+            "reply_plain",
+            resolveReplyItemContentType(
+                ReplyItem(
+                    content = ReplyContent(message = "plain")
+                )
+            )
+        )
+    }
 
     @Test
     fun `collectRenderableEmoteKeys only keeps used and mapped tokens`() {
@@ -52,6 +184,30 @@ class ReplyComponentsPolicyTest {
             shouldEnableRichCommentSelection(
                 hasRenderableEmotes = false,
                 hasInteractiveAnnotations = false
+            )
+        )
+    }
+
+    @Test
+    fun `lightweight reply mode hides ancillary decorations and sub previews`() {
+        assertFalse(shouldShowReplyAncillaryDecorations(lightweightMode = true))
+        assertTrue(shouldShowReplyAncillaryDecorations(lightweightMode = false))
+        assertFalse(
+            shouldShowReplySubPreview(
+                hideSubPreview = false,
+                lightweightMode = true
+            )
+        )
+        assertFalse(
+            shouldShowReplySubPreview(
+                hideSubPreview = true,
+                lightweightMode = false
+            )
+        )
+        assertTrue(
+            shouldShowReplySubPreview(
+                hideSubPreview = false,
+                lightweightMode = false
             )
         )
     }

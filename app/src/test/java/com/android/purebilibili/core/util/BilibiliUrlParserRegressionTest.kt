@@ -1,7 +1,7 @@
 package com.android.purebilibili.core.util
-
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class BilibiliUrlParserRegressionTest {
@@ -44,5 +44,45 @@ class BilibiliUrlParserRegressionTest {
 
         assertTrue(result.isValid)
         assertEquals("BV1xx411c7mD", result.getVideoId())
+    }
+
+    @Test
+    fun parse_acceptsMobileOpusDynamicLink() {
+        val result = BilibiliUrlParser.parse("https://m.bilibili.com/opus/1015637114125025318")
+
+        assertTrue(result.isValid)
+        assertNull(result.getVideoId())
+        assertEquals("1015637114125025318", result.getDynamicTargetId())
+    }
+
+    @Test
+    fun parse_acceptsDesktopDynamicLink() {
+        val result = BilibiliUrlParser.parse("https://t.bilibili.com/1015637114125025318")
+
+        assertTrue(result.isValid)
+        assertNull(result.getVideoId())
+        assertEquals("1015637114125025318", result.getDynamicTargetId())
+    }
+
+    @Test
+    fun parseDeepLink_prefersWrappedOpusUrlOverMisleadingAidQuery() {
+        val result = BilibiliUrlParser.parseDeepLink(
+            "bilibili://browser?url=https%3A%2F%2Fm.bilibili.com%2Fopus%2F1015637114125025318&aid=170001"
+        )
+
+        assertTrue(result.isValid)
+        assertNull(result.getVideoId())
+        assertEquals("1015637114125025318", result.getDynamicTargetId())
+    }
+
+    @Test
+    fun parseDeepLink_prefersExplicitOpusIdOverMisleadingAidQuery() {
+        val result = BilibiliUrlParser.parseDeepLink(
+            "bilibili://opus/detail?opus_id=1015637114125025318&aid=170001"
+        )
+
+        assertTrue(result.isValid)
+        assertNull(result.getVideoId())
+        assertEquals("1015637114125025318", result.getDynamicTargetId())
     }
 }

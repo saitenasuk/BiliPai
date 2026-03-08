@@ -163,4 +163,22 @@ class VideoPlayerSectionPolicyTest {
 
         assertEquals(PlaybackParameters(1.5f, 1.0f), parameters)
     }
+
+    @Test
+    fun playbackReadyAutoFullscreen_enabledForPhonesInOrientationDrivenMode() {
+        assertTrue(
+            shouldAllowPlaybackStateAutoFullscreen(
+                smallestScreenWidthDp = 411
+            )
+        )
+    }
+
+    @Test
+    fun playbackReadyAutoFullscreen_disabledForTabletsEvenWhenUsingCompactLayout() {
+        assertFalse(
+            shouldAllowPlaybackStateAutoFullscreen(
+                smallestScreenWidthDp = 600
+            )
+        )
+    }
 }

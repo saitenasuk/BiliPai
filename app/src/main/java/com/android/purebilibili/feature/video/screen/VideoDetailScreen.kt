@@ -74,7 +74,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.core.view.WindowCompat
 import com.android.purebilibili.data.model.response.BgmInfo
 import androidx.core.view.WindowInsetsCompat
+import androidx.media3.common.Player
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 //  已改用 MaterialTheme.colorScheme.primary
 
 import com.android.purebilibili.data.model.response.RelatedVideo
@@ -110,6 +112,7 @@ import com.android.purebilibili.feature.video.viewmodel.CommentSortMode  //  新
 import com.android.purebilibili.feature.video.ui.components.LikeBurstAnimation
 import com.android.purebilibili.feature.video.ui.components.TripleSuccessAnimation
 import com.android.purebilibili.feature.video.ui.components.VideoDetailSkeleton
+import com.android.purebilibili.feature.video.ui.components.VideoActionFeedbackHost
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog  //  评论图片预览
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
@@ -148,6 +151,13 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import com.android.purebilibili.feature.video.ui.components.DanmakuContextMenu
 import com.android.purebilibili.feature.video.ui.components.InteractiveChoiceOverlay
+import com.android.purebilibili.feature.video.ui.feedback.VideoFeedbackAnchor
+import com.android.purebilibili.feature.video.ui.feedback.TripleCelebrationPlacement
+import com.android.purebilibili.feature.video.ui.feedback.resolveQualityReminderPlacement
+import com.android.purebilibili.feature.video.ui.feedback.resolveTripleCelebrationPlacement
+import com.android.purebilibili.feature.video.ui.feedback.resolveVideoFeedbackPlacement
+import com.android.purebilibili.feature.video.viewmodel.PlayerToastMessage
+import com.android.purebilibili.feature.video.viewmodel.PlayerToastPresentation
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -545,7 +555,7 @@ fun VideoDetailScreen(
     val isSavingFavoriteFolders by viewModel.isSavingFavoriteFolders.collectAsState()
     
     // [Blur] Haze State
-    val hazeState = remember { HazeState() }
+    val hazeState = rememberRecoverableHazeState()
     
     //  空降助手 - 已由插件系统自动处理
     // val sponsorSegment by viewModel.currentSponsorSegment.collectAsState()
@@ -664,6 +674,11 @@ fun VideoDetailScreen(
     //  [关键] 保存进入前的状态栏配置（在 DisposableEffect 外部定义以便复用）
     val activity = remember { context.findActivity() }
     val window = remember { activity?.window }
+    var entryRequestedOrientation by rememberSaveable {
+        mutableIntStateOf(
+            activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        )
+    }
     val insetsController = remember {
         if (window != null && activity != null) {
             WindowCompat.getInsetsController(window, window.decorView)
@@ -767,6 +782,8 @@ fun VideoDetailScreen(
     // 🔄 [新增] 自动横竖屏切换 - 跟随手机传感器方向
     val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAutoRotateEnabled(context).collectAsState(initial = false)
+    val cardAnimationEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getCardAnimationEnabled(context).collectAsState(initial = true)
     
     DisposableEffect(activity, isScreenActive) {
         if (!isScreenActive || activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
@@ -885,14 +902,16 @@ fun VideoDetailScreen(
                     } catch (_: Exception) {}
                 }
 
-                // 恢复屏幕方向
-                deferredActivity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                // 恢复进入详情页前的方向请求，避免平板误横屏后退不回去。
+                deferredActivity?.requestedOrientation = resolveVideoDetailExitRequestedOrientation(
+                    originalRequestedOrientation = entryRequestedOrientation
+                )
             }
         }
     }
     
     //  新增：监听消息事件（关注/收藏反馈）- 使用居中弹窗
-    var popupMessage by remember { mutableStateOf<String?>(null) }
+    var popupMessage by remember { mutableStateOf<PlayerToastMessage?>(null) }
     LaunchedEffect(Unit) {
         viewModel.toastEvent.collect { message ->
             popupMessage = message
@@ -929,6 +948,22 @@ fun VideoDetailScreen(
         com.android.purebilibili.core.store.SettingsManager.getMiniPlayerModeSync(context) == 
             com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP
     }
+    val feedbackBottomInsetDp = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+        .value
+        .roundToInt() + if (isFullscreenMode) 24 else 20
+    val feedbackPlacement = resolveVideoFeedbackPlacement(
+        isFullscreen = isFullscreenMode,
+        isLandscape = isLandscape,
+        bottomInsetDp = feedbackBottomInsetDp
+    )
+    val feedbackAnchorAlignment = when (feedbackPlacement.anchor) {
+        VideoFeedbackAnchor.BottomCenter -> Alignment.BottomCenter
+        VideoFeedbackAnchor.BottomTrailing -> Alignment.BottomEnd
+        VideoFeedbackAnchor.CenterOverlay -> Alignment.Center
+    }
+    val isReducedActionMotion = !cardAnimationEnabled
     
     // 🔧 [性能优化] 记录上次设置的 PiP bounds，避免重复设置
     var lastPipBounds by remember { mutableStateOf<android.graphics.Rect?>(null) }
@@ -1009,6 +1044,30 @@ fun VideoDetailScreen(
         cid = cid,
         startPaused = isPortraitFullscreen && !useSharedPortraitPlayer
     )
+    val isVideoPlaying by produceState(
+        initialValue = playerState.player.isPlaying,
+        key1 = playerState.player
+    ) {
+        val player = playerState.player
+        value = player.isPlaying
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                value = isPlaying
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                value = player.isPlaying
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                value = player.isPlaying
+            }
+        }
+        player.addListener(listener)
+        awaitDispose {
+            player.removeListener(listener)
+        }
+    }
 
     var hasAppliedInitialPageSwitch by remember(currentBvid, cid) { mutableStateOf(false) }
     LaunchedEffect(uiState, currentBvid, cid, hasAppliedInitialPageSwitch) {
@@ -1298,7 +1357,12 @@ fun VideoDetailScreen(
             val success = uiState as PlayerUiState.Success
             
             // 初始化评论（传入 UP 主 mid 用于筛选）- 保持在主线程
-            commentViewModel.init(info.aid, info.owner.mid, preferredCommentSortMode)
+            commentViewModel.init(
+                aid = info.aid,
+                upMid = info.owner.mid,
+                preferredSortMode = preferredCommentSortMode,
+                expectedReplyCount = info.stat.reply
+            )
             
             playerState.updateMediaMetadata(
                 title = info.title,
@@ -2051,6 +2115,7 @@ fun VideoDetailScreen(
                                                         isRepliesEnd = commentState.isRepliesEnd,
                                                         // [新增] 传递删除相关参数
                                                         currentMid = commentState.currentMid,
+                                                        showUpFlag = commentState.showUpFlag,
                                                         dissolvingIds = commentState.dissolvingIds,
                                                         // [新增] 删除评论
                                                         onDeleteComment = { rpid ->
@@ -2138,11 +2203,14 @@ fun VideoDetailScreen(
                                                         onRestorePlayer = { playerHeightOffsetPx = 0f },
                                                         // [新增] AI Summary & BGM
                                                         aiSummary = success.aiSummary,
+                                                        aiSummaryPrompt = success.aiSummaryPrompt,
+                                                        onRetryAiSummary = { viewModel.retryAiSummary() },
                                                         bgmInfo = success.bgmInfo,
                                                         onBgmClick = onBgmClick,
                                                         ownerFollowerCount = success.ownerFollowerCount,
                                                         ownerVideoCount = success.ownerVideoCount,
-                                                        showInteractionActions = shouldShowVideoDetailActionButtons()
+                                                        showInteractionActions = shouldShowVideoDetailActionButtons(),
+                                                        isVideoPlaying = isVideoPlaying
                                                     )
 
                                                     // 底部输入栏 (覆盖在内容之上)
@@ -2880,6 +2948,7 @@ fun VideoDetailScreen(
             val successState = uiState as? PlayerUiState.Success
             SubReplySheet(
                 state = subReplyState,
+                showUpFlag = commentState.showUpFlag,
                 emoteMap = successState?.emoteMap ?: emptyMap(),
                 onDismiss = { commentViewModel.closeSubReply() },
                 onLoadMore = { commentViewModel.loadMoreSubReplies() },
@@ -2939,11 +3008,15 @@ fun VideoDetailScreen(
         if (likeBurstVisible) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(y = (-50).dp)
+                    .align(feedbackAnchorAlignment)
+                    .padding(
+                        end = if (feedbackPlacement.anchor == VideoFeedbackAnchor.BottomTrailing) feedbackPlacement.sideInsetDp.dp else 0.dp,
+                        bottom = (feedbackPlacement.bottomInsetDp + 56).dp
+                    )
             ) {
                 LikeBurstAnimation(
                     visible = true,
+                    reducedMotion = isReducedActionMotion,
                     onAnimationEnd = { viewModel.dismissLikeBurst() }
                 )
             }
@@ -2951,38 +3024,39 @@ fun VideoDetailScreen(
         
         // 🎉 三连成功庆祝动画
         val tripleCelebrationVisible by viewModel.tripleCelebrationVisible.collectAsState()
+        val tripleCelebrationPlacement = resolveTripleCelebrationPlacement(
+            isFullscreen = isFullscreenMode,
+            isLandscape = isLandscape
+        )
         if (tripleCelebrationVisible) {
             Box(
-                modifier = Modifier.align(Alignment.Center)
+                modifier = Modifier.align(
+                    when (tripleCelebrationPlacement) {
+                        TripleCelebrationPlacement.CenterOverlay -> Alignment.Center
+                    }
+                )
             ) {
                 TripleSuccessAnimation(
                     visible = true,
+                    isCompact = false,
+                    reducedMotion = isReducedActionMotion,
                     onAnimationEnd = { viewModel.dismissTripleCelebration() }
                 )
             }
         }
         
-        //  居中弹窗提示（关注/收藏反馈）
-        androidx.compose.animation.AnimatedVisibility(
-            visible = popupMessage != null,
-            enter = fadeIn() + scaleIn(initialScale = 0.8f),
-            exit = fadeOut() + scaleOut(targetScale = 0.8f),
-            modifier = Modifier.align(Alignment.Center)
-        ) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.85f),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                tonalElevation = 8.dp
-            ) {
-                Text(
-                    text = popupMessage ?: "",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
-                )
-            }
+        val activeFeedbackPlacement = if (popupMessage?.presentation == PlayerToastPresentation.CenteredHighlight) {
+            resolveQualityReminderPlacement()
+        } else {
+            feedbackPlacement
         }
+
+        VideoActionFeedbackHost(
+            message = popupMessage?.message,
+            visible = popupMessage != null,
+            placement = activeFeedbackPlacement,
+            hazeState = hazeState
+        )
 
         resumePlaybackSuggestion?.let { suggestion ->
             AlertDialog(
@@ -3455,6 +3529,12 @@ internal fun resolvePortraitRotateTargetOrientation(
     } else {
         null
     }
+}
+
+internal fun resolveVideoDetailExitRequestedOrientation(
+    originalRequestedOrientation: Int?
+): Int {
+    return originalRequestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 }
 
 internal fun shouldEnableVideoCoverSharedTransition(
