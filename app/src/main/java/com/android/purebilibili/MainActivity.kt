@@ -8,9 +8,11 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.coroutines.AppScope
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.theme.PureBiliBiliTheme
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
@@ -56,10 +59,18 @@ import com.android.purebilibili.feature.plugin.EyeProtectionOverlay
 import com.android.purebilibili.feature.settings.AppUpdateAutoCheckGate
 import com.android.purebilibili.feature.settings.AppUpdateCheckResult
 import com.android.purebilibili.feature.settings.AppUpdateChecker
+import com.android.purebilibili.feature.settings.AppUpdateDownloadState
+import com.android.purebilibili.feature.settings.AppUpdateDownloadStatus
+import com.android.purebilibili.feature.settings.AppUpdateInstallAction
 import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
+import com.android.purebilibili.feature.settings.completeAppUpdateDownload
+import com.android.purebilibili.feature.settings.downloadAppUpdateApk
+import com.android.purebilibili.feature.settings.failAppUpdateDownload
+import com.android.purebilibili.feature.settings.installDownloadedAppUpdate
 import com.android.purebilibili.feature.settings.resolveAppUpdateDialogTextColors
 import com.android.purebilibili.feature.settings.resolveUpdateReleaseNotesText
+import com.android.purebilibili.feature.settings.selectPreferredAppUpdateAsset
 import com.android.purebilibili.feature.settings.shouldRunAppEntryAutoCheck
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenPlayerOverlay
@@ -68,6 +79,7 @@ import com.android.purebilibili.navigation.AppNavigation
 import dev.chrisbanes.haze.haze
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URI
 import java.net.URLEncoder
 import java.net.URLDecoder
@@ -171,6 +183,23 @@ internal fun shouldForceStopPlaybackOnUserLeaveHint(
     shouldTriggerPip: Boolean
 ): Boolean {
     return isInVideoDetail && stopPlaybackOnExit && !shouldTriggerPip
+}
+
+internal fun isPlaybackRouteActive(
+    isInVideoDetail: Boolean,
+    isInAudioMode: Boolean
+): Boolean = isInVideoDetail || isInAudioMode
+
+internal fun shouldTriggerPlaybackRoutePip(
+    isInVideoDetail: Boolean,
+    isInAudioMode: Boolean,
+    audioModeAutoPipEnabled: Boolean,
+    shouldEnterPip: Boolean,
+    isActuallyPlaying: Boolean
+): Boolean {
+    if (!shouldEnterPip || !isActuallyPlaying) return false
+    if (isInVideoDetail) return true
+    return isInAudioMode && audioModeAutoPipEnabled
 }
 
 internal enum class CrashLogPromptAction {
@@ -366,6 +395,7 @@ class MainActivity : ComponentActivity() {
     
     //  是否在视频页面 (用于决定是否进入 PiP)
     var isInVideoDetail by mutableStateOf(false)
+    var isInAudioModeRoute by mutableStateOf(false)
     
     //  小窗管理器
     private lateinit var miniPlayerManager: MiniPlayerManager
@@ -623,7 +653,7 @@ class MainActivity : ComponentActivity() {
         
         if (shouldStartLocalProxyOnAppLaunch()) {
             // Optional warmup path; default keeps proxy off cold-start critical path.
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            AppScope.ioScope.launch {
                 try {
                     val started = com.android.purebilibili.feature.cast.LocalProxyServer.ensureStarted()
                     if (started) {
@@ -640,8 +670,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val uriHandler = LocalUriHandler.current
+            val scope = rememberCoroutineScope()
             val navController = androidx.navigation.compose.rememberNavController()
             var startupUpdateCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
+            var startupUpdateDownloadState by remember { mutableStateOf(AppUpdateDownloadState()) }
             var pendingCrashSnapshotPath by remember {
                 mutableStateOf(Logger.getPendingCrashSnapshotPath(context))
             }
@@ -795,6 +827,14 @@ class MainActivity : ComponentActivity() {
                                     onVideoDetailExit = { 
                                         isInVideoDetail = false
                                         Logger.d(TAG, "🔙 退出视频详情页")
+                                    },
+                                    onAudioModeEnter = {
+                                        isInAudioModeRoute = true
+                                        Logger.d(TAG, "🎧 进入听视频页")
+                                    },
+                                    onAudioModeExit = {
+                                        isInAudioModeRoute = false
+                                        Logger.d(TAG, "🎧 退出听视频页")
                                     },
                                     mainHazeState = mainHazeState //  传递全局 Haze 状态
                                 )
@@ -1026,6 +1066,9 @@ class MainActivity : ComponentActivity() {
                         val resolvedReleaseNotes = remember(info.releaseNotes) {
                             resolveUpdateReleaseNotesText(info.releaseNotes)
                         }
+                        val preferredAsset = remember(info.assets) {
+                            selectPreferredAppUpdateAsset(info.assets)
+                        }
                         val isDialogDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                         val dialogTextColors = remember(isDialogDarkTheme) {
                             resolveAppUpdateDialogTextColors(
@@ -1048,6 +1091,29 @@ class MainActivity : ComponentActivity() {
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = dialogTextColors.currentVersionColor
                                     )
+                                    preferredAsset?.let { asset ->
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "安装包：${asset.name}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = dialogTextColors.currentVersionColor
+                                        )
+                                    }
+                                    if (startupUpdateDownloadState.status != AppUpdateDownloadStatus.IDLE) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = when (startupUpdateDownloadState.status) {
+                                                AppUpdateDownloadStatus.DOWNLOADING ->
+                                                    "下载中 ${(startupUpdateDownloadState.progress * 100).toInt()}%"
+                                                AppUpdateDownloadStatus.COMPLETED -> "下载完成，正在准备安装"
+                                                AppUpdateDownloadStatus.FAILED ->
+                                                    startupUpdateDownloadState.errorMessage ?: "下载失败"
+                                                AppUpdateDownloadStatus.IDLE -> ""
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = dialogTextColors.currentVersionColor
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
                                         text = resolvedReleaseNotes,
@@ -1062,13 +1128,65 @@ class MainActivity : ComponentActivity() {
                             },
                             confirmButton = {
                                 com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
-                                    startupUpdateCheckResult = null
-                                    uriHandler.openUri(info.releaseUrl)
-                                }) { Text("前往下载") }
+                                    val downloadedFile = startupUpdateDownloadState.filePath
+                                        ?.takeIf { startupUpdateDownloadState.status == AppUpdateDownloadStatus.COMPLETED }
+                                        ?.let { path -> java.io.File(path) }
+                                        ?.takeIf { it.exists() }
+
+                                    if (downloadedFile != null) {
+                                        installDownloadedAppUpdate(context, downloadedFile)
+                                        return@IOSDialogAction
+                                    }
+
+                                    val asset = preferredAsset
+                                    if (asset == null) {
+                                        startupUpdateCheckResult = null
+                                        uriHandler.openUri(info.releaseUrl)
+                                        return@IOSDialogAction
+                                    }
+
+                                    if (startupUpdateDownloadState.status == AppUpdateDownloadStatus.DOWNLOADING) {
+                                        return@IOSDialogAction
+                                    }
+
+                                    scope.launch {
+                                        downloadAppUpdateApk(
+                                            context = context,
+                                            asset = asset,
+                                            onStateChange = { state -> startupUpdateDownloadState = state }
+                                        ).onSuccess { file ->
+                                            startupUpdateDownloadState = completeAppUpdateDownload(
+                                                current = startupUpdateDownloadState,
+                                                filePath = file.absolutePath
+                                            )
+                                            val installAction = installDownloadedAppUpdate(context, file)
+                                            if (installAction == AppUpdateInstallAction.OPEN_UNKNOWN_SOURCES_SETTINGS) {
+                                                Toast.makeText(context, "请先允许安装未知来源应用", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }.onFailure { error ->
+                                            startupUpdateDownloadState = failAppUpdateDownload(
+                                                current = startupUpdateDownloadState,
+                                                errorMessage = error.message ?: "更新下载失败"
+                                            )
+                                            Toast.makeText(context, error.message ?: "更新下载失败", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }) {
+                                    Text(
+                                        when {
+                                            preferredAsset == null -> "前往下载"
+                                            startupUpdateDownloadState.status == AppUpdateDownloadStatus.DOWNLOADING ->
+                                                "下载中 ${(startupUpdateDownloadState.progress * 100).toInt()}%"
+                                            startupUpdateDownloadState.status == AppUpdateDownloadStatus.COMPLETED -> "安装更新"
+                                            else -> "立即更新"
+                                        }
+                                    )
+                                }
                             },
                             dismissButton = {
                                 com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
                                     startupUpdateCheckResult = null
+                                    startupUpdateDownloadState = AppUpdateDownloadState()
                                 }) { Text("稍后") }
                             }
                         )
@@ -1147,25 +1265,33 @@ class MainActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         
-        Logger.d(TAG, "👋 onUserLeaveHint 触发, isInVideoDetail=$isInVideoDetail, isMiniMode=${miniPlayerManager.isMiniMode}")
+        Logger.d(
+            TAG,
+            "👋 onUserLeaveHint 触发, isInVideoDetail=$isInVideoDetail, isInAudioModeRoute=$isInAudioModeRoute, isMiniMode=${miniPlayerManager.isMiniMode}"
+        )
         miniPlayerManager.markUserLeaveHint()
         miniPlayerManager.refreshMediaSessionBinding()
         
         val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(this)
+        val audioModeAutoPipEnabled = SettingsManager.getAudioModeAutoPipEnabledSync(this)
         //  [重构] 使用新的模式判断方法
         val shouldEnterPip = miniPlayerManager.shouldEnterPip()
         val currentMode = miniPlayerManager.getCurrentMode()
         val isActuallyPlaying = miniPlayerManager.isPlaying || (miniPlayerManager.player?.isPlaying == true)
-        
-        //  🔧 [修复] PiP 只应在视频详情页触发，小窗模式下不应触发系统 PiP
-        // 原因：小窗模式意味着用户已离开视频详情页（在首页等其他页面），
-        // 此时从其他页面返回桌面不应进入 PiP
-        val shouldTriggerPip = isInVideoDetail 
-            && shouldEnterPip 
-            && isActuallyPlaying
+        val isPlaybackRouteActive = isPlaybackRouteActive(
+            isInVideoDetail = isInVideoDetail,
+            isInAudioMode = isInAudioModeRoute
+        )
+        val shouldTriggerPip = shouldTriggerPlaybackRoutePip(
+            isInVideoDetail = isInVideoDetail,
+            isInAudioMode = isInAudioModeRoute,
+            audioModeAutoPipEnabled = audioModeAutoPipEnabled,
+            shouldEnterPip = shouldEnterPip,
+            isActuallyPlaying = isActuallyPlaying
+        )
 
         val shouldForceStopPlayback = shouldForceStopPlaybackOnUserLeaveHint(
-            isInVideoDetail = isInVideoDetail,
+            isInVideoDetail = isPlaybackRouteActive,
             stopPlaybackOnExit = stopPlaybackOnExit,
             shouldTriggerPip = shouldTriggerPip
         )
@@ -1174,7 +1300,10 @@ class MainActivity : ComponentActivity() {
             miniPlayerManager.markLeavingByNavigation()
         }
         
-        Logger.d(TAG, " miniPlayerMode=$currentMode, shouldEnterPip=$shouldEnterPip, isPlaying=$isActuallyPlaying, shouldTriggerPip=$shouldTriggerPip, API=${Build.VERSION.SDK_INT}")
+        Logger.d(
+            TAG,
+            " miniPlayerMode=$currentMode, audioModeAutoPipEnabled=$audioModeAutoPipEnabled, shouldEnterPip=$shouldEnterPip, isPlaying=$isActuallyPlaying, shouldTriggerPip=$shouldTriggerPip, API=${Build.VERSION.SDK_INT}"
+        )
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && shouldTriggerPip) {
             try {
@@ -1323,8 +1452,10 @@ class MainActivity : ComponentActivity() {
      *  解析 b23.tv 短链接并导航
      */
     private fun resolveShortLinkAndNavigate(shortUrl: String) {
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            val fullUrl = com.android.purebilibili.core.util.BilibiliUrlParser.resolveShortUrl(shortUrl)
+        lifecycleScope.launch {
+            val fullUrl = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.android.purebilibili.core.util.BilibiliUrlParser.resolveShortUrl(shortUrl)
+            }
             if (fullUrl != null) {
                 val result = com.android.purebilibili.core.util.BilibiliUrlParser.parse(fullUrl)
                 if (result.isValid) {

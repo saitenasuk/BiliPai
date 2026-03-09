@@ -1,6 +1,7 @@
 package com.android.purebilibili.data.repository
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -49,5 +50,23 @@ class VideoRepositorySubtitleCachePolicyTest {
 
         assertNotEquals(base, cidChanged)
         assertNotEquals(base, urlChanged)
+    }
+
+    @Test
+    fun `subtitle cue cache byte estimate scales with entries and cue count`() {
+        assertEquals(
+            2144L,
+            estimateSubtitleCueCacheBytes(
+                entryCount = 2,
+                totalCueCount = 7
+            )
+        )
+        assertEquals(
+            0L,
+            estimateSubtitleCueCacheBytes(
+                entryCount = -1,
+                totalCueCount = 0
+            )
+        )
     }
 }

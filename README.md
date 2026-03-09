@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-07 · 文档已同步至 v6.9.2（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-03-08 · 文档已同步至 v6.9.3（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.9.2-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.9.3-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -42,6 +42,9 @@
 
 > [!IMPORTANT]
 > 应用内默认设置为通用场景，可能不适合所有用户。建议进入 **设置** 按个人习惯手动调整（如外观、动画、播放设置等）。
+
+> [!NOTE]
+> 首页推荐流、视频详情/播放页等高频滑动与动效链路正在进行结构性性能重构。近期 `main` 分支会持续出现滚动、模糊、转场、播放控制相关调整；若遇到阶段性波动，请以最新提交与 `CHANGELOG`/Wiki 说明为准。
 
 ## 📸 应用预览
 
@@ -526,14 +529,14 @@ app/src/main/java/com/android/purebilibili
 - [x] 直播播放 + 分区浏览
 - [x] 动态页面 + 图片下载 + GIF 支持 + 多 UP 切换稳定性修复
 - [x] 图片预览文案与过渡升级（评论场景顶部文案 + 方向感动画）
-- [x] 离线下载 + 本地播放
+- [x] 离线下载 + 当前视频批量缓存 + 本地播放
 - [x] 搜索 + 历史记录（含批量删除）
 - [x] Material You + 深色模式
 - [x] 高画质扫码登录 + 首播清晰度鉴权修复（非大会员首次 720P 回退问题）
 - [x] 横屏控制栏增强（字幕面板 / 更多面板 / 播放顺序快捷切换）
 - [x] 共享元素过渡动画 + 返回首页动效优化
 - [x] 平板/折叠屏适配（侧边栏 + 底栏布局）
-- [x] 应用内更新检测（手动检查 + 进入应用自动检查 + 启动提示 + 查看更新日志）
+- [x] 应用内更新（手动检查 + 自动检查 + 启动提示 + 应用内下载/安装）
 - [x] 插件系统核心架构
 - [x] 内置插件 (空降助手 / 去广告 / 弹幕增强 / 夜间护眼 / 今日推荐单)
 - [x] Firebase Analytics + Crashlytics（支持用户行为统计与崩溃追踪）
@@ -556,11 +559,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v6.9.2 · 2026-03-07)
+### 最近更新 (v6.9.3 · 2026-03-08)
 
-- 🚀 **评论区边播边刷更顺滑**：评论分页改为接近底部再触发，播放中自动启用轻量评论渲染，优先保证滑动帧率。
-- 🎬 **播放器稳定性继续补强**：小窗、后台播放、控制条与弹幕设置联动继续收敛，减少叠层和状态切换时的异常。
-- 🛠️ **动态页与空间页修复**：动态页支持再次点击已选 UP 回到全部关注动态，空间页“播放全部”图标显示恢复完整。
+- ⬇️ **应用内更新与批量缓存补齐**：支持应用内下载更新包并拉起安装器，当前视频详情页也支持分 P / 合集批量缓存。
+- 🎬 **播放器与字幕体验修复**：修复自动字幕在横竖屏之间状态反复的问题，并优化横屏底栏密度与弹幕输入观感。
+- 🛠️ **搜索/空间页与缓存治理增强**：搜索认证标签更准确，空间页头图和动态加载更稳，清缓存也能覆盖更多可重建临时数据。
 
 ### 历史版本
 

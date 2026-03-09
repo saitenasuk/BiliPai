@@ -31,6 +31,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PhotoCamera
+import com.android.purebilibili.core.store.LONG_PRESS_SPEED_OPTIONS
 import com.android.purebilibili.core.ui.components.DefaultPlaybackSpeedPreferenceControl
 import com.android.purebilibili.core.ui.components.formatDefaultPlaybackSpeed
 import com.android.purebilibili.data.model.response.AiAudioInfo
@@ -1244,7 +1245,7 @@ private fun LongPressSpeedOptions(
     currentSpeed: Float,
     onSelect: (Float) -> Unit
 ) {
-    val options = listOf(1.25f, 1.5f)
+    val options = LONG_PRESS_SPEED_OPTIONS
     
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),

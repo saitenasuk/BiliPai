@@ -16,6 +16,14 @@ class BottomControlBarLayoutPolicyTest {
         assertEquals(12, policy.timeFontSp)
         assertEquals(13, policy.actionTextFontSp)
         assertEquals(4, policy.danmakuSettingEndPaddingDp)
+        assertEquals(12, policy.afterTimeSpacingDp)
+        assertEquals(8, policy.danmakuSwitchToInputSpacingDp)
+        assertEquals(10, policy.afterInputSpacingDp)
+        assertEquals(12, policy.rightActionSpacingDp)
+        assertEquals(8, policy.danmakuSwitchHorizontalPaddingDp)
+        assertEquals(6, policy.danmakuSwitchVerticalPaddingDp)
+        assertEquals(7, policy.actionChipHorizontalPaddingDp)
+        assertEquals(4, policy.actionChipVerticalPaddingDp)
     }
 
     @Test
@@ -29,6 +37,14 @@ class BottomControlBarLayoutPolicyTest {
         assertEquals(13, policy.timeFontSp)
         assertEquals(14, policy.actionTextFontSp)
         assertEquals(4, policy.danmakuSettingEndPaddingDp)
+        assertEquals(14, policy.afterTimeSpacingDp)
+        assertEquals(10, policy.danmakuSwitchToInputSpacingDp)
+        assertEquals(12, policy.afterInputSpacingDp)
+        assertEquals(14, policy.rightActionSpacingDp)
+        assertEquals(8, policy.danmakuSwitchHorizontalPaddingDp)
+        assertEquals(6, policy.danmakuSwitchVerticalPaddingDp)
+        assertEquals(7, policy.actionChipHorizontalPaddingDp)
+        assertEquals(4, policy.actionChipVerticalPaddingDp)
     }
 
     @Test

@@ -2,7 +2,11 @@ package com.android.purebilibili.core.util
 
 import android.content.Context
 import coil.imageLoader
+import com.android.purebilibili.core.cache.PlayUrlCache
 import com.android.purebilibili.core.cooldown.PlaybackCooldownManager
+import com.android.purebilibili.core.store.FollowingCacheStore
+import com.android.purebilibili.data.repository.DanmakuRepository
+import com.android.purebilibili.data.repository.VideoRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
@@ -66,10 +70,14 @@ object CacheUtils {
         context.imageLoader.memoryCache?.size?.let { memoryCache += it }
         
         // 2. PlayUrlCache 内存缓存（估算：每条约 2KB）
-        val playUrlCacheSize = com.android.purebilibili.core.cache.PlayUrlCache.size()
+        val playUrlCacheSize = PlayUrlCache.size()
         memoryCache += playUrlCacheSize * 2048L
 
-        // 3. 内部缓存目录分类统计
+        // 3. 字幕与弹幕内存缓存
+        memoryCache += VideoRepository.getSubtitleCueCacheStats().estimatedBytes
+        memoryCache += DanmakuRepository.getDanmakuCacheStats().totalBytes
+
+        // 4. 内部缓存目录分类统计
         context.cacheDir?.let { cacheDir ->
             cacheDir.walkTopDown()
                 .filter { it.isFile }
@@ -87,7 +95,10 @@ object CacheUtils {
                 }
         }
 
-        // 4. 外部缓存目录
+        // 5. 应用私有日志文件
+        otherCache += Logger.getPrivateLogArtifactsSize(context)
+
+        // 6. 外部缓存目录
         context.externalCacheDir?.let { extCacheDir ->
             otherCache += getDirSizeFast(extCacheDir)
         }
@@ -112,8 +123,13 @@ object CacheUtils {
             Logger.d(TAG, " Coil memory cache cleared")
             
             // 1.2  清除 PlayUrlCache（之前遗漏的）
-            com.android.purebilibili.core.cache.PlayUrlCache.clear()
+            PlayUrlCache.clear()
             Logger.d(TAG, " PlayUrlCache cleared")
+
+            // 1.3 清除字幕与弹幕内存缓存
+            VideoRepository.clearSubtitleCueCache()
+            DanmakuRepository.clearDanmakuCache()
+            Logger.d(TAG, " Subtitle and danmaku cache cleared")
 
             // ===== 第 2 阶段：清除 API 管理的磁盘缓存 =====
             
@@ -144,10 +160,7 @@ object CacheUtils {
             // ===== 第 4 阶段：清除应用级缓存 =====
             
             // 4.1 清除关注列表缓存
-            context.getSharedPreferences("following_cache", Context.MODE_PRIVATE)
-                .edit()
-                .clear()
-                .apply()
+            FollowingCacheStore.clear(context)
             Logger.d(TAG, " Following cache cleared")
             
             // 4.2 清除 WBI 签名缓存（让其自动重新获取）
@@ -157,8 +170,9 @@ object CacheUtils {
             // 4.3  清除播放冷却状态（让用户可以重新尝试）
             PlaybackCooldownManager.clearAll()
             Logger.d(TAG, " Playback cooldown cleared")
-                
-            Logger.d(TAG, "🎉 All cache cleared successfully")
+
+            // 4.4 清除应用私有日志文件与更新残留
+            Logger.clearPrivateLogArtifacts(context)
         }.onFailure { e ->
             Logger.e(TAG, "Error clearing cache", e)
         }
@@ -172,7 +186,9 @@ object CacheUtils {
         
         // 内存缓存
         context.imageLoader.memoryCache?.clear()
-        com.android.purebilibili.core.cache.PlayUrlCache.clear()
+        PlayUrlCache.clear()
+        VideoRepository.clearSubtitleCueCache()
+        DanmakuRepository.clearDanmakuCache()
         emit(ClearProgress(20, "内存缓存已清除"))
         
         // 磁盘缓存
@@ -193,9 +209,10 @@ object CacheUtils {
         emit(ClearProgress(90, "临时文件已清除"))
         
         // 应用缓存
-        context.getSharedPreferences("following_cache", Context.MODE_PRIVATE).edit().clear().apply()
+        FollowingCacheStore.clear(context)
         com.android.purebilibili.core.network.WbiKeyManager.invalidateCache()
         PlaybackCooldownManager.clearAll()
+        Logger.clearPrivateLogArtifacts(context)
         
         emit(ClearProgress(100, "清理完成"))
     }.flowOn(Dispatchers.IO)
@@ -244,7 +261,9 @@ object CacheUtils {
         // 内存缓存
         val memorySize = breakdown.memoryCache
         context.imageLoader.memoryCache?.clear()
-        com.android.purebilibili.core.cache.PlayUrlCache.clear()
+        PlayUrlCache.clear()
+        VideoRepository.clearSubtitleCueCache()
+        DanmakuRepository.clearDanmakuCache()
         clearedSize += memorySize
         emit(ClearProgressV2(clearedSize, totalSize, false, "内存缓存已清除"))
         kotlinx.coroutines.delay(100)
@@ -277,9 +296,10 @@ object CacheUtils {
         kotlinx.coroutines.delay(100)
         
         // 应用缓存
-        context.getSharedPreferences("following_cache", Context.MODE_PRIVATE).edit().clear().apply()
+        FollowingCacheStore.clear(context)
         com.android.purebilibili.core.network.WbiKeyManager.invalidateCache()
         PlaybackCooldownManager.clearAll()
+        Logger.clearPrivateLogArtifacts(context)
         
         emit(ClearProgressV2(totalSize, totalSize, true, "清理完成"))
     }.flowOn(Dispatchers.IO)

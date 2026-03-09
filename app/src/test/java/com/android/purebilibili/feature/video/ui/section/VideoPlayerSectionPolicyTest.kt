@@ -115,22 +115,21 @@ class VideoPlayerSectionPolicyTest {
     @Test
     fun longPressSpeed_clampsHiResToCompatibilityLimit() {
         val effective = resolveEffectiveLongPressSpeed(
-            requestedSpeed = 2.0f,
+            requestedSpeed = 3.0f,
             currentAudioQuality = 30251
         )
 
-        assertTrue(effective < 2.0f)
         assertTrue(effective == 1.5f)
     }
 
     @Test
-    fun longPressSpeed_clampsStandardAudioToCompatibilityLimit() {
+    fun longPressSpeed_keepsStandardAudioAtRequestedHighSpeed() {
         val effective = resolveEffectiveLongPressSpeed(
-            requestedSpeed = 2.0f,
+            requestedSpeed = 3.0f,
             currentAudioQuality = 30280
         )
 
-        assertTrue(effective == 1.5f)
+        assertTrue(effective == 3.0f)
     }
 
     @Test
@@ -157,11 +156,21 @@ class VideoPlayerSectionPolicyTest {
     @Test
     fun longPressPlaybackParameters_clampHiResSpeedBeforeApplyingPitchSafePlayback() {
         val parameters = resolveLongPressPlaybackParameters(
-            requestedSpeed = 2.0f,
+            requestedSpeed = 3.0f,
             currentAudioQuality = 30251
         )
 
         assertEquals(PlaybackParameters(1.5f, 1.0f), parameters)
+    }
+
+    @Test
+    fun longPressPlaybackParameters_keepStandardAudioRequestedHighSpeed() {
+        val parameters = resolveLongPressPlaybackParameters(
+            requestedSpeed = 3.0f,
+            currentAudioQuality = 30280
+        )
+
+        assertEquals(PlaybackParameters(3.0f, 1.0f), parameters)
     }
 
     @Test

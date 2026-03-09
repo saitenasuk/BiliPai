@@ -2,6 +2,7 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.cache.PlayUrlCache
+import com.android.purebilibili.core.coroutines.AppScope
 import com.android.purebilibili.core.network.AppSignUtils
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiKeyManager
@@ -14,6 +15,7 @@ import com.android.purebilibili.feature.video.subtitle.SubtitleCue
 import com.android.purebilibili.feature.video.subtitle.normalizeBilibiliSubtitleUrl
 import com.android.purebilibili.feature.video.subtitle.parseBiliSubtitleBody
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,6 +30,8 @@ import java.util.concurrent.ConcurrentHashMap
 private const val HOME_PRELOAD_WAIT_MAX_MS = 1200L
 private const val HOME_PRELOAD_WAIT_STEP_MS = 35L
 private const val SUBTITLE_CUE_CACHE_MAX_ENTRIES = 512
+private const val SUBTITLE_CUE_CACHE_ENTRY_OVERHEAD_BYTES = 512L
+private const val SUBTITLE_CUE_ESTIMATED_BYTES_PER_CUE = 160L
 
 internal fun shouldPrimeBuvidForHomePreload(feedApiType: SettingsManager.FeedApiType): Boolean {
     return feedApiType == SettingsManager.FeedApiType.MOBILE
@@ -65,6 +69,22 @@ internal fun buildSubtitleCueCacheKey(
     return "${bvid.ifBlank { "unknown" }}:${cid.coerceAtLeast(0L)}:${idPart}:${subtitleLan.ifBlank { "unknown" }}:$urlHash"
 }
 
+internal fun estimateSubtitleCueCacheBytes(
+    entryCount: Int,
+    totalCueCount: Int
+): Long {
+    val normalizedEntryCount = entryCount.coerceAtLeast(0)
+    val normalizedCueCount = totalCueCount.coerceAtLeast(0)
+    return normalizedEntryCount * SUBTITLE_CUE_CACHE_ENTRY_OVERHEAD_BYTES +
+        normalizedCueCount * SUBTITLE_CUE_ESTIMATED_BYTES_PER_CUE
+}
+
+data class SubtitleCueCacheStats(
+    val entryCount: Int,
+    val totalCueCount: Int,
+    val estimatedBytes: Long
+)
+
 data class CreatorCardStats(
     val followerCount: Int,
     val videoCount: Int
@@ -81,6 +101,24 @@ object VideoRepository {
     
     //  [新增] 确保 buvid3 来自 Bilibili SPI API + 激活（解决 412 问题）
     private var buvidInitialized = false
+
+    fun getSubtitleCueCacheStats(): SubtitleCueCacheStats {
+        val snapshot = subtitleCueCache.values.toList()
+        val entryCount = snapshot.size
+        val totalCueCount = snapshot.sumOf { it.size }
+        return SubtitleCueCacheStats(
+            entryCount = entryCount,
+            totalCueCount = totalCueCount,
+            estimatedBytes = estimateSubtitleCueCacheBytes(
+                entryCount = entryCount,
+                totalCueCount = totalCueCount
+            )
+        )
+    }
+
+    fun clearSubtitleCueCache() {
+        subtitleCueCache.clear()
+    }
 
     private fun isDirectedTrafficModeActive(): Boolean {
         val context = NetworkModule.appContext ?: return false
@@ -159,15 +197,14 @@ object VideoRepository {
     }
 
     // [新增] 预加载首页数据 (在 MainActivity onCreate 调用)
-    fun preloadHomeData() {
+    fun preloadHomeData(scope: CoroutineScope = AppScope.ioScope) {
         if (isPreloading || preloadedHomeVideos != null) return
         isPreloading = true
         hasCompletedHomePreload = false
         
         com.android.purebilibili.core.util.Logger.d("VideoRepo", "🚀 Starting home data preload...")
         
-        // 使用 GlobalScope 或自定义 Scope 确保预加载不被取消
-        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+        scope.launch {
             try {
                 val feedApiType = NetworkModule.appContext
                     ?.let { SettingsManager.getFeedApiTypeSync(it) }

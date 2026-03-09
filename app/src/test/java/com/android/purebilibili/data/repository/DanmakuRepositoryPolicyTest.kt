@@ -57,4 +57,22 @@ class DanmakuRepositoryPolicyTest {
         assertEquals(3, resolveDanmakuSegmentCount(durationMs = 0L, metadataSegmentCount = null))
         assertEquals(3, resolveDanmakuSegmentCount(durationMs = -1L, metadataSegmentCount = 0))
     }
+
+    @Test
+    fun estimateDanmakuCacheBytes_sumsRawAndSegmentBytes() {
+        assertEquals(
+            6144L,
+            estimateDanmakuCacheBytes(
+                rawCacheBytes = 2048L,
+                segmentCacheBytes = 4096L
+            )
+        )
+        assertEquals(
+            0L,
+            estimateDanmakuCacheBytes(
+                rawCacheBytes = -1L,
+                segmentCacheBytes = -1L
+            )
+        )
+    }
 }

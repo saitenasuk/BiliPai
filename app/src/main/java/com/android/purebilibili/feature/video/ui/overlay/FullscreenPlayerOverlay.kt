@@ -11,6 +11,8 @@ import com.android.purebilibili.feature.video.danmaku.detectFaceOcclusionRegions
 import com.android.purebilibili.feature.video.danmaku.installFaceOcclusionModule
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
+import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
+import com.android.purebilibili.feature.video.ui.section.shouldCommitGestureSeek
 
 import android.app.Activity
 import android.content.Context
@@ -68,6 +70,7 @@ import com.android.purebilibili.feature.video.ui.gesture.GestureMode
 import com.android.purebilibili.feature.video.ui.gesture.GestureIndicator
 import com.android.purebilibili.feature.video.ui.gesture.rememberPlayerGestureState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -144,9 +147,10 @@ fun FullscreenPlayerOverlay(
     var dragDelta by remember { mutableFloatStateOf(0f) }
     var seekPreviewPosition by remember { mutableLongStateOf(0L) }
     var gestureSeekStartPosition by remember { mutableLongStateOf(0L) }
-    val fullscreenSwipeSeekSeconds by SettingsManager
-        .getFullscreenSwipeSeekSeconds(context)
-        .collectAsState(initial = 15)
+    val fullscreenSwipeSeekSeconds by produceState<Int?>(initialValue = null, context) {
+        SettingsManager.getFullscreenSwipeSeekSeconds(context)
+            .collectLatest { value = it }
+    }
     val doubleTapSeekEnabled by SettingsManager
         .getDoubleTapSeekEnabled(context)
         .collectAsState(initial = true)
@@ -387,7 +391,13 @@ fun FullscreenPlayerOverlay(
                         }
                     },
                     onDragEnd = {
-                        if (gestureMode == FullscreenGestureMode.Seek && abs(dragDelta) > 20f) {
+                        if (
+                            gestureMode == FullscreenGestureMode.Seek &&
+                            shouldCommitGestureSeek(
+                                currentPositionMs = gestureSeekStartPosition,
+                                targetPositionMs = seekPreviewPosition
+                            )
+                        ) {
                             player?.let {
                                 it.seekTo(seekPreviewPosition)
                                 danmakuManager.seekTo(seekPreviewPosition)
@@ -418,12 +428,18 @@ fun FullscreenPlayerOverlay(
                             }
                             FullscreenGestureMode.Seek -> {
                                 dragDelta += dragAmount.x
-                                // 按步长离散化横向滑动，便于控制 15/30/45/60 秒等固定跳转体验。
-                                val stepWidthPx = (screenWidth / 8f).coerceAtLeast(1f)
-                                val stepCount = (dragDelta / stepWidthPx).toInt()
-                                val seekDelta = stepCount * fullscreenSwipeSeekSeconds * 1000L
-                                seekPreviewPosition = (gestureSeekStartPosition + seekDelta).coerceIn(0L, duration)
-                                currentProgress = (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                                val seekDelta = resolveHorizontalSeekDeltaMs(
+                                    isFullscreen = true,
+                                    fullscreenSwipeSeekEnabled = true,
+                                    totalDragDistanceX = dragDelta,
+                                    containerWidthPx = screenWidth,
+                                    fullscreenSwipeSeekSeconds = fullscreenSwipeSeekSeconds,
+                                    gestureSensitivity = 1f
+                                )
+                                if (seekDelta != null) {
+                                    seekPreviewPosition = (gestureSeekStartPosition + seekDelta).coerceIn(0L, duration)
+                                    currentProgress = (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                                }
                             }
                             else -> {}
                         }

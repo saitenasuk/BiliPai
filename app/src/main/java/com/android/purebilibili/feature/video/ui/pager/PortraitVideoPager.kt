@@ -440,13 +440,12 @@ fun PortraitVideoPager(
         val autoAdvanceListener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState != Player.STATE_ENDED) return
-                when (
-                    resolvePlaybackEndAction(
-                        behavior = playbackCompletionBehavior,
-                        autoPlayEnabled = autoPlayEnabled,
-                        isExternalPlaylist = isExternalPlaylist
-                    )
-                ) {
+                val playbackEndAction = resolvePlaybackEndAction(
+                    behavior = playbackCompletionBehavior,
+                    autoPlayEnabled = autoPlayEnabled,
+                    isExternalPlaylist = isExternalPlaylist
+                )
+                when (playbackEndAction) {
                     PlaybackEndAction.STOP -> return
                     PlaybackEndAction.REPEAT_CURRENT -> {
                         exoPlayer.seekTo(0)
@@ -459,9 +458,11 @@ fun PortraitVideoPager(
                         if (lastAutoAdvancedBvid == playingBvid) return
                         lastAutoAdvancedBvid = playingBvid
 
-                        val currentPage = pagerState.currentPage
-                        val nextPage = (currentPage + 1).coerceAtMost(pageItems.lastIndex)
-                        if (nextPage <= currentPage) return
+                        val nextPage = resolveNextPortraitPageAfterPlaybackEnd(
+                            action = playbackEndAction,
+                            currentPage = pagerState.currentPage,
+                            lastPage = pageItems.lastIndex
+                        ) ?: return
 
                         scope.launch {
                             pagerState.animateScrollToPage(nextPage)
@@ -472,12 +473,11 @@ fun PortraitVideoPager(
                         if (lastAutoAdvancedBvid == playingBvid) return
                         lastAutoAdvancedBvid = playingBvid
 
-                        val currentPage = pagerState.currentPage
-                        val nextPage = if (currentPage < pageItems.lastIndex) {
-                            currentPage + 1
-                        } else {
-                            0
-                        }
+                        val nextPage = resolveNextPortraitPageAfterPlaybackEnd(
+                            action = PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST_LOOP,
+                            currentPage = pagerState.currentPage,
+                            lastPage = pageItems.lastIndex
+                        ) ?: return
                         scope.launch {
                             pagerState.animateScrollToPage(nextPage)
                         }
@@ -511,8 +511,12 @@ fun PortraitVideoPager(
 
                 onVideoChange(bvid)
 
-                val currentMediaId = exoPlayer.currentMediaItem?.mediaId?.trim().orEmpty()
-                if (currentPlayingBvid == bvid && currentMediaId == bvid) {
+                if (shouldSkipPortraitReloadForCurrentMedia(
+                        currentPlayingBvid = currentPlayingBvid,
+                        targetBvid = bvid,
+                        currentPlayerMediaId = exoPlayer.currentMediaItem?.mediaId
+                    )
+                ) {
                     isLoading = false
                     return@collect
                 }
@@ -784,7 +788,7 @@ private fun VideoPageItem(
     val faceMaskStabilizer = remember { FaceOcclusionMaskStabilizer() }
     val longPressSpeed by SettingsManager
         .getLongPressSpeed(context)
-        .collectAsState(initial = 1.75f)
+        .collectAsState(initial = 2.0f)
     val currentAudioQuality by viewModel.audioQualityPreference.collectAsState(initial = -1)
     val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
     val aid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid.toLong()

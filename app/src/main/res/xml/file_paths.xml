@@ -4,6 +4,11 @@
     <cache-path
         name="logs"
         path="logs/" />
+
+    <!-- 应用内更新 APK 缓存目录 -->
+    <cache-path
+        name="app_update"
+        path="app_update/" />
     
     <!-- 外部 Download 目录（用于日志导出） -->
     <external-path

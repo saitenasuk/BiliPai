@@ -34,4 +34,11 @@ class PlaybackSpeedPreferencePolicyTest {
         assertEquals(0.1f, normalizePlaybackSpeed(0.0f))
         assertEquals(8.0f, normalizePlaybackSpeed(9.5f))
     }
+
+    @Test
+    fun `long press speed should snap to supported options`() {
+        assertEquals(1.5f, normalizeLongPressSpeed(1.25f))
+        assertEquals(2.0f, normalizeLongPressSpeed(2.1f))
+        assertEquals(3.0f, normalizeLongPressSpeed(3.4f))
+    }
 }

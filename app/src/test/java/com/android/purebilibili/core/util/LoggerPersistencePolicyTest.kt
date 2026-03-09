@@ -91,4 +91,21 @@ class LoggerPersistencePolicyTest {
         assertTrue(content.contains("before crash"))
         assertTrue(content.contains("boom soon"))
     }
+
+    @Test
+    fun logArtifactsToClear_includePrivateFilesAndCacheLogDirs() {
+        val filesDir = File("/tmp/bilipai/files")
+        val cacheDir = File("/tmp/bilipai/cache")
+
+        assertEquals(
+            listOf(
+                File("/tmp/bilipai/files/logs"),
+                File("/tmp/bilipai/cache/logs")
+            ),
+            resolveLogArtifactDirsToClear(
+                filesDir = filesDir,
+                cacheDir = cacheDir
+            )
+        )
+    }
 }

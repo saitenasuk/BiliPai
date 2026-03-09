@@ -90,4 +90,12 @@ class SpaceProfileEnhancementPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `normalizeSpaceTopPhotoUrl rejects extra placeholder payloads`() {
+        assertEquals("", normalizeSpaceTopPhotoUrl("[]"))
+        assertEquals("", normalizeSpaceTopPhotoUrl("{}"))
+        assertEquals("", normalizeSpaceTopPhotoUrl("N/A"))
+        assertEquals("", normalizeSpaceTopPhotoUrl("about:blank"))
+    }
 }

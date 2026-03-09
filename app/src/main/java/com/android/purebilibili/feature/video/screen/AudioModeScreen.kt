@@ -1,5 +1,11 @@
 package com.android.purebilibili.feature.video.screen
 
+import android.app.Activity
+import android.app.PictureInPictureParams
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.Build
+import android.util.Rational
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -55,6 +61,67 @@ internal fun resolveAudioPlayModeLabel(mode: PlayMode): String {
     }
 }
 
+internal enum class AudioModePlayPauseAction {
+    PAUSE,
+    RESUME,
+    RESTART_FROM_BEGINNING,
+    PREPARE_AND_RESUME
+}
+
+internal fun resolveAudioModePlayPauseAction(
+    isPlaying: Boolean,
+    playbackState: Int,
+    playWhenReady: Boolean
+): AudioModePlayPauseAction {
+    if (isPlaying) return AudioModePlayPauseAction.PAUSE
+    return when (playbackState) {
+        Player.STATE_ENDED -> AudioModePlayPauseAction.RESTART_FROM_BEGINNING
+        Player.STATE_IDLE -> AudioModePlayPauseAction.PREPARE_AND_RESUME
+        Player.STATE_READY, Player.STATE_BUFFERING -> AudioModePlayPauseAction.RESUME
+        else -> if (playWhenReady) AudioModePlayPauseAction.PAUSE else AudioModePlayPauseAction.RESUME
+    }
+}
+
+internal fun shouldShowAudioModePipButton(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.O
+
+private tailrec fun Context.findHostActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findHostActivity()
+    else -> null
+}
+
+private fun Player.handleAudioModePlayPause() {
+    when (
+        resolveAudioModePlayPauseAction(
+            isPlaying = isPlaying,
+            playbackState = playbackState,
+            playWhenReady = playWhenReady
+        )
+    ) {
+        AudioModePlayPauseAction.PAUSE -> pause()
+        AudioModePlayPauseAction.RESUME -> play()
+        AudioModePlayPauseAction.RESTART_FROM_BEGINNING -> {
+            seekTo(0L)
+            play()
+        }
+        AudioModePlayPauseAction.PREPARE_AND_RESUME -> {
+            prepare()
+            play()
+        }
+    }
+}
+
+private fun enterAudioModePip(activity: Activity?) {
+    if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity.isInPictureInPictureMode) return
+    val paramsBuilder = PictureInPictureParams.Builder()
+        .setAspectRatio(Rational(16, 9))
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        paramsBuilder.setSeamlessResizeEnabled(true)
+    }
+    activity.enterPictureInPictureMode(paramsBuilder.build())
+}
+
 @Composable
 fun AudioModeScreen(
     viewModel: PlayerViewModel,
@@ -62,6 +129,9 @@ fun AudioModeScreen(
     onVideoModeClick: (String) -> Unit  //  传递当前视频的 bvid
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val showPipButton = remember { shouldShowAudioModePipButton(Build.VERSION.SDK_INT) }
+    val enterPip = remember(context) { { enterAudioModePip(context.findHostActivity()) } }
     
     //  通过共享的 ViewModel 获取播放器实例，实现无缝音频播放
     val player = viewModel.currentPlayer
@@ -92,6 +162,13 @@ fun AudioModeScreen(
     
     // 📂 [新增] 合集弹窗状态
     var showCollectionSheet by remember { mutableStateOf(false) }
+
+    DisposableEffect(viewModel) {
+        viewModel.setAudioMode(true)
+        onDispose {
+            viewModel.setAudioMode(false)
+        }
+    }
     
     Scaffold(
         containerColor = Color.Black,
@@ -111,7 +188,6 @@ fun AudioModeScreen(
                 val successState = displayState
                 
                 // ==================== 共享状态逻辑 ====================
-                val context = LocalContext.current
                 val playlist by PlaylistManager.playlist.collectAsState()
                 val currentIndex by PlaylistManager.currentIndex.collectAsState()
                 val currentPlayMode by PlaylistManager.playMode.collectAsState()
@@ -335,7 +411,7 @@ fun AudioModeScreen(
                         if (player != null) {
                             PlayerControls(
                                 player = player,
-                                onPlayPause = { if (player.isPlaying) player.pause() else player.play() },
+                                onPlayPause = { player.handleAudioModePlayPause() },
                                 onSeek = { pos -> 
                                     player.seekTo(pos)
                                     // [修复] 确保 seek 后音量正常
@@ -398,7 +474,11 @@ fun AudioModeScreen(
                     
                     // 2. 顶层：UI Overlay
                     Column(modifier = Modifier.fillMaxSize()) {
-                        AudioModeTopBar(onBack = onBack)
+                        AudioModeTopBar(
+                            onBack = onBack,
+                            showPipButton = showPipButton,
+                            onEnterPip = enterPip
+                        )
                         Spacer(modifier = Modifier.weight(1f))
                         controlsContent()
                     }
@@ -420,7 +500,11 @@ fun AudioModeScreen(
                     
                     // 2. 内容层：TopBar + 中间 Pager + 底部 Controls
                     Column(modifier = Modifier.fillMaxSize()) {
-                        AudioModeTopBar(onBack = onBack)
+                        AudioModeTopBar(
+                            onBack = onBack,
+                            showPipButton = showPipButton,
+                            onEnterPip = enterPip
+                        )
                         
                         // 中间 Pager 区域 - 占据剩余空间
                         Box(
@@ -538,13 +622,18 @@ fun AudioModeScreen(
 }
 
 @Composable
-private fun AudioModeTopBar(onBack: () -> Unit) {
+private fun AudioModeTopBar(
+    onBack: () -> Unit,
+    showPipButton: Boolean,
+    onEnterPip: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()  //  添加状态栏内边距以实现沉浸效果
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
         IconButton(onClick = onBack) {
             Icon(
@@ -552,6 +641,17 @@ private fun AudioModeTopBar(onBack: () -> Unit) {
                 contentDescription = "Back",
                 tint = Color.White
             )
+        }
+        if (showPipButton) {
+            IconButton(onClick = onEnterPip) {
+                Icon(
+                    CupertinoIcons.Default.Pip,
+                    contentDescription = "Picture in picture",
+                    tint = Color.White
+                )
+            }
+        } else {
+            Spacer(modifier = Modifier.size(48.dp))
         }
     }
 }

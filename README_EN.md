@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-07 · Synced to v6.9.2 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-08 · Synced to v6.9.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.9.2-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.9.3-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -59,6 +59,7 @@
 | **Playback Speed** | 0.5x / 0.75x / 1.0x / 1.25x / 1.5x / 2.0x |
 | **Picture-in-Picture** | Floating window playback for multitasking |
 | **Audio Mode** | 🆕 Dedicated audio player with immersive/vinyl modes, lyrics, and playlist management |
+| **In-app Update** | 🆕 Check updates, download APK in-app, and hand off to the system installer |
 | **Background Play** | Continue listening when screen is off or in background |
 | **Playback Order** | Supports Stop After Current / In-order / Single Loop / List Loop / Auto Continue, with quick toggle in landscape and portrait |
 | **Comment Copy UX** | Long-press opens selectable-copy panel so users can drag-select exact comment text (including rich text scenarios) |
@@ -375,14 +376,14 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 - [x] Anime/Movie Playback
 - [x] Live Streaming
 - [x] Dynamic Feed (with fast-switch stability improvements)
-- [x] Offline Download
+- [x] Offline Download + current-video batch caching
 - [x] Search + History (with bulk delete)
 - [x] Material You + Dark Mode
 - [x] TV Login + first-play quality auth fixes for logged-in non-premium users
 - [x] Landscape player controls upgrade (subtitle panel + more panel + play-order quick switch)
 - [x] Shared Element Transitions + return-to-home animation optimization
 - [x] Tablet/Foldable Support (sidebar + bottom bar layout)
-- [x] In-app update checks (manual + auto-check on app entry + startup prompt + release notes viewer)
+- [x] In-app update flow (manual + auto-check + startup prompt + in-app download/install)
 - [x] Plugin System Core
 - [x] Built-in Plugins
 
@@ -403,11 +404,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v6.9.2 · 2026-03-07)
+### Latest (v6.9.3 · 2026-03-08)
 
-- 🚀 **Smoother Comment Scrolling While Playing**: Comment pagination now waits until the user is near the bottom, and playback automatically switches comment rows into a lighter rendering mode.
-- 🎬 **Player Stability Improvements**: Mini-player, background playback, top controls, and danmaku settings coordination were tightened to reduce edge-case state glitches.
-- 🛠️ **Dynamic and Space Fixes**: Re-tapping a selected followed user now returns to the full dynamic feed, and the Space page `Play all` icon no longer renders clipped.
+- ⬇️ **In-app Updates and Batch Caching**: Update checks can now download the APK inside the app and open the system installer, and the current video page supports batch caching for pages/seasons.
+- 🎬 **Player and Subtitle Fixes**: Subtitle visibility now stays consistent between portrait and landscape, and the landscape bottom bar is denser and better balanced.
+- 🛠️ **Search/Space/Cache Cleanup Improvements**: Search verification badges are more accurate, Space header/dynamic loading is more robust, and cache cleanup now removes more rebuildable temporary data.
 
 ---
 

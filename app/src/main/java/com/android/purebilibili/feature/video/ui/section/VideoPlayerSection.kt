@@ -114,6 +114,7 @@ import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -131,7 +132,11 @@ internal fun resolveEffectiveLongPressSpeed(
     hiResSpeedLimit: Float = HI_RES_LONG_PRESS_SPEED_LIMIT
 ): Float {
     val normalized = requestedSpeed.coerceAtLeast(0.1f)
-    return normalized.coerceAtMost(hiResSpeedLimit)
+    return if (currentAudioQuality == HI_RES_AUDIO_QUALITY_ID) {
+        normalized.coerceAtMost(hiResSpeedLimit)
+    } else {
+        normalized
+    }
 }
 
 internal fun resolveLongPressPlaybackParameters(
@@ -193,13 +198,14 @@ internal fun resolveHorizontalSeekDeltaMs(
     fullscreenSwipeSeekEnabled: Boolean,
     totalDragDistanceX: Float,
     containerWidthPx: Float,
-    fullscreenSwipeSeekSeconds: Int,
+    fullscreenSwipeSeekSeconds: Int?,
     gestureSensitivity: Float
-): Long {
+): Long? {
     if (isFullscreen && fullscreenSwipeSeekEnabled) {
+        val seekSeconds = fullscreenSwipeSeekSeconds ?: return null
         val stepWidthPx = (containerWidthPx / 8f).coerceAtLeast(1f)
         val stepCount = (totalDragDistanceX / stepWidthPx).toInt()
-        val steppedDelta = stepCount * fullscreenSwipeSeekSeconds * 1000L
+        val steppedDelta = stepCount * seekSeconds * 1000L
         if (steppedDelta != 0L) return steppedDelta
     }
     return (totalDragDistanceX * 200f * gestureSensitivity).toLong()
@@ -729,6 +735,8 @@ fun VideoPlayerSection(
     forceCoverOnly: Boolean = false,
     allowLivePlayerSharedElement: Boolean = true,
     suppressSubtitleOverlay: Boolean = false,
+    subtitleDisplayModePreferenceOverride: SubtitleDisplayMode? = null,
+    onSubtitleDisplayModePreferenceOverrideChange: (SubtitleDisplayMode) -> Unit = {},
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -784,9 +792,11 @@ fun VideoPlayerSection(
     val seekBackwardSeconds by com.android.purebilibili.core.store.SettingsManager
         .getSeekBackwardSeconds(context)
         .collectAsState(initial = 10)
-    val fullscreenSwipeSeekSeconds by com.android.purebilibili.core.store.SettingsManager
-        .getFullscreenSwipeSeekSeconds(context)
-        .collectAsState(initial = 15)
+    val fullscreenSwipeSeekSeconds by produceState<Int?>(initialValue = null, context) {
+        com.android.purebilibili.core.store.SettingsManager
+            .getFullscreenSwipeSeekSeconds(context)
+            .collectLatest { value = it }
+    }
     val fullscreenSwipeSeekEnabled by com.android.purebilibili.core.store.SettingsManager
         .getFullscreenSwipeSeekEnabled(context)
         .collectAsState(initial = true)
@@ -1069,6 +1079,7 @@ fun VideoPlayerSection(
 
                                 startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
                                 startPosition = playerState.player.currentPosition
+                                seekTargetTime = startPosition
 
                                 val attributes = getActivity()?.window?.attributes
                                 val currentWindowBrightness = attributes?.screenBrightness ?: -1f
@@ -1200,7 +1211,9 @@ fun VideoPlayerSection(
                                         fullscreenSwipeSeekSeconds = fullscreenSwipeSeekSeconds,
                                         gestureSensitivity = gestureSensitivity
                                     )
-                                    seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
+                                    if (seekDelta != null) {
+                                        seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
+                                    }
                                 }
                                 VideoGestureMode.Brightness -> {
                                     // 距离已在上方累积，使用负值因为上滑是负 Y
@@ -1287,7 +1300,7 @@ fun VideoPlayerSection(
                             hasShownHiResCompatHint = true
                             Toast.makeText(
                                 context,
-                                "长按倍速最高 1.5x，以降低失真",
+                                "Hi-Res 音源长按倍速最高 1.5x，以降低失真",
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -1455,32 +1468,26 @@ fun VideoPlayerSection(
         //  当视频/开关状态变化时更新弹幕加载策略
         val cid = (uiState as? PlayerUiState.Success)?.info?.cid ?: 0L
         val aid = (uiState as? PlayerUiState.Success)?.info?.aid ?: 0L
+        val danmakuDurationHintMs = playerState.player.duration.takeIf { it > 0 } ?: 0L
         val danmakuLoadPolicy = remember(cid, danmakuEnabled) {
             resolveVideoPlayerDanmakuLoadPolicy(
                 cid = cid,
-                danmakuEnabled = danmakuEnabled
+                danmakuEnabled = danmakuEnabled,
+                durationHintMs = danmakuDurationHintMs
             )
         }
-        //  监听 player 状态，等待 duration 可用后加载弹幕
+        //  直接加载弹幕，不再等待 duration；仓库层会回退到 metadata/fallback 段数。
         LaunchedEffect(cid, aid, danmakuEnabled) {
             danmakuManager.isEnabled = danmakuLoadPolicy.shouldEnable
-            if (!danmakuLoadPolicy.shouldLoad) {
+            if (!danmakuLoadPolicy.shouldLoadImmediately) {
                 return@LaunchedEffect
             }
 
-            //  [修复] 等待播放器准备好并获取 duration (最多等待 5 秒)
-            var durationMs = 0L
-            var retries = 0
-            while (durationMs <= 0 && retries < 50) {
-                durationMs = playerState.player.duration.takeIf { it > 0 } ?: 0L
-                if (durationMs <= 0) {
-                    kotlinx.coroutines.delay(100)
-                    retries++
-                }
-            }
-
-            android.util.Log.d("VideoPlayerSection", "🎯 Loading danmaku for cid=$cid, aid=$aid, duration=${durationMs}ms (after $retries retries)")
-            danmakuManager.loadDanmaku(cid, aid, durationMs)  //  传入时长启用 Protobuf API
+            android.util.Log.d(
+                "VideoPlayerSection",
+                "🎯 Loading danmaku for cid=$cid, aid=$aid, durationHint=${danmakuLoadPolicy.durationHintMs}ms"
+            )
+            danmakuManager.loadDanmaku(cid, aid, danmakuLoadPolicy.durationHintMs)
         }
 
         //  横竖屏/小窗切换后，重绑 surface 并在需要时主动恢复播放。
@@ -2061,7 +2068,7 @@ fun VideoPlayerSection(
                 "${bvid}_${success.info.cid}_${success.subtitlePrimaryLanguage}_${success.subtitleSecondaryLanguage}_${success.subtitlePrimaryLikelyAi}_${success.subtitleSecondaryLikelyAi}_${subtitleAutoPreference.name}"
             }
         }
-        var subtitleDisplayModePreference by rememberSaveable("${subtitleToggleKey}_mode") {
+        var localSubtitleDisplayModePreference by rememberSaveable("${subtitleToggleKey}_mode") {
             mutableStateOf(
                 if (subtitleFeatureEnabled) {
                     resolveSubtitleDisplayModeByAutoPreference(
@@ -2079,6 +2086,17 @@ fun VideoPlayerSection(
         }
         var subtitleLargeTextByUser by rememberSaveable("${subtitleToggleKey}_large") {
             mutableStateOf(false)
+        }
+        val subtitleDisplayModePreference = subtitleDisplayModePreferenceOverride ?: localSubtitleDisplayModePreference
+        val applySubtitleDisplayModePreferenceChange: (SubtitleDisplayMode) -> Unit = remember(
+            subtitleDisplayModePreferenceOverride,
+            onSubtitleDisplayModePreferenceOverrideChange
+        ) {
+            if (subtitleDisplayModePreferenceOverride != null) {
+                onSubtitleDisplayModePreferenceOverrideChange
+            } else {
+                { mode -> localSubtitleDisplayModePreference = mode }
+            }
         }
         val subtitleDisplayMode = remember(
             subtitleFeatureEnabled,
@@ -2840,14 +2858,14 @@ fun VideoPlayerSection(
                             "VideoPlayerSection",
                             "字幕显示模式切换: mode=$mode"
                         )
-                        subtitleDisplayModePreference = mode
+                        applySubtitleDisplayModePreferenceChange(mode)
                     },
                     onEnabledChange = { enabled ->
                         com.android.purebilibili.core.util.Logger.d(
                             "VideoPlayerSection",
                             "字幕总开关切换: enabled=$enabled"
                         )
-                        subtitleDisplayModePreference = if (enabled) {
+                        val nextMode = if (enabled) {
                             resolveDefaultSubtitleDisplayMode(
                                 hasPrimaryTrack = subtitleControlAvailability.primarySelectable,
                                 hasSecondaryTrack = subtitleControlAvailability.secondarySelectable
@@ -2855,6 +2873,7 @@ fun VideoPlayerSection(
                         } else {
                             SubtitleDisplayMode.OFF
                         }
+                        applySubtitleDisplayModePreferenceChange(nextMode)
                     },
                     onLargeTextChange = { enabled ->
                         com.android.purebilibili.core.util.Logger.d(

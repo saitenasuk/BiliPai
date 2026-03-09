@@ -72,6 +72,19 @@ internal fun isDanmakuCloudSyncSuccessful(code: Int): Boolean = code == 0 || cod
 internal const val DANMAKU_SEGMENT_DURATION_MS = 360000L
 internal const val DANMAKU_SEGMENT_SAFE_FALLBACK_COUNT = 3
 
+internal fun estimateDanmakuCacheBytes(
+    rawCacheBytes: Long,
+    segmentCacheBytes: Long
+): Long {
+    return rawCacheBytes.coerceAtLeast(0L) + segmentCacheBytes.coerceAtLeast(0L)
+}
+
+data class DanmakuCacheStats(
+    val rawEntryCount: Int,
+    val segmentEntryCount: Int,
+    val totalBytes: Long
+)
+
 internal fun resolveDanmakuThumbupState(
     dmid: Long,
     data: Map<String, DanmakuThumbupStatsItem>
@@ -160,6 +173,20 @@ object DanmakuRepository {
             danmakuSegmentCacheBytes = 0L
         }
         com.android.purebilibili.core.util.Logger.d("DanmakuRepo", " Danmaku cache cleared")
+    }
+
+    fun getDanmakuCacheStats(): DanmakuCacheStats {
+        val rawEntryCount = synchronized(danmakuCache) { danmakuCache.size }
+        val segmentEntryCount = synchronized(danmakuSegmentCache) { danmakuSegmentCache.size }
+        val totalBytes = estimateDanmakuCacheBytes(
+            rawCacheBytes = synchronized(danmakuCache) { danmakuCacheBytes },
+            segmentCacheBytes = synchronized(danmakuSegmentCache) { danmakuSegmentCacheBytes }
+        )
+        return DanmakuCacheStats(
+            rawEntryCount = rawEntryCount,
+            segmentEntryCount = segmentEntryCount,
+            totalBytes = totalBytes
+        )
     }
 
     /**

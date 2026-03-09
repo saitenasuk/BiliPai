@@ -816,13 +816,19 @@ private fun SpaceContent(
             }
             
             1 -> {  //  动态 Tab
+                val dynamicPresentationState = resolveSpaceDynamicPresentationState(
+                    itemCount = state.dynamics.size,
+                    isLoading = state.isLoadingDynamics,
+                    hasLoadedOnce = state.hasLoadedDynamicsOnce,
+                    lastLoadFailed = state.lastDynamicLoadFailed
+                )
                 // 触发加载
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     LaunchedEffect(Unit) { onLoadDynamic() }
                 }
                 
                 // 动态列表
-                if (state.dynamics.isEmpty() && !state.isLoadingDynamics) {
+                if (dynamicPresentationState == SpaceDynamicPresentationState.EMPTY) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(
                             modifier = Modifier
@@ -832,6 +838,20 @@ private fun SpaceContent(
                         ) {
                             Text(
                                 text = "暂无动态",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                } else if (dynamicPresentationState == SpaceDynamicPresentationState.ERROR) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "动态加载失败，请稍后重试",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         }
@@ -853,7 +873,7 @@ private fun SpaceContent(
                     }
                     
                     // 加载中指示器
-                    if (state.isLoadingDynamics) {
+                    if (dynamicPresentationState == SpaceDynamicPresentationState.LOADING) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Box(
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),

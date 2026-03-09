@@ -21,7 +21,16 @@ internal fun normalizeSpaceTopPhotoUrl(url: String): String {
     val candidate = url.trim()
     if (candidate.isEmpty()) return ""
     val lower = candidate.lowercase()
-    if (lower == "null" || lower == "nil" || lower == "none" || lower == "undefined") {
+    if (
+        lower == "null" ||
+        lower == "nil" ||
+        lower == "none" ||
+        lower == "undefined" ||
+        lower == "[]" ||
+        lower == "{}" ||
+        lower == "n/a" ||
+        lower == "about:blank"
+    ) {
         return ""
     }
     return when {

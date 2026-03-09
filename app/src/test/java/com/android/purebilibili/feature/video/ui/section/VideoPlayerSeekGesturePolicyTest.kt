@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.ui.section
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class VideoPlayerSeekGesturePolicyTest {
 
@@ -59,6 +60,20 @@ class VideoPlayerSeekGesturePolicyTest {
         )
 
         assertEquals(4_000L, delta)
+    }
+
+    @Test
+    fun `fullscreen fixed-step seek waits for loaded step setting`() {
+        val delta = resolveHorizontalSeekDeltaMs(
+            isFullscreen = true,
+            fullscreenSwipeSeekEnabled = true,
+            totalDragDistanceX = 110f,
+            containerWidthPx = 800f,
+            fullscreenSwipeSeekSeconds = null,
+            gestureSensitivity = 1f
+        )
+
+        assertNull(delta)
     }
 
     @Test

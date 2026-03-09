@@ -32,6 +32,14 @@ internal fun resolveCrashSnapshotMarkerFile(baseDir: File): File =
 internal fun resolveCrashSnapshotExportRelativePath(): String =
     "$DOWNLOAD_LOG_RELATIVE_PATH/$CRASH_SNAPSHOT_FILE_NAME"
 
+internal fun resolveLogArtifactDirsToClear(
+    filesDir: File,
+    cacheDir: File
+): List<File> = listOf(
+    resolveLogPersistenceDir(filesDir),
+    resolveLogPersistenceDir(cacheDir)
+).distinctBy { it.absolutePath }
+
 internal fun hasPendingCrashSnapshot(
     markerExists: Boolean,
     snapshotExists: Boolean
@@ -147,6 +155,32 @@ object Logger {
     fun sharePendingCrashSnapshot(context: Context): Boolean {
         init(context)
         return LogCollector.sharePendingCrashSnapshot(context)
+    }
+
+    fun getPrivateLogArtifactsSize(context: Context): Long {
+        init(context)
+        val persistedLogDir = resolveLogPersistenceDir(context.filesDir)
+        return if (!persistedLogDir.exists()) {
+            0L
+        } else {
+            persistedLogDir.walkTopDown()
+                .filter { it.isFile }
+                .sumOf { it.length() }
+        }
+    }
+
+    fun clearPrivateLogArtifacts(context: Context) {
+        init(context)
+        LogCollector.clear()
+        LogCollector.clearPendingCrashSnapshot()
+        resolveLogArtifactDirsToClear(
+            filesDir = context.filesDir,
+            cacheDir = context.cacheDir
+        ).forEach { dir ->
+            if (dir.exists()) {
+                dir.deleteRecursively()
+            }
+        }
     }
 }
 

@@ -158,6 +158,8 @@ fun AppNavigation(
     isInPipMode: Boolean = false,
     onVideoDetailEnter: () -> Unit = {},
     onVideoDetailExit: () -> Unit = {},
+    onAudioModeEnter: () -> Unit = {},
+    onAudioModeExit: () -> Unit = {},
     mainHazeState: dev.chrisbanes.haze.HazeState? = null //  全局 Haze 状态
 ) {
     val homeViewModel: HomeViewModel = viewModel()
@@ -944,6 +946,13 @@ fun AppNavigation(
                 viewModel(viewModelStoreOwner = parentEntry)
             } else {
                 viewModel()
+            }
+
+            DisposableEffect(Unit) {
+                onAudioModeEnter()
+                onDispose {
+                    onAudioModeExit()
+                }
             }
             
             com.android.purebilibili.feature.video.screen.AudioModeScreen(

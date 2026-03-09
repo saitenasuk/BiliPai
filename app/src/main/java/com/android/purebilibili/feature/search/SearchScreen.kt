@@ -1721,18 +1721,23 @@ fun UpSearchResultCard(
                     
                     // 认证标志
                     cleanedItem.official_verify?.let { verify ->
-                        if (verify.type >= 0) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Surface(
-                                color = if (verify.type == 0) Color(0xFFFFB300) else Color(0xFF2196F3),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = if (verify.type == 0) "个人" else "机构",
-                                    fontSize = 10.sp,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
+                        when (resolveSearchVerifyBadge(verify.type, verify.desc)) {
+                            SearchVerifyBadge.NONE -> Unit
+                            SearchVerifyBadge.PERSONAL,
+                            SearchVerifyBadge.ORGANIZATION -> {
+                                val isPersonal = resolveSearchVerifyBadge(verify.type, verify.desc) == SearchVerifyBadge.PERSONAL
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Surface(
+                                    color = if (isPersonal) Color(0xFFFFB300) else Color(0xFF2196F3),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isPersonal) "个人" else "机构",
+                                        fontSize = 10.sp,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
                             }
                         }
                     }

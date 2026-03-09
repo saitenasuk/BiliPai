@@ -115,6 +115,7 @@ fun SettingsScreen(
     var updateStatusText by remember { mutableStateOf("点击检查") }
     var updateCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
     var changelogCheckResult by remember { mutableStateOf<AppUpdateCheckResult?>(null) }
+    var updateDownloadState by remember { mutableStateOf(AppUpdateDownloadState()) }
     
     // [新增] 黑名单页面状态
     var showBlockedList by remember { mutableStateOf(false) }
@@ -384,6 +385,9 @@ fun SettingsScreen(
         val resolvedReleaseNotes = remember(info.releaseNotes) {
             resolveUpdateReleaseNotesText(info.releaseNotes)
         }
+        val preferredAsset = remember(info.assets) {
+            selectPreferredAppUpdateAsset(info.assets)
+        }
         val isDialogDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
         val dialogTextColors = remember(isDialogDarkTheme) {
             resolveAppUpdateDialogTextColors(
@@ -406,6 +410,27 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = dialogTextColors.currentVersionColor
                     )
+                    preferredAsset?.let { asset ->
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "安装包：${asset.name}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = dialogTextColors.currentVersionColor
+                        )
+                    }
+                    if (updateDownloadState.status != AppUpdateDownloadStatus.IDLE) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = when (updateDownloadState.status) {
+                                AppUpdateDownloadStatus.DOWNLOADING -> "下载中 ${(updateDownloadState.progress * 100).toInt()}%"
+                                AppUpdateDownloadStatus.COMPLETED -> "下载完成，正在准备安装"
+                                AppUpdateDownloadStatus.FAILED -> updateDownloadState.errorMessage ?: "下载失败"
+                                AppUpdateDownloadStatus.IDLE -> ""
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = dialogTextColors.currentVersionColor
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = resolvedReleaseNotes,
@@ -420,13 +445,65 @@ fun SettingsScreen(
             },
             confirmButton = {
                 com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
-                    updateCheckResult = null
-                    uriHandler.openUri(info.releaseUrl)
-                }) { Text("前往下载") }
+                    val downloadedFile = updateDownloadState.filePath
+                        ?.takeIf { updateDownloadState.status == AppUpdateDownloadStatus.COMPLETED }
+                        ?.let { path -> java.io.File(path) }
+                        ?.takeIf { it.exists() }
+
+                    if (downloadedFile != null) {
+                        installDownloadedAppUpdate(context, downloadedFile)
+                        return@IOSDialogAction
+                    }
+
+                    val asset = preferredAsset
+                    if (asset == null) {
+                        updateCheckResult = null
+                        uriHandler.openUri(info.releaseUrl)
+                        return@IOSDialogAction
+                    }
+
+                    if (updateDownloadState.status == AppUpdateDownloadStatus.DOWNLOADING) {
+                        return@IOSDialogAction
+                    }
+
+                    scope.launch {
+                        downloadAppUpdateApk(
+                            context = context,
+                            asset = asset,
+                            onStateChange = { state -> updateDownloadState = state }
+                        ).onSuccess { file ->
+                            updateDownloadState = completeAppUpdateDownload(
+                                current = updateDownloadState,
+                                filePath = file.absolutePath
+                            )
+                            val installAction = installDownloadedAppUpdate(context, file)
+                            if (installAction == AppUpdateInstallAction.OPEN_UNKNOWN_SOURCES_SETTINGS) {
+                                Toast.makeText(context, "请先允许安装未知来源应用", Toast.LENGTH_SHORT).show()
+                            }
+                        }.onFailure { error ->
+                            updateDownloadState = failAppUpdateDownload(
+                                current = updateDownloadState,
+                                errorMessage = error.message ?: "更新下载失败"
+                            )
+                            Toast.makeText(context, error.message ?: "更新下载失败", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }) {
+                    Text(
+                        when {
+                            preferredAsset == null -> "前往下载"
+                            updateDownloadState.status == AppUpdateDownloadStatus.DOWNLOADING ->
+                                "下载中 ${(updateDownloadState.progress * 100).toInt()}%"
+                            updateDownloadState.status == AppUpdateDownloadStatus.COMPLETED -> "安装更新"
+                            else -> "立即更新"
+                        }
+                    )
+                }
             },
             dismissButton = {
                 com.android.purebilibili.core.ui.IOSDialogAction(onClick = {
                     updateCheckResult = null
+                    updateDownloadState = AppUpdateDownloadState()
                 }) { Text("稍后") }
             }
         )

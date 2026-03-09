@@ -55,6 +55,24 @@ data class PlayerProgress(
     val buffered: Long = 0L
 )
 
+data class LandscapeDanmakuPlaceholderPolicy(
+    val maxLines: Int,
+    val ellipsis: Boolean,
+    val trailingTextPaddingDp: Int
+)
+
+internal fun resolveLandscapeDanmakuPlaceholderPolicy(
+    settingButtonSizeDp: Int,
+    settingEndPaddingDp: Int,
+    extraBufferDp: Int = 8
+): LandscapeDanmakuPlaceholderPolicy {
+    return LandscapeDanmakuPlaceholderPolicy(
+        maxLines = 1,
+        ellipsis = true,
+        trailingTextPaddingDp = settingButtonSizeDp + settingEndPaddingDp + extraBufferDp
+    )
+}
+
 internal fun shouldShowSubtitleButtonInControlBar(
     isFullscreen: Boolean,
     subtitleTrackAvailable: Boolean
@@ -272,6 +290,15 @@ fun BottomControlBar(
             widthDp = configuration.screenWidthDp
         )
     }
+    val danmakuPlaceholderPolicy = remember(
+        layoutPolicy.danmakuSettingButtonSizeDp,
+        layoutPolicy.danmakuSettingEndPaddingDp
+    ) {
+        resolveLandscapeDanmakuPlaceholderPolicy(
+            settingButtonSizeDp = layoutPolicy.danmakuSettingButtonSizeDp,
+            settingEndPaddingDp = layoutPolicy.danmakuSettingEndPaddingDp
+        )
+    }
     val fullscreenToggleTouchTargetDp = remember(layoutPolicy.fullscreenIconSizeDp) {
         resolveFullscreenToggleTouchTargetDp(iconSizeDp = layoutPolicy.fullscreenIconSizeDp)
     }
@@ -430,7 +457,10 @@ fun BottomControlBar(
                             }
                         )
                         .consumeTap(onDanmakuToggle)
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                        .padding(
+                            horizontal = layoutPolicy.danmakuSwitchHorizontalPaddingDp.dp,
+                            vertical = layoutPolicy.danmakuSwitchVerticalPaddingDp.dp
+                        ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -464,7 +494,14 @@ fun BottomControlBar(
                         text = "发个友善的弹幕见证当下...",
                         color = Color.White.copy(alpha = 0.7f),
                         fontSize = layoutPolicy.danmakuInputFontSp.sp,
-                        modifier = Modifier.padding(start = layoutPolicy.danmakuInputStartPaddingDp.dp)
+                        maxLines = danmakuPlaceholderPolicy.maxLines,
+                        overflow = if (danmakuPlaceholderPolicy.ellipsis) TextOverflow.Ellipsis else TextOverflow.Clip,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = layoutPolicy.danmakuInputStartPaddingDp.dp,
+                                end = danmakuPlaceholderPolicy.trailingTextPaddingDp.dp
+                            )
                     )
                     
                     // Settings Icon inside input bar (right)
@@ -549,7 +586,10 @@ fun BottomControlBar(
                             color = if (subtitleEnabled) MaterialTheme.colorScheme.primary else Color.White,
                             fontSize = layoutPolicy.actionTextFontSp.sp,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(
+                                horizontal = layoutPolicy.actionChipHorizontalPaddingDp.dp,
+                                vertical = layoutPolicy.actionChipVerticalPaddingDp.dp
+                            )
                         )
                     }
                 }
@@ -568,7 +608,10 @@ fun BottomControlBar(
                                     showSubtitlePanel = false
                                 }
                             }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .padding(
+                                horizontal = layoutPolicy.actionChipHorizontalPaddingDp.dp,
+                                vertical = layoutPolicy.actionChipVerticalPaddingDp.dp
+                            )
                     )
                 }
 

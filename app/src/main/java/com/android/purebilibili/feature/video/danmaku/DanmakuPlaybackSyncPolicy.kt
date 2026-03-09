@@ -6,6 +6,12 @@ private const val NORMAL_SYNC_INTERVAL_MS = 2200L
 private const val NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS = 6
 private const val NON_NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS = 3
 
+internal enum class DanmakuSyncAction {
+    None,
+    PauseOnly,
+    HardResync
+}
+
 internal fun resolveDanmakuDriftSyncIntervalMs(videoSpeed: Float): Long {
     return when {
         videoSpeed >= 1.75f -> 900L
@@ -26,6 +32,71 @@ internal fun shouldForceDanmakuDataResync(videoSpeed: Float, tickCount: Int): Bo
         NON_NORMAL_SPEED_FORCE_RESYNC_INTERVAL_TICKS
     }
     return tickCount % interval == 0
+}
+
+internal fun resolveDanmakuActionForIsPlayingChange(
+    isPlayerPlaying: Boolean,
+    danmakuEnabled: Boolean,
+    hasData: Boolean
+): DanmakuSyncAction {
+    if (!isPlayerPlaying) return DanmakuSyncAction.PauseOnly
+    return if (danmakuEnabled && hasData) DanmakuSyncAction.HardResync else DanmakuSyncAction.None
+}
+
+internal fun resolveDanmakuActionForPlaybackState(
+    playbackState: Int,
+    isPlayerPlaying: Boolean,
+    danmakuEnabled: Boolean,
+    hasData: Boolean,
+    resumedFromBuffering: Boolean
+): DanmakuSyncAction {
+    return when (playbackState) {
+        androidx.media3.common.Player.STATE_BUFFERING -> DanmakuSyncAction.PauseOnly
+        androidx.media3.common.Player.STATE_ENDED -> DanmakuSyncAction.PauseOnly
+        androidx.media3.common.Player.STATE_READY ->
+            if (resumedFromBuffering && isPlayerPlaying && danmakuEnabled && hasData) {
+                DanmakuSyncAction.HardResync
+            } else {
+                DanmakuSyncAction.None
+            }
+        else -> DanmakuSyncAction.None
+    }
+}
+
+internal fun resolveDanmakuActionForPositionDiscontinuity(
+    reason: Int,
+    hasData: Boolean
+): DanmakuSyncAction {
+    if (!hasData) return DanmakuSyncAction.None
+    val isSeekDiscontinuity =
+        reason == androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK ||
+            reason == androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT
+    return if (isSeekDiscontinuity) DanmakuSyncAction.HardResync else DanmakuSyncAction.None
+}
+
+internal fun resolveDanmakuActionForPlaybackSpeedChange(
+    previousSpeed: Float,
+    newSpeed: Float,
+    isPlayerPlaying: Boolean,
+    hasData: Boolean
+): DanmakuSyncAction {
+    if (!isPlayerPlaying || !hasData) return DanmakuSyncAction.None
+    return if (abs(previousSpeed - newSpeed) > 0.01f) DanmakuSyncAction.HardResync else DanmakuSyncAction.None
+}
+
+internal fun resolveDanmakuGuardAction(
+    videoSpeed: Float,
+    tickCount: Int,
+    danmakuEnabled: Boolean,
+    isPlaying: Boolean,
+    hasData: Boolean
+): DanmakuSyncAction {
+    if (!danmakuEnabled || !isPlaying || !hasData) return DanmakuSyncAction.None
+    return if (shouldForceDanmakuDataResync(videoSpeed, tickCount)) {
+        DanmakuSyncAction.HardResync
+    } else {
+        DanmakuSyncAction.None
+    }
 }
 
 internal inline fun executeExplicitDanmakuResync(

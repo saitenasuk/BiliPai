@@ -11,6 +11,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.store.home.HomeSettingsStore
+import com.android.purebilibili.core.store.navigation.NavigationSettingsStore
+import com.android.purebilibili.core.store.player.PlayerSettingsStore
 import com.android.purebilibili.feature.settings.share.SettingsShareApplyResult
 import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinition
 import com.android.purebilibili.feature.settings.share.SettingsShareSection
@@ -32,7 +35,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.math.abs
 
 // 声明 DataStore 扩展属性
-private val Context.settingsDataStore by preferencesDataStore(name = "settings_prefs")
+internal val Context.settingsDataStore by preferencesDataStore(name = "settings_prefs")
 
 /**
  *  首页设置合并类 - 减少 HomeScreen 重组次数
@@ -110,24 +113,10 @@ enum class BottomProgressBehavior(
     }
 }
 
-internal fun normalizePlaybackSpeed(speed: Float): Float {
-    return speed.coerceIn(0.1f, 8.0f)
-}
-
 internal fun normalizeDanmakuDisplayArea(value: Float): Float {
     val normalized = value.coerceIn(0.25f, 1.0f)
     val supportedOptions = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f)
     return supportedOptions.minByOrNull { abs(it - normalized) } ?: 0.5f
-}
-
-internal fun resolvePreferredPlaybackSpeed(
-    defaultSpeed: Float,
-    rememberLastSpeed: Boolean,
-    lastSpeed: Float
-): Float {
-    val normalizedDefault = normalizePlaybackSpeed(defaultSpeed)
-    if (!rememberLastSpeed) return normalizedDefault
-    return normalizePlaybackSpeed(lastSpeed)
 }
 
 data class HomeSettings(
@@ -389,6 +378,7 @@ object SettingsManager {
     private val KEY_COMMENT_DEFAULT_SORT_MODE = intPreferencesKey("comment_default_sort_mode")
     //  [新增] 离开播放页后停止播放（优先于小窗/画中画模式）
     private val KEY_STOP_PLAYBACK_ON_EXIT = booleanPreferencesKey("stop_playback_on_exit")
+    private val KEY_AUDIO_MODE_AUTO_PIP_ENABLED = booleanPreferencesKey("audio_mode_auto_pip_enabled")
     private val KEY_VIDEO_AI_SUMMARY_ENTRY_ENABLED = booleanPreferencesKey("video_ai_summary_entry_enabled")
     private const val PLAYBACK_SPEED_CACHE_PREFS = "playback_speed_cache"
     private const val CACHE_KEY_DEFAULT_PLAYBACK_SPEED = "default_speed"
@@ -423,9 +413,7 @@ object SettingsManager {
     }
 
     fun getHomeSettings(context: Context): Flow<HomeSettings> {
-        return context.settingsDataStore.data
-            .map(::mapHomeSettingsFromPreferences)
-            .distinctUntilChanged()
+        return HomeSettingsStore.observe(context)
     }
 
     // --- Auto Play on Enter (Click to Play) ---
@@ -677,80 +665,43 @@ object SettingsManager {
         }
     }
 
-    //  [新增] --- 长按倍速 (默认 1.5x，兼容更稳定) ---
+    //  [新增] --- 长按倍速 (默认 2.0x，Hi-Res 音频运行时单独限速) ---
     fun getLongPressSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> (preferences[KEY_LONG_PRESS_SPEED] ?: 1.5f).coerceIn(1.25f, 1.5f) }
+        .map { preferences -> normalizeLongPressSpeed(preferences[KEY_LONG_PRESS_SPEED] ?: DEFAULT_LONG_PRESS_SPEED) }
 
     suspend fun setLongPressSpeed(context: Context, speed: Float) {
         context.settingsDataStore.edit { preferences -> 
-            preferences[KEY_LONG_PRESS_SPEED] = speed.coerceIn(1.25f, 1.5f)
+            preferences[KEY_LONG_PRESS_SPEED] = normalizeLongPressSpeed(speed)
         }
     }
 
     //  [新增] --- 默认播放速度 / 记忆上次速度 ---
-    fun getDefaultPlaybackSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> normalizePlaybackSpeed(preferences[KEY_DEFAULT_PLAYBACK_SPEED] ?: 1.0f) }
+    fun getDefaultPlaybackSpeed(context: Context): Flow<Float> =
+        PlayerSettingsStore.getDefaultPlaybackSpeed(context)
 
     suspend fun setDefaultPlaybackSpeed(context: Context, speed: Float) {
-        val normalized = normalizePlaybackSpeed(speed)
-        context.settingsDataStore.edit { preferences ->
-            preferences[KEY_DEFAULT_PLAYBACK_SPEED] = normalized
-        }
-        context.getSharedPreferences(PLAYBACK_SPEED_CACHE_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putFloat(CACHE_KEY_DEFAULT_PLAYBACK_SPEED, normalized)
-            .apply()
+        PlayerSettingsStore.setDefaultPlaybackSpeed(context, speed)
     }
 
-    fun getRememberLastPlaybackSpeed(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_REMEMBER_LAST_PLAYBACK_SPEED] ?: false }
+    fun getRememberLastPlaybackSpeed(context: Context): Flow<Boolean> =
+        PlayerSettingsStore.getRememberLastPlaybackSpeed(context)
 
     suspend fun setRememberLastPlaybackSpeed(context: Context, enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[KEY_REMEMBER_LAST_PLAYBACK_SPEED] = enabled
-        }
-        context.getSharedPreferences(PLAYBACK_SPEED_CACHE_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(CACHE_KEY_REMEMBER_LAST_SPEED, enabled)
-            .apply()
+        PlayerSettingsStore.setRememberLastPlaybackSpeed(context, enabled)
     }
 
-    fun getLastPlaybackSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> normalizePlaybackSpeed(preferences[KEY_LAST_PLAYBACK_SPEED] ?: 1.0f) }
+    fun getLastPlaybackSpeed(context: Context): Flow<Float> =
+        PlayerSettingsStore.getLastPlaybackSpeed(context)
 
     suspend fun setLastPlaybackSpeed(context: Context, speed: Float) {
-        val normalized = normalizePlaybackSpeed(speed)
-        context.settingsDataStore.edit { preferences ->
-            preferences[KEY_LAST_PLAYBACK_SPEED] = normalized
-        }
-        context.getSharedPreferences(PLAYBACK_SPEED_CACHE_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putFloat(CACHE_KEY_LAST_PLAYBACK_SPEED, normalized)
-            .apply()
+        PlayerSettingsStore.setLastPlaybackSpeed(context, speed)
     }
 
-    fun getPreferredPlaybackSpeed(context: Context): Flow<Float> = combine(
-        getDefaultPlaybackSpeed(context),
-        getRememberLastPlaybackSpeed(context),
-        getLastPlaybackSpeed(context)
-    ) { defaultSpeed, rememberLast, lastSpeed ->
-        resolvePreferredPlaybackSpeed(
-            defaultSpeed = defaultSpeed,
-            rememberLastSpeed = rememberLast,
-            lastSpeed = lastSpeed
-        )
-    }
+    fun getPreferredPlaybackSpeed(context: Context): Flow<Float> =
+        PlayerSettingsStore.getPreferredPlaybackSpeed(context)
 
     fun getPreferredPlaybackSpeedSync(context: Context): Float {
-        val prefs = context.getSharedPreferences(PLAYBACK_SPEED_CACHE_PREFS, Context.MODE_PRIVATE)
-        val defaultSpeed = normalizePlaybackSpeed(prefs.getFloat(CACHE_KEY_DEFAULT_PLAYBACK_SPEED, 1.0f))
-        val rememberLast = prefs.getBoolean(CACHE_KEY_REMEMBER_LAST_SPEED, false)
-        val lastSpeed = normalizePlaybackSpeed(prefs.getFloat(CACHE_KEY_LAST_PLAYBACK_SPEED, 1.0f))
-        return resolvePreferredPlaybackSpeed(
-            defaultSpeed = defaultSpeed,
-            rememberLastSpeed = rememberLast,
-            lastSpeed = lastSpeed
-        )
+        return PlayerSettingsStore.getPreferredPlaybackSpeedSync(context)
     }
 
     //  [新增] --- 主题色索引 (0-5, 默认 0 = BiliPink) ---
@@ -1869,6 +1820,26 @@ object SettingsManager {
             .getBoolean("stop_playback_on_exit", false)
     }
 
+    fun getAudioModeAutoPipEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_AUDIO_MODE_AUTO_PIP_ENABLED] ?: false }
+
+    suspend fun setAudioModeAutoPipEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_AUDIO_MODE_AUTO_PIP_ENABLED] = value
+        }
+        context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .edit().putBoolean("audio_mode_auto_pip_enabled", value).apply()
+    }
+
+    fun getAudioModeAutoPipEnabledSync(context: Context): Boolean {
+        return context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .getBoolean("audio_mode_auto_pip_enabled", false)
+    }
+
+    internal fun shouldEnableAudioModeAutoPipToggle(mode: MiniPlayerMode): Boolean {
+        return mode == MiniPlayerMode.SYSTEM_PIP
+    }
+
     fun getVideoAiSummaryEntryEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_VIDEO_AI_SUMMARY_ENTRY_ENABLED] ?: true }
 
@@ -2281,6 +2252,15 @@ object SettingsManager {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_SHOW_ONLINE_COUNT] = enabled
         }
+        context.getSharedPreferences("video_overlay_cache", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("show_online_count", enabled)
+            .apply()
+    }
+
+    fun getShowOnlineCountSync(context: Context): Boolean {
+        return context.getSharedPreferences("video_overlay_cache", Context.MODE_PRIVATE)
+            .getBoolean("show_online_count", false)
     }
 
     fun getSubtitleAutoPreference(context: Context): Flow<SubtitleAutoPreference> =
@@ -2380,15 +2360,11 @@ object SettingsManager {
     }
 
     fun getAppNavigationSettings(context: Context): Flow<AppNavigationSettings> {
-        return context.settingsDataStore.data
-            .map(::mapAppNavigationSettingsFromPreferences)
-            .distinctUntilChanged()
+        return NavigationSettingsStore.observe(context)
     }
 
     suspend fun setTabletUseSidebar(context: Context, useSidebar: Boolean) {
-        context.settingsDataStore.edit { preferences -> 
-            preferences[KEY_TABLET_NAVIGATION_MODE] = useSidebar 
-        }
+        NavigationSettingsStore.setTabletUseSidebar(context, useSidebar)
     }
     
     // ========== [问题12] 视频操作按钮可见性 ==========

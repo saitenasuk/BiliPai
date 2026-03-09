@@ -2,54 +2,52 @@ package com.android.purebilibili.feature.video.ui.section
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class VideoPlayerDanmakuLoadPolicyTest {
 
     @Test
-    fun shouldLoadAndEnableWhenDanmakuEnabledAndCidIsValid() {
+    fun immediateLoad_startsAsSoonAsCidIsAvailable_evenWithoutDurationHint() {
         val policy = resolveVideoPlayerDanmakuLoadPolicy(
-            cid = 12345L,
-            danmakuEnabled = true
+            cid = 10086L,
+            danmakuEnabled = true,
+            durationHintMs = 0L
         )
 
-        assertEquals(
-            VideoPlayerDanmakuLoadPolicy(
-                shouldEnable = true,
-                shouldLoad = true
-            ),
-            policy
-        )
+        assertTrue(policy.shouldEnable)
+        assertTrue(policy.shouldLoadImmediately)
+        assertEquals(0L, policy.durationHintMs)
     }
 
     @Test
-    fun shouldDisableAndSkipLoadWhenDanmakuDisabled() {
+    fun immediateLoad_keepsDurationHintWhenPlayerAlreadyKnowsIt() {
         val policy = resolveVideoPlayerDanmakuLoadPolicy(
-            cid = 12345L,
-            danmakuEnabled = false
+            cid = 10010L,
+            danmakuEnabled = true,
+            durationHintMs = 360_000L
         )
 
-        assertEquals(
-            VideoPlayerDanmakuLoadPolicy(
-                shouldEnable = false,
-                shouldLoad = false
-            ),
-            policy
-        )
+        assertTrue(policy.shouldLoadImmediately)
+        assertEquals(360_000L, policy.durationHintMs)
     }
 
     @Test
-    fun shouldDisableAndSkipLoadWhenCidInvalid() {
-        val policy = resolveVideoPlayerDanmakuLoadPolicy(
-            cid = 0L,
-            danmakuEnabled = true
+    fun immediateLoad_staysDisabledWhenCidInvalidOrDanmakuOff() {
+        assertFalse(
+            resolveVideoPlayerDanmakuLoadPolicy(
+                cid = 0L,
+                danmakuEnabled = true,
+                durationHintMs = 0L
+            ).shouldLoadImmediately
         )
 
-        assertEquals(
-            VideoPlayerDanmakuLoadPolicy(
-                shouldEnable = false,
-                shouldLoad = false
-            ),
-            policy
+        assertFalse(
+            resolveVideoPlayerDanmakuLoadPolicy(
+                cid = 10010L,
+                danmakuEnabled = false,
+                durationHintMs = 0L
+            ).shouldLoadImmediately
         )
     }
 }

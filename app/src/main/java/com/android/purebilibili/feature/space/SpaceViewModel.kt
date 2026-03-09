@@ -8,6 +8,7 @@ import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.data.repository.ActionRepository
 import com.android.purebilibili.data.repository.FavoriteRepository
+import com.android.purebilibili.data.repository.shouldContinueDynamicFetchAfterFilter
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,6 +48,8 @@ sealed class SpaceUiState {
         val dynamicOffset: String = "",
         val hasMoreDynamics: Boolean = true,
         val isLoadingDynamics: Boolean = false,
+        val hasLoadedDynamicsOnce: Boolean = false,
+        val lastDynamicLoadFailed: Boolean = false,
         
         //  Uploads Sub-Tab
         val selectedSubTab: SpaceSubTab = SpaceSubTab.VIDEO,
@@ -577,37 +580,74 @@ class SpaceViewModel(
         if (!refresh && !current.hasMoreDynamics) return
         
         viewModelScope.launch {
-            _uiState.value = current.copy(isLoadingDynamics = true)
+            _uiState.value = current.copy(
+                isLoadingDynamics = true,
+                lastDynamicLoadFailed = false
+            )
             
             try {
-                val offset = if (refresh) "" else current.dynamicOffset
-                val response = spaceApi.getSpaceDynamic(currentMid, offset)
-                
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                
-                if (response.code == 0 && response.data != null) {
-                    val newItems = response.data.items.filter { it.visible }
-                    val allItems = if (refresh) newItems else currentState.dynamics + newItems
-                    
-                    _uiState.value = currentState.copy(
-                        dynamics = allItems,
-                        dynamicOffset = response.data.offset,
-                        hasMoreDynamics = response.data.has_more,
-                        isLoadingDynamics = false
-                    )
-                    
-                    android.util.Log.d("SpaceVM", " loadSpaceDynamic: +${newItems.size} items, total=${allItems.size}, hasMore=${response.data.has_more}")
-                } else {
-                    android.util.Log.e("SpaceVM", " loadSpaceDynamic failed: code=${response.code}, msg=${response.message}")
-                    _uiState.value = currentState.copy(
-                        isLoadingDynamics = false,
-                        hasMoreDynamics = false
-                    )
+                var offset = if (refresh) "" else current.dynamicOffset
+                val accumulated = if (refresh) mutableListOf() else currentState.dynamics.toMutableList()
+                var hasMore = true
+                var pagesFetched = 0
+                var failed = false
+
+                while (true) {
+                    val response = spaceApi.getSpaceDynamic(currentMid, offset)
+                    if (response.code != 0 || response.data == null) {
+                        android.util.Log.e("SpaceVM", " loadSpaceDynamic failed: code=${response.code}, msg=${response.message}")
+                        failed = true
+                        hasMore = false
+                        break
+                    }
+
+                    val responseData = response.data
+                    val visibleItems = responseData.items.filter { it.visible }
+                    accumulated += visibleItems
+                    pagesFetched += 1
+                    val previousOffset = offset
+                    offset = responseData.offset
+                    hasMore = responseData.has_more
+                    val newlyAccumulatedVisibleCount = if (refresh) {
+                        accumulated.size
+                    } else {
+                        (accumulated.size - currentState.dynamics.size).coerceAtLeast(0)
+                    }
+
+                    if (!shouldContinueDynamicFetchAfterFilter(
+                            accumulatedVisibleCount = newlyAccumulatedVisibleCount,
+                            hasMore = hasMore,
+                            previousOffset = previousOffset,
+                            nextOffset = offset,
+                            pagesFetched = pagesFetched
+                        )
+                    ) {
+                        break
+                    }
                 }
+
+                _uiState.value = currentState.copy(
+                    dynamics = accumulated,
+                    dynamicOffset = offset,
+                    hasMoreDynamics = hasMore,
+                    isLoadingDynamics = false,
+                    hasLoadedDynamicsOnce = true,
+                    lastDynamicLoadFailed = failed
+                )
+                android.util.Log.d(
+                    "SpaceVM",
+                    " loadSpaceDynamic: total=${accumulated.size}, hasMore=$hasMore, pagesFetched=$pagesFetched, failed=$failed"
+                )
             } catch (e: Exception) {
                 android.util.Log.e("SpaceVM", "loadSpaceDynamic error: ${e.message}", e)
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = currentState.copy(isLoadingDynamics = false)
+                _uiState.value = currentState.copy(
+                    isLoadingDynamics = false,
+                    hasLoadedDynamicsOnce = true,
+                    lastDynamicLoadFailed = true,
+                    hasMoreDynamics = false
+                )
             }
         }
     }

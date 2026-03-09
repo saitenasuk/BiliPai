@@ -44,6 +44,11 @@ data class SubtitleDisplayOption(
     val enabled: Boolean
 )
 
+data class SubtitlePreferenceSession(
+    val key: String,
+    val initialMode: SubtitleDisplayMode
+)
+
 data class SubtitleControlAvailability(
     val trackAvailable: Boolean,
     val primarySelectable: Boolean,
@@ -265,6 +270,42 @@ fun resolveSubtitleDisplayModeByAutoPreference(
             if (!defaultModeLikelyAi || isMuted) defaultMode else SubtitleDisplayMode.OFF
         }
     }
+}
+
+fun resolveSubtitlePreferenceSession(
+    bvid: String,
+    cid: Long,
+    primaryLanguage: String?,
+    secondaryLanguage: String?,
+    primaryTrackLikelyAi: Boolean,
+    secondaryTrackLikelyAi: Boolean,
+    hasPrimaryTrack: Boolean,
+    hasSecondaryTrack: Boolean,
+    preference: SubtitleAutoPreference,
+    isMuted: Boolean = false
+): SubtitlePreferenceSession {
+    val sessionKey = "${bvid.trim()}_${cid}_${primaryLanguage}_${secondaryLanguage}_${primaryTrackLikelyAi}_${secondaryTrackLikelyAi}_${preference.name}"
+    val initialMode = resolveSubtitleDisplayModeByAutoPreference(
+        preference = preference,
+        hasPrimaryTrack = hasPrimaryTrack,
+        hasSecondaryTrack = hasSecondaryTrack,
+        primaryTrackLikelyAi = primaryTrackLikelyAi,
+        secondaryTrackLikelyAi = secondaryTrackLikelyAi,
+        isMuted = isMuted
+    )
+    return SubtitlePreferenceSession(
+        key = sessionKey,
+        initialMode = initialMode
+    )
+}
+
+fun resolveSubtitleDisplayModePreference(
+    previousSessionKey: String?,
+    nextSessionKey: String,
+    previousMode: SubtitleDisplayMode,
+    nextInitialMode: SubtitleDisplayMode
+): SubtitleDisplayMode {
+    return if (previousSessionKey == nextSessionKey) previousMode else nextInitialMode
 }
 
 fun resolveSubtitleControlAvailability(

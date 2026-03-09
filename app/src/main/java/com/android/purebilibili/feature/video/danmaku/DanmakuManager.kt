@@ -118,6 +118,7 @@ class DanmakuManager private constructor(
     private var lastDanmakuPluginUpdateToken: Long = 0L
     private var currentFaceAwareBand: DanmakuDisplayBand? = null
     private val faceBandStabilizer = FaceOcclusionBandStabilizer()
+    private var wasBufferingWhilePlaying = false
     
     // 配置
     val config = DanmakuConfig()
@@ -902,8 +903,16 @@ class DanmakuManager private constructor(
                     if (p.isPlaying && config.isEnabled && isPlaying) {
                         val playerPos = p.currentPosition
                         tickCount++
-                        controller?.let { ctrl ->
-                            if (shouldForceDanmakuDataResync(currentVideoSpeed, tickCount)) {
+                        when (
+                            resolveDanmakuGuardAction(
+                                videoSpeed = currentVideoSpeed,
+                                tickCount = tickCount,
+                                danmakuEnabled = config.isEnabled,
+                                isPlaying = isPlaying,
+                                hasData = cachedDanmakuList != null
+                            )
+                        ) {
+                            DanmakuSyncAction.HardResync -> {
                                 cachedDanmakuList?.let { list ->
                                     resyncDanmakuTimeline(
                                         list = list,
@@ -912,9 +921,9 @@ class DanmakuManager private constructor(
                                         reason = "drift_sync"
                                     )
                                 }
-                            } else {
-                                ctrl.start(playerPos)
                             }
+                            DanmakuSyncAction.None,
+                            DanmakuSyncAction.PauseOnly -> Unit
                         }
                         Log.d(
                             TAG,
@@ -967,50 +976,86 @@ class DanmakuManager private constructor(
         playerListener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlayerPlaying: Boolean) {
                 Log.w(TAG, " onIsPlayingChanged: isPlaying=$isPlayerPlaying, isEnabled=${config.isEnabled}, hasData=${cachedDanmakuList != null}")
-                
-                if (isPlayerPlaying && config.isEnabled) {
-                    //  [修复] 只有当数据已加载时才启动弹幕
-                    if (cachedDanmakuList != null) {
+
+                when (
+                    resolveDanmakuActionForIsPlayingChange(
+                        isPlayerPlaying = isPlayerPlaying,
+                        danmakuEnabled = config.isEnabled,
+                        hasData = cachedDanmakuList != null
+                    )
+                ) {
+                    DanmakuSyncAction.HardResync -> {
                         val position = exoPlayer.currentPosition
-                        controller?.start(position)
+                        cachedDanmakuList?.let { list ->
+                            resyncDanmakuTimeline(
+                                list = list,
+                                positionMs = position,
+                                shouldPlay = true,
+                                reason = "is_playing_changed"
+                            )
+                        }
                         isPlaying = true
-                        // 🎬 [根本修复] 启动帧级同步
+                        wasBufferingWhilePlaying = false
                         startDriftSync()
-                        Log.w(TAG, " Danmaku STARTED at ${position}ms with frame sync")
-                    } else {
-                        Log.w(TAG, " Player playing but danmaku data not loaded yet, will start after load")
-                        // 数据加载完成后会自动 start
+                        Log.w(TAG, " Danmaku HARD RESYNC at ${position}ms with frame sync")
                     }
-                } else if (!isPlayerPlaying) {
-                    // 暂停 - DanmakuRenderEngine 的 pause() 会让弹幕停在原地
-                    controller?.pause()
-                    isPlaying = false
-                    // 🎬 [根本修复] 停止帧级同步
-                    stopDriftSync()
-                    Log.w(TAG, " Danmaku PAUSED (danmakus stay in place)")
+                    DanmakuSyncAction.PauseOnly -> {
+                        controller?.pause()
+                        isPlaying = false
+                        stopDriftSync()
+                        Log.w(TAG, " Danmaku PAUSED (danmakus stay in place)")
+                    }
+                    DanmakuSyncAction.None -> {
+                        if (isPlayerPlaying) {
+                            Log.w(TAG, " Player playing but danmaku data not loaded/enabled yet, will sync after load")
+                        }
+                    }
                 }
             }
             
             override fun onPlaybackStateChanged(playbackState: Int) {
                 Log.d(TAG, " onPlaybackStateChanged: state=$playbackState")
-                when (playbackState) {
-                    Player.STATE_READY -> {
-                        if (exoPlayer.isPlaying && config.isEnabled) {
-                            val position = exoPlayer.currentPosition
-                            controller?.start(position)
-                            isPlaying = true
+                when (
+                    resolveDanmakuActionForPlaybackState(
+                        playbackState = playbackState,
+                        isPlayerPlaying = exoPlayer.isPlaying,
+                        danmakuEnabled = config.isEnabled,
+                        hasData = cachedDanmakuList != null,
+                        resumedFromBuffering = wasBufferingWhilePlaying
+                    )
+                ) {
+                    DanmakuSyncAction.HardResync -> {
+                        val position = exoPlayer.currentPosition
+                        cachedDanmakuList?.let { list ->
+                            resyncDanmakuTimeline(
+                                list = list,
+                                positionMs = position,
+                                shouldPlay = true,
+                                reason = "state_ready_resume"
+                            )
+                        }
+                        isPlaying = true
+                        wasBufferingWhilePlaying = false
+                        startDriftSync()
+                    }
+                    DanmakuSyncAction.PauseOnly -> {
+                        if (playbackState == Player.STATE_BUFFERING) {
+                            wasBufferingWhilePlaying = isPlaying
+                        } else {
+                            wasBufferingWhilePlaying = false
+                        }
+                        controller?.pause()
+                        if (playbackState == Player.STATE_ENDED) {
+                            isPlaying = false
+                            stopDriftSync()
+                        }
+                        if (playbackState == Player.STATE_BUFFERING) {
+                            Log.d(TAG, " Buffering, danmaku paused")
                         }
                     }
-                    Player.STATE_ENDED -> {
-                        // 视频结束时暂停弹幕（保持在屏幕上）
-                        controller?.pause()
-                        isPlaying = false
-                    }
-                    Player.STATE_BUFFERING -> {
-                        // 缓冲时暂停弹幕
-                        if (isPlaying) {
-                            controller?.pause()
-                            Log.d(TAG, " Buffering, danmaku paused")
+                    DanmakuSyncAction.None -> {
+                        if (playbackState != Player.STATE_BUFFERING) {
+                            wasBufferingWhilePlaying = false
                         }
                     }
                 }
@@ -1021,10 +1066,12 @@ class DanmakuManager private constructor(
                 newPosition: Player.PositionInfo,
                 reason: Int
             ) {
-                val isSeekDiscontinuity =
-                    reason == Player.DISCONTINUITY_REASON_SEEK ||
-                        reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT
-                if (isSeekDiscontinuity) {
+                if (
+                    resolveDanmakuActionForPositionDiscontinuity(
+                        reason = reason,
+                        hasData = cachedDanmakuList != null
+                    ) == DanmakuSyncAction.HardResync
+                ) {
                     Log.w(TAG, " Seek detected: ${oldPosition.positionMs}ms -> ${newPosition.positionMs}ms")
                     
                     //  关键修复：Seek 时重新调用 setData(list, 0) + start(newPosition)
@@ -1053,6 +1100,7 @@ class DanmakuManager private constructor(
                 //  同步弹幕速度：视频 2x 时，弹幕也需要 2 倍速滚动
                 // 通过减少 moveTime 来加快弹幕滚动
                 if (videoSpeed != currentVideoSpeed) {
+                    val previousSpeed = currentVideoSpeed
                     currentVideoSpeed = videoSpeed
                     
                     controller?.let { ctrl ->
@@ -1061,18 +1109,24 @@ class DanmakuManager private constructor(
                         val adjustedMoveTime = (originalMoveTime / videoSpeed).toLong()
                         ctrl.config.scroll.moveTime = adjustedMoveTime
                         
-                        // [关键修复] 任何倍速变化都需要立即同步弹幕到当前视频位置
-                        // 因为视频倍速变化后，弹幕引擎的内部时间线与视频时间线会产生偏差
-                        // 例如：2倍速播放5分钟后，视频在10分钟处，但弹幕引擎可能还在5分钟处
-                        val currentPos = exoPlayer.currentPosition
-                        Log.w(TAG, "⏩ Speed changed, resyncing danmaku at ${currentPos}ms")
-                        cachedDanmakuList?.let { list ->
-                            resyncDanmakuTimeline(
-                                list = list,
-                                positionMs = currentPos,
-                                shouldPlay = exoPlayer.isPlaying,
-                                reason = "speed_change"
-                            )
+                        if (
+                            resolveDanmakuActionForPlaybackSpeedChange(
+                                previousSpeed = previousSpeed,
+                                newSpeed = videoSpeed,
+                                isPlayerPlaying = exoPlayer.isPlaying,
+                                hasData = cachedDanmakuList != null
+                            ) == DanmakuSyncAction.HardResync
+                        ) {
+                            val currentPos = exoPlayer.currentPosition
+                            Log.w(TAG, "⏩ Speed changed, resyncing danmaku at ${currentPos}ms")
+                            cachedDanmakuList?.let { list ->
+                                resyncDanmakuTimeline(
+                                    list = list,
+                                    positionMs = currentPos,
+                                    shouldPlay = exoPlayer.isPlaying,
+                                    reason = "speed_change"
+                                )
+                            }
                         }
                         
                         ctrl.invalidateView()
@@ -1264,9 +1318,15 @@ class DanmakuManager private constructor(
         danmakuView?.visibility = android.view.View.VISIBLE
         
         if (player?.isPlaying == true) {
-            val position = player?.currentPosition ?: 0L
-            controller?.start(position)
-            isPlaying = true
+            cachedDanmakuList?.let { list ->
+                resyncDanmakuTimeline(
+                    list = list,
+                    positionMs = player?.currentPosition ?: 0L,
+                    shouldPlay = true,
+                    invalidateView = true,
+                    reason = "show"
+                )
+            }
         }
     }
     

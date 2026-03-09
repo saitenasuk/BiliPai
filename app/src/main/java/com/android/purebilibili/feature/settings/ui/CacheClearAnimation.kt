@@ -635,7 +635,7 @@ fun CacheClearConfirmDialog(
         text = { 
             Column {
                 Text(
-                    "确定要清除所有图片和视频缓存吗？", 
+                    resolveCacheClearConfirmationMessage(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(8.dp))

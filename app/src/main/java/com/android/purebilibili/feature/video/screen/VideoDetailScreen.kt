@@ -115,6 +115,13 @@ import com.android.purebilibili.feature.video.ui.components.VideoDetailSkeleton
 import com.android.purebilibili.feature.video.ui.components.VideoActionFeedbackHost
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog  //  评论图片预览
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
+import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
+import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
+import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayModePreference
+import com.android.purebilibili.feature.video.policy.reduceVideoDetailPostScroll
+import com.android.purebilibili.feature.video.policy.reduceVideoDetailPreScroll
+import com.android.purebilibili.feature.video.policy.resolveVideoDetailCollapseProgress
+import com.android.purebilibili.feature.video.subtitle.resolveSubtitlePreferenceSession
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -1068,6 +1075,67 @@ fun VideoDetailScreen(
             player.removeListener(listener)
         }
     }
+    val subtitleAutoPreference by com.android.purebilibili.core.store.SettingsManager
+        .getSubtitleAutoPreference(context)
+        .collectAsState(initial = SubtitleAutoPreference.OFF)
+    val subtitleAudioManager = remember {
+        context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+    }
+    val subtitleAutoModeMuted = remember(playerState.player, subtitleAudioManager, currentBvid) {
+        val systemMuted = runCatching {
+            subtitleAudioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) <= 0
+        }.getOrDefault(false)
+        systemMuted || playerState.player.volume <= 0f
+    }
+    val subtitlePreferenceSession = remember(uiState, currentBvid, subtitleAutoPreference, subtitleAutoModeMuted) {
+        val success = uiState as? PlayerUiState.Success
+        if (success == null) {
+            resolveSubtitlePreferenceSession(
+                bvid = currentBvid,
+                cid = 0L,
+                primaryLanguage = null,
+                secondaryLanguage = null,
+                primaryTrackLikelyAi = false,
+                secondaryTrackLikelyAi = false,
+                hasPrimaryTrack = false,
+                hasSecondaryTrack = false,
+                preference = subtitleAutoPreference,
+                isMuted = subtitleAutoModeMuted
+            )
+        } else {
+            val subtitleBelongsToCurrentVideo =
+                success.subtitleOwnerBvid == success.info.bvid &&
+                    success.subtitleOwnerCid == success.info.cid &&
+                    success.info.cid > 0L
+            val hasPrimaryTrack = subtitleBelongsToCurrentVideo &&
+                (!success.subtitlePrimaryTrackKey.isNullOrBlank() || !success.subtitlePrimaryLanguage.isNullOrBlank())
+            val hasSecondaryTrack = subtitleBelongsToCurrentVideo &&
+                (!success.subtitleSecondaryTrackKey.isNullOrBlank() || !success.subtitleSecondaryLanguage.isNullOrBlank())
+            resolveSubtitlePreferenceSession(
+                bvid = success.info.bvid,
+                cid = success.info.cid,
+                primaryLanguage = success.subtitlePrimaryLanguage,
+                secondaryLanguage = success.subtitleSecondaryLanguage,
+                primaryTrackLikelyAi = subtitleBelongsToCurrentVideo && success.subtitlePrimaryLikelyAi,
+                secondaryTrackLikelyAi = subtitleBelongsToCurrentVideo && success.subtitleSecondaryLikelyAi,
+                hasPrimaryTrack = hasPrimaryTrack,
+                hasSecondaryTrack = hasSecondaryTrack,
+                preference = subtitleAutoPreference,
+                isMuted = subtitleAutoModeMuted
+            )
+        }
+    }
+    var subtitlePreferenceSessionKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var subtitleDisplayModeOverride by rememberSaveable { mutableStateOf(SubtitleDisplayMode.OFF) }
+    LaunchedEffect(subtitlePreferenceSession.key) {
+        subtitleDisplayModeOverride = resolveSubtitleDisplayModePreference(
+            previousSessionKey = subtitlePreferenceSessionKey,
+            nextSessionKey = subtitlePreferenceSession.key,
+            previousMode = subtitleDisplayModeOverride,
+            nextInitialMode = subtitlePreferenceSession.initialMode
+        )
+        subtitlePreferenceSessionKey = subtitlePreferenceSession.key
+    }
 
     var hasAppliedInitialPageSwitch by remember(currentBvid, cid) { mutableStateOf(false) }
     LaunchedEffect(uiState, currentBvid, cid, hasAppliedInitialPageSwitch) {
@@ -1644,7 +1712,9 @@ fun VideoDetailScreen(
                 onPageSelect = { viewModel.switchPage(it) },
                 forceCoverOnly = forceCoverOnlyForReturn,
                 allowLivePlayerSharedElement = !predictiveBackAnimationEnabled,
-                suppressSubtitleOverlay = shouldSuppressSubtitleOverlay
+                suppressSubtitleOverlay = shouldSuppressSubtitleOverlay,
+                subtitleDisplayModePreferenceOverride = subtitleDisplayModeOverride,
+                onSubtitleDisplayModePreferenceOverrideChange = { subtitleDisplayModeOverride = it }
             )
         } else {
                 //  沉浸式布局：视频延伸到状态栏 + 内容区域
@@ -1784,39 +1854,27 @@ fun VideoDetailScreen(
                     val nestedScrollConnection = remember(inlinePortraitScrollEnabled, isPortraitFullscreen) {
                         object : NestedScrollConnection {
                             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                                if (!inlinePortraitScrollEnabled || isPortraitFullscreen) return Offset.Zero
-                                
-                                val delta = available.y
-                                // 上滑 (delta < 0)：隐藏播放器，消费滚动
-                                if (delta < 0) {
-                                    val nextOffset = resolveNextPlayerHeightOffset(
-                                        currentOffsetPx = playerHeightOffsetPx,
-                                        deltaPx = delta,
-                                        minOffsetPx = -collapseRangePx
-                                    ) ?: return Offset.Zero
-                                    val consumed = nextOffset - playerHeightOffsetPx
-                                    playerHeightOffsetPx = nextOffset
-                                    return Offset(0f, consumed)
-                                }
-                                return Offset.Zero
+                                val scrollUpdate = reduceVideoDetailPreScroll(
+                                    currentOffsetPx = playerHeightOffsetPx,
+                                    deltaPx = available.y,
+                                    minOffsetPx = -collapseRangePx,
+                                    inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
+                                    isPortraitFullscreen = isPortraitFullscreen
+                                ) ?: return Offset.Zero
+                                playerHeightOffsetPx = scrollUpdate.nextOffsetPx
+                                return Offset(0f, scrollUpdate.consumedDeltaPx)
                             }
 
                             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                                if (!inlinePortraitScrollEnabled || isPortraitFullscreen) return Offset.Zero
-                                
-                                val delta = available.y
-                                // 下滑 (delta > 0)：显示播放器 (且 available > 0 说明内容已滚到顶)
-                                if (delta > 0) {
-                                     val nextOffset = resolveNextPlayerHeightOffset(
-                                         currentOffsetPx = playerHeightOffsetPx,
-                                         deltaPx = delta,
-                                         minOffsetPx = -collapseRangePx
-                                     ) ?: return Offset.Zero
-                                     val consumedDelta = nextOffset - playerHeightOffsetPx
-                                     playerHeightOffsetPx = nextOffset
-                                     return Offset(0f, consumedDelta)
-                                }
-                                return Offset.Zero
+                                val scrollUpdate = reduceVideoDetailPostScroll(
+                                    currentOffsetPx = playerHeightOffsetPx,
+                                    deltaPx = available.y,
+                                    minOffsetPx = -collapseRangePx,
+                                    inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
+                                    isPortraitFullscreen = isPortraitFullscreen
+                                ) ?: return Offset.Zero
+                                playerHeightOffsetPx = scrollUpdate.nextOffsetPx
+                                return Offset(0f, scrollUpdate.consumedDeltaPx)
                             }
                         }
                     }
@@ -1832,11 +1890,11 @@ fun VideoDetailScreen(
                     //  当 playerHeightOffsetPx 为 -videoHeightPx 时，高度只剩 statusBarHeight
                     //  [Fix] 竖屏全屏模式下强制高度不受偏移影响
                     val playerHeightOffset = if (isPortraitFullscreen) 0f else playerHeightOffsetPx
-                    val collapseProgress = if (collapseRangePx > 0f) {
-                        (abs(playerHeightOffset) / collapseRangePx).coerceIn(0f, 1f)
-                    } else {
-                        0f
-                    }
+                    val collapseProgress = resolveVideoDetailCollapseProgress(
+                        playerHeightOffsetPx = playerHeightOffset,
+                        collapseRangePx = collapseRangePx,
+                        isPortraitFullscreen = isPortraitFullscreen
+                    )
                     val expandedViewportHeight = if (useOfficialInlinePortraitDetailExperience) {
                         expandedPortraitInlineSpec.heightDp.dp
                     } else {
@@ -2013,7 +2071,9 @@ fun VideoDetailScreen(
                                 onDownloadAudio = { viewModel.downloadAudio(context) },
                                 forceCoverOnly = forceCoverOnlyForReturn,
                                 allowLivePlayerSharedElement = !predictiveBackAnimationEnabled,
-                                suppressSubtitleOverlay = shouldSuppressSubtitleOverlay
+                                suppressSubtitleOverlay = shouldSuppressSubtitleOverlay,
+                                subtitleDisplayModePreferenceOverride = subtitleDisplayModeOverride,
+                                onSubtitleDisplayModePreferenceOverrideChange = { subtitleDisplayModeOverride = it }
                                 //  空降助手 - 已由插件系统自动处理
                                 // sponsorSegment = sponsorSegment,
                                 // showSponsorSkipButton = showSponsorSkipButton,
@@ -2733,11 +2793,18 @@ fun VideoDetailScreen(
         //  [新增] 下载选项菜单 & 画质选择
         val showDownloadDialog by viewModel.showDownloadDialog.collectAsState()
         val successForDownload = uiState as? PlayerUiState.Success
+        val downloadTasks by com.android.purebilibili.feature.download.DownloadManager.tasks.collectAsState()
         
         // 本地状态控制画质选择弹窗
         var showQualitySelection by remember { mutableStateOf(false) }
+        var showBatchDownloadDialog by remember { mutableStateOf(false) }
 
         if (showDownloadDialog && successForDownload != null) {
+            val batchDownloadCandidates = remember(successForDownload.info) {
+                com.android.purebilibili.feature.download.resolveBatchDownloadCandidates(
+                    successForDownload.info
+                )
+            }
             ModalBottomSheet(
                 onDismissRequest = { viewModel.closeDownloadDialog() },
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -2792,6 +2859,38 @@ fun VideoDetailScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                    }
+
+                    if (batchDownloadCandidates.size > 1) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showBatchDownloadDialog = true
+                                    viewModel.closeDownloadDialog()
+                                }
+                                .padding(horizontal = 16.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Default.SquareStack3dUp,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = "批量缓存",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "选择多个分P或合集条目统一加入下载",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                     
@@ -2916,6 +3015,40 @@ fun VideoDetailScreen(
                     showQualitySelection = false
                 },
                 onDismiss = { showQualitySelection = false }
+            )
+        }
+
+        if (showBatchDownloadDialog && successForDownload != null) {
+            val batchDownloadCandidates = remember(successForDownload.info) {
+                com.android.purebilibili.feature.download.resolveBatchDownloadCandidates(
+                    successForDownload.info
+                )
+            }
+            val downloadedCandidateIds = remember(downloadTasks) {
+                downloadTasks.values
+                    .filter { !it.isFailed && !it.isAudioOnly }
+                    .map { "${it.bvid}#${it.cid}" }
+                    .toSet()
+            }
+            val sortedQualityOptions = successForDownload.qualityIds
+                .zip(successForDownload.qualityLabels)
+                .sortedByDescending { it.first }
+            val highestQuality = sortedQualityOptions.firstOrNull()?.first ?: successForDownload.currentQuality
+
+            com.android.purebilibili.feature.download.BatchDownloadDialog(
+                title = successForDownload.info.title,
+                candidates = batchDownloadCandidates,
+                qualityOptions = sortedQualityOptions,
+                currentQuality = highestQuality,
+                downloadedIds = downloadedCandidateIds,
+                onConfirm = { quality, selectedCandidates ->
+                    viewModel.downloadBatchWithQuality(
+                        qualityId = quality,
+                        candidates = selectedCandidates
+                    )
+                    showBatchDownloadDialog = false
+                },
+                onDismiss = { showBatchDownloadDialog = false }
             )
         }
         

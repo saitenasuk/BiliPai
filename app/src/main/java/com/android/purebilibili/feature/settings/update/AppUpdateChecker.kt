@@ -2,9 +2,25 @@ package com.android.purebilibili.feature.settings
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.net.HttpURLConnection
 import java.net.URL
+
+data class AppUpdateAsset(
+    val name: String,
+    val downloadUrl: String,
+    val sizeBytes: Long,
+    val contentType: String
+) {
+    val isApk: Boolean
+        get() = name.endsWith(".apk", ignoreCase = true) ||
+            contentType.equals("application/vnd.android.package-archive", ignoreCase = true)
+}
 
 data class AppUpdateCheckResult(
     val isUpdateAvailable: Boolean,
@@ -13,6 +29,7 @@ data class AppUpdateCheckResult(
     val releaseUrl: String,
     val releaseNotes: String,
     val publishedAt: String?,
+    val assets: List<AppUpdateAsset>,
     val message: String
 )
 
@@ -20,6 +37,7 @@ object AppUpdateChecker {
     private const val LATEST_RELEASE_API = "https://api.github.com/repos/jay3-yy/BiliPai/releases/latest"
     private const val CONNECT_TIMEOUT_MS = 6000
     private const val READ_TIMEOUT_MS = 8000
+    private val releaseJson = Json { ignoreUnknownKeys = true }
 
     suspend fun check(currentVersion: String): Result<AppUpdateCheckResult> = withContext(Dispatchers.IO) {
         runCatching {
@@ -39,7 +57,7 @@ object AppUpdateChecker {
                 }
 
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(body)
+                val json = JSONObject(JSONTokener(body))
 
                 val latestTag = json.optString("tag_name", "")
                 val latestVersion = normalizeVersion(latestTag)
@@ -50,6 +68,7 @@ object AppUpdateChecker {
                 val releaseUrl = json.optString("html_url", "https://github.com/jay3-yy/BiliPai/releases")
                 val releaseNotes = json.optString("body", "").trim()
                 val publishedAt = json.optString("published_at", "").takeIf { it.isNotBlank() }
+                val assets = parseReleaseAssets(body)
                 val updateAvailable = isRemoteNewer(currentVersion, latestVersion)
                 val message = if (updateAvailable) {
                     "发现新版本 v$latestVersion"
@@ -64,6 +83,7 @@ object AppUpdateChecker {
                     releaseUrl = releaseUrl,
                     releaseNotes = releaseNotes,
                     publishedAt = publishedAt,
+                    assets = assets,
                     message = message
                 )
             } finally {
@@ -99,5 +119,32 @@ object AppUpdateChecker {
         return version
             .split('.')
             .mapNotNull { part -> part.toIntOrNull() }
+    }
+
+    internal fun parseReleaseAssets(rawReleaseJson: String): List<AppUpdateAsset> {
+        val assetsJson = runCatching {
+            releaseJson
+                .parseToJsonElement(rawReleaseJson)
+                .jsonObject["assets"]
+                ?.jsonArray
+        }.getOrNull() ?: return emptyList()
+
+        return buildList {
+            for (assetElement in assetsJson) {
+                val assetJson = assetElement.jsonObject
+                val asset = AppUpdateAsset(
+                    name = assetJson["name"]?.jsonPrimitive?.content.orEmpty().trim(),
+                    downloadUrl = assetJson["browser_download_url"]?.jsonPrimitive?.content.orEmpty().trim(),
+                    sizeBytes = assetJson["size"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L,
+                    contentType = assetJson["content_type"]?.jsonPrimitive?.content.orEmpty().trim()
+                )
+                if (asset.name.isBlank() || asset.downloadUrl.isBlank() || !asset.isApk) continue
+                add(asset)
+            }
+        }
+    }
+
+    internal fun parseReleaseAssets(releaseJson: JSONObject): List<AppUpdateAsset> {
+        return parseReleaseAssets(releaseJson.toString())
     }
 }
