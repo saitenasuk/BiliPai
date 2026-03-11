@@ -2907,6 +2907,8 @@ fun VideoPlayerSection(
                     playerState.player.seekTo(position)
                     danmakuManager.seekTo(position)
                 },
+                previewSeekPositionMs = seekTargetTime,
+                previewSeekActive = gestureMode == VideoGestureMode.Seek,
                 // [New] Codec & Audio
                 currentCodec = currentCodec,
                 onCodecChange = onCodecChange,

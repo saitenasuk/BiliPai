@@ -129,6 +129,27 @@ object VideoRepository {
             isOnMobileData = isOnMobileData
         )
     }
+
+    suspend fun getVideoTitle(
+        bvid: String,
+        aid: Long = 0L
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val lookup = resolveVideoInfoLookupInput(rawBvid = bvid, aid = aid)
+                ?: throw Exception("无效的视频标识: bvid=$bvid, aid=$aid")
+            val response = if (lookup.bvid.isNotEmpty()) {
+                api.getVideoInfo(lookup.bvid)
+            } else {
+                api.getVideoInfoByAid(lookup.aid)
+            }
+            val info = response.data ?: throw Exception("视频详情为空: ${response.code}")
+            val title = info.title.trim()
+            if (title.isEmpty()) throw Exception("视频标题为空")
+            Result.success(title)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
     
     private suspend fun ensureBuvid3FromSpi() {
         if (buvidInitialized) return

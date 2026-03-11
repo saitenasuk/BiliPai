@@ -299,7 +299,10 @@ fun CategoryTabRow(
     val visualTuning = remember { resolveTopTabVisualTuning() }
     val primaryColor = MaterialTheme.colorScheme.primary
     val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
-    val effectiveLiquidGlassEnabled = isLiquidGlassEnabled && interactionBudget == HomeInteractionMotionBudget.FULL
+    val effectiveLiquidGlassEnabled = resolveEffectiveTopTabLiquidGlassEnabled(
+        isLiquidGlassEnabled = isLiquidGlassEnabled,
+        interactionBudget = interactionBudget
+    )
 
     //  [交互优化] 触觉反馈
     val haptic = com.android.purebilibili.core.util.rememberHapticFeedback()
@@ -419,7 +422,7 @@ fun CategoryTabRow(
                 ).toDp()
             }
 
-            LaunchedEffect(isLiquidGlassEnabled) {
+            LaunchedEffect(effectiveLiquidGlassEnabled) {
                 snapshotFlow { Pair(currentPosition, actualTabWidthPx) }
                     .collect { (position, tabWidthPx) ->
                         val now = SystemClock.uptimeMillis()
@@ -437,7 +440,7 @@ fun CategoryTabRow(
                         isInteracting = shouldTopTabIndicatorBeInteracting(
                             pagerIsScrolling = pagerState?.isScrollInProgress == true,
                             combinedVelocityPxPerSecond = rawVelocity,
-                            liquidGlassEnabled = isLiquidGlassEnabled
+                            liquidGlassEnabled = effectiveLiquidGlassEnabled
                         )
                         lastPosition = position
                         lastTimeMs = now
@@ -449,7 +452,7 @@ fun CategoryTabRow(
                             isInteracting = shouldTopTabIndicatorBeInteracting(
                                 pagerIsScrolling = pagerState?.isScrollInProgress == true,
                                 combinedVelocityPxPerSecond = indicatorVelocityPxPerSecond,
-                                liquidGlassEnabled = isLiquidGlassEnabled
+                                liquidGlassEnabled = effectiveLiquidGlassEnabled
                             )
                             delay(90)
                             indicatorVelocityPxPerSecond = 0f
@@ -496,7 +499,7 @@ fun CategoryTabRow(
                             velocity = indicatorVelocityPxPerSecond,
                             startPadding = floatingAdjustedInsetDp,
                             modifier = Modifier.fillMaxSize(),
-                            isLiquidGlassEnabled = isLiquidGlassEnabled,
+                            isLiquidGlassEnabled = effectiveLiquidGlassEnabled,
                             clampToBounds = true,
                             edgeInset = floatingIndicatorEdgeInset,
                             viewportShiftPx = scrollOffset,
@@ -523,7 +526,7 @@ fun CategoryTabRow(
                             itemWidthPx = actualTabWidthPx,
                             isDragging = isInteracting,
                             velocityPxPerSecond = indicatorVelocityPxPerSecond,
-                            isLiquidGlassEnabled = isLiquidGlassEnabled,
+                            isLiquidGlassEnabled = effectiveLiquidGlassEnabled,
                             liquidGlassStyle = liquidGlassStyle,
                             backdrop = indicatorBackdrop,
                             indicatorColor = if (isIos26Style) {
@@ -545,7 +548,7 @@ fun CategoryTabRow(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (isLiquidGlassEnabled) Modifier.layerBackdrop(tabContentBackdrop) else Modifier)
+                        .then(if (effectiveLiquidGlassEnabled) Modifier.layerBackdrop(tabContentBackdrop) else Modifier)
                 ) {
                     LazyRow(
                         state = tabListState,

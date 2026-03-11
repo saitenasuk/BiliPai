@@ -393,14 +393,17 @@ internal fun shouldAutoEnterPortraitFullscreenFromRoute(
 
 internal fun shouldSyncMainPlayerToInternalBvid(
     isPortraitFullscreen: Boolean,
-    routeBvid: String,
     currentBvid: String,
-    loadedBvid: String
+    currentBvidCid: Long,
+    loadedBvid: String,
+    loadedCid: Long
 ): Boolean {
     if (isPortraitFullscreen) return false
     if (currentBvid.isBlank()) return false
-    if (currentBvid == routeBvid) return false
-    return loadedBvid != currentBvid
+    if (loadedBvid != currentBvid) return true
+    val targetCid = currentBvidCid.takeIf { it > 0L } ?: return false
+    val resolvedLoadedCid = loadedCid.takeIf { it > 0L } ?: return true
+    return resolvedLoadedCid != targetCid
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -1041,6 +1044,7 @@ fun VideoDetailScreen(
     var portraitSyncSnapshotPositionMs by remember { mutableLongStateOf(0L) }
     var hasPendingPortraitSync by remember { mutableStateOf(false) }
     var pendingMainReloadBvidAfterPortrait by rememberSaveable { mutableStateOf<String?>(null) }
+    var portraitPendingSelectionBvid by rememberSaveable { mutableStateOf<String?>(null) }
     var currentBvidCid by rememberSaveable { mutableLongStateOf(0L) }
 
     // 初始化播放器状态
@@ -1271,10 +1275,14 @@ fun VideoDetailScreen(
 
     val tryApplyPortraitProgressSync = remember(playerState, viewModel) {
         { snapshotBvid: String?, snapshotPositionMs: Long ->
-            val currentBvid = (viewModel.uiState.value as? PlayerUiState.Success)?.info?.bvid
+            val currentSuccess = viewModel.uiState.value as? PlayerUiState.Success
+            val currentBvid = currentSuccess?.info?.bvid
+            val currentCid = currentSuccess?.info?.cid ?: 0L
             if (!com.android.purebilibili.feature.video.ui.pager.shouldApplyPortraitProgressSync(
                     snapshotBvid = snapshotBvid,
-                    currentBvid = currentBvid
+                    snapshotCid = portraitSyncSnapshotCid,
+                    currentBvid = currentBvid,
+                    currentCid = currentCid
                 )
             ) {
                 false
@@ -1308,24 +1316,20 @@ fun VideoDetailScreen(
                  // 退出时恢复音量 (不自动播放，等待用户操作或 onResume)
                  playerState.player.volume = 1f
              }
-            val currentUiSuccess = viewModel.uiState.value as? PlayerUiState.Success
-            val currentUiBvid = currentUiSuccess?.info?.bvid
-            val currentUiCid = currentUiSuccess?.info?.cid ?: 0L
-            val targetBvid = pendingMainReloadBvidAfterPortrait ?: portraitSyncSnapshotBvid
-            if (com.android.purebilibili.feature.video.ui.pager.shouldReloadMainPlayerAfterPortraitExit(
-                    snapshotBvid = targetBvid,
-                    snapshotCid = portraitSyncSnapshotCid,
-                    currentBvid = currentUiBvid,
-                    currentCid = currentUiCid
-                )
-            ) {
-                viewModel.loadVideo(
-                    bvid = targetBvid!!,
-                    autoPlay = true,
-                    cid = portraitSyncSnapshotCid
-                )
+            val targetBvid = pendingMainReloadBvidAfterPortrait
+                ?: portraitPendingSelectionBvid
+                ?: portraitSyncSnapshotBvid
+            val targetCid = if (targetBvid == portraitSyncSnapshotBvid) {
+                portraitSyncSnapshotCid
+            } else {
+                currentBvidCid
+            }
+            if (!targetBvid.isNullOrBlank()) {
+                currentBvid = targetBvid
+                currentBvidCid = targetCid
             }
             pendingMainReloadBvidAfterPortrait = null
+            portraitPendingSelectionBvid = null
         }
     }
 
@@ -1354,9 +1358,10 @@ fun VideoDetailScreen(
         val success = uiState as? PlayerUiState.Success ?: return@LaunchedEffect
         if (!shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = isPortraitFullscreen,
-                routeBvid = bvid,
                 currentBvid = currentBvid,
-                loadedBvid = success.info.bvid
+                currentBvidCid = currentBvidCid,
+                loadedBvid = success.info.bvid,
+                loadedCid = success.info.cid
             )
         ) {
             return@LaunchedEffect
@@ -2462,10 +2467,8 @@ fun VideoDetailScreen(
                 },
                 onVideoChange = { newBvid ->
                     // 高频滑动期间不重载主播放器，避免与竖屏播放器抢焦点导致暂停。
-                    // 退出竖屏时再同步到主播放器。
-                    currentBvid = newBvid
-                    currentBvidCid = 0L
-                    pendingMainReloadBvidAfterPortrait = newBvid
+                    // 仅记录竖屏会话内当前浏览目标，真正退出时再提交给主播放器。
+                    portraitPendingSelectionBvid = newBvid
                 },
                 viewModel = viewModel,
                 commentViewModel = commentViewModel,
@@ -2473,6 +2476,7 @@ fun VideoDetailScreen(
                 // [新增] 进度同步
                 initialStartPositionMs = portraitSyncSnapshotPositionMs,
                 onProgressUpdate = { bvid, pos, cidSnapshot ->
+                    portraitPendingSelectionBvid = bvid
                     portraitSyncSnapshotBvid = bvid
                     portraitSyncSnapshotCid = cidSnapshot
                     portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
@@ -2486,6 +2490,7 @@ fun VideoDetailScreen(
                 onExitSnapshot = { bvid, pos, cidSnapshot ->
                     currentBvid = bvid
                     currentBvidCid = cidSnapshot
+                    portraitPendingSelectionBvid = bvid
                     portraitSyncSnapshotBvid = bvid
                     portraitSyncSnapshotCid = cidSnapshot
                     portraitSyncSnapshotPositionMs = pos.coerceAtLeast(0L)
@@ -2506,12 +2511,17 @@ fun VideoDetailScreen(
                     onNavigateToSearch()
                 },
                 onUserClick = { mid ->
-                    val anchorBvid = pendingMainReloadBvidAfterPortrait
+                    val anchorBvid = portraitPendingSelectionBvid
+                        ?: pendingMainReloadBvidAfterPortrait
                         ?: portraitSyncSnapshotBvid
                         ?: (uiState as? PlayerUiState.Success)?.info?.bvid
                     if (!anchorBvid.isNullOrBlank()) {
                         currentBvid = anchorBvid
-                        currentBvidCid = portraitSyncSnapshotCid
+                        currentBvidCid = if (anchorBvid == portraitSyncSnapshotBvid) {
+                            portraitSyncSnapshotCid
+                        } else {
+                            0L
+                        }
                         pendingMainReloadBvidAfterPortrait = anchorBvid
                     }
                     if (com.android.purebilibili.feature.video.ui.pager

@@ -303,6 +303,8 @@ fun VideoPlayerOverlay(
     onSeekStart: () -> Unit = {},
     //  [新增] 外部可接管 seek 行为（用于同步弹幕等）
     onSeekTo: ((Long) -> Unit)? = null,
+    previewSeekPositionMs: Long? = null,
+    previewSeekActive: Boolean = false,
     // [New] Codec & Audio Params
     currentCodec: String = "hev1",
     onCodecChange: (String) -> Unit = {},
@@ -504,6 +506,13 @@ fun VideoPlayerOverlay(
             delay(delayMs)
         }
     }
+    val displayedProgressState = remember(progressState, previewSeekPositionMs, previewSeekActive) {
+        resolveDisplayedPlayerProgress(
+            progress = progressState,
+            previewPositionMs = previewSeekPositionMs,
+            previewActive = previewSeekActive
+        )
+    }
     
     // 📖 计算当前章节（必须在 progressState 之后定义）
     val currentChapter = remember(progressState.current, viewPoints) {
@@ -609,8 +618,8 @@ fun VideoPlayerOverlay(
             )
         ) {
             PersistentBottomProgressBar(
-                current = progressState.current,
-                duration = progressState.duration,
+                current = displayedProgressState.current,
+                duration = displayedProgressState.duration,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
@@ -674,7 +683,7 @@ fun VideoPlayerOverlay(
                 //  [修复] 底部控制栏 - 固定在底部
                 BottomControlBar(
                     isPlaying = isPlaying,
-                    progress = progressState,
+                    progress = displayedProgressState,
                     isFullscreen = isFullscreen,
                     currentSpeed = currentSpeed,
                     currentRatio = currentAspectRatio,
@@ -1085,7 +1094,7 @@ fun VideoPlayerOverlay(
         if (showChapterList && viewPoints.isNotEmpty()) {
             ChapterListPanel(
                 viewPoints = viewPoints,
-                currentPositionMs = progressState.current,
+                currentPositionMs = displayedProgressState.current,
                 onSeek = { position -> onSeekTo?.invoke(position) ?: player.seekTo(position) },
                 onDismiss = { showChapterList = false }
             )

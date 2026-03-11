@@ -259,4 +259,51 @@ class VideoPlayerOverlayPolicyTest {
             )
         )
     }
+
+    @Test
+    fun displayedProgressPrefersPreviewWhileSeeking() {
+        val resolved = resolveDisplayedPlayerProgress(
+            progress = PlayerProgress(
+                current = 12_000L,
+                duration = 60_000L,
+                buffered = 20_000L
+            ),
+            previewPositionMs = 34_000L,
+            previewActive = true
+        )
+
+        assertEquals(34_000L, resolved.current)
+        assertEquals(60_000L, resolved.duration)
+        assertEquals(20_000L, resolved.buffered)
+    }
+
+    @Test
+    fun displayedProgressClampsPreviewWithinDuration() {
+        val resolved = resolveDisplayedPlayerProgress(
+            progress = PlayerProgress(
+                current = 12_000L,
+                duration = 60_000L,
+                buffered = 20_000L
+            ),
+            previewPositionMs = 90_000L,
+            previewActive = true
+        )
+
+        assertEquals(60_000L, resolved.current)
+    }
+
+    @Test
+    fun displayedProgressFallsBackToPlayerPositionWhenPreviewInactive() {
+        val resolved = resolveDisplayedPlayerProgress(
+            progress = PlayerProgress(
+                current = 12_000L,
+                duration = 60_000L,
+                buffered = 20_000L
+            ),
+            previewPositionMs = 34_000L,
+            previewActive = false
+        )
+
+        assertEquals(12_000L, resolved.current)
+    }
 }

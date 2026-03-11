@@ -4,16 +4,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -50,179 +54,197 @@ internal fun BatchDownloadDialog(
     var selectedQuality by remember(currentQuality) { mutableIntStateOf(currentQuality) }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "批量缓存",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+            val screenHeightDp = maxHeight.value.toInt().coerceAtLeast(1)
+            val dialogMaxHeight = resolveBatchDownloadDialogMaxHeight(screenHeightDp).dp
+            val candidateListMaxHeight = resolveBatchDownloadCandidateListMaxHeight(
+                screenHeightDp = screenHeightDp,
+                qualityOptionCount = qualityOptions.size
+            ).dp
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = dialogMaxHeight),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = false,
-                        onClick = {
-                            workingCandidates = selectAllBatchDownloadCandidates(workingCandidates)
-                        },
-                        label = { Text("全选") }
-                    )
-                    FilterChip(
-                        selected = false,
-                        onClick = {
-                            workingCandidates = invertBatchDownloadCandidateSelection(workingCandidates)
-                        },
-                        label = { Text("反选") }
-                    )
-                    FilterChip(
-                        selected = false,
-                        onClick = {
-                            workingCandidates = selectOnlyUndownloadedBatchCandidates(
-                                candidates = workingCandidates,
-                                downloadedIds = downloadedIds
-                            )
-                        },
-                        label = { Text("仅未下载") }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "选择条目",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                LazyColumn(
+            ) {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 280.dp)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp)
                 ) {
-                    items(workingCandidates, key = { it.id }) { candidate ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    workingCandidates = workingCandidates.map {
-                                        if (it.id == candidate.id) it.copy(selected = !it.selected) else it
+                    Text(
+                        text = "批量缓存",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                workingCandidates = selectAllBatchDownloadCandidates(workingCandidates)
+                            },
+                            label = { Text("全选") }
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                workingCandidates = invertBatchDownloadCandidateSelection(workingCandidates)
+                            },
+                            label = { Text("反选") }
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                workingCandidates = selectOnlyUndownloadedBatchCandidates(
+                                    candidates = workingCandidates,
+                                    downloadedIds = downloadedIds
+                                )
+                            },
+                            label = { Text("仅未下载") }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "选择条目",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = candidateListMaxHeight)
+                    ) {
+                        items(workingCandidates, key = { it.id }) { candidate ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        workingCandidates = workingCandidates.map {
+                                            if (it.id == candidate.id) it.copy(selected = !it.selected) else it
+                                        }
                                     }
-                                }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = candidate.selected,
-                                onCheckedChange = { checked ->
-                                    workingCandidates = workingCandidates.map {
-                                        if (it.id == candidate.id) it.copy(selected = checked) else it
-                                    }
-                                }
-                            )
-                            Column(
-                                modifier = Modifier.weight(1f)
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = candidate.label,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                Checkbox(
+                                    checked = candidate.selected,
+                                    onCheckedChange = { checked ->
+                                        workingCandidates = workingCandidates.map {
+                                            if (it.id == candidate.id) it.copy(selected = checked) else it
+                                        }
+                                    }
                                 )
-                                Text(
-                                    text = candidate.title,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            if (candidate.id in downloadedIds) {
-                                Box(
-                                    modifier = Modifier
-                                        .background(
-                                            color = MaterialTheme.colorScheme.secondaryContainer,
-                                            shape = RoundedCornerShape(999.dp)
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                Column(
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     Text(
-                                        text = "已存在",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        text = candidate.label,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
+                                    Text(
+                                        text = candidate.title,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                if (candidate.id in downloadedIds) {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                                shape = RoundedCornerShape(999.dp)
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "已存在",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                Text(
-                    text = "统一画质",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "统一画质",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                qualityOptions.forEach { (qualityId, qualityLabel) ->
+                    qualityOptions.forEach { (qualityId, qualityLabel) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedQuality = qualityId }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedQuality == qualityId,
+                                onClick = { selectedQuality = qualityId }
+                            )
+                            Text(
+                                text = qualityLabel,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedQuality = qualityId }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        RadioButton(
-                            selected = selectedQuality == qualityId,
-                            onClick = { selectedQuality = qualityId }
-                        )
-                        Text(
-                            text = qualityLabel,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("取消")
-                    }
-                    Button(
-                        onClick = { onConfirm(selectedQuality, workingCandidates) },
-                        modifier = Modifier.weight(1f),
-                        enabled = canConfirmBatchDownload(workingCandidates)
-                    ) {
-                        Text("加入下载")
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("取消")
+                        }
+                        Button(
+                            onClick = { onConfirm(selectedQuality, workingCandidates) },
+                            modifier = Modifier.weight(1f),
+                            enabled = canConfirmBatchDownload(workingCandidates)
+                        ) {
+                            Text("加入下载")
+                        }
                     }
                 }
             }

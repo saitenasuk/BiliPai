@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-08 · Synced to v6.9.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-10 · Synced to v6.9.4 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.9.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.9.4-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -404,11 +404,11 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v6.9.3 · 2026-03-08)
+### Latest (v6.9.4 · 2026-03-10)
 
-- ⬇️ **In-app Updates and Batch Caching**: Update checks can now download the APK inside the app and open the system installer, and the current video page supports batch caching for pages/seasons.
-- 🎬 **Player and Subtitle Fixes**: Subtitle visibility now stays consistent between portrait and landscape, and the landscape bottom bar is denser and better balanced.
-- 🛠️ **Search/Space/Cache Cleanup Improvements**: Search verification badges are more accurate, Space header/dynamic loading is more robust, and cache cleanup now removes more rebuildable temporary data.
+- ✨ **Home/Search and Batch Caching Polish**: The home header keeps its material treatment more consistently, search now has a hot-search toggle with smoother transitions, and the batch caching dialog adapts better to shorter screens.
+- 🎬 **Portrait Feed and Seek Preview Fixes**: Portrait up/down swipes no longer leak state into the wrong video, recommendation paging keeps refilling near the tail, and seek previews now update the displayed playback time immediately.
+- 💬 **Better In-app Comment Navigation**: Bare `BV` IDs inside comments are now clickable, and portrait comment sheets try to keep Bilibili video links inside the app when possible.
 
 ---
 

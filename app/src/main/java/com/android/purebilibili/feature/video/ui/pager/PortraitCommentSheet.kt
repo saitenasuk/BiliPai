@@ -44,15 +44,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.util.BilibiliUrlParser
 import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.feature.video.ui.components.CommentFraudDetectingBanner
 import com.android.purebilibili.feature.video.ui.components.CommentFraudResultDialog
 import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
+import com.android.purebilibili.feature.video.screen.shouldOpenCommentUrlInApp
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import kotlinx.coroutines.launch
@@ -73,6 +76,7 @@ fun PortraitCommentSheet(
     onUserClick: (Long) -> Unit
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val defaultSortMode by com.android.purebilibili.core.store.SettingsManager
         .getCommentDefaultSortMode(context)
         .collectAsState(
@@ -133,6 +137,38 @@ fun PortraitCommentSheet(
         )
     }
 
+    val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
+        val url = rawUrl.trim()
+        if (url.isEmpty()) return@openCommentUrl
+
+        val parsedResult = BilibiliUrlParser.parse(url)
+        if (parsedResult.bvid != null && shouldOpenCommentUrlInApp(url)) {
+            val inAppIntent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(url)
+            ).setPackage(context.packageName)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            val launchedInApp = runCatching {
+                context.startActivity(inAppIntent)
+            }.isSuccess
+            if (launchedInApp) return@openCommentUrl
+        }
+
+        if (shouldOpenCommentUrlInApp(url)) {
+            val inAppIntent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(url)
+            ).setPackage(context.packageName)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            val launchedInApp = runCatching {
+                context.startActivity(inAppIntent)
+            }.isSuccess
+            if (launchedInApp) return@openCommentUrl
+        }
+
+        runCatching { uriHandler.openUri(url) }
+    }
+
     // 整个覆盖层动画 (Fade In/Out)
     AnimatedVisibility(
         visible = visible,
@@ -182,12 +218,14 @@ fun PortraitCommentSheet(
                          SubReplyContent(
                              viewModel = commentViewModel,
                              onBack = { commentViewModel.closeSubReply() },
-                             onUserClick = onUserClick
+                             onUserClick = onUserClick,
+                             onCommentUrlClick = openCommentUrl
                          )
                     } else {
                          MainCommentList(
                              viewModel = commentViewModel,
-                             onUserClick = onUserClick
+                             onUserClick = onUserClick,
+                             onCommentUrlClick = openCommentUrl
                          )
                     }
                 }
@@ -199,7 +237,8 @@ fun PortraitCommentSheet(
 @Composable
 private fun MainCommentList(
     viewModel: VideoCommentViewModel,
-    onUserClick: (Long) -> Unit
+    onUserClick: (Long) -> Unit,
+    onCommentUrlClick: (String) -> Unit
 ) {
     val state by viewModel.commentState.collectAsState()
     val context = LocalContext.current
@@ -251,6 +290,7 @@ private fun MainCommentList(
                             viewModel.openSubReply(parentReply)
                         },
                         onLikeClick = { viewModel.likeComment(reply.rpid) },
+                        onUrlClick = onCommentUrlClick,
                         onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUserClick(it) } }
                     )
                 }
@@ -275,7 +315,8 @@ private fun MainCommentList(
 private fun SubReplyContent(
     viewModel: VideoCommentViewModel,
     onBack: () -> Unit,
-    onUserClick: (Long) -> Unit
+    onUserClick: (Long) -> Unit,
+    onCommentUrlClick: (String) -> Unit
 ) {
     val state by viewModel.subReplyState.collectAsState()
     val commentState by viewModel.commentState.collectAsState()
@@ -322,6 +363,7 @@ private fun SubReplyContent(
                     onSubClick = { /* 已经是详情页，忽略 */ },
                     hideSubPreview = true, // 详情页不显示楼中楼预览
                     onLikeClick = { viewModel.likeComment(rootReply.rpid) },
+                    onUrlClick = onCommentUrlClick,
                     onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUserClick(it) } }
                 )
                 
@@ -353,6 +395,7 @@ private fun SubReplyContent(
                     onClick = { /* TODO: 回复子评论 */ },
                     onSubClick = { /* 子评论没有子子评论预览 */ },
                     onLikeClick = { viewModel.likeComment(reply.rpid) },
+                    onUrlClick = onCommentUrlClick,
                     onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUserClick(it) } }
                 )
             }

@@ -11,6 +11,19 @@ import kotlin.test.assertTrue
 
 class PortraitPagerSwitchPolicyTest {
 
+    private fun related(
+        bvid: String,
+        aid: Long = 0L,
+        title: String = bvid
+    ): RelatedVideo {
+        return RelatedVideo(
+            aid = aid,
+            bvid = bvid,
+            title = title,
+            owner = Owner(mid = 1L, name = "up")
+        )
+    }
+
     @Test
     fun resolveCommittedPage_returnsNullWhileScrolling() {
         val target = resolveCommittedPage(
@@ -225,6 +238,55 @@ class PortraitPagerSwitchPolicyTest {
                 initialStartPositionMs = 12000L
             )
         )
+    }
+
+    @Test
+    fun shouldLoadMorePortraitRecommendations_onlyWhenNearTailAndNotAlreadyLoading() {
+        assertTrue(
+            shouldLoadMorePortraitRecommendations(
+                committedPage = 3,
+                totalItemsCount = 5,
+                isLoadingMoreRecommendations = false
+            )
+        )
+        assertFalse(
+            shouldLoadMorePortraitRecommendations(
+                committedPage = 1,
+                totalItemsCount = 5,
+                isLoadingMoreRecommendations = false
+            )
+        )
+        assertFalse(
+            shouldLoadMorePortraitRecommendations(
+                committedPage = 3,
+                totalItemsCount = 5,
+                isLoadingMoreRecommendations = true
+            )
+        )
+        assertFalse(
+            shouldLoadMorePortraitRecommendations(
+                committedPage = -1,
+                totalItemsCount = 5,
+                isLoadingMoreRecommendations = false
+            )
+        )
+    }
+
+    @Test
+    fun mergePortraitRecommendationAppendItems_filtersDuplicatesAndCurrentVideo() {
+        val appendItems = mergePortraitRecommendationAppendItems(
+            currentBvid = "BV_CURRENT",
+            existingBvids = setOf("BV_CURRENT", "BV_A", "BV_B"),
+            fetchedRecommendations = listOf(
+                related("BV_CURRENT", aid = 1L),
+                related("BV_B", aid = 2L),
+                related("BV_C", aid = 3L),
+                related("BV_D", aid = 4L),
+                related("BV_C", aid = 5L)
+            )
+        )
+
+        assertEquals(listOf("BV_C", "BV_D"), appendItems.map { it.bvid })
     }
 
     @Test

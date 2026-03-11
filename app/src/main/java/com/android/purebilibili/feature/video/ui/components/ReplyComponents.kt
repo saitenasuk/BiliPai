@@ -37,6 +37,7 @@ import coil.ImageLoader
 import coil.imageLoader
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.BilibiliUrlParser
 import com.android.purebilibili.data.model.response.ReplyFansDetail
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyItem
@@ -45,6 +46,7 @@ import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.data.model.response.ReplySailingCardBg
 import com.android.purebilibili.data.model.response.ReplySailingFan
 import com.android.purebilibili.data.model.response.ReplyUpAction
+import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextPlacement
 import androidx.compose.ui.layout.ContentScale
@@ -53,10 +55,18 @@ import com.android.purebilibili.core.ui.common.copyOnLongPress
 import androidx.compose.foundation.text.selection.SelectionContainer
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 private val EMOTE_TOKEN_PATTERN = """\[(.*?)\]""".toRegex()
 internal val COMMENT_TIMESTAMP_PATTERN =
     """(?<!\d)(\d{1,2})\s*[:：]\s*(\d{2})(?:\s*[:：]\s*(\d{2}))?(?!\d)""".toRegex()
+internal val COMMENT_URL_PATTERN =
+    """((https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])""".toRegex()
+internal val COMMENT_INLINE_BVID_PATTERN =
+    Regex("""(?<![A-Za-z0-9])BV[a-zA-Z0-9]{10}(?![A-Za-z0-9])""", RegexOption.IGNORE_CASE)
+internal const val COLLAPSED_SUB_REPLY_PREVIEW_LIMIT = 3
+
+private val replyVideoTitleCache = ConcurrentHashMap<String, String>()
 
 internal fun parseCommentTimestampSeconds(match: MatchResult): Long? {
     val first = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return null
@@ -151,6 +161,178 @@ internal fun resolveReplyItemContentType(item: ReplyItem): String {
         !item.replies.isNullOrEmpty() || item.rcount > 0 -> "reply_thread"
         else -> "reply_plain"
     }
+}
+
+internal data class ReplyVideoReference(
+    val bvid: String,
+    val navigationUrl: String
+)
+
+internal fun resolveReplyVideoReference(text: String): ReplyVideoReference? {
+    val trimmed = text.trim()
+    if (trimmed.isEmpty()) return null
+
+    val parsed = BilibiliUrlParser.parse(trimmed)
+    val bvid = parsed.bvid?.takeIf { it.isNotBlank() } ?: return null
+    val standaloneReference = trimmed.equals(bvid, ignoreCase = true) ||
+        trimmed.startsWith("http://", ignoreCase = true) ||
+        trimmed.startsWith("https://", ignoreCase = true) ||
+        trimmed.startsWith("bilibili://", ignoreCase = true) ||
+        trimmed.startsWith("b23.tv", ignoreCase = true) ||
+        trimmed.startsWith("www.bilibili.com", ignoreCase = true) ||
+        trimmed.startsWith("m.bilibili.com", ignoreCase = true)
+    if (!standaloneReference) return null
+
+    return ReplyVideoReference(
+        bvid = bvid,
+        navigationUrl = resolveReplyVideoNavigationUrl(bvid)
+    )
+}
+
+internal fun resolveReplyVideoDisplayText(
+    resolvedTitle: String?,
+    fallbackText: String
+): String = resolvedTitle?.trim().takeUnless { it.isNullOrEmpty() } ?: fallbackText.trim()
+
+internal fun resolveReplyVideoNavigationUrl(bvid: String): String =
+    "https://www.bilibili.com/video/$bvid"
+
+internal suspend fun resolveReplyVideoTitle(
+    reference: ReplyVideoReference?,
+    cache: MutableMap<String, String>,
+    titleProvider: suspend (String) -> String?
+): String? {
+    reference ?: return null
+    val cached = cache[reference.bvid]?.trim().takeUnless { it.isNullOrEmpty() }
+    if (cached != null) return cached
+
+    val resolved = titleProvider(reference.bvid)?.trim().takeUnless { it.isNullOrEmpty() }
+    if (resolved != null) {
+        cache[reference.bvid] = resolved
+    }
+    return resolved
+}
+
+internal fun buildRichCommentAnnotatedString(
+    text: String,
+    prefix: AnnotatedString? = null,
+    renderableEmoteKeys: Set<String> = emptySet(),
+    color: Color = Color.Unspecified,
+    timestampColor: Color = Color.Unspecified,
+    urlColor: Color = Color.Unspecified
+): AnnotatedString {
+    return buildAnnotatedString {
+        if (prefix != null) {
+            append(prefix)
+        }
+
+        val replyPattern = "^回复 @(.*?) :".toRegex()
+        val replyMatch = replyPattern.find(text)
+        var startIndex = 0
+        if (replyMatch != null) {
+            withStyle(SpanStyle(color = color, fontWeight = FontWeight.Medium)) {
+                append(replyMatch.value)
+            }
+            startIndex = replyMatch.range.last + 1
+        }
+
+        val remainingText = text.substring(startIndex)
+
+        data class MatchInfo(
+            val range: IntRange,
+            val type: String,
+            val value: String,
+            val seconds: Long = 0L,
+            val annotation: String = value
+        )
+
+        val allMatches = mutableListOf<MatchInfo>()
+
+        EMOTE_TOKEN_PATTERN.findAll(remainingText).forEach { match ->
+            allMatches.add(MatchInfo(match.range, "emote", match.value))
+        }
+
+        COMMENT_TIMESTAMP_PATTERN.findAll(remainingText).forEach { match ->
+            val totalSeconds = parseCommentTimestampSeconds(match) ?: return@forEach
+            allMatches.add(MatchInfo(match.range, "timestamp", match.value, totalSeconds))
+        }
+
+        COMMENT_URL_PATTERN.findAll(remainingText).forEach { match ->
+            allMatches.add(MatchInfo(match.range, "url", match.value))
+        }
+
+        COMMENT_INLINE_BVID_PATTERN.findAll(remainingText).forEach { match ->
+            val bvid = BilibiliUrlParser.parse(match.value).bvid?.takeIf { it.isNotBlank() } ?: return@forEach
+            allMatches.add(
+                MatchInfo(
+                    range = match.range,
+                    type = "video",
+                    value = match.value,
+                    annotation = resolveReplyVideoNavigationUrl(bvid)
+                )
+            )
+        }
+
+        allMatches.sortBy { it.range.first }
+
+        var lastIndex = 0
+        allMatches.forEach { matchInfo ->
+            if (lastIndex < matchInfo.range.first) {
+                append(remainingText.substring(lastIndex, matchInfo.range.first))
+            }
+            if (matchInfo.range.first >= lastIndex) {
+                when (matchInfo.type) {
+                    "emote" -> {
+                        if (matchInfo.value in renderableEmoteKeys) {
+                            appendInlineContent(id = matchInfo.value, alternateText = matchInfo.value)
+                        } else {
+                            append(matchInfo.value)
+                        }
+                    }
+
+                    "timestamp" -> {
+                        pushStringAnnotation(tag = "TIMESTAMP", annotation = matchInfo.seconds.toString())
+                        withStyle(SpanStyle(color = timestampColor, fontWeight = FontWeight.Medium)) {
+                            append(matchInfo.value)
+                        }
+                        pop()
+                    }
+
+                    "url",
+                    "video" -> {
+                        pushStringAnnotation(tag = "URL", annotation = matchInfo.annotation)
+                        withStyle(SpanStyle(color = urlColor, textDecoration = TextDecoration.Underline)) {
+                            append(matchInfo.value)
+                        }
+                        pop()
+                    }
+                }
+                lastIndex = matchInfo.range.last + 1
+            }
+        }
+
+        if (lastIndex < remainingText.length) {
+            append(remainingText.substring(lastIndex))
+        }
+    }
+}
+
+internal fun resolveVisibleSubReplies(
+    replies: List<ReplyItem>?,
+    expanded: Boolean,
+    collapsedLimit: Int = COLLAPSED_SUB_REPLY_PREVIEW_LIMIT
+): List<ReplyItem> {
+    val previewReplies = replies.orEmpty()
+    return if (expanded) previewReplies else previewReplies.take(collapsedLimit)
+}
+
+internal fun shouldShowInlineSubReplyToggle(
+    previewReplyCount: Int,
+    collapsedLimit: Int = COLLAPSED_SUB_REPLY_PREVIEW_LIMIT
+): Boolean = previewReplyCount > collapsedLimit
+
+internal fun resolveInlineSubReplyToggleLabel(expanded: Boolean): String {
+    return if (expanded) "收起回复" else "展开回复"
 }
 
 internal data class FanGroupTagVisual(
@@ -345,6 +527,16 @@ fun ReplyItemView(
     }
     val piliPlusDecoration = fanGroupVisual
         ?.takeIf { !it.cardBgImageUrl.isNullOrBlank() }
+    var isSubPreviewExpanded by remember(item.rpid) { mutableStateOf(false) }
+    val visibleSubReplies = remember(item.replies, isSubPreviewExpanded) {
+        resolveVisibleSubReplies(
+            replies = item.replies,
+            expanded = isSubPreviewExpanded
+        )
+    }
+    val showInlineSubReplyToggle = remember(item.replies) {
+        shouldShowInlineSubReplyToggle(item.replies.orEmpty().size)
+    }
 
     Column(
         modifier = Modifier
@@ -424,7 +616,7 @@ fun ReplyItemView(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     // Content
-                    RichCommentText(
+                    ReplyMessageText(
                         text = item.content.message,
                         fontSize = 15.sp,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -540,9 +732,8 @@ fun ReplyItemView(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSubClick(item) }
                     ) {
-                        item.replies?.take(3)?.forEach { subReply ->
+                        visibleSubReplies.forEach { subReply ->
                             val subEmoteMap = remember(subReply.content.emote, emoteMap) {
                                 val inlineEmotes = subReply.content.emote.orEmpty()
                                 if (inlineEmotes.isEmpty()) {
@@ -594,15 +785,34 @@ fun ReplyItemView(
                                 }
                             }
 
-                            RichCommentText(
-                                text = subReply.content.message,
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSubClick(item) }
+                            ) {
+                                ReplyMessageText(
+                                    text = subReply.content.message,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                    emoteMap = subEmoteMap,
+                                    maxLines = 3,
+                                    onTimestampClick = onTimestampClick,
+                                    onUrlClick = onUrlClick,
+                                    prefix = prefix
+                                )
+                            }
+                        }
+
+                        if (showInlineSubReplyToggle) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = resolveInlineSubReplyToggleLabel(expanded = isSubPreviewExpanded),
                                 fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                emoteMap = subEmoteMap,
-                                maxLines = 3,  // Increase max lines for inline text
-                                onTimestampClick = onTimestampClick,
-                                onUrlClick = onUrlClick,
-                                prefix = prefix
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .clickable { isSubPreviewExpanded = !isSubPreviewExpanded }
+                                    .padding(vertical = 4.dp)
                             )
                         }
                         
@@ -643,6 +853,122 @@ fun ReplyItemView(
 }
 
 /**
+ * 评论文本：普通文本继续走 RichCommentText；
+ * 若整条评论是视频引用，则异步解析标题后替换为主题色标题。
+ */
+@Composable
+private fun ReplyMessageText(
+    text: String,
+    fontSize: TextUnit,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    emoteMap: Map<String, String>,
+    maxLines: Int = Int.MAX_VALUE,
+    onTimestampClick: ((Long) -> Unit)? = null,
+    onUrlClick: ((String) -> Unit)? = null,
+    prefix: AnnotatedString? = null
+) {
+    val videoReference = remember(text) { resolveReplyVideoReference(text) }
+    var resolvedTitle by remember(videoReference?.bvid) {
+        mutableStateOf(videoReference?.bvid?.let(replyVideoTitleCache::get))
+    }
+
+    LaunchedEffect(videoReference?.bvid) {
+        val reference = videoReference ?: return@LaunchedEffect
+        if (!resolvedTitle.isNullOrBlank()) return@LaunchedEffect
+        resolvedTitle = resolveReplyVideoTitle(
+            reference = reference,
+            cache = replyVideoTitleCache,
+            titleProvider = { bvid ->
+                VideoRepository.getVideoTitle(bvid).getOrNull()
+            }
+        )
+    }
+
+    if (videoReference != null && !resolvedTitle.isNullOrBlank()) {
+        ReplyVideoReferenceText(
+            text = resolveReplyVideoDisplayText(
+                resolvedTitle = resolvedTitle,
+                fallbackText = text
+            ),
+            fontSize = fontSize,
+            maxLines = maxLines,
+            url = videoReference.navigationUrl,
+            onUrlClick = onUrlClick,
+            prefix = prefix
+        )
+    } else {
+        RichCommentText(
+            text = text,
+            fontSize = fontSize,
+            color = color,
+            emoteMap = emoteMap,
+            maxLines = maxLines,
+            onTimestampClick = onTimestampClick,
+            onUrlClick = onUrlClick,
+            prefix = prefix
+        )
+    }
+}
+
+@Composable
+private fun ReplyVideoReferenceText(
+    text: String,
+    fontSize: TextUnit,
+    maxLines: Int,
+    url: String,
+    onUrlClick: ((String) -> Unit)?,
+    prefix: AnnotatedString? = null
+) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val annotatedString = remember(text, url, prefix, primaryColor) {
+        buildAnnotatedString {
+            if (prefix != null) {
+                append(prefix)
+            }
+            pushStringAnnotation(tag = "URL", annotation = url)
+            withStyle(
+                SpanStyle(
+                    color = primaryColor,
+                    fontWeight = FontWeight.Medium
+                )
+            ) {
+                append(text)
+            }
+            pop()
+        }
+    }
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val modifier = if (onUrlClick != null) {
+        Modifier.pointerInput(annotatedString, url) {
+            detectTapGestures { offset ->
+                textLayoutResult?.let { layoutResult ->
+                    val position = layoutResult.getOffsetForPosition(offset)
+                    annotatedString.getStringAnnotations(
+                        tag = "URL",
+                        start = maxOf(0, position - 1),
+                        end = minOf(annotatedString.length, position + 1)
+                    ).firstOrNull()?.let { annotation ->
+                        onUrlClick(annotation.item)
+                    }
+                }
+            }
+        }
+    } else {
+        Modifier
+    }
+
+    Text(
+        text = annotatedString,
+        fontSize = fontSize,
+        color = primaryColor,
+        lineHeight = (fontSize.value * 1.5).sp,
+        maxLines = maxLines,
+        onTextLayout = { textLayoutResult = it },
+        modifier = modifier
+    )
+}
+
+/**
  *  [新增] 富文本评论组件
  * 支持：表情渲染、时间戳点击跳转
  */
@@ -673,91 +999,14 @@ fun RichCommentText(
         color,
         urlColor
     ) {
-        buildAnnotatedString {
-            // [新增] 添加前缀 (如用户名)
-            if (prefix != null) {
-                append(prefix)
-            }
-
-            // 高亮 "回复 @某人 :"
-            val replyPattern = "^回复 @(.*?) :".toRegex()
-            val replyMatch = replyPattern.find(text)
-            var startIndex = 0
-            if (replyMatch != null) {
-                withStyle(SpanStyle(color = color, fontWeight = FontWeight.Medium)) {
-                    append(replyMatch.value)
-                }
-                startIndex = replyMatch.range.last + 1
-            }
-
-            val remainingText = text.substring(startIndex)
-            
-            //  收集所有匹配（表情 + 时间戳）并按位置排序
-            data class MatchInfo(val range: IntRange, val type: String, val value: String, val seconds: Long = 0)
-            val allMatches = mutableListOf<MatchInfo>()
-            
-            // 收集表情匹配
-            EMOTE_TOKEN_PATTERN.findAll(remainingText).forEach { match ->
-                allMatches.add(MatchInfo(match.range, "emote", match.value))
-            }
-            
-            // 收集时间戳匹配
-            COMMENT_TIMESTAMP_PATTERN.findAll(remainingText).forEach { match ->
-                val totalSeconds = parseCommentTimestampSeconds(match) ?: return@forEach
-                allMatches.add(MatchInfo(match.range, "timestamp", match.value, totalSeconds))
-            }
-            
-            // 收集 URL 匹配
-            val urlPattern = """((https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])""".toRegex()
-            urlPattern.findAll(remainingText).forEach { match ->
-                allMatches.add(MatchInfo(match.range, "url", match.value))
-            }
-
-            // 按位置排序
-            allMatches.sortBy { it.range.first }
-            
-            var lastIndex = 0
-            allMatches.forEach { matchInfo ->
-                // 添加匹配之前的普通文本
-                if (lastIndex < matchInfo.range.first) {
-                    append(remainingText.substring(lastIndex, matchInfo.range.first))
-                }
-                // 避免重叠匹配（例如 URL 中的数字被识别为时间戳）
-                if (matchInfo.range.first >= lastIndex) {
-                    when (matchInfo.type) {
-                        "emote" -> {
-                            if (matchInfo.value in renderableEmoteKeys) {
-                                appendInlineContent(id = matchInfo.value, alternateText = matchInfo.value)
-                            } else {
-                                append(matchInfo.value)
-                            }
-                        }
-                        "timestamp" -> {
-                            //  时间戳使用特殊样式并添加点击注解
-                            pushStringAnnotation(tag = "TIMESTAMP", annotation = matchInfo.seconds.toString())
-                            withStyle(SpanStyle(color = timestampColor, fontWeight = FontWeight.Medium)) {
-                                append(matchInfo.value)
-                            }
-                            pop()
-                        }
-                        "url" -> {
-                            // URL 高亮
-                            pushStringAnnotation(tag = "URL", annotation = matchInfo.value)
-                            withStyle(SpanStyle(color = urlColor, textDecoration = TextDecoration.Underline)) {
-                                append(matchInfo.value)
-                            }
-                            pop()
-                        }
-                    }
-                    lastIndex = matchInfo.range.last + 1
-                }
-            }
-            
-            // 添加剩余文本
-            if (lastIndex < remainingText.length) {
-                append(remainingText.substring(lastIndex))
-            }
-        }
+        buildRichCommentAnnotatedString(
+            text = text,
+            prefix = prefix,
+            renderableEmoteKeys = renderableEmoteKeys,
+            color = color,
+            timestampColor = timestampColor,
+            urlColor = urlColor
+        )
     }
 
     val inlineContent = remember(renderableEmoteKeys, emoteMap, context) {

@@ -57,7 +57,6 @@ import com.android.purebilibili.feature.home.components.CategoryTabRow
 import com.android.purebilibili.feature.home.components.iOSHomeHeader  //  iOS 大标题头部
 import com.android.purebilibili.feature.home.components.iOSRefreshIndicator  //  iOS 下拉刷新指示器
 import com.android.purebilibili.feature.home.components.HomeInteractionMotionBudget
-import com.android.purebilibili.feature.home.components.HOME_HEADER_SECONDARY_BLUR_RESTORE_DELAY_MS
 import com.android.purebilibili.feature.home.components.resolveHomeInteractionMotionBudget
 import com.android.purebilibili.feature.home.components.resolveHomeDrawerScrimAlpha
 import com.android.purebilibili.feature.home.components.shouldSnapHomeTopTabSelection
@@ -223,7 +222,6 @@ fun HomeScreen(
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topCategories.size }
     var hasSyncedPagerWithState by remember(topCategories) { mutableStateOf(false) }
     var programmaticPageSwitchInProgress by remember { mutableStateOf(false) }
-    var delayHeaderSecondaryBlurRestore by remember { mutableStateOf(false) }
     TrackJankStateFlag(
         stateName = "home:pager_swipe",
         isActive = pagerState.isScrollInProgress
@@ -1179,18 +1177,6 @@ fun HomeScreen(
         val isFeedScrollInProgress by remember(activeGridState) {
             derivedStateOf { activeGridState?.isScrollInProgress == true }
         }
-        val isAnyHomeMotionActive =
-            pagerState.isScrollInProgress ||
-                programmaticPageSwitchInProgress ||
-                isFeedScrollInProgress
-        LaunchedEffect(isAnyHomeMotionActive) {
-            if (isAnyHomeMotionActive) {
-                delayHeaderSecondaryBlurRestore = true
-                return@LaunchedEffect
-            }
-            delay(HOME_HEADER_SECONDARY_BLUR_RESTORE_DELAY_MS)
-            delayHeaderSecondaryBlurRestore = false
-        }
         val homeInteractionMotionBudget = resolveHomeInteractionMotionBudget(
             isPagerScrolling = pagerState.isScrollInProgress,
             isProgrammaticPageSwitchInProgress = programmaticPageSwitchInProgress,
@@ -1205,7 +1191,7 @@ fun HomeScreen(
             stateName = "home:header_transition",
             isActive = isHeaderTransitionRunning
         )
-        val forceLowBlurBudget = homeInteractionMotionBudget == HomeInteractionMotionBudget.REDUCED
+        val forceLowBlurBudget = false
         
         // Calculate parameters based on scroll
         // 1. Search Bar Collapse (First phase)
@@ -1261,7 +1247,6 @@ fun HomeScreen(
             isScrolling = isFeedScrollInProgress,
             isTransitionRunning = isHeaderTransitionRunning,
             forceLowBlurBudget = forceLowBlurBudget,
-            delaySecondaryBlurRestoreAfterMotion = delayHeaderSecondaryBlurRestore,
             interactionBudget = homeInteractionMotionBudget
         )
 

@@ -69,14 +69,10 @@ internal fun shouldEnableTopTabSecondaryBlur(
     hasHeaderBlur: Boolean,
     topTabMaterialMode: TopTabMaterialMode,
     isScrolling: Boolean,
-    isTransitionRunning: Boolean,
-    forceLowBlurBudget: Boolean,
-    keepDisabledAfterMotionSettles: Boolean
+    isTransitionRunning: Boolean
 ): Boolean {
     if (!hasHeaderBlur) return false
     if (topTabMaterialMode == TopTabMaterialMode.PLAIN) return false
-    if (forceLowBlurBudget) return false
-    if (keepDisabledAfterMotionSettles) return false
     if (isScrolling || isTransitionRunning) return false
     return true
 }
@@ -121,7 +117,6 @@ fun iOSHomeHeader(
     isScrolling: Boolean = false,
     isTransitionRunning: Boolean = false,
     forceLowBlurBudget: Boolean = false,
-    delaySecondaryBlurRestoreAfterMotion: Boolean = false,
     interactionBudget: HomeInteractionMotionBudget = HomeInteractionMotionBudget.FULL
 ) {
     val haptic = rememberHapticFeedback()
@@ -164,9 +159,7 @@ fun iOSHomeHeader(
         hasHeaderBlur = hazeState != null,
         topTabMaterialMode = topTabStyle.materialMode,
         isScrolling = isScrolling,
-        isTransitionRunning = isTransitionRunning,
-        forceLowBlurBudget = forceLowBlurBudget,
-        keepDisabledAfterMotionSettles = delaySecondaryBlurRestoreAfterMotion
+        isTransitionRunning = isTransitionRunning
     )
     val isGlassSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     val liquidStyle = homeSettings?.liquidGlassStyle ?: LiquidGlassStyle.CLASSIC
@@ -217,11 +210,10 @@ fun iOSHomeHeader(
         label = "tabShadowElevation"
     )
     val effectiveTabShadowElevation = if (interactionBudget == HomeInteractionMotionBudget.REDUCED) 0.dp else tabShadowElevation
-    val effectiveTabMaterialMode = if (interactionBudget == HomeInteractionMotionBudget.REDUCED) {
-        TopTabMaterialMode.PLAIN
-    } else {
-        topTabStyle.materialMode
-    }
+    val effectiveTabMaterialMode = resolveEffectiveHomeHeaderTabMaterialMode(
+        materialMode = topTabStyle.materialMode,
+        interactionBudget = interactionBudget
+    )
     val tabOverlayAlpha by animateFloatAsState(
         targetValue = when (effectiveTabMaterialMode) {
             TopTabMaterialMode.PLAIN -> if (isTabFloating) 0.95f else 1f

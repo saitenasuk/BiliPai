@@ -303,6 +303,23 @@ fun FullscreenPlayerOverlay(
     // [问题8修复] 状态栏排除区域高度（像素）
     val statusBarExclusionZonePx = with(density) { 40.dp.toPx() }
     val overlayHazeState = rememberRecoverableHazeState()
+    val displayedProgressState = remember(
+        currentPosition,
+        duration,
+        seekPreviewPosition,
+        gestureMode,
+        player?.bufferedPosition
+    ) {
+        resolveDisplayedPlayerProgress(
+            progress = PlayerProgress(
+                current = currentPosition,
+                duration = duration,
+                buffered = player?.bufferedPosition ?: 0L
+            ),
+            previewPositionMs = seekPreviewPosition,
+            previewActive = gestureMode == FullscreenGestureMode.Seek
+        )
+    }
     
     Box(
         modifier = Modifier
@@ -812,13 +829,23 @@ fun FullscreenPlayerOverlay(
                             
                             Spacer(modifier = Modifier.width(8.dp))
                             
-                            Text(FormatUtils.formatDuration((currentPosition / 1000).toInt()), color = Color.White, fontSize = 12.sp)
+                            Text(
+                                FormatUtils.formatDuration((displayedProgressState.current / 1000).toInt()),
+                                color = Color.White,
+                                fontSize = 12.sp
+                            )
                             
                             var isDragging by remember { mutableStateOf(false) }
                             var dragProgress by remember { mutableFloatStateOf(0f) }
                             
                             Slider(
-                                value = if (isDragging) dragProgress else currentProgress,
+                                value = if (isDragging) {
+                                    dragProgress
+                                } else if (displayedProgressState.duration > 0L) {
+                                    (displayedProgressState.current.toFloat() / displayedProgressState.duration.toFloat()).coerceIn(0f, 1f)
+                                } else {
+                                    currentProgress
+                                },
                                 onValueChange = { newValue ->
                                     if (!isDragging) {
                                         danmakuManager.clear()  //  拖动开始时清除弹幕

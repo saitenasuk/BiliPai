@@ -11,9 +11,10 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertFalse(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = false,
-                routeBvid = "BV_ROUTE",
                 currentBvid = "BV_ROUTE",
-                loadedBvid = "BV_NEXT"
+                currentBvidCid = 0L,
+                loadedBvid = "BV_ROUTE",
+                loadedCid = 0L
             )
         )
     }
@@ -23,9 +24,10 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertTrue(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = false,
-                routeBvid = "BV_ROUTE",
                 currentBvid = "BV_TARGET",
-                loadedBvid = "BV_ROUTE"
+                currentBvidCid = 0L,
+                loadedBvid = "BV_ROUTE",
+                loadedCid = 0L
             )
         )
     }
@@ -35,9 +37,10 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertFalse(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = false,
-                routeBvid = "BV_ROUTE",
                 currentBvid = "BV_TARGET",
-                loadedBvid = "BV_TARGET"
+                currentBvidCid = 0L,
+                loadedBvid = "BV_TARGET",
+                loadedCid = 0L
             )
         )
     }
@@ -47,9 +50,36 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertFalse(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = true,
-                routeBvid = "BV_ROUTE",
                 currentBvid = "BV_TARGET",
-                loadedBvid = "BV_ROUTE"
+                currentBvidCid = 0L,
+                loadedBvid = "BV_ROUTE",
+                loadedCid = 0L
+            )
+        )
+    }
+
+    @Test
+    fun portraitExitSameBvidDifferentCid_shouldSyncMainPlayer() {
+        assertTrue(
+            shouldSyncMainPlayerToInternalBvid(
+                isPortraitFullscreen = false,
+                currentBvid = "BV_TARGET",
+                currentBvidCid = 202L,
+                loadedBvid = "BV_TARGET",
+                loadedCid = 101L
+            )
+        )
+    }
+
+    @Test
+    fun blankCurrentBvid_shouldNotSyncMainPlayer() {
+        assertFalse(
+            shouldSyncMainPlayerToInternalBvid(
+                isPortraitFullscreen = false,
+                currentBvid = " ",
+                currentBvidCid = 202L,
+                loadedBvid = "BV_TARGET",
+                loadedCid = 101L
             )
         )
     }

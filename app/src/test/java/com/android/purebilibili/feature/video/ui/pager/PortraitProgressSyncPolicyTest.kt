@@ -11,7 +11,9 @@ class PortraitProgressSyncPolicyTest {
         assertTrue(
             shouldApplyPortraitProgressSync(
                 snapshotBvid = "BV1xx411c7mD",
-                currentBvid = "BV1xx411c7mD"
+                snapshotCid = 100L,
+                currentBvid = "BV1xx411c7mD",
+                currentCid = 100L
             )
         )
     }
@@ -21,7 +23,9 @@ class PortraitProgressSyncPolicyTest {
         assertFalse(
             shouldApplyPortraitProgressSync(
                 snapshotBvid = "BV1xx411c7mD",
-                currentBvid = "BV9xx411c7mD"
+                snapshotCid = 100L,
+                currentBvid = "BV9xx411c7mD",
+                currentCid = 100L
             )
         )
     }
@@ -31,7 +35,33 @@ class PortraitProgressSyncPolicyTest {
         assertFalse(
             shouldApplyPortraitProgressSync(
                 snapshotBvid = " ",
-                currentBvid = "BV1xx411c7mD"
+                snapshotCid = 100L,
+                currentBvid = "BV1xx411c7mD",
+                currentCid = 100L
+            )
+        )
+    }
+
+    @Test
+    fun doNotApplySyncWhenSnapshotCidMismatchesCurrentCid() {
+        assertFalse(
+            shouldApplyPortraitProgressSync(
+                snapshotBvid = "BV1xx411c7mD",
+                snapshotCid = 101L,
+                currentBvid = "BV1xx411c7mD",
+                currentCid = 202L
+            )
+        )
+    }
+
+    @Test
+    fun applySyncWhenCurrentCidUnknownButBvidMatches() {
+        assertTrue(
+            shouldApplyPortraitProgressSync(
+                snapshotBvid = "BV1xx411c7mD",
+                snapshotCid = 101L,
+                currentBvid = "BV1xx411c7mD",
+                currentCid = 0L
             )
         )
     }

@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-08 · 文档已同步至 v6.9.3（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-03-10 · 文档已同步至 v6.9.4（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.9.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.9.4-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -559,11 +559,11 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v6.9.3 · 2026-03-08)
+### 最近更新 (v6.9.4 · 2026-03-10)
 
-- ⬇️ **应用内更新与批量缓存补齐**：支持应用内下载更新包并拉起安装器，当前视频详情页也支持分 P / 合集批量缓存。
-- 🎬 **播放器与字幕体验修复**：修复自动字幕在横竖屏之间状态反复的问题，并优化横屏底栏密度与弹幕输入观感。
-- 🛠️ **搜索/空间页与缓存治理增强**：搜索认证标签更准确，空间页头图和动态加载更稳，清缓存也能覆盖更多可重建临时数据。
+- ✨ **首页/搜索与批量缓存体验打磨**：首页顶部材质效果更稳定，搜索页新增热搜开关和平滑切换动效，批量缓存弹窗也改成更适合短屏设备的自适应布局。
+- 🎬 **竖屏滑动与播放器预览修复**：修复竖屏上下滑时的视频串页与推荐断流问题，拖动进度条时控制层时间也会跟随 seek 预览位置更新。
+- 💬 **评论区站内跳转补强**：评论中的裸 `BV` 号现在可以直接点击，竖屏评论面板遇到站内视频链接也会优先尝试应用内打开。
 
 ### 历史版本
 

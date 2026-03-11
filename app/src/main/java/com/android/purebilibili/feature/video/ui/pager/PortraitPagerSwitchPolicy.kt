@@ -4,6 +4,8 @@ import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
 
+private const val PORTRAIT_RECOMMENDATION_PREFETCH_THRESHOLD = 1
+
 internal fun resolveCommittedPage(
     isScrollInProgress: Boolean,
     currentPage: Int,
@@ -69,6 +71,34 @@ internal fun resolvePortraitInitialProgressPosition(
 ): Long {
     if (!isFirstPage) return 0L
     return initialStartPositionMs.coerceAtLeast(0L)
+}
+
+internal fun shouldLoadMorePortraitRecommendations(
+    committedPage: Int,
+    totalItemsCount: Int,
+    isLoadingMoreRecommendations: Boolean,
+    prefetchThreshold: Int = PORTRAIT_RECOMMENDATION_PREFETCH_THRESHOLD
+): Boolean {
+    if (isLoadingMoreRecommendations) return false
+    if (committedPage < 0 || totalItemsCount <= 0) return false
+    val lastTriggerIndex = (totalItemsCount - 1 - prefetchThreshold).coerceAtLeast(0)
+    return committedPage >= lastTriggerIndex
+}
+
+internal fun mergePortraitRecommendationAppendItems(
+    currentBvid: String,
+    existingBvids: Set<String>,
+    fetchedRecommendations: List<RelatedVideo>
+): List<RelatedVideo> {
+    return fetchedRecommendations
+        .asSequence()
+        .filter { candidate ->
+            candidate.bvid.isNotBlank() &&
+                candidate.bvid != currentBvid &&
+                candidate.bvid !in existingBvids
+        }
+        .distinctBy { it.bvid }
+        .toList()
 }
 
 internal fun toViewInfoForPortraitDetail(related: RelatedVideo): ViewInfo {

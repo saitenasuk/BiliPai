@@ -63,3 +63,17 @@ fun resolveTopTabStyle(
         materialMode = materialMode
     )
 }
+
+internal fun resolveEffectiveHomeHeaderTabMaterialMode(
+    materialMode: TopTabMaterialMode,
+    interactionBudget: HomeInteractionMotionBudget
+): TopTabMaterialMode {
+    return materialMode
+}
+
+internal fun resolveEffectiveTopTabLiquidGlassEnabled(
+    isLiquidGlassEnabled: Boolean,
+    interactionBudget: HomeInteractionMotionBudget
+): Boolean {
+    return isLiquidGlassEnabled
+}

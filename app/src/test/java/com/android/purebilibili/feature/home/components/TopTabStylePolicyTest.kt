@@ -79,6 +79,34 @@ class TopTabStylePolicyTest {
     }
 
     @Test
+    fun `reduced interaction budget keeps home header tab material mode`() {
+        assertEquals(
+            TopTabMaterialMode.LIQUID_GLASS,
+            resolveEffectiveHomeHeaderTabMaterialMode(
+                materialMode = TopTabMaterialMode.LIQUID_GLASS,
+                interactionBudget = HomeInteractionMotionBudget.REDUCED
+            )
+        )
+        assertEquals(
+            TopTabMaterialMode.BLUR,
+            resolveEffectiveHomeHeaderTabMaterialMode(
+                materialMode = TopTabMaterialMode.BLUR,
+                interactionBudget = HomeInteractionMotionBudget.REDUCED
+            )
+        )
+    }
+
+    @Test
+    fun `reduced interaction budget keeps top tab liquid glass enabled`() {
+        assertTrue(
+            resolveEffectiveTopTabLiquidGlassEnabled(
+                isLiquidGlassEnabled = true,
+                interactionBudget = HomeInteractionMotionBudget.REDUCED
+            )
+        )
+    }
+
+    @Test
     fun `balanced visual tuning shrinks top indicator footprint`() {
         val tuning = resolveTopTabVisualTuning()
 

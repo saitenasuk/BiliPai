@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyContent
@@ -8,6 +9,7 @@ import com.android.purebilibili.data.model.response.ReplySailingCardBg
 import com.android.purebilibili.data.model.response.ReplySailingFan
 import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.data.model.response.ReplyUpAction
+import kotlinx.coroutines.runBlocking
 import kotlin.test.assertContentEquals
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -356,5 +358,149 @@ class ReplyComponentsPolicyTest {
             "https://i0.hdslb.com/bfs/garb/item@240w_1q.webp",
             resolveDecorationImageUrl("https://i0.hdslb.com/bfs/garb/item@240w.webp")
         )
+    }
+
+    @Test
+    fun `resolveReplyVideoReference extracts standalone bvid references`() {
+        val reference = resolveReplyVideoReference(" BV1ecNuzGEPB ")
+
+        assertNotNull(reference)
+        assertEquals("BV1ecNuzGEPB", reference.bvid)
+        assertEquals("https://www.bilibili.com/video/BV1ecNuzGEPB", reference.navigationUrl)
+    }
+
+    @Test
+    fun `resolveReplyVideoReference ignores embedded video ids in regular sentences`() {
+        val reference = resolveReplyVideoReference("我觉得 BV1ecNuzGEPB 这个也不错")
+
+        assertNull(reference)
+    }
+
+    @Test
+    fun `buildRichCommentAnnotatedString marks inline bvid as clickable video url`() {
+        val text = "我觉得 BV1ecNuzGEPB 这个也不错"
+        val annotated = buildRichCommentAnnotatedString(
+            text = text,
+            renderableEmoteKeys = emptySet(),
+            color = Color.Black,
+            timestampColor = Color.Blue,
+            urlColor = Color.Red
+        )
+
+        val start = text.indexOf("BV1ecNuzGEPB")
+        val annotations = annotated.getStringAnnotations(
+            tag = "URL",
+            start = start,
+            end = start + "BV1ecNuzGEPB".length
+        )
+
+        assertEquals(1, annotations.size)
+        assertEquals(
+            "https://www.bilibili.com/video/BV1ecNuzGEPB",
+            annotations.single().item
+        )
+    }
+
+    @Test
+    fun `buildRichCommentAnnotatedString ignores bvid-like fragments inside longer tokens`() {
+        val text = "前缀xBV1ecNuzGEPBy后缀"
+        val annotated = buildRichCommentAnnotatedString(
+            text = text,
+            renderableEmoteKeys = emptySet(),
+            color = Color.Black,
+            timestampColor = Color.Blue,
+            urlColor = Color.Red
+        )
+
+        val annotations = annotated.getStringAnnotations(
+            tag = "URL",
+            start = 0,
+            end = text.length
+        )
+
+        assertTrue(annotations.isEmpty())
+    }
+
+    @Test
+    fun `resolveReplyVideoDisplayText prefers resolved title over fallback id`() {
+        assertEquals(
+            "真实视频标题",
+            resolveReplyVideoDisplayText(
+                resolvedTitle = "真实视频标题",
+                fallbackText = "BV1ecNuzGEPB"
+            )
+        )
+        assertEquals(
+            "BV1ecNuzGEPB",
+            resolveReplyVideoDisplayText(
+                resolvedTitle = "   ",
+                fallbackText = "BV1ecNuzGEPB"
+            )
+        )
+    }
+
+    @Test
+    fun `resolveVisibleSubReplies applies collapsed preview limit`() {
+        val replies = listOf(
+            ReplyItem(rpid = 1L),
+            ReplyItem(rpid = 2L),
+            ReplyItem(rpid = 3L),
+            ReplyItem(rpid = 4L)
+        )
+
+        assertEquals(
+            listOf(1L, 2L, 3L),
+            resolveVisibleSubReplies(replies = replies, expanded = false).map { it.rpid }
+        )
+        assertEquals(
+            listOf(1L, 2L, 3L, 4L),
+            resolveVisibleSubReplies(replies = replies, expanded = true).map { it.rpid }
+        )
+    }
+
+    @Test
+    fun `inline sub reply toggle only appears when preview count exceeds collapsed limit`() {
+        assertFalse(shouldShowInlineSubReplyToggle(previewReplyCount = 3))
+        assertTrue(shouldShowInlineSubReplyToggle(previewReplyCount = 4))
+        assertEquals("展开回复", resolveInlineSubReplyToggleLabel(expanded = false))
+        assertEquals("收起回复", resolveInlineSubReplyToggleLabel(expanded = true))
+    }
+
+    @Test
+    fun `resolveReplyVideoTitle caches lightweight provider result`() = runBlocking {
+        val cache = mutableMapOf<String, String>()
+        var providerCalls = 0
+
+        val title = resolveReplyVideoTitle(
+            reference = ReplyVideoReference(
+                bvid = "BV1ecNuzGEPB",
+                navigationUrl = "https://www.bilibili.com/video/BV1ecNuzGEPB"
+            ),
+            cache = cache,
+            titleProvider = { bvid ->
+                providerCalls += 1
+                "标题:$bvid"
+            }
+        )
+
+        assertEquals("标题:BV1ecNuzGEPB", title)
+        assertEquals(1, providerCalls)
+        assertEquals("标题:BV1ecNuzGEPB", cache["BV1ecNuzGEPB"])
+    }
+
+    @Test
+    fun `resolveReplyVideoTitle reuses cache before provider`() = runBlocking {
+        val title = resolveReplyVideoTitle(
+            reference = ReplyVideoReference(
+                bvid = "BV1ecNuzGEPB",
+                navigationUrl = "https://www.bilibili.com/video/BV1ecNuzGEPB"
+            ),
+            cache = mutableMapOf("BV1ecNuzGEPB" to "缓存标题"),
+            titleProvider = {
+                error("provider should not be called when cache is warm")
+            }
+        )
+
+        assertEquals("缓存标题", title)
     }
 }

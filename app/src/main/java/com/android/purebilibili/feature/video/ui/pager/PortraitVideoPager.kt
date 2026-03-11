@@ -204,7 +204,7 @@ fun PortraitVideoPager(
         .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
     val isExternalPlaylist by PlaylistManager.isExternalPlaylist.collectAsState()
 
-    val baseRecommendations = remember {
+    val baseRecommendations = remember(recommendations) {
         recommendations.distinctBy { it.bvid }
     }
     val initialPageIndex = remember(initialBvid, initialInfo.bvid, baseRecommendations) {
@@ -214,13 +214,20 @@ fun PortraitVideoPager(
             recommendations = baseRecommendations
         )
     }
-    val pageItems = remember {
+    val recommendationItems = remember(initialInfo.bvid, baseRecommendations) {
+        mutableStateListOf<RelatedVideo>().apply {
+            addAll(baseRecommendations)
+        }
+    }
+    val pageItems = remember(initialInfo.bvid, baseRecommendations) {
         mutableStateListOf<Any>().apply {
             add(initialInfo)
             addAll(baseRecommendations)
         }
     }
     var watchLaterVideos by remember { mutableStateOf<List<RelatedVideo>>(emptyList()) }
+    var isLoadingMoreRecommendations by remember { mutableStateOf(false) }
+    val appendedRecommendationSeeds = remember { mutableStateListOf<String>() }
 
     LaunchedEffect(Unit) {
         if (TokenManager.sessDataCache.isNullOrEmpty()) {
@@ -507,9 +514,44 @@ fun PortraitVideoPager(
                 val item = pageItems.getOrNull(committedPage) ?: return@collect
 
                 val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
-                val aid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid.toLong()
+                val aid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid
 
                 onVideoChange(bvid)
+
+                if (
+                    shouldLoadMorePortraitRecommendations(
+                        committedPage = committedPage,
+                        totalItemsCount = pageItems.size,
+                        isLoadingMoreRecommendations = isLoadingMoreRecommendations
+                    ) &&
+                    bvid !in appendedRecommendationSeeds
+                ) {
+                    appendedRecommendationSeeds.add(bvid)
+                    isLoadingMoreRecommendations = true
+                    launch {
+                        try {
+                            val existingBvids = pageItems.mapNotNull { candidate ->
+                                when (candidate) {
+                                    is ViewInfo -> candidate.bvid
+                                    is RelatedVideo -> candidate.bvid
+                                    else -> null
+                                }
+                            }.toSet()
+                            val appendItems = mergePortraitRecommendationAppendItems(
+                                currentBvid = bvid,
+                                existingBvids = existingBvids,
+                                fetchedRecommendations = com.android.purebilibili.data.repository.VideoRepository
+                                    .getRelatedVideos(bvid)
+                            )
+                            if (appendItems.isNotEmpty()) {
+                                recommendationItems.addAll(appendItems)
+                                pageItems.addAll(appendItems)
+                            }
+                        } finally {
+                            isLoadingMoreRecommendations = false
+                        }
+                    }
+                }
 
                 if (shouldSkipPortraitReloadForCurrentMedia(
                         currentPlayingBvid = currentPlayingBvid,
@@ -727,7 +769,7 @@ fun PortraitVideoPager(
                 onRotateToLandscape = onRotateToLandscape,
                 onProgressUpdate = onProgressUpdate,
                 watchLaterVideos = watchLaterVideos,
-                recommendationVideos = baseRecommendations,
+                recommendationVideos = recommendationItems,
                 hasRenderedFirstFrame = (renderedFirstFrameGeneration == activeLoadGeneration),
                 initialProgressPositionMs = resolvePortraitInitialProgressPosition(
                     isFirstPage = page == 0,
@@ -791,7 +833,7 @@ private fun VideoPageItem(
         .collectAsState(initial = 2.0f)
     val currentAudioQuality by viewModel.audioQualityPreference.collectAsState(initial = -1)
     val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
-    val aid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid.toLong()
+    val aid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid
     
     // [修复] 手动监听 ExoPlayer 播放状态，确保 UI 及时更新
     var isPlaying by remember { mutableStateOf(exoPlayer.isPlaying) }

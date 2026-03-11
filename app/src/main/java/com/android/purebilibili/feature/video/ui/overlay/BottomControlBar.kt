@@ -55,6 +55,21 @@ data class PlayerProgress(
     val buffered: Long = 0L
 )
 
+internal fun resolveDisplayedPlayerProgress(
+    progress: PlayerProgress,
+    previewPositionMs: Long?,
+    previewActive: Boolean
+): PlayerProgress {
+    if (!previewActive || previewPositionMs == null) return progress
+    val safeDuration = progress.duration.coerceAtLeast(0L)
+    val resolvedCurrent = if (safeDuration > 0L) {
+        previewPositionMs.coerceIn(0L, safeDuration)
+    } else {
+        previewPositionMs.coerceAtLeast(0L)
+    }
+    return progress.copy(current = resolvedCurrent)
+}
+
 data class LandscapeDanmakuPlaceholderPolicy(
     val maxLines: Int,
     val ellipsis: Boolean,
