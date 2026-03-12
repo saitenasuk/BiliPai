@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-10 · 文档已同步至 v6.9.4（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-03-11 · 文档已同步至 v6.9.6（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.9.4-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.9.6-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -559,11 +559,12 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v6.9.4 · 2026-03-10)
+### 最近更新 (v6.9.6 · 2026-03-11)
 
-- ✨ **首页/搜索与批量缓存体验打磨**：首页顶部材质效果更稳定，搜索页新增热搜开关和平滑切换动效，批量缓存弹窗也改成更适合短屏设备的自适应布局。
-- 🎬 **竖屏滑动与播放器预览修复**：修复竖屏上下滑时的视频串页与推荐断流问题，拖动进度条时控制层时间也会跟随 seek 预览位置更新。
-- 💬 **评论区站内跳转补强**：评论中的裸 `BV` 号现在可以直接点击，竖屏评论面板遇到站内视频链接也会优先尝试应用内打开。
+- ✨ **动态详情与评论链路重写**：动态详情按桌面动态接口重新解析，补齐 `opus` 正文内容合并，评论读取也改为按真实 `oid/type` 和评论总数选择正确线程。
+- 💬 **动态楼中楼补全**：动态评论弹层现在支持楼中楼预览、查看回复入口和二级评论拉取，不再只能看到主评论单层列表。
+- ⚙️ **视觉开关联动修复**：修复关闭底栏磨砂会自动打开液态玻璃，以及关闭液态玻璃会反向打开底栏磨砂的问题。
+- 📺 **合集分集跳转修复**：修复合集/分集视频里切到其他集后偶发跳回第一集的问题，相关跳转现在会保留正确的 `cid`。
 
 ### 历史版本
 

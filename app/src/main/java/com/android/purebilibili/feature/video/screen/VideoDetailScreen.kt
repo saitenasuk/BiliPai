@@ -118,6 +118,7 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextConte
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayModePreference
+import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.policy.reduceVideoDetailPostScroll
 import com.android.purebilibili.feature.video.policy.reduceVideoDetailPreScroll
 import com.android.purebilibili.feature.video.policy.resolveVideoDetailCollapseProgress
@@ -2232,7 +2233,7 @@ fun VideoDetailScreen(
                                                         //  [新增] 时间戳点击跳转
                                                         onTimestampClick = { positionMs ->
                                                             playerState.player.seekTo(positionMs)
-                                                            playerState.player.play()
+                                                            playPlayerFromUserAction(playerState.player)
                                                         },
                                                         //  [新增] 弹幕发送
                                                         onDanmakuSendClick = {
@@ -2708,7 +2709,7 @@ fun VideoDetailScreen(
                             onClick = {
                                 viewModel.dismissPlaybackEndedDialog()
                                 playerState.player.seekTo(0)
-                                playerState.player.play()
+                                playPlayerFromUserAction(playerState.player)
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(
@@ -3098,7 +3099,7 @@ fun VideoDetailScreen(
                 //  [新增] 时间戳点击跳转
                 onTimestampClick = { positionMs ->
                     playerState.player.seekTo(positionMs)
-                    playerState.player.play()
+                    playPlayerFromUserAction(playerState.player)
                     commentViewModel.closeSubReply()  // 关闭弹窗以便看视频
                 },
                 // [#14修复] 图片预览回调

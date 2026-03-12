@@ -110,6 +110,8 @@ import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayMod
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTextAt
 import com.android.purebilibili.feature.video.subtitle.shouldRenderPrimarySubtitle
 import com.android.purebilibili.feature.video.subtitle.shouldRenderSecondarySubtitle
+import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
+import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -1110,7 +1112,7 @@ fun VideoPlayerSection(
                                     playerState.player.seekTo(seekTargetTime)
                                     danmakuManager.seekTo(seekTargetTime)
                                 }
-                                playerState.player.play()
+                                playPlayerFromUserAction(playerState.player)
                             } else if (gestureMode == VideoGestureMode.SwipeToFullscreen) {
                                 //  阈值判定：上滑超过一定距离触发全屏
                                 val swipeThreshold = 50.dp.toPx()
@@ -1350,13 +1352,13 @@ fun VideoPlayerSection(
                                 }
                                 // 中间：暂停/播放
                                 else -> {
-                                    player.playWhenReady = !player.playWhenReady
+                                    togglePlayerPlaybackFromUserAction(player)
                                     com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "⏯️ DoubleTap center: toggle play/pause")
                                 }
                             }
                         } else {
                             // 关闭跳转时，全屏双击暂停/播放
-                            player.playWhenReady = !player.playWhenReady
+                            togglePlayerPlaybackFromUserAction(player)
                             com.android.purebilibili.core.util.Logger.d("VideoPlayerSection", "⏯️ DoubleTap (Seek Disabled): toggle play/pause")
                         }
                     },
@@ -2965,8 +2967,8 @@ fun VideoPlayerSection(
                 onDislike = onDislike,
                 onCoin = onCoin,
                 onToggleFavorite = onToggleFavorite,
-                onDrawerVideoClick = { vid ->
-                    onRelatedVideoClick(vid, null) 
+                onDrawerVideoClick = { vid, options ->
+                    onRelatedVideoClick(vid, options) 
                 },
                 pages = uiState.info.pages,
                 currentPageIndex = currentPageIndex,

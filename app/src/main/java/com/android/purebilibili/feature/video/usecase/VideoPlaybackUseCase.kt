@@ -74,6 +74,30 @@ data class QualitySwitchResult(
     val cachedDashAudios: List<DashAudio>
 )
 
+internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = playWhenReady
+
+internal fun shouldPreparePlayerBeforeExplicitPlay(
+    playbackState: Int,
+    hasMediaItems: Boolean
+): Boolean {
+    return hasMediaItems && playbackState == Player.STATE_IDLE
+}
+
+internal fun playPlayerFromUserAction(player: Player) {
+    if (shouldPreparePlayerBeforeExplicitPlay(player.playbackState, player.mediaItemCount > 0)) {
+        player.prepare()
+    }
+    player.play()
+}
+
+internal fun togglePlayerPlaybackFromUserAction(player: Player) {
+    if (player.isPlaying) {
+        player.pause()
+        return
+    }
+    playPlayerFromUserAction(player)
+}
+
 class VideoPlaybackUseCase(
     private var progressManager: PlaybackProgressManager = PlaybackProgressManager(),
     private val qualityManager: QualityManager = QualityManager()
@@ -404,9 +428,11 @@ class VideoPlaybackUseCase(
         }
         
         player.setMediaSource(finalSource)
-        player.prepare()
         if (seekTo > 0) {
             player.seekTo(seekTo)
+        }
+        if (shouldPreparePlayerOnLoad(playWhenReady)) {
+            player.prepare()
         }
         player.playWhenReady = playWhenReady
     }
@@ -420,9 +446,11 @@ class VideoPlaybackUseCase(
         
         val mediaItem = MediaItem.fromUri(url)
         player.setMediaItem(mediaItem)
-        player.prepare()
         if (seekTo > 0) {
             player.seekTo(seekTo)
+        }
+        if (shouldPreparePlayerOnLoad(playWhenReady)) {
+            player.prepare()
         }
         player.playWhenReady = playWhenReady
     }

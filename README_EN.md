@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-10 · Synced to v6.9.4 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-11 · Synced to v6.9.5 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.9.4-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.9.5-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -404,11 +404,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v6.9.4 · 2026-03-10)
+### Latest (v6.9.5 · 2026-03-11)
 
-- ✨ **Home/Search and Batch Caching Polish**: The home header keeps its material treatment more consistently, search now has a hot-search toggle with smoother transitions, and the batch caching dialog adapts better to shorter screens.
-- 🎬 **Portrait Feed and Seek Preview Fixes**: Portrait up/down swipes no longer leak state into the wrong video, recommendation paging keeps refilling near the tail, and seek previews now update the displayed playback time immediately.
-- 💬 **Better In-app Comment Navigation**: Bare `BV` IDs inside comments are now clickable, and portrait comment sheets try to keep Bilibili video links inside the app when possible.
+- ✨ **Unified home glass styling**: The home header search box, settings button, and top category chrome now follow the same blur / liquid-glass language as the bottom bar, with better light/dark readability tuning.
+- 🪟 **Home badge toggles now switch style instead of hiding data**: Appearance settings only control the glass-pill presentation for cover/info badges, while play count, reply count, and duration remain visible in plain mode.
+- 🎬 **Explicit playback action fixes**: Timestamp seek, replay, and play/pause gestures now share an explicit prepare + play path, preventing taps from failing to start playback when the player is still idle.
+- 💬 **Reply previews stay visible during playback**: Fixed the issue where inline comment replies disappeared while video playback was active and only came back after pausing.
 
 ---
 

@@ -13,6 +13,7 @@ import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.feature.video.ui.section.shouldCommitGestureSeek
+import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 
 import android.app.Activity
 import android.content.Context
@@ -365,7 +366,7 @@ fun FullscreenPlayerOverlay(
                                     danmakuManager.seekTo(newPos)
                                 }
                                 FullscreenDoubleTapAction.TogglePlayPause -> {
-                                    if (p.isPlaying) p.pause() else p.play()
+                                    togglePlayerPlaybackFromUserAction(p)
                                 }
                             }
                         }
@@ -814,7 +815,7 @@ fun FullscreenPlayerOverlay(
                             Surface(
                                 onClick = {
                                     lastInteractionTime = System.currentTimeMillis()
-                                    player?.let { if (it.isPlaying) it.pause() else it.play() }
+                                    player?.let { togglePlayerPlaybackFromUserAction(it) }
                                 },
                                 shape = CircleShape,
                                 color = Color.Transparent
