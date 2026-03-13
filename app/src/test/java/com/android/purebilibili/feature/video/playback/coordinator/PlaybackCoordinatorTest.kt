@@ -24,6 +24,7 @@ class PlaybackCoordinatorTest {
             behavior = PlaybackCompletionBehavior.PLAY_IN_ORDER,
             autoPlayEnabled = false,
             isExternalPlaylist = true,
+            externalPlaylistAutoContinueEnabled = true,
             externalPlaylistSource = ExternalPlaylistSource.FAVORITE,
             playMode = PlayMode.SEQUENTIAL
         )

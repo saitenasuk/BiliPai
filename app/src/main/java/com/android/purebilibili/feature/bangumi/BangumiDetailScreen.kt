@@ -42,6 +42,7 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.feature.bangumi.ui.detail.RatingRow
 import com.android.purebilibili.feature.bangumi.ui.detail.FollowButton
 import com.android.purebilibili.feature.bangumi.ui.detail.SeasonSelector
+import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.unifiedBlur
@@ -62,7 +63,7 @@ fun BangumiDetailScreen(
     val detailState by viewModel.detailState.collectAsState()
     
     // ✨ Haze State
-    val hazeState = remember { HazeState() }
+    val hazeState = rememberRecoverableHazeState()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     
     // 加载详情

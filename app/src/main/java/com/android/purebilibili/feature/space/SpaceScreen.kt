@@ -46,7 +46,7 @@ import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import com.android.purebilibili.core.util.iOSTapEffect
 import com.android.purebilibili.core.util.responsiveContentWidth
 
-import dev.chrisbanes.haze.HazeState
+import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -88,7 +88,7 @@ fun SpaceScreen(
     var showTopPhotoPreview by remember(mid) { mutableStateOf(false) }
     
     // [Blur] Haze State
-    val hazeState = remember { HazeState() }
+    val hazeState = rememberRecoverableHazeState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     LaunchedEffect(mid) {

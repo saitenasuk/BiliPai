@@ -18,6 +18,12 @@ internal fun resolveHistoryRenderKey(item: HistoryItem): String {
     return "${businessTag}_${fallbackId.coerceAtLeast(0L)}"
 }
 
+internal fun resolveHistoryLookupKey(item: HistoryItem): String {
+    val bvid = item.videoItem.bvid.trim()
+    if (bvid.isNotEmpty()) return bvid
+    return resolveHistoryRenderKey(item)
+}
+
 internal fun resolveHistoryDeleteKid(item: HistoryItem): String? {
     val prefixAndId = when (item.business) {
         HistoryBusiness.ARCHIVE -> "archive" to item.videoItem.id

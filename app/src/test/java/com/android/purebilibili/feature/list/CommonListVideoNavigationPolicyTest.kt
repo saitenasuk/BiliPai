@@ -1,55 +1,52 @@
 package com.android.purebilibili.feature.list
 
 import com.android.purebilibili.data.model.response.VideoItem
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class CommonListVideoNavigationPolicyTest {
 
     @Test
-    fun `returns normalized request when video has bvid`() {
+    fun `video navigation uses bvid when available`() {
         val request = resolveCommonListVideoNavigationRequest(
-            VideoItem(
-                bvid = "  BV1abc411c7m  ",
-                cid = 1234L,
-                pic = "//i0.hdslb.com/test.jpg"
-            )
-        )
-
-        assertEquals(
-            CommonListVideoNavigationRequest(
-                bvid = "BV1abc411c7m",
-                cid = 1234L,
-                coverUrl = "//i0.hdslb.com/test.jpg"
-            ),
-            request
-        )
-    }
-
-    @Test
-    fun `returns null when video bvid is blank`() {
-        val request = resolveCommonListVideoNavigationRequest(
-            VideoItem(
-                bvid = "   ",
-                cid = 1234L,
+            video = VideoItem(
+                bvid = "BV1xx",
+                cid = 123L,
                 pic = "https://example.com/cover.jpg"
             )
         )
 
-        assertNull(request)
+        assertNotNull(request)
+        assertEquals("BV1xx", request.lookupKey)
+        assertEquals("BV1xx", request.bvid)
+        assertEquals(123L, request.cid)
     }
 
     @Test
-    fun `falls back to zero cid when cid is invalid`() {
+    fun `history navigation falls back to render key when bvid is blank`() {
         val request = resolveCommonListVideoNavigationRequest(
-            VideoItem(
-                bvid = "BV1abc411c7m",
-                cid = -1L,
-                pic = ""
-            )
+            video = VideoItem(
+                cid = 456L,
+                pic = "https://example.com/live.jpg"
+            ),
+            fallbackLookupKey = "live_9988"
         )
 
-        assertEquals(0L, request?.cid)
+        assertNotNull(request)
+        assertEquals("live_9988", request.lookupKey)
+        assertEquals("", request.bvid)
+        assertEquals(456L, request.cid)
+    }
+
+    @Test
+    fun `navigation request stays null when both bvid and fallback key are blank`() {
+        val request = resolveCommonListVideoNavigationRequest(
+            video = VideoItem(),
+            fallbackLookupKey = " "
+        )
+
+        assertNull(request)
     }
 }

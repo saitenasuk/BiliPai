@@ -114,6 +114,12 @@ fun VideoSettingsPanel(
     val longPressSpeed by com.android.purebilibili.core.store.SettingsManager
         .getLongPressSpeed(context)
         .collectAsState(initial = 2.0f)
+    val twoFingerVerticalSpeedEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getTwoFingerVerticalSpeedEnabled(context)
+        .collectAsState(initial = false)
+    val twoFingerHorizontalSpeedEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getTwoFingerHorizontalSpeedEnabled(context)
+        .collectAsState(initial = false)
     val defaultPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
         .getDefaultPlaybackSpeed(context)
         .collectAsState(initial = 1.0f)
@@ -926,6 +932,89 @@ fun VideoSettingsPanel(
                             }
                         }
                     )
+                }
+                SettingsDivider()
+            }
+
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = CupertinoIcons.Default.ArrowUpArrowDown,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "双指上下滑动调倍速",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "仅全屏生效，开启一项时会关闭另一项",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = twoFingerVerticalSpeedEnabled,
+                            onCheckedChange = { checked ->
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setTwoFingerVerticalSpeedEnabled(context, checked)
+                                }
+                            },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = CupertinoIcons.Default.ArrowLeftArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "双指左右滑动调倍速",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "仅全屏生效，开启一项时会关闭另一项",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = twoFingerHorizontalSpeedEnabled,
+                            onCheckedChange = { checked ->
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setTwoFingerHorizontalSpeedEnabled(context, checked)
+                                }
+                            },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                    }
                 }
             }
         }

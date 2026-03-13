@@ -394,6 +394,7 @@ internal fun shouldAutoEnterPortraitFullscreenFromRoute(
 
 internal fun shouldSyncMainPlayerToInternalBvid(
     isPortraitFullscreen: Boolean,
+    routeBvid: String,
     currentBvid: String,
     currentBvidCid: Long,
     loadedBvid: String,
@@ -401,6 +402,7 @@ internal fun shouldSyncMainPlayerToInternalBvid(
 ): Boolean {
     if (isPortraitFullscreen) return false
     if (currentBvid.isBlank()) return false
+    if (loadedBvid != currentBvid && currentBvid == routeBvid) return false
     if (loadedBvid != currentBvid) return true
     val targetCid = currentBvidCid.takeIf { it > 0L } ?: return false
     val resolvedLoadedCid = loadedCid.takeIf { it > 0L } ?: return true
@@ -1359,6 +1361,7 @@ fun VideoDetailScreen(
         val success = uiState as? PlayerUiState.Success ?: return@LaunchedEffect
         if (!shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = isPortraitFullscreen,
+                routeBvid = bvid,
                 currentBvid = currentBvid,
                 currentBvidCid = currentBvidCid,
                 loadedBvid = success.info.bvid,

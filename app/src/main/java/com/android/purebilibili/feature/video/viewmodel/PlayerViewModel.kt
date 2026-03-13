@@ -1118,6 +1118,9 @@ class PlayerViewModel : ViewModel() {
                 val context = appContext ?: return
                 val autoPlayEnabled = com.android.purebilibili.core.store.SettingsManager
                     .getAutoPlaySync(context)
+                val externalPlaylistAutoContinueEnabled =
+                    com.android.purebilibili.core.store.SettingsManager
+                        .getExternalPlaylistAutoContinueSync(context)
 
                 if (isPortraitPlaybackSessionActive) {
                     Logger.d("PlayerVM", "📱 STATE_ENDED in portrait session, handled by portrait pager")
@@ -1130,6 +1133,7 @@ class PlayerViewModel : ViewModel() {
                     behavior = behavior,
                     autoPlayEnabled = autoPlayEnabled,
                     isExternalPlaylist = PlaylistManager.isExternalPlaylist.value,
+                    externalPlaylistAutoContinueEnabled = externalPlaylistAutoContinueEnabled,
                     externalPlaylistSource = PlaylistManager.externalPlaylistSource.value,
                     playMode = PlaylistManager.playMode.value
                 )

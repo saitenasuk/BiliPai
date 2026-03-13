@@ -174,6 +174,49 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun hiResLongPressCompatHint_showsOnlyWhenClampHappensFirstTime() {
+        assertTrue(
+            shouldShowHiResLongPressCompatHint(
+                requestedSpeed = 3.0f,
+                effectiveSpeed = 1.5f,
+                hasShownHint = false
+            )
+        )
+    }
+
+    @Test
+    fun hiResLongPressCompatHint_staysSilentAfterFirstReminderOrWithoutClamp() {
+        assertFalse(
+            shouldShowHiResLongPressCompatHint(
+                requestedSpeed = 3.0f,
+                effectiveSpeed = 1.5f,
+                hasShownHint = true
+            )
+        )
+        assertFalse(
+            shouldShowHiResLongPressCompatHint(
+                requestedSpeed = 1.5f,
+                effectiveSpeed = 1.5f,
+                hasShownHint = false
+            )
+        )
+        assertFalse(
+            shouldShowHiResLongPressCompatHint(
+                requestedSpeed = 3.0f,
+                effectiveSpeed = 3.0f,
+                hasShownHint = false
+            )
+        )
+        assertFalse(
+            shouldShowHiResLongPressCompatHint(
+                requestedSpeed = 1.5004f,
+                effectiveSpeed = 1.5f,
+                hasShownHint = false
+            )
+        )
+    }
+
+    @Test
     fun playbackReadyAutoFullscreen_enabledForPhonesInOrientationDrivenMode() {
         assertTrue(
             shouldAllowPlaybackStateAutoFullscreen(

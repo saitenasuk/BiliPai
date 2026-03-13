@@ -15,7 +15,8 @@ internal enum class PlaybackEndAction {
 internal fun resolvePlaybackEndAction(
     behavior: PlaybackCompletionBehavior,
     autoPlayEnabled: Boolean,
-    isExternalPlaylist: Boolean
+    isExternalPlaylist: Boolean,
+    externalPlaylistAutoContinueEnabled: Boolean
 ): PlaybackEndAction {
     return when (behavior) {
         PlaybackCompletionBehavior.STOP_AFTER_CURRENT -> PlaybackEndAction.STOP
@@ -23,7 +24,12 @@ internal fun resolvePlaybackEndAction(
         PlaybackCompletionBehavior.REPEAT_ONE -> PlaybackEndAction.REPEAT_CURRENT
         PlaybackCompletionBehavior.LOOP_PLAYLIST -> PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST_LOOP
         PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC -> {
-            if (autoPlayEnabled || isExternalPlaylist) {
+            val shouldAutoContinue = if (isExternalPlaylist) {
+                externalPlaylistAutoContinueEnabled
+            } else {
+                autoPlayEnabled
+            }
+            if (shouldAutoContinue) {
                 PlaybackEndAction.AUTO_CONTINUE
             } else {
                 PlaybackEndAction.STOP
@@ -37,6 +43,7 @@ internal fun resolvePlaybackEndActionForSession(
     behavior: PlaybackCompletionBehavior,
     autoPlayEnabled: Boolean,
     isExternalPlaylist: Boolean,
+    externalPlaylistAutoContinueEnabled: Boolean,
     externalPlaylistSource: ExternalPlaylistSource,
     playMode: PlayMode
 ): PlaybackEndAction {
@@ -46,6 +53,7 @@ internal fun resolvePlaybackEndActionForSession(
     return resolvePlaybackEndAction(
         behavior = behavior,
         autoPlayEnabled = autoPlayEnabled,
-        isExternalPlaylist = isExternalPlaylist
+        isExternalPlaylist = isExternalPlaylist,
+        externalPlaylistAutoContinueEnabled = externalPlaylistAutoContinueEnabled
     )
 }

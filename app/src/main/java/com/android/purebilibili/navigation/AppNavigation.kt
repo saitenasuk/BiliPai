@@ -1011,9 +1011,9 @@ fun AppNavigation(
                     viewModel = historyViewModel,
                     onBack = { navController.popBackStack() },
                     globalHazeState = mainHazeState, // [新增] 传入全局 HazeState
-                    onVideoClick = { bvid, cid, cover ->
+                    onVideoClick = { lookupKey, cid, cover ->
                         // [修复] 根据历史记录类型导航到不同页面
-                        val historyItem = historyViewModel.getHistoryItem(bvid)
+                        val historyItem = historyViewModel.getHistoryItem(lookupKey)
                         val resolvedCid = resolveHistoryPlaybackCid(
                             clickedCid = cid,
                             historyItem = historyItem
@@ -1029,7 +1029,7 @@ fun AppNavigation(
                                     navController.navigate(ScreenRoutes.BangumiDetail.createRoute(historyItem.seasonId, historyItem.epid))
                                 } else {
                                     // 异常情况，尝试普通视频方式
-                                    navigateToVideo(bvid, resolvedCid, cover)
+                                    navigateToVideo(lookupKey, resolvedCid, cover)
                                 }
                             }
                             com.android.purebilibili.data.model.response.HistoryBusiness.LIVE -> {
@@ -1041,12 +1041,12 @@ fun AppNavigation(
                                         historyItem.videoItem.owner.name
                                     ))
                                 } else {
-                                    navigateToVideo(bvid, resolvedCid, cover)
+                                    navigateToVideo(lookupKey, resolvedCid, cover)
                                 }
                             }
                             else -> {
                                 // 普通视频 (archive) 或未知类型
-                                navigateToVideo(bvid, resolvedCid, cover)
+                                navigateToVideo(lookupKey, resolvedCid, cover)
                             }
                         }
                     }

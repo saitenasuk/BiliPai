@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.AnalyticsHelper
@@ -122,7 +123,7 @@ fun SettingsScreen(
     var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
 
     // Haze State for this screen
-    val activeHazeState = mainHazeState ?: remember { dev.chrisbanes.haze.HazeState() }
+    val activeHazeState = mainHazeState ?: rememberRecoverableHazeState()
 
     // Directory Picker - 使用文件系统 API
     val defaultPath = remember { SettingsManager.getDefaultDownloadPath(context) }

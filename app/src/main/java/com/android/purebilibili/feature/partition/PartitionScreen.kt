@@ -78,7 +78,7 @@ fun PartitionScreen(
     onBack: () -> Unit,
     onPartitionClick: (Int, String) -> Unit = { _, _ -> }  // 分区ID + 分区名
 ) {
-    val hazeState = remember { HazeState() }
+    val hazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     Scaffold(

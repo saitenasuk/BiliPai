@@ -587,6 +587,8 @@ fun PlaybackSettingsContent(
                     //  [新增] 自动播放下一个
                     val autoPlayEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getAutoPlay(context).collectAsState(initial = true)
+                    val externalPlaylistAutoContinueEnabled by com.android.purebilibili.core.store.SettingsManager
+                        .getExternalPlaylistAutoContinue(context).collectAsState(initial = true)
                     val resumePlaybackPromptEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getResumePlaybackPromptEnabled(context).collectAsState(initial = true)
                     val playbackCompletionBehavior by com.android.purebilibili.core.store.SettingsManager
@@ -647,7 +649,7 @@ fun PlaybackSettingsContent(
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ForwardEnd,
                             title = "自动播放下一个",
-                            subtitle = "视频结束后自动播放推荐视频",
+                            subtitle = "普通视频结束后自动播放推荐视频",
                             checked = autoPlayEnabled,
                             onCheckedChange = { 
                                 scope.launch {
@@ -656,6 +658,20 @@ fun PlaybackSettingsContent(
                                 }
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
+                        )
+                        Divider()
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.ListBullet,
+                            title = "列表/收藏夹连续播放",
+                            subtitle = "控制收藏夹、稍后再看、合集等列表播放完后是否继续下一条",
+                            checked = externalPlaylistAutoContinueEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setExternalPlaylistAutoContinue(context, it)
+                                }
+                            },
+                            iconTint = iOSTeal
                         )
                         Divider()
                         Column(

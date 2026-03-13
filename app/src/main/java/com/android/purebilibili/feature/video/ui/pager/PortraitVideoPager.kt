@@ -199,6 +199,9 @@ fun PortraitVideoPager(
     val autoPlayEnabled by SettingsManager
         .getAutoPlay(context)
         .collectAsState(initial = true)
+    val externalPlaylistAutoContinueEnabled by SettingsManager
+        .getExternalPlaylistAutoContinue(context)
+        .collectAsState(initial = true)
     val playbackCompletionBehavior by SettingsManager
         .getPlaybackCompletionBehavior(context)
         .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
@@ -441,6 +444,7 @@ fun PortraitVideoPager(
         pageItems.size,
         currentPlayingBvid,
         autoPlayEnabled,
+        externalPlaylistAutoContinueEnabled,
         playbackCompletionBehavior,
         isExternalPlaylist
     ) {
@@ -450,7 +454,8 @@ fun PortraitVideoPager(
                 val playbackEndAction = resolvePlaybackEndAction(
                     behavior = playbackCompletionBehavior,
                     autoPlayEnabled = autoPlayEnabled,
-                    isExternalPlaylist = isExternalPlaylist
+                    isExternalPlaylist = isExternalPlaylist,
+                    externalPlaylistAutoContinueEnabled = externalPlaylistAutoContinueEnabled
                 )
                 when (playbackEndAction) {
                     PlaybackEndAction.STOP -> return

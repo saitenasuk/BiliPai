@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,6 +86,13 @@ fun StoryVideoCard(
     val cardCornerRadius = iOSCornerRadius.ExtraLarge * cornerRadiusScale  // 20.dp * scale
     val smallCornerRadius = iOSCornerRadius.Small * cornerRadiusScale - 2.dp  // 8.dp * scale
     val durationBadgeStyle = remember { resolveVideoCardDurationBadgeVisualStyle() }
+    val durationText = remember(video.duration) { FormatUtils.formatDuration(video.duration) }
+    val durationBadgeMinWidth = remember(durationText, durationBadgeStyle) {
+        resolveVideoCardDurationBadgeMinWidthDp(
+            durationText = durationText,
+            style = durationBadgeStyle
+        ).dp
+    }
     val scrollLitePolicy = remember(scrollLiteModeEnabled) {
         resolveStoryVideoCardScrollLiteVisualPolicy(
             scrollLiteModeEnabled = scrollLiteModeEnabled
@@ -245,10 +253,13 @@ fun StoryVideoCard(
                     shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
-                        text = FormatUtils.formatDuration(video.duration),
+                        text = durationText,
                         color = Color.White,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false,
+                        textAlign = TextAlign.Center,
                         style = androidx.compose.ui.text.TextStyle(
                             shadow = androidx.compose.ui.graphics.Shadow(
                                 color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
@@ -256,15 +267,19 @@ fun StoryVideoCard(
                                 blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
                             )
                         ),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        modifier = Modifier
+                            .widthIn(min = durationBadgeMinWidth)
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
                     )
                 }
             } else {
                 Text(
-                    text = FormatUtils.formatDuration(video.duration),
+                    text = durationText,
                     color = Color.White,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false,
                     style = androidx.compose.ui.text.TextStyle(
                         shadow = androidx.compose.ui.graphics.Shadow(
                             color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),

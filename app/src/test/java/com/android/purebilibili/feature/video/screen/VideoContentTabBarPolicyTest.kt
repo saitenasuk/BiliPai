@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.screen
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -22,5 +23,14 @@ class VideoContentTabBarPolicyTest {
                 isPlayerCollapsed = true
             )
         )
+    }
+
+    @Test
+    fun `danmaku action layout keeps settings target comfortably tappable`() {
+        val policy = resolveVideoContentTabBarDanmakuActionLayoutPolicy()
+
+        assertEquals(40, policy.settingsButtonSizeDp)
+        assertEquals(20, policy.settingsIconSizeDp)
+        assertEquals(22, policy.sendBadgeSizeDp)
     }
 }

@@ -11,6 +11,7 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertFalse(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = false,
+                routeBvid = "BV_ROUTE",
                 currentBvid = "BV_ROUTE",
                 currentBvidCid = 0L,
                 loadedBvid = "BV_ROUTE",
@@ -24,6 +25,7 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertTrue(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = false,
+                routeBvid = "BV_ROUTE",
                 currentBvid = "BV_TARGET",
                 currentBvidCid = 0L,
                 loadedBvid = "BV_ROUTE",
@@ -37,6 +39,7 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertFalse(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = false,
+                routeBvid = "BV_ROUTE",
                 currentBvid = "BV_TARGET",
                 currentBvidCid = 0L,
                 loadedBvid = "BV_TARGET",
@@ -50,6 +53,7 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertFalse(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = true,
+                routeBvid = "BV_ROUTE",
                 currentBvid = "BV_TARGET",
                 currentBvidCid = 0L,
                 loadedBvid = "BV_ROUTE",
@@ -63,6 +67,7 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertTrue(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = false,
+                routeBvid = "BV_TARGET",
                 currentBvid = "BV_TARGET",
                 currentBvidCid = 202L,
                 loadedBvid = "BV_TARGET",
@@ -76,10 +81,25 @@ class VideoDetailInternalBvidSyncPolicyTest {
         assertFalse(
             shouldSyncMainPlayerToInternalBvid(
                 isPortraitFullscreen = false,
+                routeBvid = "BV_ROUTE",
                 currentBvid = " ",
                 currentBvidCid = 202L,
                 loadedBvid = "BV_TARGET",
                 loadedCid = 101L
+            )
+        )
+    }
+
+    @Test
+    fun inPlaceAutoAdvanceToAnotherBvid_shouldNotSyncBackToRouteVideo() {
+        assertFalse(
+            shouldSyncMainPlayerToInternalBvid(
+                isPortraitFullscreen = false,
+                routeBvid = "BV_ROUTE",
+                currentBvid = "BV_ROUTE",
+                currentBvidCid = 101L,
+                loadedBvid = "BV_NEXT",
+                loadedCid = 202L
             )
         )
     }

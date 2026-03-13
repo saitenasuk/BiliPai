@@ -21,6 +21,7 @@ import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
+import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.hazeEffect
@@ -333,7 +334,7 @@ fun WatchLaterScreen(
     globalHazeState: HazeState? = null // [新增]
 ) {
     val state by viewModel.uiState.collectAsState()
-    val hazeState = remember { HazeState() }
+    val hazeState = rememberRecoverableHazeState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val context = LocalContext.current
     val windowSizeClass = LocalWindowSizeClass.current

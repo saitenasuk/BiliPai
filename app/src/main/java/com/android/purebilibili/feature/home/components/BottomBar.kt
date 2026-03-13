@@ -42,6 +42,7 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.alpha
+import com.android.purebilibili.core.ui.blur.shouldAllowDirectHazeLiquidGlassFallback
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
@@ -529,6 +530,8 @@ fun FrostedBottomBar(
                     .matchParentSize()
                     .run {
                         val isSupported = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+                        val allowDirectHazeLiquidGlassFallback =
+                            shouldAllowDirectHazeLiquidGlassFallback(android.os.Build.VERSION.SDK_INT)
                         val scrollState = com.android.purebilibili.feature.home.LocalHomeScrollOffset.current
                         
                         if (showGlassEffect && isSupported && backdrop != null) {
@@ -588,7 +591,12 @@ fun FrostedBottomBar(
                                     )
                                 }
                             }
-                        } else if (showGlassEffect && isSupported && hazeState != null) {
+                        } else if (
+                            showGlassEffect &&
+                            isSupported &&
+                            allowDirectHazeLiquidGlassFallback &&
+                            hazeState != null
+                        ) {
                             // [Haze Fallback] Use Haze blur when no backdrop available
                             this
                                 .hazeEffect(

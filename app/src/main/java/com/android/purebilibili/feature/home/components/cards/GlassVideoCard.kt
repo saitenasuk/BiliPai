@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,6 +88,13 @@ fun GlassVideoCard(
     val tagCornerRadius = iOSCornerRadius.Small * cornerRadiusScale  // 10.dp * scale
     val smallTagRadius = iOSCornerRadius.ExtraSmall * cornerRadiusScale  // 6.dp * scale
     val durationBadgeStyle = remember { resolveVideoCardDurationBadgeVisualStyle() }
+    val durationText = remember(video.duration) { FormatUtils.formatDuration(video.duration) }
+    val durationBadgeMinWidth = remember(durationText, durationBadgeStyle) {
+        resolveVideoCardDurationBadgeMinWidthDp(
+            durationText = durationText,
+            style = durationBadgeStyle
+        ).dp
+    }
     val coverPillColors = rememberHomeGlassPillColors(
         glassEnabled = true,
         blurEnabled = true,
@@ -305,10 +313,13 @@ fun GlassVideoCard(
                                 shape = RoundedCornerShape(tagCornerRadius)
                             ) {
                                 Text(
-                                    text = FormatUtils.formatDuration(video.duration),
+                                    text = durationText,
                                     color = Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    textAlign = TextAlign.Center,
                                     style = androidx.compose.ui.text.TextStyle(
                                         shadow = Shadow(
                                             color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
@@ -316,15 +327,19 @@ fun GlassVideoCard(
                                             blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
                                         )
                                     ),
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    modifier = Modifier
+                                        .widthIn(min = durationBadgeMinWidth)
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
                                 )
                             }
                         } else {
                             Text(
-                                text = FormatUtils.formatDuration(video.duration),
+                                text = durationText,
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
                                 style = androidx.compose.ui.text.TextStyle(
                                     shadow = Shadow(
                                         color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),

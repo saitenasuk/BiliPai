@@ -676,7 +676,7 @@ fun CacheClearAnimationDialog(
     progress: CacheClearProgress,
     onDismiss: () -> Unit
 ) {
-    val hazeState = remember { HazeState() }
+    val hazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
     
     val progressValue = if (progress.total > 0) {
         (progress.current.toFloat() / progress.total.toFloat()).coerceIn(0f, 1f)

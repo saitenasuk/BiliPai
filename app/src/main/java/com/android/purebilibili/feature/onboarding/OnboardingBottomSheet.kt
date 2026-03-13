@@ -78,7 +78,7 @@ fun OnboardingBottomSheet(
     val pagerState = rememberPagerState(pageCount = { 3 })
     
     //  弹窗局部 Haze 状态 (用于内部元素)
-    val localHazeState = remember { HazeState() }
+    val localHazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
     
     //  控制进出场动画
     androidx.compose.animation.AnimatedVisibility(

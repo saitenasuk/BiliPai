@@ -349,7 +349,7 @@ fun CommonListScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     
     // [Fix] 这里的模糊冲突核心：顶栏需要自己的独立 HazeState
-    val localHazeState = androidx.compose.runtime.remember { HazeState() }
+    val localHazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
     
     // 🔍 搜索状态
     var searchQuery by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
@@ -573,6 +573,9 @@ fun CommonListScreen(
                             { video -> historyViewModel.resolveHistoryRenderKey(video) }
                         } else {
                             { video -> video.bvid.ifBlank { video.id.toString() } }
+                        },
+                        resolveHistoryLookupKey = historyViewModel?.let { vm ->
+                            { video -> vm.resolveHistoryLookupKey(video) }
                         },
                         onHistoryLongDelete = if (historyViewModel != null) {
                             { key ->
@@ -861,6 +864,7 @@ fun CommonListContent(
     resolveHistoryItemKey: (com.android.purebilibili.data.model.response.VideoItem) -> String = { video ->
         video.bvid.ifBlank { video.id.toString() }
     },
+    resolveHistoryLookupKey: ((com.android.purebilibili.data.model.response.VideoItem) -> String)? = null,
     onHistoryLongDelete: ((String) -> Unit)? = null,
     onHistoryDissolveComplete: ((String) -> Unit)? = null,
     onHistoryToggleSelect: ((String) -> Unit)? = null
@@ -966,8 +970,11 @@ fun CommonListContent(
                                         if (historyBatchMode) {
                                             onHistoryToggleSelect?.invoke(historyKey)
                                         } else {
-                                            resolveCommonListVideoNavigationRequest(video)?.let { request ->
-                                                onVideoClick(request.bvid, request.cid, request.coverUrl)
+                                            resolveCommonListVideoNavigationRequest(
+                                                video = video,
+                                                fallbackLookupKey = resolveHistoryLookupKey?.invoke(video)
+                                            )?.let { request ->
+                                                onVideoClick(request.lookupKey, request.cid, request.coverUrl)
                                             }
                                         }
                                     },

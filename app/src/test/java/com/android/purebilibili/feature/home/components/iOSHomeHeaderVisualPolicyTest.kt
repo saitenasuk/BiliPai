@@ -5,6 +5,7 @@ import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.feature.home.HomeGlassResolvedColors
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import org.junit.Assert.assertEquals
@@ -69,7 +70,22 @@ class iOSHomeHeaderVisualPolicyTest {
                 materialMode = TopTabMaterialMode.LIQUID_GLASS,
                 isGlassSupported = true,
                 hasBackdrop = false,
-                hasHazeState = true
+                hasHazeState = true,
+                allowHazeLiquidGlassFallback = true
+            )
+        )
+    }
+
+    @Test
+    fun `android 16 liquid glass top chrome falls back to blur when backdrop is unavailable`() {
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopChromeRenderMode(
+                materialMode = TopTabMaterialMode.LIQUID_GLASS,
+                isGlassSupported = true,
+                hasBackdrop = false,
+                hasHazeState = true,
+                allowHazeLiquidGlassFallback = false
             )
         )
     }
@@ -82,7 +98,8 @@ class iOSHomeHeaderVisualPolicyTest {
                 materialMode = TopTabMaterialMode.LIQUID_GLASS,
                 isGlassSupported = false,
                 hasBackdrop = true,
-                hasHazeState = true
+                hasHazeState = true,
+                allowHazeLiquidGlassFallback = true
             )
         )
     }
@@ -253,6 +270,79 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `top blur surface type matches bottom bar budget in blur mode`() {
+        assertEquals(
+            BlurSurfaceType.BOTTOM_BAR,
+            resolveHomeTopBlurSurfaceType(HomeTopChromeRenderMode.BLUR)
+        )
+    }
+
+    @Test
+    fun `blur mode uses continuous top slab instead of plain background`() {
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopContinuousSlabRenderMode(HomeTopChromeRenderMode.BLUR)
+        )
+        assertEquals(
+            HomeTopChromeRenderMode.PLAIN,
+            resolveHomeTopContinuousSlabRenderMode(HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP)
+        )
+    }
+
+    @Test
+    fun `blur mode keeps local search and tabs plain to avoid stacked blur lag`() {
+        assertEquals(
+            HomeTopChromeRenderMode.PLAIN,
+            resolveHomeTopLocalChromeRenderMode(HomeTopChromeRenderMode.BLUR)
+        )
+        assertEquals(
+            HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+            resolveHomeTopLocalChromeRenderMode(HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP)
+        )
+    }
+
+    @Test
+    fun `blur mode ignores scroll and transition budget jitter`() {
+        val blurPolicy = resolveHomeTopChromeMotionPolicy(
+            renderMode = HomeTopChromeRenderMode.BLUR,
+            isScrolling = true,
+            isTransitionRunning = true
+        )
+        val liquidPolicy = resolveHomeTopChromeMotionPolicy(
+            renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+            isScrolling = true,
+            isTransitionRunning = true
+        )
+
+        assertFalse(blurPolicy.isScrolling)
+        assertFalse(blurPolicy.isTransitionRunning)
+        assertTrue(liquidPolicy.isScrolling)
+        assertTrue(liquidPolicy.isTransitionRunning)
+    }
+
+    @Test
+    fun `top blur container color reuses bottom bar surface color rule`() {
+        val colors = resolveHomeTopBlurContainerColors(
+            colors = HomeGlassResolvedColors(
+                containerColor = Color.Transparent,
+                borderColor = Color.White.copy(alpha = 0.12f),
+                highlightColor = Color.White.copy(alpha = 0.1f)
+            ),
+            surfaceColor = Color.Black,
+            blurIntensity = BlurIntensity.APPLE_DOCK
+        )
+
+        assertEquals(
+            resolveBottomBarSurfaceColor(
+                surfaceColor = Color.Black,
+                blurEnabled = true,
+                blurIntensity = BlurIntensity.APPLE_DOCK
+            ),
+            colors.containerColor
+        )
+    }
+
+    @Test
     fun `docked blur top tabs use same overlay alpha as blur chrome container`() {
         assertEquals(
             0.4f,
@@ -315,6 +405,18 @@ class iOSHomeHeaderVisualPolicyTest {
                 isTransitionRunning = true
             )
         )
+    }
+
+    @Test
+    fun `floating top tabs use tighter spacing beneath search`() {
+        assertEquals(2f, resolveHomeTopTabVerticalPaddingDp(isTabFloating = true), 0.0001f)
+        assertEquals(-4f, resolveHomeTopTabYOffsetDp(isTabFloating = true), 0.0001f)
+    }
+
+    @Test
+    fun `docked top tabs keep neutral spacing beneath search`() {
+        assertEquals(0f, resolveHomeTopTabVerticalPaddingDp(isTabFloating = false), 0.0001f)
+        assertEquals(0f, resolveHomeTopTabYOffsetDp(isTabFloating = false), 0.0001f)
     }
 
     @Test

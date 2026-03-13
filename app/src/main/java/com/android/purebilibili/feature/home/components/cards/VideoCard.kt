@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -70,6 +71,19 @@ internal fun shouldOpenLongPressMenu(
     hasPreviewAction: Boolean,
     hasMenuAction: Boolean
 ): Boolean = !hasPreviewAction && hasMenuAction
+
+internal fun resolveVideoCardCoverCacheKey(
+    video: VideoItem,
+    isDataSaverActive: Boolean
+): String {
+    val normalizedIdentity = video.bvid.trim().ifEmpty {
+        video.pic.trim().ifEmpty {
+            "fallback_${video.id.coerceAtLeast(0L)}_${video.cid.coerceAtLeast(0L)}_${video.title.hashCode()}"
+        }
+    }
+    val qualityTag = if (isDataSaverActive) "s" else "n"
+    return "cover_${normalizedIdentity}_${qualityTag}"
+}
 
 /**
  *  官方 B 站风格视频卡片
@@ -114,6 +128,13 @@ fun ElegantVideoCard(
     val cardCornerRadius = 12.dp * cornerRadiusScale  // HIG 标准圆角
     val smallCornerRadius = iOSCornerRadius.Tiny * cornerRadiusScale  // 4.dp * scale
     val durationBadgeStyle = remember { resolveVideoCardDurationBadgeVisualStyle() }
+    val durationText = remember(video.duration) { FormatUtils.formatDuration(video.duration) }
+    val durationBadgeMinWidth = remember(durationText, durationBadgeStyle) {
+        resolveVideoCardDurationBadgeMinWidthDp(
+            durationText = durationText,
+            style = durationBadgeStyle
+        ).dp
+    }
     val coverPillColors = rememberHomeGlassPillColors(
         glassEnabled = true,
         blurEnabled = true,
@@ -163,6 +184,12 @@ fun ElegantVideoCard(
     //  [新增] 确认对话框状态
     var showUnfavoriteDialog by remember { mutableStateOf(false) }
     
+    val coverCacheKey = remember(video, isDataSaverActive) {
+        resolveVideoCardCoverCacheKey(
+            video = video,
+            isDataSaverActive = isDataSaverActive
+        )
+    }
     val coverUrl = remember(video.bvid) {
         FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic)
     }
@@ -322,8 +349,8 @@ fun ElegantVideoCard(
                     .data(coverUrl)
                     .size(imageWidth, imageHeight)  // 省流量时使用更小尺寸
                     .crossfade(100)  //  缩短淡入时间
-                    .memoryCacheKey("cover_${video.bvid}_${if (isDataSaverActive) "s" else "n"}")
-                    .diskCacheKey("cover_${video.bvid}_${if (isDataSaverActive) "s" else "n"}")
+                    .memoryCacheKey(coverCacheKey)
+                    .diskCacheKey(coverCacheKey)
                     .build(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
@@ -453,10 +480,13 @@ fun ElegantVideoCard(
                             border = BorderStroke(0.8.dp, emphasizedCoverPillColors.borderColor)
                         ) {
                             Text(
-                                text = FormatUtils.formatDuration(video.duration),
+                                text = durationText,
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false,
+                                textAlign = TextAlign.Center,
                                 style = androidx.compose.ui.text.TextStyle(
                                     shadow = Shadow(
                                         color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
@@ -464,15 +494,19 @@ fun ElegantVideoCard(
                                         blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
                                     )
                                 ),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                modifier = Modifier
+                                    .widthIn(min = durationBadgeMinWidth)
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
                     } else {
                         Text(
-                            text = FormatUtils.formatDuration(video.duration),
+                            text = durationText,
                             color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false,
                             style = androidx.compose.ui.text.TextStyle(
                                 shadow = Shadow(
                                     color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
@@ -495,10 +529,13 @@ fun ElegantVideoCard(
                         border = BorderStroke(0.8.dp, emphasizedCoverPillColors.borderColor)
                     ) {
                         Text(
-                            text = FormatUtils.formatDuration(video.duration),
+                            text = durationText,
                             color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false,
+                            textAlign = TextAlign.Center,
                             style = androidx.compose.ui.text.TextStyle(
                                 shadow = Shadow(
                                     color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),
@@ -506,15 +543,19 @@ fun ElegantVideoCard(
                                     blurRadius = durationBadgeStyle.textShadowBlurRadiusPx
                                 )
                             ),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            modifier = Modifier
+                                .widthIn(min = durationBadgeMinWidth)
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
                         )
                     }
                 } else {
                     Text(
-                        text = FormatUtils.formatDuration(video.duration),
+                        text = durationText,
                         color = Color.White,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false,
                         style = androidx.compose.ui.text.TextStyle(
                             shadow = Shadow(
                                 color = Color.Black.copy(alpha = durationBadgeStyle.textShadowAlpha),

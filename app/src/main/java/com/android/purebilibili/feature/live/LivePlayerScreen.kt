@@ -104,7 +104,7 @@ fun LivePlayerScreen(
     val showLivePipButton = remember { shouldShowLivePipButton(android.os.Build.VERSION.SDK_INT) }
     
     // Haze blur 状态 (用于侧边栏实时模糊)
-    val hazeState = remember { HazeState() }
+    val hazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
     
     // 平板判断: 宽度 > 600dp 且为横屏
     val isTablet = configuration.screenWidthDp > 600

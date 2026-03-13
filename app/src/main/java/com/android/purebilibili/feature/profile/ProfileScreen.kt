@@ -70,6 +70,7 @@ import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import com.android.purebilibili.core.ui.components.IOSGridItem
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 
+import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.unifiedBlur
@@ -146,7 +147,7 @@ fun ProfileScreen(
     )
     
     // [Blur] Haze State
-    val hazeState = remember { HazeState() }
+    val hazeState = rememberRecoverableHazeState()
 
     //  设置沉浸式状态栏和导航栏（进入时修改，离开时恢复）
     DisposableEffect(shouldControlSystemBars, lightStatusBars) {

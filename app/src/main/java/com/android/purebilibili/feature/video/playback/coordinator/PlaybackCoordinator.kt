@@ -24,6 +24,7 @@ internal class PlaybackCoordinator(
         behavior: PlaybackCompletionBehavior,
         autoPlayEnabled: Boolean,
         isExternalPlaylist: Boolean,
+        externalPlaylistAutoContinueEnabled: Boolean,
         externalPlaylistSource: ExternalPlaylistSource,
         playMode: PlayMode
     ): PlaybackEndAction {
@@ -31,6 +32,7 @@ internal class PlaybackCoordinator(
             behavior = behavior,
             autoPlayEnabled = autoPlayEnabled,
             isExternalPlaylist = isExternalPlaylist,
+            externalPlaylistAutoContinueEnabled = externalPlaylistAutoContinueEnabled,
             externalPlaylistSource = externalPlaylistSource,
             playMode = playMode
         )

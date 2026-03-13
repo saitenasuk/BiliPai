@@ -119,7 +119,10 @@ fun LiveDanmakuOverlay(
                             val item = iterator.next()
                             if (item.showAtTime < expireBefore) {
                                 iterator.remove()
-                                recycleDanmakuData(item)
+                                releaseLiveDanmakuData(
+                                    data = item,
+                                    ownership = LiveDanmakuBitmapOwnership.CONTROLLER_ATTACHED
+                                )
                                 removedAny = true
                             }
                         }
@@ -132,7 +135,10 @@ fun LiveDanmakuOverlay(
                         danmakuList.sortBy { it.showAtTime }
                         while (danmakuList.size > maxActiveDanmaku) {
                             val removed = danmakuList.removeAt(0)
-                            recycleDanmakuData(removed)
+                            releaseLiveDanmakuData(
+                                data = removed,
+                                ownership = LiveDanmakuBitmapOwnership.CONTROLLER_ATTACHED
+                            )
                         }
                         ctrl.setData(danmakuList.toList(), 0)
                         ctrl.invalidateView()
@@ -160,7 +166,10 @@ fun LiveDanmakuOverlay(
                 val danmakuData = createDanmakuData(item, currentTime, context, controller)
                 if (pendingDanmaku.size >= maxPendingDanmaku) {
                     val dropped = pendingDanmaku.removeAt(0)
-                    recycleDanmakuData(dropped)
+                    releaseLiveDanmakuData(
+                        data = dropped,
+                        ownership = LiveDanmakuBitmapOwnership.APP_QUEUE_ONLY
+                    )
                 }
                 pendingDanmaku.add(danmakuData)
             } catch (e: Exception) {
@@ -174,9 +183,21 @@ fun LiveDanmakuOverlay(
         onDispose {
             android.util.Log.d("LiveDanmakuOverlay", "Disposing DanmakuView")
             try {
+                controller?.setData(emptyList(), 0)
+                controller?.invalidateView()
                 controller?.stop()
-                danmakuList.forEach(::recycleDanmakuData)
-                pendingDanmaku.forEach(::recycleDanmakuData)
+                danmakuList.forEach { data ->
+                    releaseLiveDanmakuData(
+                        data = data,
+                        ownership = LiveDanmakuBitmapOwnership.CONTROLLER_ATTACHED
+                    )
+                }
+                pendingDanmaku.forEach { data ->
+                    releaseLiveDanmakuData(
+                        data = data,
+                        ownership = LiveDanmakuBitmapOwnership.APP_QUEUE_ONLY
+                    )
+                }
                 danmakuList.clear()
                 pendingDanmaku.clear()
                 isStarted = false
@@ -223,7 +244,13 @@ private fun createDanmakuData(
     )
 }
 
-private fun recycleDanmakuData(data: DanmakuData) {
+private fun releaseLiveDanmakuData(
+    data: DanmakuData,
+    ownership: LiveDanmakuBitmapOwnership
+) {
+    if (!shouldManuallyRecycleLiveDanmakuBitmap(ownership)) {
+        return
+    }
     val bitmap = (data as? BitmapData)?.bitmap ?: return
     if (!bitmap.isRecycled) {
         bitmap.recycle()

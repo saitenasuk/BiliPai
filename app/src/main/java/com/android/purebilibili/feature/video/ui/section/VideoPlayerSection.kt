@@ -17,9 +17,15 @@ import com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlay
 import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlCallbacks
 import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlUiState
 import com.android.purebilibili.feature.video.ui.components.SponsorSkipButton
+import com.android.purebilibili.feature.video.ui.components.TwoFingerSpeedFeedbackOverlay
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.toFullscreenAspectRatio
 import com.android.purebilibili.feature.video.ui.components.toVideoAspectRatio
+import com.android.purebilibili.feature.video.ui.gesture.LockedTwoFingerSpeedAxis
+import com.android.purebilibili.feature.video.ui.gesture.TwoFingerSpeedGestureMode
+import com.android.purebilibili.feature.video.ui.gesture.resolveLockedTwoFingerSpeedAxis
+import com.android.purebilibili.feature.video.ui.gesture.resolveTwoFingerGesturePlaybackSpeed
+import com.android.purebilibili.feature.video.ui.gesture.resolveTwoFingerSpeedGestureMode
 import com.android.purebilibili.data.model.response.ViewPoint
 
 import android.app.Activity
@@ -32,9 +38,12 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
@@ -152,6 +161,15 @@ internal fun resolveLongPressPlaybackParameters(
         ),
         1.0f
     )
+}
+
+internal fun shouldShowHiResLongPressCompatHint(
+    requestedSpeed: Float,
+    effectiveSpeed: Float,
+    hasShownHint: Boolean
+): Boolean {
+    if (hasShownHint) return false
+    return requestedSpeed - effectiveSpeed > 0.001f
 }
 
 internal fun resolveVerticalGestureMode(
@@ -749,6 +767,7 @@ fun VideoPlayerSection(
     }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
+    val settingsScope = rememberCoroutineScope()
 
     // --- 新增：读取设置中的"详细统计信息"开关 ---
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -831,12 +850,55 @@ fun VideoPlayerSection(
     val longPressSpeed by com.android.purebilibili.core.store.SettingsManager
         .getLongPressSpeed(context)
         .collectAsState(initial = 2.0f)
+    val twoFingerVerticalSpeedEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getTwoFingerVerticalSpeedEnabled(context)
+        .collectAsState(initial = false)
+    val twoFingerHorizontalSpeedEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getTwoFingerHorizontalSpeedEnabled(context)
+        .collectAsState(initial = false)
+    val twoFingerSpeedMode = remember(
+        twoFingerVerticalSpeedEnabled,
+        twoFingerHorizontalSpeedEnabled
+    ) {
+        resolveTwoFingerSpeedGestureMode(
+            verticalEnabled = twoFingerVerticalSpeedEnabled,
+            horizontalEnabled = twoFingerHorizontalSpeedEnabled
+        )
+    }
+    val hiResCompatHintShownPersisted by com.android.purebilibili.core.store.SettingsManager
+        .getHiResLongPressCompatHintShown(context)
+        .collectAsState(
+            initial = com.android.purebilibili.core.store.SettingsManager
+                .getHiResLongPressCompatHintShownSync(context)
+        )
     var isLongPressing by remember { mutableStateOf(false) }
     var originalPlaybackParameters by remember { mutableStateOf(PlaybackParameters.DEFAULT) }
     var effectiveLongPressSpeed by remember { mutableFloatStateOf(longPressSpeed) }
     var longPressSpeedFeedbackVisible by remember { mutableStateOf(false) }
-    var hasShownHiResCompatHint by remember(bvid) { mutableStateOf(false) }
+    var twoFingerSpeedFeedbackVisible by remember { mutableStateOf(false) }
+    var twoFingerSpeedFeedbackRevision by remember { mutableIntStateOf(0) }
+    var twoFingerFeedbackSpeed by remember { mutableFloatStateOf(1.0f) }
+    var hasShownHiResCompatHintLocally by remember {
+        mutableStateOf(
+            com.android.purebilibili.core.store.SettingsManager
+                .getHiResLongPressCompatHintShownSync(context)
+        )
+    }
+    val hasShownHiResCompatHint = hiResCompatHintShownPersisted || hasShownHiResCompatHintLocally
     var hasAutoEnteredFullscreen by remember(bvid) { mutableStateOf(false) }
+
+    LaunchedEffect(hiResCompatHintShownPersisted) {
+        if (hiResCompatHintShownPersisted) {
+            hasShownHiResCompatHintLocally = true
+        }
+    }
+
+    LaunchedEffect(twoFingerSpeedFeedbackRevision) {
+        if (twoFingerSpeedFeedbackRevision > 0) {
+            delay(900)
+            twoFingerSpeedFeedbackVisible = false
+        }
+    }
     
     //  [新增] 缓冲状态监听
     var isBuffering by remember { mutableStateOf(false) }
@@ -984,7 +1046,7 @@ fun VideoPlayerSection(
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     //  共享弹幕管理器（用于所有 seek 路径的一致同步）
     val danmakuManager = rememberDanmakuManager()
-    val overlayDrawerHazeState = remember { HazeState() }
+    val overlayDrawerHazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
     val forceCoverDuringReturnAnimation = shouldForceCoverDuringReturnAnimation(
         forceCoverOnly = forceCoverOnly
     )
@@ -1016,25 +1078,95 @@ fun VideoPlayerSection(
 
     Box(
         modifier = rootModifier
-            //  [新增] 处理双指缩放和平移
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1f, 5f)
-                    
-                    if (scale > 1f) {
-                        // 缩放状态下，允许平移
-                        val maxPanX = (size.width * scale - size.width) / 2
-                        val maxPanY = (size.height * scale - size.height) / 2
-                        panX = (panX + pan.x * scale).coerceIn(-maxPanX, maxPanX)
-                        panY = (panY + pan.y * scale).coerceIn(-maxPanY, maxPanY)
-                        
-                        // 如果正在缩放/平移，隐藏手势图标和控制栏
-                        isGestureVisible = false
-                        showControls = false
-                    } else {
-                        // 恢复原始比例时，重置平移
-                        panX = 0f
-                        panY = 0f
+            //  [新增] 处理双指缩放/平移，并在全屏时支持双指调倍速
+            .pointerInput(isFullscreen, isInPipMode, isScreenLocked, twoFingerSpeedMode) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var totalPanX = 0f
+                    var totalPanY = 0f
+                    var lockedAxis: LockedTwoFingerSpeedAxis? = null
+                    var gestureStartSpeed = playerState.player.playbackParameters.speed
+                    val directionThresholdPx = viewConfiguration.touchSlop * 1.5f
+                    var observedMultiTouch = false
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressedCount = event.changes.count { it.pressed }
+                        if (pressedCount == 0) break
+                        if (pressedCount < 2) {
+                            if (observedMultiTouch) break
+                            continue
+                        }
+                        observedMultiTouch = true
+
+                        val pan = event.calculatePan()
+                        val zoom = event.calculateZoom()
+                        totalPanX += pan.x
+                        totalPanY += pan.y
+
+                        val speedModeAllowed = isFullscreen &&
+                            !isInPipMode &&
+                            !isScreenLocked &&
+                            twoFingerSpeedMode != TwoFingerSpeedGestureMode.Off
+
+                        if (speedModeAllowed && lockedAxis == null) {
+                            lockedAxis = resolveLockedTwoFingerSpeedAxis(
+                                mode = twoFingerSpeedMode,
+                                totalDragX = totalPanX,
+                                totalDragY = totalPanY,
+                                thresholdPx = directionThresholdPx
+                            )
+                            if (lockedAxis != null) {
+                                gestureStartSpeed = playerState.player.playbackParameters.speed
+                                showControls = false
+                                isGestureVisible = false
+                            }
+                        }
+
+                        if (speedModeAllowed && lockedAxis != null) {
+                            val resolvedSpeed = resolveTwoFingerGesturePlaybackSpeed(
+                                startSpeed = gestureStartSpeed,
+                                mode = twoFingerSpeedMode,
+                                totalDragX = totalPanX,
+                                totalDragY = totalPanY,
+                                containerWidthPx = size.width.toFloat(),
+                                containerHeightPx = size.height.toFloat()
+                            )
+                            if (abs(playerState.player.playbackParameters.speed - resolvedSpeed) > 0.001f) {
+                                playerState.player.setPlaybackSpeed(resolvedSpeed)
+                            }
+                            twoFingerFeedbackSpeed = resolvedSpeed
+                            twoFingerSpeedFeedbackVisible = true
+                            twoFingerSpeedFeedbackRevision++
+                            event.changes.forEach { change ->
+                                if (change.position != change.previousPosition) {
+                                    change.consume()
+                                }
+                            }
+                            continue
+                        }
+
+                        if (zoom != 1f || pan != Offset.Zero) {
+                            scale = (scale * zoom).coerceIn(1f, 5f)
+
+                            if (scale > 1f) {
+                                val maxPanX = (size.width * scale - size.width) / 2
+                                val maxPanY = (size.height * scale - size.height) / 2
+                                panX = (panX + pan.x * scale).coerceIn(-maxPanX, maxPanX)
+                                panY = (panY + pan.y * scale).coerceIn(-maxPanY, maxPanY)
+                                isGestureVisible = false
+                                showControls = false
+                            } else {
+                                panX = 0f
+                                panY = 0f
+                            }
+
+                            event.changes.forEach { change ->
+                                if (change.position != change.previousPosition) {
+                                    change.consume()
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1298,13 +1430,23 @@ fun VideoPlayerSection(
                         )
                         effectiveLongPressSpeed = longPressPlaybackParameters.speed
                         player.playbackParameters = longPressPlaybackParameters
-                        if (effectiveLongPressSpeed < longPressSpeed && !hasShownHiResCompatHint) {
-                            hasShownHiResCompatHint = true
+                        if (
+                            shouldShowHiResLongPressCompatHint(
+                                requestedSpeed = longPressSpeed,
+                                effectiveSpeed = effectiveLongPressSpeed,
+                                hasShownHint = hasShownHiResCompatHint
+                            )
+                        ) {
+                            hasShownHiResCompatHintLocally = true
                             Toast.makeText(
                                 context,
                                 "Hi-Res 音源长按倍速最高 1.5x，以降低失真",
                                 Toast.LENGTH_SHORT
                             ).show()
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setHiResLongPressCompatHintShown(context, true)
+                            }
                         }
                         isLongPressing = true
                         longPressSpeedFeedbackVisible = true
@@ -2516,6 +2658,13 @@ fun VideoPlayerSection(
                 )
             }
         }
+
+        TwoFingerSpeedFeedbackOverlay(
+            visible = twoFingerSpeedFeedbackVisible && !isInPipMode,
+            speed = twoFingerFeedbackSpeed,
+            mode = twoFingerSpeedMode,
+            hazeState = overlayDrawerHazeState
+        )
 
         //  [新增] 缩放还原按钮 (仅在放大时显示)
         AnimatedVisibility(

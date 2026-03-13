@@ -5,7 +5,6 @@ import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -54,6 +53,7 @@ import com.android.purebilibili.core.store.LiquidGlassStyle
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
+import com.android.purebilibili.core.ui.blur.shouldAllowDirectHazeLiquidGlassFallback
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.BlurIntensity
@@ -71,6 +71,11 @@ import com.android.purebilibili.feature.home.resolveHomeGlassChromeStyle
 import com.android.purebilibili.feature.home.resolveHomeGlassPillStyle
 
 private const val HOME_HEADER_LIQUID_GLASS_ALPHA = 0.10f
+
+internal data class HomeTopChromeMotionPolicy(
+    val isScrolling: Boolean,
+    val isTransitionRunning: Boolean
+)
 
 internal enum class HomeTopChromeRenderMode {
     PLAIN,
@@ -94,14 +99,16 @@ internal fun resolveHomeTopChromeRenderMode(
     materialMode: TopTabMaterialMode,
     isGlassSupported: Boolean,
     hasBackdrop: Boolean,
-    hasHazeState: Boolean
+    hasHazeState: Boolean,
+    allowHazeLiquidGlassFallback: Boolean = true
 ): HomeTopChromeRenderMode {
     return when (materialMode) {
         TopTabMaterialMode.PLAIN -> HomeTopChromeRenderMode.PLAIN
         TopTabMaterialMode.BLUR -> HomeTopChromeRenderMode.BLUR
         TopTabMaterialMode.LIQUID_GLASS -> when {
             isGlassSupported && hasBackdrop -> HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP
-            isGlassSupported && hasHazeState -> HomeTopChromeRenderMode.LIQUID_GLASS_HAZE
+            isGlassSupported && hasHazeState && allowHazeLiquidGlassFallback ->
+                HomeTopChromeRenderMode.LIQUID_GLASS_HAZE
             hasHazeState -> HomeTopChromeRenderMode.BLUR
             else -> HomeTopChromeRenderMode.PLAIN
         }
@@ -134,14 +141,71 @@ internal fun resolveHomeTopTabOverlayAlpha(
     }
 }
 
+internal fun resolveHomeTopTabVerticalPaddingDp(isTabFloating: Boolean): Float {
+    return if (isTabFloating) 2f else 0f
+}
+
+internal fun resolveHomeTopTabYOffsetDp(isTabFloating: Boolean): Float {
+    return if (isTabFloating) (-4f) else 0f
+}
+
 internal fun resolveHomeTopBlurContainerColors(
     colors: HomeGlassResolvedColors,
     surfaceColor: Color,
     blurIntensity: BlurIntensity
 ): HomeGlassResolvedColors {
     return colors.copy(
-        containerColor = surfaceColor.copy(alpha = resolveHomeTopBlurContainerAlpha(blurIntensity))
+        containerColor = resolveBottomBarSurfaceColor(
+            surfaceColor = surfaceColor,
+            blurEnabled = true,
+            blurIntensity = blurIntensity
+        )
     )
+}
+
+internal fun resolveHomeTopBlurSurfaceType(
+    renderMode: HomeTopChromeRenderMode
+): BlurSurfaceType {
+    return when (renderMode) {
+        HomeTopChromeRenderMode.BLUR -> BlurSurfaceType.BOTTOM_BAR
+        else -> BlurSurfaceType.HEADER
+    }
+}
+
+internal fun resolveHomeTopContinuousSlabRenderMode(
+    renderMode: HomeTopChromeRenderMode
+): HomeTopChromeRenderMode {
+    return when (renderMode) {
+        HomeTopChromeRenderMode.BLUR -> HomeTopChromeRenderMode.BLUR
+        else -> HomeTopChromeRenderMode.PLAIN
+    }
+}
+
+internal fun resolveHomeTopLocalChromeRenderMode(
+    renderMode: HomeTopChromeRenderMode
+): HomeTopChromeRenderMode {
+    return when (renderMode) {
+        HomeTopChromeRenderMode.BLUR -> HomeTopChromeRenderMode.PLAIN
+        else -> renderMode
+    }
+}
+
+internal fun resolveHomeTopChromeMotionPolicy(
+    renderMode: HomeTopChromeRenderMode,
+    isScrolling: Boolean,
+    isTransitionRunning: Boolean
+): HomeTopChromeMotionPolicy {
+    return if (renderMode == HomeTopChromeRenderMode.BLUR) {
+        HomeTopChromeMotionPolicy(
+            isScrolling = false,
+            isTransitionRunning = false
+        )
+    } else {
+        HomeTopChromeMotionPolicy(
+            isScrolling = isScrolling,
+            isTransitionRunning = isTransitionRunning
+        )
+    }
 }
 
 internal fun shouldEnableTopTabSecondaryBlur(
@@ -340,7 +404,7 @@ internal fun Modifier.homeTopChromeSurface(
                     if (hazeState != null) {
                         Modifier.unifiedBlur(
                             hazeState = hazeState,
-                            surfaceType = BlurSurfaceType.HEADER,
+                            surfaceType = resolveHomeTopBlurSurfaceType(renderMode),
                             motionTier = motionTier,
                             isScrolling = isScrolling,
                             isTransitionRunning = isTransitionRunning,
@@ -415,17 +479,6 @@ fun iOSHomeHeader(
         blurEnabled = isTopChromeBlurEnabled,
         blurIntensity = blurIntensity
     )
-    val targetHeaderColor = MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlpha)
-    
-    // [UX优化] 平滑过渡顶部栏背景色 (Smooth Header Color Transition)
-    // 注意：这里保留颜色动画是没问题的，因为它不影响布局
-    // [UX优化] 平滑过渡顶部栏背景色 (Smooth Header Color Transition)
-    // 注意：这里保留颜色动画是没问题的，因为它不影响布局
-    val animatedHeaderColor by animateColorAsState(
-        targetValue = targetHeaderColor,
-        animationSpec = androidx.compose.animation.core.tween<androidx.compose.ui.graphics.Color>(300),
-        label = "headerColor"
-    )
 
     val topTabStyle = resolveTopTabStyle(
         isBottomBarFloating = homeSettings?.isBottomBarFloating == true,
@@ -442,12 +495,14 @@ fun iOSHomeHeader(
         isTransitionRunning = isTransitionRunning
     )
     val isGlassSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    val allowHazeLiquidGlassFallback = shouldAllowDirectHazeLiquidGlassFallback(Build.VERSION.SDK_INT)
     val liquidStyle = homeSettings?.liquidGlassStyle ?: LiquidGlassStyle.CLASSIC
     val topChromeRenderMode = resolveHomeTopChromeRenderMode(
         materialMode = topChromeMaterialMode,
         isGlassSupported = isGlassSupported,
         hasBackdrop = backdrop != null,
-        hasHazeState = hazeState != null
+        hasHazeState = hazeState != null,
+        allowHazeLiquidGlassFallback = allowHazeLiquidGlassFallback
     )
     val surfaceColor = MaterialTheme.colorScheme.surface
     val tabShape = RoundedCornerShape(if (isTabFloating) 22.dp else 0.dp)
@@ -532,12 +587,18 @@ fun iOSHomeHeader(
     val topForegroundColor = resolveHomeTopForegroundColor(isLightMode = isLightMode)
     val topSearchContentAlpha = resolveHomeTopSearchContentAlpha(topChromeRenderMode)
     val topActionIconAlpha = resolveHomeTopActionIconAlpha(topChromeRenderMode)
+    val topChromeMotionPolicy = resolveHomeTopChromeMotionPolicy(
+        renderMode = topChromeRenderMode,
+        isScrolling = isScrolling,
+        isTransitionRunning = isTransitionRunning
+    )
     val tabChromeRenderMode = when (effectiveTabMaterialMode) {
         TopTabMaterialMode.LIQUID_GLASS -> resolveHomeTopChromeRenderMode(
             materialMode = effectiveTabMaterialMode,
             isGlassSupported = isGlassSupported,
             hasBackdrop = backdrop != null,
-            hasHazeState = hazeState != null
+            hasHazeState = hazeState != null,
+            allowHazeLiquidGlassFallback = allowHazeLiquidGlassFallback
         )
         TopTabMaterialMode.BLUR -> if (enableTopTabSecondaryBlur) {
             HomeTopChromeRenderMode.BLUR
@@ -546,6 +607,14 @@ fun iOSHomeHeader(
         }
         TopTabMaterialMode.PLAIN -> HomeTopChromeRenderMode.PLAIN
     }
+    val tabChromeMotionPolicy = resolveHomeTopChromeMotionPolicy(
+        renderMode = tabChromeRenderMode,
+        isScrolling = isScrolling,
+        isTransitionRunning = isTransitionRunning
+    )
+    val localTopChromeRenderMode = resolveHomeTopLocalChromeRenderMode(topChromeRenderMode)
+    val localTabChromeRenderMode = resolveHomeTopLocalChromeRenderMode(tabChromeRenderMode)
+    val continuousSlabRenderMode = resolveHomeTopContinuousSlabRenderMode(topChromeRenderMode)
 
     // [Optimization] Calculate layout values LOCALLY using deferred state read
     // This prevents HomeScreen from recomposing when headerOffset changes
@@ -581,9 +650,14 @@ fun iOSHomeHeader(
         label = "tabHorizontalPadding"
     )
     val tabVerticalPadding by animateDpAsState(
-        targetValue = if (isTabFloating) 4.dp else 0.dp,
+        targetValue = resolveHomeTopTabVerticalPaddingDp(isTabFloating).dp,
         animationSpec = tween(240),
         label = "tabVerticalPadding"
+    )
+    val tabVerticalOffset by animateDpAsState(
+        targetValue = resolveHomeTopTabYOffsetDp(isTabFloating).dp,
+        animationSpec = tween(240),
+        label = "tabVerticalOffset"
     )
     val tabShadowElevation by animateDpAsState(
         targetValue = if (isTabFloating) 8.dp else 0.dp,
@@ -591,31 +665,42 @@ fun iOSHomeHeader(
         label = "tabShadowElevation"
     )
     val effectiveTabShadowElevation = if (interactionBudget == HomeInteractionMotionBudget.REDUCED) 0.dp else tabShadowElevation
-    val tabOverlayAlpha by animateFloatAsState(
-        targetValue = resolveHomeTopTabOverlayAlpha(
-            materialMode = effectiveTabMaterialMode,
-            isTabFloating = isTabFloating,
-            containerAlpha = tabChromeColors.containerColor.alpha
-        ),
-        animationSpec = tween(220),
-        label = "tabOverlayAlpha"
+    val tabOverlayAlpha = resolveHomeTopTabOverlayAlpha(
+        materialMode = effectiveTabMaterialMode,
+        isTabFloating = isTabFloating,
+        containerAlpha = tabChromeColors.containerColor.alpha
     )
     val tabContentAlpha by animateFloatAsState(
         targetValue = if (topTabsVisible) 1f else 0f,
         animationSpec = tween(durationMillis = 180),
         label = "tabContentAlpha"
     )
-    val tabBorderAlpha by animateFloatAsState(
-        targetValue = if (isTabFloating) tabChromeStyle.borderAlpha else 0f,
-        animationSpec = tween(220),
-        label = "tabBorderAlpha"
-    )
+    val tabBorderAlpha = if (isTabFloating) tabChromeStyle.borderAlpha else 0f
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .zIndex(10f)
     ) {
+        if (continuousSlabRenderMode != HomeTopChromeRenderMode.PLAIN) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(statusBarHeight + currentSearchHeight + currentTabHeight)
+                    .homeTopChromeSurface(
+                        renderMode = continuousSlabRenderMode,
+                        shape = androidx.compose.ui.graphics.RectangleShape,
+                        surfaceColor = Color.Transparent,
+                        hazeState = hazeState,
+                        backdrop = backdrop,
+                        liquidStyle = liquidStyle,
+                        motionTier = motionTier,
+                        isScrolling = topChromeMotionPolicy.isScrolling,
+                        isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
+                        forceLowBlurBudget = forceLowBlurBudget
+                    )
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -664,15 +749,15 @@ fun iOSHomeHeader(
                                 .size(32.dp)
                                 .clip(CircleShape)
                                 .homeTopChromeSurface(
-                                    renderMode = topChromeRenderMode,
+                                    renderMode = localTopChromeRenderMode,
                                     shape = CircleShape,
                                     surfaceColor = headerChromeColors.containerColor,
                                     hazeState = hazeState,
                                     backdrop = backdrop,
                                     liquidStyle = liquidStyle,
                                     motionTier = motionTier,
-                                    isScrolling = isScrolling,
-                                    isTransitionRunning = isTransitionRunning,
+                                    isScrolling = topChromeMotionPolicy.isScrolling,
+                                    isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
                                     forceLowBlurBudget = forceLowBlurBudget
                                 )
                                 .border(1.dp, headerChromeColors.borderColor, CircleShape)
@@ -714,15 +799,15 @@ fun iOSHomeHeader(
                                 .height(36.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .homeTopChromeSurface(
-                                    renderMode = topChromeRenderMode,
+                                    renderMode = localTopChromeRenderMode,
                                     shape = RoundedCornerShape(10.dp),
                                     surfaceColor = searchPillColors.containerColor,
                                     hazeState = hazeState,
                                     backdrop = backdrop,
                                     liquidStyle = liquidStyle,
                                     motionTier = motionTier,
-                                    isScrolling = isScrolling,
-                                    isTransitionRunning = isTransitionRunning,
+                                    isScrolling = topChromeMotionPolicy.isScrolling,
+                                    isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
                                     forceLowBlurBudget = forceLowBlurBudget
                                 )
                                 .border(
@@ -795,15 +880,15 @@ fun iOSHomeHeader(
                             .size(44.dp)
                             .clip(CircleShape)
                             .homeTopChromeSurface(
-                                renderMode = topChromeRenderMode,
+                                renderMode = localTopChromeRenderMode,
                                 shape = CircleShape,
                                 surfaceColor = headerChromeColors.containerColor,
                                 hazeState = hazeState,
                                 backdrop = backdrop,
                                 liquidStyle = liquidStyle,
                                 motionTier = motionTier,
-                                isScrolling = isScrolling,
-                                isTransitionRunning = isTransitionRunning,
+                                isScrolling = topChromeMotionPolicy.isScrolling,
+                                isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
                                 forceLowBlurBudget = forceLowBlurBudget
                             )
                             .border(0.8.dp, headerChromeColors.borderColor, CircleShape)
@@ -828,17 +913,18 @@ fun iOSHomeHeader(
                 tabContentAlpha = tabContentAlpha,
                 tabHorizontalPadding = tabHorizontalPadding,
                 tabVerticalPadding = tabVerticalPadding,
+                tabVerticalOffset = tabVerticalOffset,
                 isTabFloating = isTabFloating,
                 effectiveTabShadowElevation = effectiveTabShadowElevation,
                 tabShape = tabShape,
-                tabChromeRenderMode = tabChromeRenderMode,
+                tabChromeRenderMode = localTabChromeRenderMode,
                 tabSurfaceColor = tabSurfaceColor.copy(alpha = tabOverlayAlpha),
                 hazeState = hazeState,
                 backdrop = backdrop,
                 liquidStyle = liquidStyle,
                 motionTier = motionTier,
-                isScrolling = isScrolling,
-                isTransitionRunning = isTransitionRunning,
+                isScrolling = tabChromeMotionPolicy.isScrolling,
+                isTransitionRunning = tabChromeMotionPolicy.isTransitionRunning,
                 forceLowBlurBudget = forceLowBlurBudget,
                 tabBorderAlpha = tabBorderAlpha,
                 tabHighlightColor = tabChromeColors.highlightColor,

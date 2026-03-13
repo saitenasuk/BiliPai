@@ -66,7 +66,7 @@ fun SettingsShareScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
-    val hazeState = remember { HazeState() }
+    val hazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
     val scrollOffset by remember {
         derivedStateOf {
             if (listState.firstVisibleItemIndex > 0) 2000f

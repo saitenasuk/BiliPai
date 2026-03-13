@@ -36,14 +36,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.animation.doOnEnd
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.layout.ContentScale
-import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.coroutines.AppScope
@@ -200,6 +198,21 @@ internal fun shouldTriggerPlaybackRoutePip(
     if (!shouldEnterPip || !isActuallyPlaying) return false
     if (isInVideoDetail) return true
     return isInAudioMode && audioModeAutoPipEnabled
+}
+
+internal data class MainActivityPlaybackOverlayState(
+    val showMiniPlayerOverlay: Boolean,
+    val showDedicatedPipPlayer: Boolean
+)
+
+internal fun resolveMainActivityPlaybackOverlayState(
+    isInPipMode: Boolean
+): MainActivityPlaybackOverlayState {
+    return MainActivityPlaybackOverlayState(
+        showMiniPlayerOverlay = !isInPipMode,
+        // System PiP should keep using the existing video render target.
+        showDedicatedPipPlayer = false
+    )
 }
 
 internal enum class CrashLogPromptAction {
@@ -846,8 +859,11 @@ class MainActivity : ComponentActivity() {
                     }
                     //  小窗全屏状态
                     var showFullscreen by remember { mutableStateOf(false) }
+                    val playbackOverlayState = remember(isInPipMode) {
+                        resolveMainActivityPlaybackOverlayState(isInPipMode = isInPipMode)
+                    }
                     //  小窗播放器覆盖层 (非 PiP 模式下显示)
-                    if (!isInPipMode) {
+                    if (playbackOverlayState.showMiniPlayerOverlay) {
                         MiniPlayerOverlay(
                             miniPlayerManager = miniPlayerManager,
                             onExpandClick = {
@@ -903,11 +919,6 @@ class MainActivity : ComponentActivity() {
                     
                     //  护眼模式覆盖层（最顶层，应用于所有内容）
                     EyeProtectionOverlay()
-
-                    // PiP 模式专用播放器 (只在 PiP 模式下显示，覆盖所有内容)
-                    if (isInPipMode) {
-                        PiPVideoPlayer(miniPlayerManager = miniPlayerManager)
-                    }
                     
                     // [New] Custom Splash Wallpaper Overlay
                     val readCustomSplashPrefs = remember { shouldReadCustomSplashPreferences() }
@@ -1478,48 +1489,6 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         com.android.purebilibili.feature.cast.DlnaManager.unbindService(this)
-    }
-}
-
-/**
- * PiP 模式专用播放器 Composable
- */
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-@Composable
-fun PiPVideoPlayer(miniPlayerManager: MiniPlayerManager) {
-    val player = miniPlayerManager.player
-    
-    if (player != null) {
-        AndroidView(
-            factory = { context ->
-                PlayerView(context).apply {
-                    this.player = player
-                    useController = false // 隐藏控制器，由系统 PiP 窗口接管
-                    layoutParams = android.view.ViewGroup.LayoutParams(
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    // 确保视频填充窗口
-                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
-                }
-            },
-            update = { view ->
-                // 每次重组确保 player 是最新的
-                if (view.player != player) {
-                    view.player = player
-                }
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-        )
-    } else {
-        // 如果没有播放器，显示黑屏
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-        )
     }
 }
 

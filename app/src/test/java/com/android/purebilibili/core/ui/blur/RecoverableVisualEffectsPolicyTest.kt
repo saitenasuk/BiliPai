@@ -27,4 +27,32 @@ class RecoverableVisualEffectsPolicyTest {
             )
         )
     }
+
+    @Test
+    fun recreatesRecoverableHazeStateOnAndroid16AndAbove() {
+        assertTrue(
+            shouldRecreateRecoverableHazeState(
+                sdkInt = 36
+            )
+        )
+        assertFalse(
+            shouldRecreateRecoverableHazeState(
+                sdkInt = 35
+            )
+        )
+    }
+
+    @Test
+    fun directHazeLiquidGlassFallbackIsDisabledOnAndroid16AndAbove() {
+        assertFalse(
+            shouldAllowDirectHazeLiquidGlassFallback(
+                sdkInt = 36
+            )
+        )
+        assertTrue(
+            shouldAllowDirectHazeLiquidGlassFallback(
+                sdkInt = 35
+            )
+        )
+    }
 }

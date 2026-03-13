@@ -85,7 +85,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.android.purebilibili.core.util.responsiveContentWidth
-import dev.chrisbanes.haze.HazeState
+import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.util.LocalWindowSizeClass
@@ -164,7 +164,7 @@ fun SearchScreen(
     val resultListState = rememberLazyListState()
 
     // ✨ Haze State
-    val hazeState = remember { HazeState() }
+    val hazeState = rememberRecoverableHazeState()
 
     // 2. 顶部避让高度计算
     val density = LocalDensity.current

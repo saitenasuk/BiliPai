@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -32,6 +34,7 @@ internal fun HomeTopTabChrome(
     tabContentAlpha: Float,
     tabHorizontalPadding: Dp,
     tabVerticalPadding: Dp,
+    tabVerticalOffset: Dp,
     isTabFloating: Boolean,
     effectiveTabShadowElevation: Dp,
     tabShape: Shape,
@@ -55,6 +58,7 @@ internal fun HomeTopTabChrome(
             .zIndex(-1f)
             .height(currentTabHeight)
             .graphicsLayer { alpha = tabAlpha * tabContentAlpha }
+            .offset { IntOffset(x = 0, y = tabVerticalOffset.roundToPx()) }
             .clip(RoundedCornerShape(bottomStart = 0.dp, bottomEnd = 0.dp))
     ) {
         Box(

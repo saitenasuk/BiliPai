@@ -15,7 +15,8 @@ class PlaybackCompletionPolicyTest {
             resolvePlaybackEndAction(
                 behavior = PlaybackCompletionBehavior.STOP_AFTER_CURRENT,
                 autoPlayEnabled = true,
-                isExternalPlaylist = true
+                isExternalPlaylist = true,
+                externalPlaylistAutoContinueEnabled = true
             )
         )
     }
@@ -27,7 +28,8 @@ class PlaybackCompletionPolicyTest {
             resolvePlaybackEndAction(
                 behavior = PlaybackCompletionBehavior.PLAY_IN_ORDER,
                 autoPlayEnabled = false,
-                isExternalPlaylist = false
+                isExternalPlaylist = false,
+                externalPlaylistAutoContinueEnabled = false
             )
         )
     }
@@ -39,7 +41,8 @@ class PlaybackCompletionPolicyTest {
             resolvePlaybackEndAction(
                 behavior = PlaybackCompletionBehavior.REPEAT_ONE,
                 autoPlayEnabled = false,
-                isExternalPlaylist = true
+                isExternalPlaylist = true,
+                externalPlaylistAutoContinueEnabled = false
             )
         )
     }
@@ -51,7 +54,8 @@ class PlaybackCompletionPolicyTest {
             resolvePlaybackEndAction(
                 behavior = PlaybackCompletionBehavior.LOOP_PLAYLIST,
                 autoPlayEnabled = false,
-                isExternalPlaylist = false
+                isExternalPlaylist = false,
+                externalPlaylistAutoContinueEnabled = false
             )
         )
     }
@@ -63,7 +67,8 @@ class PlaybackCompletionPolicyTest {
             resolvePlaybackEndAction(
                 behavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
                 autoPlayEnabled = false,
-                isExternalPlaylist = false
+                isExternalPlaylist = false,
+                externalPlaylistAutoContinueEnabled = true
             )
         )
         assertEquals(
@@ -71,19 +76,34 @@ class PlaybackCompletionPolicyTest {
             resolvePlaybackEndAction(
                 behavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
                 autoPlayEnabled = true,
-                isExternalPlaylist = false
+                isExternalPlaylist = false,
+                externalPlaylistAutoContinueEnabled = false
             )
         )
     }
 
     @Test
-    fun `auto continue still continues for external playlist when autoplay off`() {
+    fun `auto continue stops for external playlist when dedicated switch is off`() {
+        assertEquals(
+            PlaybackEndAction.STOP,
+            resolvePlaybackEndAction(
+                behavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
+                autoPlayEnabled = false,
+                isExternalPlaylist = true,
+                externalPlaylistAutoContinueEnabled = false
+            )
+        )
+    }
+
+    @Test
+    fun `auto continue still continues for external playlist when dedicated switch is on`() {
         assertEquals(
             PlaybackEndAction.AUTO_CONTINUE,
             resolvePlaybackEndAction(
                 behavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
                 autoPlayEnabled = false,
-                isExternalPlaylist = true
+                isExternalPlaylist = true,
+                externalPlaylistAutoContinueEnabled = true
             )
         )
     }
@@ -96,6 +116,7 @@ class PlaybackCompletionPolicyTest {
                 behavior = PlaybackCompletionBehavior.STOP_AFTER_CURRENT,
                 autoPlayEnabled = false,
                 isExternalPlaylist = true,
+                externalPlaylistAutoContinueEnabled = false,
                 externalPlaylistSource = ExternalPlaylistSource.FAVORITE,
                 playMode = PlayMode.SEQUENTIAL
             )
@@ -110,6 +131,7 @@ class PlaybackCompletionPolicyTest {
                 behavior = PlaybackCompletionBehavior.PLAY_IN_ORDER,
                 autoPlayEnabled = false,
                 isExternalPlaylist = true,
+                externalPlaylistAutoContinueEnabled = false,
                 externalPlaylistSource = ExternalPlaylistSource.FAVORITE,
                 playMode = PlayMode.REPEAT_ONE
             )
@@ -124,6 +146,7 @@ class PlaybackCompletionPolicyTest {
                 behavior = PlaybackCompletionBehavior.STOP_AFTER_CURRENT,
                 autoPlayEnabled = true,
                 isExternalPlaylist = true,
+                externalPlaylistAutoContinueEnabled = true,
                 externalPlaylistSource = ExternalPlaylistSource.WATCH_LATER,
                 playMode = PlayMode.SEQUENTIAL
             )

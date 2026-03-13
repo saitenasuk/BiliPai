@@ -78,8 +78,10 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     /**
      * 根据 bvid 获取历史记录项的导航信息
      */
-    fun getHistoryItem(bvid: String): com.android.purebilibili.data.model.response.HistoryItem? {
-        return _historyItemsMap[bvid]
+    fun getHistoryItem(lookupKey: String): com.android.purebilibili.data.model.response.HistoryItem? {
+        val normalizedKey = lookupKey.trim()
+        if (normalizedKey.isEmpty()) return null
+        return _historyItemsMap[normalizedKey] ?: _historyItemsByRenderKey[normalizedKey]
     }
 
     fun resolveHistoryRenderKey(video: VideoItem): String {
@@ -92,6 +94,12 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         }?.key
         if (!matched.isNullOrBlank()) return matched
         return "unknown_${video.id.coerceAtLeast(0L)}"
+    }
+
+    fun resolveHistoryLookupKey(video: VideoItem): String {
+        val bvid = video.bvid.trim()
+        if (bvid.isNotEmpty()) return bvid
+        return resolveHistoryRenderKey(video)
     }
 
     fun startVideoDissolve(renderKey: String) {
@@ -262,7 +270,9 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
         _uiState.value = _uiState.value.copy(items = optimisticList)
         _historyItemsByRenderKey.keys.removeAll(targetKeys)
         targetKeys.forEach { key ->
-            snapshotRenderMap[key]?.videoItem?.bvid?.takeIf { it.isNotBlank() }?.let { _historyItemsMap.remove(it) }
+            snapshotRenderMap[key]?.let { item ->
+                _historyItemsMap.remove(resolveHistoryLookupKey(item))
+            }
         }
 
         viewModelScope.launch {
@@ -335,10 +345,7 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
 
     private fun cacheHistoryItems(historyItems: List<com.android.purebilibili.data.model.response.HistoryItem>) {
         historyItems.forEach { item ->
-            val bvid = item.videoItem.bvid.trim()
-            if (bvid.isNotEmpty()) {
-                _historyItemsMap[bvid] = item
-            }
+            _historyItemsMap[resolveHistoryLookupKey(item)] = item
             _historyItemsByRenderKey[resolveHistoryRenderKey(item)] = item
         }
     }

@@ -22,6 +22,9 @@ import com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_OPACITY
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuOpacity
 import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRules
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
+import com.android.purebilibili.feature.video.ui.gesture.TwoFingerSpeedToggleState
+import com.android.purebilibili.feature.video.ui.gesture.applyHorizontalTwoFingerSpeedToggle
+import com.android.purebilibili.feature.video.ui.gesture.applyVerticalTwoFingerSpeedToggle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -287,6 +290,12 @@ object SettingsManager {
     private val KEY_SEEK_BACKWARD_SECONDS = intPreferencesKey("seek_backward_seconds")
     //  [新增] 长按倍速 (默认 2.0x)
     private val KEY_LONG_PRESS_SPEED = floatPreferencesKey("long_press_speed")
+    private val KEY_TWO_FINGER_VERTICAL_SPEED_ENABLED =
+        booleanPreferencesKey("two_finger_vertical_speed_enabled")
+    private val KEY_TWO_FINGER_HORIZONTAL_SPEED_ENABLED =
+        booleanPreferencesKey("two_finger_horizontal_speed_enabled")
+    private val KEY_HI_RES_LONG_PRESS_COMPAT_HINT_SHOWN =
+        booleanPreferencesKey("hi_res_long_press_compat_hint_shown")
     //  [新增] 默认播放速度/记忆上次播放速度
     private val KEY_DEFAULT_PLAYBACK_SPEED = floatPreferencesKey("default_playback_speed")
     private val KEY_REMEMBER_LAST_PLAYBACK_SPEED = booleanPreferencesKey("remember_last_playback_speed")
@@ -429,6 +438,8 @@ object SettingsManager {
     private const val RESUME_PROMPT_CACHE_PREFS = "resume_prompt_cache"
     private const val CACHE_KEY_RESUME_PROMPT_ENABLED = "resume_prompt_enabled"
     private const val CACHE_KEY_RESUME_PROMPT_SHOWN = "resume_prompt_shown"
+    private const val HI_RES_LONG_PRESS_HINT_CACHE_PREFS = "hi_res_long_press_hint_cache"
+    private const val CACHE_KEY_HI_RES_LONG_PRESS_HINT_SHOWN = "hi_res_long_press_hint_shown"
 
     fun getClickToPlay(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_CLICK_TO_PLAY] ?: true }
@@ -488,6 +499,10 @@ object SettingsManager {
     }
 
     // --- Auto Play Next ---
+    private val KEY_EXTERNAL_PLAYLIST_AUTO_CONTINUE =
+        booleanPreferencesKey("external_playlist_auto_continue")
+    private const val CACHE_KEY_EXTERNAL_PLAYLIST_AUTO_CONTINUE = "external_playlist_auto_continue"
+
     fun getAutoPlay(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_AUTO_PLAY] ?: true }
 
@@ -502,6 +517,24 @@ object SettingsManager {
     fun getAutoPlaySync(context: Context): Boolean {
         return context.getSharedPreferences("auto_play_cache", Context.MODE_PRIVATE)
             .getBoolean("auto_play_enabled", true)  // 默认开启
+    }
+
+    fun getExternalPlaylistAutoContinue(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_EXTERNAL_PLAYLIST_AUTO_CONTINUE] ?: true }
+
+    suspend fun setExternalPlaylistAutoContinue(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_EXTERNAL_PLAYLIST_AUTO_CONTINUE] = value
+        }
+        context.getSharedPreferences("auto_play_cache", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(CACHE_KEY_EXTERNAL_PLAYLIST_AUTO_CONTINUE, value)
+            .apply()
+    }
+
+    fun getExternalPlaylistAutoContinueSync(context: Context): Boolean {
+        return context.getSharedPreferences("auto_play_cache", Context.MODE_PRIVATE)
+            .getBoolean(CACHE_KEY_EXTERNAL_PLAYLIST_AUTO_CONTINUE, true)
     }
 
     fun getPlaybackCompletionBehavior(context: Context): Flow<PlaybackCompletionBehavior> =
@@ -680,6 +713,57 @@ object SettingsManager {
         context.settingsDataStore.edit { preferences -> 
             preferences[KEY_LONG_PRESS_SPEED] = normalizeLongPressSpeed(speed)
         }
+    }
+
+    fun getTwoFingerVerticalSpeedEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_TWO_FINGER_VERTICAL_SPEED_ENABLED] ?: false }
+
+    suspend fun setTwoFingerVerticalSpeedEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            val current = TwoFingerSpeedToggleState(
+                verticalEnabled = preferences[KEY_TWO_FINGER_VERTICAL_SPEED_ENABLED] ?: false,
+                horizontalEnabled = preferences[KEY_TWO_FINGER_HORIZONTAL_SPEED_ENABLED] ?: false
+            )
+            val updated = applyVerticalTwoFingerSpeedToggle(current, enabled)
+            preferences[KEY_TWO_FINGER_VERTICAL_SPEED_ENABLED] = updated.verticalEnabled
+            preferences[KEY_TWO_FINGER_HORIZONTAL_SPEED_ENABLED] = updated.horizontalEnabled
+        }
+    }
+
+    fun getTwoFingerHorizontalSpeedEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_TWO_FINGER_HORIZONTAL_SPEED_ENABLED] ?: false }
+
+    suspend fun setTwoFingerHorizontalSpeedEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            val current = TwoFingerSpeedToggleState(
+                verticalEnabled = preferences[KEY_TWO_FINGER_VERTICAL_SPEED_ENABLED] ?: false,
+                horizontalEnabled = preferences[KEY_TWO_FINGER_HORIZONTAL_SPEED_ENABLED] ?: false
+            )
+            val updated = applyHorizontalTwoFingerSpeedToggle(current, enabled)
+            preferences[KEY_TWO_FINGER_VERTICAL_SPEED_ENABLED] = updated.verticalEnabled
+            preferences[KEY_TWO_FINGER_HORIZONTAL_SPEED_ENABLED] = updated.horizontalEnabled
+        }
+    }
+
+    fun getHiResLongPressCompatHintShown(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_HI_RES_LONG_PRESS_COMPAT_HINT_SHOWN] ?: false }
+
+    suspend fun setHiResLongPressCompatHintShown(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HI_RES_LONG_PRESS_COMPAT_HINT_SHOWN] = value
+        }
+        context.getSharedPreferences(HI_RES_LONG_PRESS_HINT_CACHE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(CACHE_KEY_HI_RES_LONG_PRESS_HINT_SHOWN, value)
+            .apply()
+    }
+
+    fun getHiResLongPressCompatHintShownSync(context: Context): Boolean {
+        return context.getSharedPreferences(HI_RES_LONG_PRESS_HINT_CACHE_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(CACHE_KEY_HI_RES_LONG_PRESS_HINT_SHOWN, false)
     }
 
     //  [新增] --- 默认播放速度 / 记忆上次速度 ---
