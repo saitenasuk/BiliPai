@@ -102,9 +102,9 @@ class PlaybackCoordinatorTest {
         val outcome = coordinator.executePlaybackEndAction(
             action = PlaybackEndAction.STOP,
             repeatCurrent = { error("repeat should not run for stop") },
-            playNextInOrder = { error("next should not run for stop") },
-            playNextFromPlaylistLoop = { error("playlist loop should not run for stop") },
-            autoContinue = { error("auto continue should not run for stop") }
+            playNextInOrder = { _ -> error("next should not run for stop") },
+            playNextFromPlaylistLoop = { _ -> error("playlist loop should not run for stop") },
+            autoContinue = { _ -> error("auto continue should not run for stop") }
         )
 
         assertTrue(outcome.shouldHidePlaybackEndedDialog)
@@ -118,9 +118,9 @@ class PlaybackCoordinatorTest {
         val outcome = coordinator.executePlaybackEndAction(
             action = PlaybackEndAction.REPEAT_CURRENT,
             repeatCurrent = { repeated = true },
-            playNextInOrder = { false },
-            playNextFromPlaylistLoop = { false },
-            autoContinue = {}
+            playNextInOrder = { _ -> false },
+            playNextFromPlaylistLoop = { _ -> false },
+            autoContinue = { _ -> }
         )
 
         assertTrue(repeated)
@@ -134,9 +134,9 @@ class PlaybackCoordinatorTest {
         val outcome = coordinator.executePlaybackEndAction(
             action = PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST,
             repeatCurrent = {},
-            playNextInOrder = { false },
-            playNextFromPlaylistLoop = { true },
-            autoContinue = {}
+            playNextInOrder = { _ -> false },
+            playNextFromPlaylistLoop = { _ -> true },
+            autoContinue = { _ -> }
         )
 
         assertTrue(outcome.shouldHidePlaybackEndedDialog)
@@ -146,16 +146,21 @@ class PlaybackCoordinatorTest {
     fun `executePlaybackEndAction should auto continue without hiding dialog`() {
         val coordinator = PlaybackCoordinator(PlaybackSessionStore())
         var autoContinued = false
+        var ignoredSavedProgress = false
 
         val outcome = coordinator.executePlaybackEndAction(
             action = PlaybackEndAction.AUTO_CONTINUE,
             repeatCurrent = {},
             playNextInOrder = { false },
             playNextFromPlaylistLoop = { false },
-            autoContinue = { autoContinued = true }
+            autoContinue = { ignoreSavedProgress ->
+                autoContinued = true
+                ignoredSavedProgress = ignoreSavedProgress
+            }
         )
 
         assertTrue(autoContinued)
+        assertTrue(ignoredSavedProgress)
         assertFalse(outcome.shouldHidePlaybackEndedDialog)
     }
 }

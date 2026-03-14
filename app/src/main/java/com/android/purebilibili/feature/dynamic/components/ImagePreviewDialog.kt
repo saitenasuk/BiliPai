@@ -46,9 +46,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
@@ -69,6 +72,9 @@ import androidx.compose.ui.graphics.toArgb
  */
 private val ImagePreviewOpenEasing = CubicBezierEasing(0.2f, 0.9f, 0.2f, 1f)
 private val ImagePreviewCloseEasing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
+
+internal const val IMAGE_PREVIEW_BACKDROP_TAG = "image_preview_backdrop"
+internal const val IMAGE_PREVIEW_PAGE_TAG = "image_preview_page"
 
 private data class ImagePreviewOverlayRequest(
     val token: Long,
@@ -132,19 +138,30 @@ fun ImagePreviewOverlayHost(
 ) {
     val activeRequest by ImagePreviewOverlayController.request.collectAsState()
     activeRequest?.let { request ->
-        ImagePreviewOverlayContent(
-            images = request.images,
-            initialIndex = request.initialIndex,
-            sourceRect = request.sourceRect,
-            textContent = request.textContent,
-            onDismiss = {
+        Dialog(
+            onDismissRequest = {
                 ImagePreviewOverlayController.dismiss(request.token)
                 request.onDismiss()
             },
-            modifier = modifier
-                .fillMaxSize()
-                .zIndex(100f)
-        )
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            ImagePreviewOverlayContent(
+                images = request.images,
+                initialIndex = request.initialIndex,
+                sourceRect = request.sourceRect,
+                textContent = request.textContent,
+                onDismiss = {
+                    ImagePreviewOverlayController.dismiss(request.token)
+                    request.onDismiss()
+                },
+                modifier = modifier
+                    .fillMaxSize()
+                    .zIndex(100f)
+            )
+        }
     }
 }
 
@@ -345,6 +362,7 @@ private fun ImagePreviewOverlayContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .testTag(IMAGE_PREVIEW_BACKDROP_TAG)
                     .background(Color.Black.copy(alpha = backdropAlpha))
                     .pointerInput(Unit) {
                         detectTapGestures(
@@ -421,6 +439,7 @@ private fun ImagePreviewOverlayContent(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .testTag(IMAGE_PREVIEW_PAGE_TAG)
                             .graphicsLayer {
                                 if (apply3D) {
                                     //  3D 旋转角度（最大45度）

@@ -136,6 +136,7 @@ enum class VideoGestureMode { None, Brightness, Volume, Seek, SwipeToFullscreen 
 
 private const val HI_RES_AUDIO_QUALITY_ID = 30251
 private const val HI_RES_LONG_PRESS_SPEED_LIMIT = 1.5f
+private const val LONG_PRESS_SPEED_LOCK_THRESHOLD_DP = 72
 
 internal fun resolveEffectiveLongPressSpeed(
     requestedSpeed: Float,
@@ -170,6 +171,33 @@ internal fun shouldShowHiResLongPressCompatHint(
 ): Boolean {
     if (hasShownHint) return false
     return requestedSpeed - effectiveSpeed > 0.001f
+}
+
+internal fun shouldEnableLongPressSpeedGesture(
+    isScreenLocked: Boolean,
+    scale: Float,
+    isMultiTouchActive: Boolean
+): Boolean {
+    return !isScreenLocked && !isMultiTouchActive && scale <= 1.01f
+}
+
+internal fun shouldLockLongPressSpeedBySwipe(
+    isLongPressing: Boolean,
+    alreadyLocked: Boolean,
+    totalDragDistanceY: Float,
+    thresholdPx: Float
+): Boolean {
+    return isLongPressing &&
+        !alreadyLocked &&
+        thresholdPx > 0f &&
+        totalDragDistanceY <= -thresholdPx
+}
+
+internal fun shouldRestorePlaybackParametersAfterLongPressRelease(
+    wasLongPressing: Boolean,
+    longPressSpeedLocked: Boolean
+): Boolean {
+    return wasLongPressing && !longPressSpeedLocked
 }
 
 internal fun resolveVerticalGestureMode(
@@ -533,6 +561,20 @@ internal fun shouldPromoteFirstFrameByPlaybackFallback(
         currentPositionMs > 300L
 }
 
+internal fun shouldAutoHidePlayerChromeOnPlaybackStart(
+    showControls: Boolean,
+    hasAutoHiddenForCurrentVideo: Boolean,
+    isPlaying: Boolean,
+    isFirstFrameRendered: Boolean,
+    forceCoverDuringReturnAnimation: Boolean
+): Boolean {
+    return showControls &&
+        !hasAutoHiddenForCurrentVideo &&
+        isPlaying &&
+        isFirstFrameRendered &&
+        !forceCoverDuringReturnAnimation
+}
+
 internal fun shouldRebindPlayerSurfaceOnForeground(
     hasPlayerView: Boolean,
     isInPipMode: Boolean,
@@ -875,6 +917,9 @@ fun VideoPlayerSection(
     var originalPlaybackParameters by remember { mutableStateOf(PlaybackParameters.DEFAULT) }
     var effectiveLongPressSpeed by remember { mutableFloatStateOf(longPressSpeed) }
     var longPressSpeedFeedbackVisible by remember { mutableStateOf(false) }
+    var longPressSpeedLocked by remember(bvid) { mutableStateOf(false) }
+    var lockedLongPressSpeed by remember(bvid) { mutableFloatStateOf(1.0f) }
+    var isMultiTouchActive by remember { mutableStateOf(false) }
     var twoFingerSpeedFeedbackVisible by remember { mutableStateOf(false) }
     var twoFingerSpeedFeedbackRevision by remember { mutableIntStateOf(0) }
     var twoFingerFeedbackSpeed by remember { mutableFloatStateOf(1.0f) }
@@ -902,17 +947,35 @@ fun VideoPlayerSection(
     
     //  [新增] 缓冲状态监听
     var isBuffering by remember { mutableStateOf(false) }
+    var observedPlaybackSpeed by remember(playerState.player) {
+        mutableFloatStateOf(playerState.player.playbackParameters.speed)
+    }
     DisposableEffect(playerState.player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
             }
+
+            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+                observedPlaybackSpeed = playbackParameters.speed
+            }
         }
         playerState.player.addListener(listener)
         // 初始化状态
         isBuffering = playerState.player.playbackState == Player.STATE_BUFFERING
+        observedPlaybackSpeed = playerState.player.playbackParameters.speed
         onDispose {
             playerState.player.removeListener(listener)
+        }
+    }
+
+    LaunchedEffect(observedPlaybackSpeed, longPressSpeedLocked, lockedLongPressSpeed, isLongPressing) {
+        if (
+            longPressSpeedLocked &&
+            !isLongPressing &&
+            abs(observedPlaybackSpeed - lockedLongPressSpeed) > 0.001f
+        ) {
+            longPressSpeedLocked = false
         }
     }
 
@@ -964,6 +1027,7 @@ fun VideoPlayerSection(
 
     // 控制器显示状态
     var showControls by remember { mutableStateOf(true) }
+    var hasAutoHiddenControlsForCurrentVideo by remember(bvid) { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var faceVisualMasks by remember { mutableStateOf(emptyList<FaceOcclusionVisualMask>()) }
     val faceMaskStabilizer = remember { FaceOcclusionMaskStabilizer() }
@@ -1092,12 +1156,33 @@ fun VideoPlayerSection(
                     while (true) {
                         val event = awaitPointerEvent()
                         val pressedCount = event.changes.count { it.pressed }
-                        if (pressedCount == 0) break
+                        if (pressedCount == 0) {
+                            isMultiTouchActive = false
+                            break
+                        }
                         if (pressedCount < 2) {
-                            if (observedMultiTouch) break
+                            if (observedMultiTouch) {
+                                isMultiTouchActive = false
+                                break
+                            }
                             continue
                         }
                         observedMultiTouch = true
+                        isMultiTouchActive = true
+
+                        if (isLongPressing) {
+                            if (
+                                shouldRestorePlaybackParametersAfterLongPressRelease(
+                                    wasLongPressing = isLongPressing,
+                                    longPressSpeedLocked = longPressSpeedLocked
+                                )
+                            ) {
+                                playerState.player.playbackParameters = originalPlaybackParameters
+                            }
+                            isLongPressing = false
+                            longPressSpeedFeedbackVisible = false
+                            totalDragDistanceY = 0f
+                        }
 
                         val pan = event.calculatePan()
                         val zoom = event.calculateZoom()
@@ -1270,12 +1355,50 @@ fun VideoPlayerSection(
                             dragStartX = -1f
                         },
                         onDragCancel = {
+                            if (isLongPressing) {
+                                totalDragDistanceX = 0f
+                                totalDragDistanceY = 0f
+                                return@detectDragGestures
+                            }
                             isGestureVisible = false
                             gestureMode = VideoGestureMode.None
                             dragStartX = -1f
                         },
                         //  [修复点] 使用 dragAmount 而不是 change.positionChange()
                         onDrag = { change, dragAmount ->
+                            if (isLongPressing) {
+                                if (
+                                    !shouldEnableLongPressSpeedGesture(
+                                        isScreenLocked = isScreenLocked,
+                                        scale = scale,
+                                        isMultiTouchActive = isMultiTouchActive
+                                    )
+                                ) {
+                                    change.consume()
+                                    return@detectDragGestures
+                                }
+                                totalDragDistanceY += dragAmount.y
+                                val lockThresholdPx = LONG_PRESS_SPEED_LOCK_THRESHOLD_DP.dp.toPx()
+                                if (
+                                    shouldLockLongPressSpeedBySwipe(
+                                        isLongPressing = isLongPressing,
+                                        alreadyLocked = longPressSpeedLocked,
+                                        totalDragDistanceY = totalDragDistanceY,
+                                        thresholdPx = lockThresholdPx
+                                    )
+                                ) {
+                                    longPressSpeedLocked = true
+                                    lockedLongPressSpeed = effectiveLongPressSpeed
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    Toast.makeText(
+                                        context,
+                                        "已锁定 ${effectiveLongPressSpeed}x",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                                change.consume()
+                                return@detectDragGestures
+                            }
                             // 如果手势不可见（即在 safe zone 中启动被忽略），则停止处理
                             if (!isGestureVisible && gestureMode == VideoGestureMode.None) {
                                 // do nothing
@@ -1419,8 +1542,15 @@ fun VideoPlayerSection(
                         }
                     },
                     onLongPress = {
-                        // 🔒 锁定时禁用长按倍速
-                        if (isScreenLocked) return@detectTapGestures
+                        if (
+                            !shouldEnableLongPressSpeedGesture(
+                                isScreenLocked = isScreenLocked,
+                                scale = scale,
+                                isMultiTouchActive = isMultiTouchActive
+                            )
+                        ) {
+                            return@detectTapGestures
+                        }
                         //  长按开始：保存原速度并应用长按倍速
                         val player = playerState.player
                         originalPlaybackParameters = player.playbackParameters
@@ -1449,6 +1579,7 @@ fun VideoPlayerSection(
                             }
                         }
                         isLongPressing = true
+                        totalDragDistanceY = 0f
                         longPressSpeedFeedbackVisible = true
                         com.android.purebilibili.core.util.Logger.d(
                             "VideoPlayerSection",
@@ -1509,12 +1640,24 @@ fun VideoPlayerSection(
                         tryAwaitRelease()
                         //  如果之前是长按状态，松开时恢复原速度
                         if (isLongPressing) {
-                            playerState.player.playbackParameters = originalPlaybackParameters
+                            if (
+                                shouldRestorePlaybackParametersAfterLongPressRelease(
+                                    wasLongPressing = isLongPressing,
+                                    longPressSpeedLocked = longPressSpeedLocked
+                                )
+                            ) {
+                                playerState.player.playbackParameters = originalPlaybackParameters
+                            }
                             isLongPressing = false
                             longPressSpeedFeedbackVisible = false
+                            totalDragDistanceY = 0f
                             com.android.purebilibili.core.util.Logger.d(
                                 "VideoPlayerSection",
-                                "⏹️ LongPress released: speed ${originalPlaybackParameters.speed}x"
+                                if (longPressSpeedLocked) {
+                                    "🔒 LongPress locked: speed ${lockedLongPressSpeed}x"
+                                } else {
+                                    "⏹️ LongPress released: speed ${originalPlaybackParameters.speed}x"
+                                }
                             )
                         }
                     }
@@ -1562,6 +1705,9 @@ fun VideoPlayerSection(
         val danmakuSmartOcclusion by com.android.purebilibili.core.store.SettingsManager
             .getDanmakuSmartOcclusion(context)
             .collectAsState(initial = false)
+        val danmakuFullscreenPanelWidthMode by com.android.purebilibili.core.store.SettingsManager
+            .getDanmakuFullscreenPanelWidthMode(context)
+            .collectAsState(initial = com.android.purebilibili.core.store.DanmakuPanelWidthMode.THIRD)
         val danmakuBlockRulesRaw by com.android.purebilibili.core.store.SettingsManager
             .getDanmakuBlockRulesRaw(context)
             .collectAsState(initial = "")
@@ -1967,6 +2113,28 @@ fun VideoPlayerSection(
         isFirstFrameRendered = isFirstFrameRendered,
         forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
     )
+
+    LaunchedEffect(
+        showControls,
+        hasAutoHiddenControlsForCurrentVideo,
+        isFirstFrameRendered,
+        forceCoverDuringReturnAnimation,
+        playerState.player.isPlaying
+    ) {
+        if (
+            shouldAutoHidePlayerChromeOnPlaybackStart(
+                showControls = showControls,
+                hasAutoHiddenForCurrentVideo = hasAutoHiddenControlsForCurrentVideo,
+                isPlaying = playerState.player.isPlaying,
+                isFirstFrameRendered = isFirstFrameRendered,
+                forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
+            )
+        ) {
+            showControls = false
+            hasAutoHiddenControlsForCurrentVideo = true
+        }
+    }
+
     val coverMotionSpec = remember(forceCoverDuringReturnAnimation) {
         resolveVideoPlayerCoverMotionSpec(forceCoverDuringReturnAnimation)
     }
@@ -2791,7 +2959,11 @@ fun VideoPlayerSection(
                 Spacer(modifier = Modifier.width(8.dp))
                 // 倍速文字
                 Text(
-                    text = "${effectiveLongPressSpeed}x",
+                    text = if (longPressSpeedLocked) {
+                        "已锁定 ${effectiveLongPressSpeed}x"
+                    } else {
+                        "${effectiveLongPressSpeed}x 上滑锁定"
+                    },
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
@@ -2859,6 +3031,7 @@ fun VideoPlayerSection(
                 danmakuAllowSpecial = danmakuAllowSpecial,
                 danmakuBlockRulesRaw = danmakuBlockRulesRaw,
                 danmakuSmartOcclusion = danmakuSmartOcclusion,
+                danmakuFullscreenPanelWidthMode = danmakuFullscreenPanelWidthMode,
                 onDanmakuOpacityChange = { value ->
                     danmakuManager.opacity = value
                     scope.launch {
@@ -2925,6 +3098,11 @@ fun VideoPlayerSection(
                 onDanmakuSmartOcclusionChange = { value ->
                     scope.launch {
                         com.android.purebilibili.core.store.SettingsManager.setDanmakuSmartOcclusion(context, value)
+                    }
+                },
+                onDanmakuFullscreenPanelWidthModeChange = { value ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.SettingsManager.setDanmakuFullscreenPanelWidthMode(context, value)
                     }
                 },
                 onDanmakuBlockRulesRawChange = { value ->

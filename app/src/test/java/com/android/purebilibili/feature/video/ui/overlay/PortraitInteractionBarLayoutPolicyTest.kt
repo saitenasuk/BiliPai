@@ -15,6 +15,8 @@ class PortraitInteractionBarLayoutPolicyTest {
         assertEquals(180, policy.bottomPaddingDp)
         assertEquals(20, policy.itemSpacingDp)
         assertEquals(34, policy.iconSizeDp)
+        assertEquals(44, policy.iconBackingSizeDp)
+        assertEquals(5, policy.iconBackingInnerPaddingDp)
         assertEquals(12, policy.labelFontSp)
     }
 
@@ -28,6 +30,8 @@ class PortraitInteractionBarLayoutPolicyTest {
         assertEquals(188, policy.bottomPaddingDp)
         assertEquals(22, policy.itemSpacingDp)
         assertEquals(37, policy.iconSizeDp)
+        assertEquals(48, policy.iconBackingSizeDp)
+        assertEquals(5, policy.iconBackingInnerPaddingDp)
         assertEquals(12, policy.labelFontSp)
     }
 
@@ -41,6 +45,8 @@ class PortraitInteractionBarLayoutPolicyTest {
         assertEquals(196, policy.bottomPaddingDp)
         assertEquals(24, policy.itemSpacingDp)
         assertEquals(40, policy.iconSizeDp)
+        assertEquals(52, policy.iconBackingSizeDp)
+        assertEquals(6, policy.iconBackingInnerPaddingDp)
         assertEquals(13, policy.labelFontSp)
     }
 
@@ -54,6 +60,8 @@ class PortraitInteractionBarLayoutPolicyTest {
         assertEquals(220, policy.bottomPaddingDp)
         assertEquals(28, policy.itemSpacingDp)
         assertEquals(46, policy.iconSizeDp)
+        assertEquals(58, policy.iconBackingSizeDp)
+        assertEquals(6, policy.iconBackingInnerPaddingDp)
         assertEquals(15, policy.labelFontSp)
     }
 }

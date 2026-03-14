@@ -521,4 +521,90 @@ class BackgroundPlaybackPolicyTest {
             )
         )
     }
+
+    @Test
+    fun videoSkipShouldFallbackToDirectBackgroundExecutionWhenCallbackMissing() {
+        val item = PlaylistItem(
+            bvid = "BV1direct",
+            title = "next",
+            cover = "",
+            owner = "tester"
+        )
+
+        assertEquals(
+            PlaylistSkipExecutionMode.DIRECT_BACKGROUND,
+            resolvePlaylistSkipExecutionMode(
+                item = item,
+                callbackAvailable = false,
+                hasDirectPlaybackContext = true
+            )
+        )
+    }
+
+    @Test
+    fun bangumiSkipShouldStillRequireCallbackEvenWhenDirectContextExists() {
+        val item = PlaylistItem(
+            bvid = "",
+            title = "第1话",
+            cover = "",
+            owner = "番剧",
+            isBangumi = true,
+            seasonId = 100L,
+            epId = 200L
+        )
+
+        assertEquals(
+            PlaylistSkipExecutionMode.NONE,
+            resolvePlaylistSkipExecutionMode(
+                item = item,
+                callbackAvailable = false,
+                hasDirectPlaybackContext = true
+            )
+        )
+        assertEquals(
+            PlaylistSkipExecutionMode.CALLBACK,
+            resolvePlaylistSkipExecutionMode(
+                item = item,
+                callbackAvailable = true,
+                hasDirectPlaybackContext = true
+            )
+        )
+    }
+
+    @Test
+    fun playlistSkipExecutionModeShouldRejectMissingItemOrPlaybackContext() {
+        assertEquals(
+            PlaylistSkipExecutionMode.NONE,
+            resolvePlaylistSkipExecutionMode(
+                item = null,
+                callbackAvailable = false,
+                hasDirectPlaybackContext = true
+            )
+        )
+        assertEquals(
+            PlaylistSkipExecutionMode.NONE,
+            resolvePlaylistSkipExecutionMode(
+                item = PlaylistItem(
+                    bvid = "BV1noop",
+                    title = "sample",
+                    cover = "",
+                    owner = "tester"
+                ),
+                callbackAvailable = false,
+                hasDirectPlaybackContext = false
+            )
+        )
+    }
+
+    @Test
+    fun externalTransportActionOrderShouldPrioritizeNextBeforePlayPauseAndPrevious() {
+        assertEquals(
+            listOf(
+                MiniPlayerManager.ACTION_NEXT,
+                MiniPlayerManager.ACTION_PLAY_PAUSE,
+                MiniPlayerManager.ACTION_PREVIOUS
+            ),
+            resolveExternalTransportActionOrder().toList()
+        )
+    }
 }
