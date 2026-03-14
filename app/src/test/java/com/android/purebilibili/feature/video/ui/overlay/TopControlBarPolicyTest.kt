@@ -45,8 +45,8 @@ class TopControlBarPolicyTest {
     }
 
     @Test
-    fun fullscreenTopBar_doesNotConsumeStatusBarPadding() {
-        assertFalse(
+    fun fullscreenTopBar_appliesStatusBarPaddingForSafeTapArea() {
+        assertTrue(
             shouldApplyStatusBarPaddingToTopControlBar(
                 isFullscreen = true
             )

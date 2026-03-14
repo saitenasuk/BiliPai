@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -36,7 +37,32 @@ class DanmakuSettingsPanelPolicyTest {
             policy.presentation
         )
         assertEquals(0, policy.bottomPaddingDp)
-        assertEquals(380, policy.maxWidthDp)
         assertEquals(480, policy.maxHeightDp)
+    }
+
+    @Test
+    fun fullscreenPanelWidthMode_isFixedToQuarterWidth() {
+        val fullWidth = resolveDanmakuSettingsPanelLayoutPolicy(
+            isFullscreen = true,
+            screenWidthDp = 915,
+            screenHeightDp = 411,
+            fullscreenWidthMode = DanmakuPanelWidthMode.FULL
+        )
+        val halfWidth = resolveDanmakuSettingsPanelLayoutPolicy(
+            isFullscreen = true,
+            screenWidthDp = 915,
+            screenHeightDp = 411,
+            fullscreenWidthMode = DanmakuPanelWidthMode.HALF
+        )
+        val thirdWidth = resolveDanmakuSettingsPanelLayoutPolicy(
+            isFullscreen = true,
+            screenWidthDp = 915,
+            screenHeightDp = 411,
+            fullscreenWidthMode = DanmakuPanelWidthMode.THIRD
+        )
+
+        assertEquals(221, fullWidth.maxWidthDp)
+        assertEquals(221, halfWidth.maxWidthDp)
+        assertEquals(221, thirdWidth.maxWidthDp)
     }
 }

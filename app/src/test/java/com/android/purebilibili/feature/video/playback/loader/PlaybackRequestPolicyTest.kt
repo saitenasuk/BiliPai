@@ -14,6 +14,7 @@ class PlaybackRequestPolicyTest {
             cid = 2233L,
             force = true,
             autoPlay = false,
+            ignoreSavedProgress = true,
             audioLang = "jp",
             videoCodecOverride = "av01"
         )
@@ -23,6 +24,7 @@ class PlaybackRequestPolicyTest {
         assertEquals(2233L, request.cid)
         assertEquals(true, request.force)
         assertEquals(false, request.autoPlay)
+        assertEquals(true, request.ignoreSavedProgress)
         assertEquals("jp", request.audioLang)
         assertEquals("av01", request.videoCodecOverride)
     }
@@ -53,6 +55,24 @@ class PlaybackRequestPolicyTest {
                 currentCid = 1001L,
                 uiBvid = "BV1cid",
                 uiCid = 1002L
+            )
+        )
+    }
+
+    @Test
+    fun `resolve progress cid should ignore saved progress when request opts out of resume`() {
+        val request = PlaybackRequest.create(
+            bvid = "BV1restart",
+            ignoreSavedProgress = true
+        )
+
+        assertEquals(
+            0L,
+            request.resolveProgressCid(
+                currentBvid = "BV1restart",
+                currentCid = 4455L,
+                uiBvid = "BV1restart",
+                uiCid = 5566L
             )
         )
     }

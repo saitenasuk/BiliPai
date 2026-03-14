@@ -51,7 +51,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicTopBarWithTabs
 import com.android.purebilibili.feature.dynamic.components.DynamicDisplayMode
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentSheet
 import com.android.purebilibili.feature.dynamic.components.RepostDialog
-import com.android.purebilibili.feature.video.ui.components.SubReplySheet
+import com.android.purebilibili.feature.dynamic.components.DynamicSubReplyPreviewHost
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
@@ -517,9 +517,8 @@ fun DynamicScreen(
         )
     }
 
-    SubReplySheet(
+    DynamicSubReplyPreviewHost(
         state = subReplyState,
-        emoteMap = emptyMap(),
         onDismiss = { viewModel.closeSubReply() },
         onLoadMore = { viewModel.loadMoreSubReplies() }
     )

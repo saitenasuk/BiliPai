@@ -8,6 +8,28 @@ import org.junit.Test
 class HomePreloadPolicyTest {
 
     @Test
+    fun startsHomePreloadOnlyWhenNoCacheAndNoTaskExist() {
+        assertTrue(
+            shouldStartHomePreload(
+                hasPreloadedData = false,
+                hasActivePreloadTask = false
+            )
+        )
+        assertFalse(
+            shouldStartHomePreload(
+                hasPreloadedData = true,
+                hasActivePreloadTask = false
+            )
+        )
+        assertFalse(
+            shouldStartHomePreload(
+                hasPreloadedData = false,
+                hasActivePreloadTask = true
+            )
+        )
+    }
+
+    @Test
     fun primesBuvidOnlyForMobileFeedApi() {
         assertFalse(shouldPrimeBuvidForHomePreload(SettingsManager.FeedApiType.WEB))
         assertTrue(shouldPrimeBuvidForHomePreload(SettingsManager.FeedApiType.MOBILE))

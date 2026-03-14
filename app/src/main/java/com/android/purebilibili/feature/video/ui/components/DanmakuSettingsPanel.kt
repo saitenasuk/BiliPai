@@ -1,6 +1,7 @@
 // File: feature/video/ui/components/DanmakuSettingsPanel.kt
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
 import com.android.purebilibili.feature.video.danmaku.resolveFaceOcclusionModuleUiState
 import androidx.compose.foundation.background
@@ -30,10 +31,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 // 主题色将在 Composable 内通过 MaterialTheme.colorScheme.primary 获取
 private val PanelBackground = Color(0xFF1E1E1E)
 private val CardBackground = Color(0xFF2A2A2A)
+private const val FULLSCREEN_DANMAKU_PANEL_WIDTH_FRACTION = 0.25f
+private const val FULLSCREEN_DANMAKU_PANEL_MIN_WIDTH_DP = 220
 
 enum class DanmakuSettingsPanelPresentation {
     CenteredDialog,
@@ -52,15 +56,23 @@ data class DanmakuSettingsPanelLayoutPolicy(
 fun resolveDanmakuSettingsPanelLayoutPolicy(
     isFullscreen: Boolean,
     screenWidthDp: Int,
-    screenHeightDp: Int
+    screenHeightDp: Int,
+    fullscreenWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD
 ): DanmakuSettingsPanelLayoutPolicy {
     if (isFullscreen) {
+        val availableWidthDp = (screenWidthDp - 32).coerceAtLeast(0)
+        val resolvedMaxWidth = (
+            availableWidthDp *
+                FULLSCREEN_DANMAKU_PANEL_WIDTH_FRACTION
+            )
+            .roundToInt()
+            .coerceAtLeast(FULLSCREEN_DANMAKU_PANEL_MIN_WIDTH_DP)
         return DanmakuSettingsPanelLayoutPolicy(
             presentation = DanmakuSettingsPanelPresentation.CenteredDialog,
             horizontalPaddingDp = 16,
             bottomPaddingDp = 0,
-            minWidthDp = 300,
-            maxWidthDp = 380,
+            minWidthDp = FULLSCREEN_DANMAKU_PANEL_MIN_WIDTH_DP,
+            maxWidthDp = resolvedMaxWidth,
             maxHeightDp = 480
         )
     }
@@ -106,6 +118,7 @@ fun DanmakuSettingsPanel(
     showSmartOcclusionSection: Boolean = true,
     blockRulesRaw: String = "",
     smartOcclusion: Boolean = true,
+    fullscreenWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
     smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
     smartOcclusionDownloadProgress: Int? = null,
     onOpacityChange: (Float) -> Unit,
@@ -120,15 +133,22 @@ fun DanmakuSettingsPanel(
     onAllowSpecialChange: (Boolean) -> Unit = {},
     onBlockRulesRawChange: (String) -> Unit = {},
     onSmartOcclusionChange: (Boolean) -> Unit = {},
+    onFullscreenWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
     onSmartOcclusionDownloadClick: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(isFullscreen, configuration.screenWidthDp, configuration.screenHeightDp) {
+    val layoutPolicy = remember(
+        isFullscreen,
+        configuration.screenWidthDp,
+        configuration.screenHeightDp,
+        fullscreenWidthMode
+    ) {
         resolveDanmakuSettingsPanelLayoutPolicy(
             isFullscreen = isFullscreen,
             screenWidthDp = configuration.screenWidthDp,
-            screenHeightDp = configuration.screenHeightDp
+            screenHeightDp = configuration.screenHeightDp,
+            fullscreenWidthMode = fullscreenWidthMode
         )
     }
     val moduleUiState = remember(smartOcclusionModuleState, smartOcclusionDownloadProgress) {
@@ -209,7 +229,7 @@ fun DanmakuSettingsPanel(
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 // Settings Card
                 Surface(
                     modifier = Modifier.fillMaxWidth(),

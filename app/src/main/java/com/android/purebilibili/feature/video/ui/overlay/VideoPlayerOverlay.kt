@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
+import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.util.FormatUtils
@@ -246,6 +247,7 @@ fun VideoPlayerOverlay(
     danmakuAllowSpecial: Boolean = true,
     danmakuBlockRulesRaw: String = "",
     danmakuSmartOcclusion: Boolean = true,
+    danmakuFullscreenPanelWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
     onDanmakuSpeedChange: (Float) -> Unit = {},
@@ -258,6 +260,7 @@ fun VideoPlayerOverlay(
     onDanmakuAllowSpecialChange: (Boolean) -> Unit = {},
     onDanmakuBlockRulesRawChange: (String) -> Unit = {},
     onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
+    onDanmakuFullscreenPanelWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
     subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
     subtitleControlCallbacks: SubtitleControlCallbacks = SubtitleControlCallbacks(),
     smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
@@ -982,6 +985,7 @@ fun VideoPlayerOverlay(
                 showBlockRuleEditor = true,
                 blockRulesRaw = danmakuBlockRulesRaw,
                 smartOcclusion = danmakuSmartOcclusion,
+                fullscreenWidthMode = danmakuFullscreenPanelWidthMode,
                 smartOcclusionModuleState = smartOcclusionModuleState,
                 smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
                 onOpacityChange = onDanmakuOpacityChange,
@@ -996,6 +1000,7 @@ fun VideoPlayerOverlay(
                 onAllowSpecialChange = onDanmakuAllowSpecialChange,
                 onBlockRulesRawChange = onDanmakuBlockRulesRawChange,
                 onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
+                onFullscreenWidthModeChange = onDanmakuFullscreenPanelWidthModeChange,
                 onSmartOcclusionDownloadClick = onDanmakuSmartOcclusionDownloadClick,
                 onDismiss = { showDanmakuSettings = false }
             )

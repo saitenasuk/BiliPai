@@ -145,6 +145,21 @@ data class HomeSettings(
     val crashTrackingConsentShown: Boolean = true
 )
 
+enum class DanmakuPanelWidthMode(val value: Int, val label: String, val widthFraction: Float) {
+    FULL(0, "全宽", 1f),
+    HALF(1, "半屏", 0.5f),
+    THIRD(2, "1/3 屏", 1f / 3f);
+
+    companion object {
+        fun fromValue(value: Int): DanmakuPanelWidthMode =
+            entries.find { it.value == value } ?: THIRD
+    }
+}
+
+internal fun normalizeDanmakuFullscreenPanelWidthMode(
+    mode: DanmakuPanelWidthMode
+): DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD
+
 data class DanmakuSettings(
     val enabled: Boolean = true,
     val opacity: Float = DANMAKU_DEFAULT_OPACITY,
@@ -158,6 +173,7 @@ data class DanmakuSettings(
     val allowColorful: Boolean = true,
     val allowSpecial: Boolean = true,
     val smartOcclusion: Boolean = false,
+    val fullscreenPanelWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
     val blockRulesRaw: String = "",
     val blockRules: List<String> = emptyList()
 )
@@ -1245,6 +1261,8 @@ object SettingsManager {
     private val KEY_DANMAKU_ALLOW_COLORFUL = booleanPreferencesKey("danmaku_allow_colorful")
     private val KEY_DANMAKU_ALLOW_SPECIAL = booleanPreferencesKey("danmaku_allow_special")
     private val KEY_DANMAKU_SMART_OCCLUSION = booleanPreferencesKey("danmaku_smart_occlusion")
+    private val KEY_DANMAKU_FULLSCREEN_PANEL_WIDTH_MODE =
+        intPreferencesKey("danmaku_fullscreen_panel_width_mode")
     private val KEY_DANMAKU_BLOCK_RULES = stringPreferencesKey("danmaku_block_rules")
     private val KEY_DANMAKU_MERGE_DUPLICATES = booleanPreferencesKey("danmaku_merge_duplicates")
     private val KEY_DANMAKU_DEFAULTS_VERSION = intPreferencesKey("danmaku_defaults_version")
@@ -1269,6 +1287,12 @@ object SettingsManager {
             allowColorful = preferences[KEY_DANMAKU_ALLOW_COLORFUL] ?: true,
             allowSpecial = preferences[KEY_DANMAKU_ALLOW_SPECIAL] ?: true,
             smartOcclusion = preferences[KEY_DANMAKU_SMART_OCCLUSION] ?: false,
+            fullscreenPanelWidthMode = normalizeDanmakuFullscreenPanelWidthMode(
+                DanmakuPanelWidthMode.fromValue(
+                    preferences[KEY_DANMAKU_FULLSCREEN_PANEL_WIDTH_MODE]
+                        ?: DanmakuPanelWidthMode.THIRD.value
+                )
+            ),
             blockRulesRaw = blockRulesRaw,
             blockRules = parseDanmakuBlockRules(blockRulesRaw)
         )
@@ -1386,6 +1410,26 @@ object SettingsManager {
     suspend fun setDanmakuSmartOcclusion(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_DANMAKU_SMART_OCCLUSION] = value
+        }
+    }
+
+    fun getDanmakuFullscreenPanelWidthMode(context: Context): Flow<DanmakuPanelWidthMode> =
+        context.settingsDataStore.data.map { preferences ->
+            normalizeDanmakuFullscreenPanelWidthMode(
+                DanmakuPanelWidthMode.fromValue(
+                    preferences[KEY_DANMAKU_FULLSCREEN_PANEL_WIDTH_MODE]
+                        ?: DanmakuPanelWidthMode.THIRD.value
+                )
+            )
+        }
+
+    suspend fun setDanmakuFullscreenPanelWidthMode(
+        context: Context,
+        value: DanmakuPanelWidthMode
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_FULLSCREEN_PANEL_WIDTH_MODE] =
+                normalizeDanmakuFullscreenPanelWidthMode(value).value
         }
     }
 

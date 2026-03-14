@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class TopControlBarLayoutPolicyTest {
 
@@ -59,5 +61,19 @@ class TopControlBarLayoutPolicyTest {
         assertEquals(15, policy.timeFontSp)
         assertEquals(20, policy.backToTitleSpacingDp)
         assertEquals(13, policy.onlineCountFontSp)
+    }
+
+    @Test
+    fun fullscreenTopBar_appliesStatusBarPaddingForSafeTapArea() {
+        assertTrue(
+            shouldApplyStatusBarPaddingToTopControlBar(
+                isFullscreen = true
+            )
+        )
+        assertFalse(
+            shouldApplyStatusBarPaddingToTopControlBar(
+                isFullscreen = false
+            )
+        )
     }
 }

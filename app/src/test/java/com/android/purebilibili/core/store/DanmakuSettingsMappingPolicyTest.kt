@@ -2,6 +2,7 @@ package com.android.purebilibili.core.store
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlin.test.Test
@@ -37,12 +38,13 @@ class DanmakuSettingsMappingPolicyTest {
         assertTrue(result.allowColorful)
         assertTrue(result.allowSpecial)
         assertFalse(result.smartOcclusion)
+        assertEquals(DanmakuPanelWidthMode.THIRD, result.fullscreenPanelWidthMode)
         assertEquals("", result.blockRulesRaw)
         assertEquals(emptyList(), result.blockRules)
     }
 
     @Test
-    fun populatedPreferences_mapToDanmakuSettingsCorrectly() {
+    fun populatedPreferences_normalizeFullscreenPanelWidthToThird() {
         val prefs = mutablePreferencesOf(
             booleanPreferencesKey("danmaku_enabled") to false,
             floatPreferencesKey("danmaku_opacity") to 0.3f,
@@ -56,6 +58,7 @@ class DanmakuSettingsMappingPolicyTest {
             booleanPreferencesKey("danmaku_allow_colorful") to false,
             booleanPreferencesKey("danmaku_allow_special") to false,
             booleanPreferencesKey("danmaku_smart_occlusion") to true,
+            intPreferencesKey("danmaku_fullscreen_panel_width_mode") to DanmakuPanelWidthMode.HALF.value,
             stringPreferencesKey("danmaku_block_rules") to "剧透\n广告\n  \n测试"
         )
 
@@ -73,6 +76,7 @@ class DanmakuSettingsMappingPolicyTest {
         assertFalse(result.allowColorful)
         assertFalse(result.allowSpecial)
         assertTrue(result.smartOcclusion)
+        assertEquals(DanmakuPanelWidthMode.THIRD, result.fullscreenPanelWidthMode)
         assertEquals("剧透\n广告\n  \n测试", result.blockRulesRaw)
         assertEquals(listOf("剧透", "广告", "测试"), result.blockRules)
     }
@@ -86,5 +90,16 @@ class DanmakuSettingsMappingPolicyTest {
         val result = mapDanmakuSettingsFromPreferences(prefs)
 
         assertEquals(0.25f, result.displayArea)
+    }
+
+    @Test
+    fun invalidFullscreenPanelWidthMode_fallsBackToThirdWidth() {
+        val prefs = mutablePreferencesOf(
+            intPreferencesKey("danmaku_fullscreen_panel_width_mode") to 99
+        )
+
+        val result = mapDanmakuSettingsFromPreferences(prefs)
+
+        assertEquals(DanmakuPanelWidthMode.THIRD, result.fullscreenPanelWidthMode)
     }
 }

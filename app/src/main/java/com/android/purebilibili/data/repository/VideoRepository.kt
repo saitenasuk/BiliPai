@@ -16,8 +16,9 @@ import com.android.purebilibili.feature.video.subtitle.normalizeBilibiliSubtitle
 import com.android.purebilibili.feature.video.subtitle.parseBiliSubtitleBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.CacheControl
 import okhttp3.Request
@@ -27,11 +28,16 @@ import java.security.MessageDigest
 import java.util.TreeMap
 import java.util.concurrent.ConcurrentHashMap
 
-private const val HOME_PRELOAD_WAIT_MAX_MS = 1200L
-private const val HOME_PRELOAD_WAIT_STEP_MS = 35L
 private const val SUBTITLE_CUE_CACHE_MAX_ENTRIES = 512
 private const val SUBTITLE_CUE_CACHE_ENTRY_OVERHEAD_BYTES = 512L
 private const val SUBTITLE_CUE_ESTIMATED_BYTES_PER_CUE = 160L
+
+internal fun shouldStartHomePreload(
+    hasPreloadedData: Boolean,
+    hasActivePreloadTask: Boolean
+): Boolean {
+    return !hasPreloadedData && !hasActivePreloadTask
+}
 
 internal fun shouldPrimeBuvidForHomePreload(feedApiType: SettingsManager.FeedApiType): Boolean {
     return feedApiType == SettingsManager.FeedApiType.MOBILE
@@ -50,6 +56,17 @@ internal fun shouldReportHomeDataReadyForSplash(
     hasPreloadedData: Boolean
 ): Boolean {
     return hasCompletedPreload || hasPreloadedData
+}
+
+internal fun resolveHomeFeedWbiKeys(
+    cachedKeys: Pair<String, String>?,
+    navWbiImg: WbiImg?
+): Pair<String, String>? {
+    if (cachedKeys != null) return cachedKeys
+    val wbiImg = navWbiImg ?: return null
+    val imgKey = wbiImg.img_url.substringAfterLast("/").substringBefore(".")
+    val subKey = wbiImg.sub_url.substringAfterLast("/").substringBefore(".")
+    return if (imgKey.isNotEmpty() && subKey.isNotEmpty()) imgKey to subKey else null
 }
 
 internal fun buildSubtitleCueCacheKey(
@@ -206,7 +223,7 @@ object VideoRepository {
 
     // [新增] 预加载缓存
     @Volatile private var preloadedHomeVideos: Result<List<VideoItem>>? = null
-    @Volatile private var isPreloading = false
+    @Volatile private var homePreloadDeferred: Deferred<Result<List<VideoItem>>>? = null
     @Volatile private var hasCompletedHomePreload = false
     
     // [新增] 检查首页数据是否就绪
@@ -219,13 +236,13 @@ object VideoRepository {
 
     // [新增] 预加载首页数据 (在 MainActivity onCreate 调用)
     fun preloadHomeData(scope: CoroutineScope = AppScope.ioScope) {
-        if (isPreloading || preloadedHomeVideos != null) return
-        isPreloading = true
+        val activePreloadTask = homePreloadDeferred?.takeIf { it.isActive } != null
+        if (!shouldStartHomePreload(preloadedHomeVideos != null, activePreloadTask)) return
         hasCompletedHomePreload = false
-        
+
         com.android.purebilibili.core.util.Logger.d("VideoRepo", "🚀 Starting home data preload...")
-        
-        scope.launch {
+
+        homePreloadDeferred = scope.async {
             try {
                 val feedApiType = NetworkModule.appContext
                     ?.let { SettingsManager.getFeedApiTypeSync(it) }
@@ -239,45 +256,52 @@ object VideoRepository {
                         "🚀 Skip buvid warmup for WEB home preload"
                     )
                 }
-                
-                // 执行加载
+
                 val result = getHomeVideosInternal(idx = 0)
                 preloadedHomeVideos = result
-                
+
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", "🚀 Home data preload finished. Success=${result.isSuccess}")
+                result
             } catch (e: Exception) {
                 com.android.purebilibili.core.util.Logger.e("VideoRepo", "🚀 Home data preload failed", e)
-                preloadedHomeVideos = Result.failure(e)
+                Result.failure<List<VideoItem>>(e).also { preloadedHomeVideos = it }
             } finally {
-                isPreloading = false
                 hasCompletedHomePreload = true
             }
         }
+    }
+
+    private suspend fun awaitHomePreloadResult(): Result<List<VideoItem>>? {
+        val deferred = homePreloadDeferred ?: return null
+        return runCatching { deferred.await() }.getOrNull()
+    }
+
+    private fun consumePreloadedHomeVideos(): Result<List<VideoItem>>? {
+        val cached = preloadedHomeVideos ?: return null
+        preloadedHomeVideos = null
+        homePreloadDeferred = null
+        return cached
     }
 
     // 1. 首页推荐 (修改为优先使用预加载数据)
     suspend fun getHomeVideos(idx: Int = 0): Result<List<VideoItem>> = withContext(Dispatchers.IO) {
         // 如果是首次加载 (idx=0) 且有预加载数据，直接使用
         if (idx == 0) {
-            val cached = preloadedHomeVideos
+            val cached = consumePreloadedHomeVideos()
             if (cached != null) {
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", "✅ Using preloaded home data!")
-                preloadedHomeVideos = null // 消费后清除，避免后续刷新无法获取新数据
                 return@withContext cached
             }
-            if (shouldReuseInFlightPreloadForHomeRequest(idx, isPreloading, hasPreloadedData = false)) {
-                val waitStart = System.currentTimeMillis()
-                while (isPreloading && preloadedHomeVideos == null &&
-                    (System.currentTimeMillis() - waitStart) < HOME_PRELOAD_WAIT_MAX_MS) {
-                    delay(HOME_PRELOAD_WAIT_STEP_MS)
-                }
-                val awaited = preloadedHomeVideos
+
+            val hasActivePreloadTask = homePreloadDeferred?.isActive == true
+            if (shouldReuseInFlightPreloadForHomeRequest(idx, hasActivePreloadTask, hasPreloadedData = false)) {
+                val awaited = awaitHomePreloadResult()
                 if (awaited != null) {
                     com.android.purebilibili.core.util.Logger.d(
                         "VideoRepo",
-                        "✅ Reused in-flight home preload after ${System.currentTimeMillis() - waitStart}ms"
+                        "✅ Reused in-flight home preload result"
                     )
-                    preloadedHomeVideos = null
+                    consumePreloadedHomeVideos()
                     return@withContext awaited
                 }
             }
@@ -322,10 +346,13 @@ object VideoRepository {
     //  Web 端推荐流 (WBI 签名)
     private suspend fun fetchWebFeed(idx: Int): Result<List<VideoItem>> {
         try {
-            val navResp = api.getNavInfo()
-            val wbiImg = navResp.data?.wbi_img ?: throw Exception("无法获取 Key")
-            val imgKey = wbiImg.img_url.substringAfterLast("/").substringBefore(".")
-            val subKey = wbiImg.sub_url.substringAfterLast("/").substringBefore(".")
+            val cachedKeys = WbiKeyManager.getWbiKeys().getOrNull()
+            val navWbiImg = if (cachedKeys == null) api.getNavInfo().data?.wbi_img else null
+            val resolvedKeys = resolveHomeFeedWbiKeys(
+                cachedKeys = cachedKeys,
+                navWbiImg = navWbiImg
+            ) ?: throw Exception("无法获取 Key")
+            val (imgKey, subKey) = resolvedKeys
 
             val params = mapOf(
                 "ps" to "30", "fresh_type" to "3", "fresh_idx" to idx.toString(),

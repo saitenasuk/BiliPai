@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-11 · Synced to v6.9.5 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-14 · Synced to v6.9.9 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.9.5-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-6.9.9-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -56,11 +56,11 @@
 | **DASH Streaming** | Adaptive bitrate selection, seamless quality switching, smooth playback |
 | **Danmaku System** | Adjustable opacity, font size, speed, and density filtering |
 | **Gesture Control** | Brightness (left), Volume (right), Seek (horizontal) |
-| **Playback Speed** | 0.5x / 0.75x / 1.0x / 1.25x / 1.5x / 2.0x |
+| **Playback Speed** | 0.5x / 0.75x / 1.0x / 1.25x / 1.5x / 2.0x, with swipe-up lock while long-press speed is active |
 | **Picture-in-Picture** | Floating window playback for multitasking |
-| **Audio Mode** | 🆕 Dedicated audio player with immersive/vinyl modes, lyrics, and playlist management |
+| **Audio Mode** | 🆕 Dedicated audio player with immersive/vinyl modes, lyrics, playlists, and a sleep timer |
 | **In-app Update** | 🆕 Check updates, download APK in-app, and hand off to the system installer |
-| **Background Play** | Continue listening when screen is off or in background |
+| **Background Play** | Continue listening when screen is off or in background, with more reliable prev/next controls from notifications and system media controls |
 | **Playback Order** | Supports Stop After Current / In-order / Single Loop / List Loop / Auto Continue, with quick toggle in landscape and portrait |
 | **Comment Copy UX** | Long-press opens selectable-copy panel so users can drag-select exact comment text (including rich text scenarios) |
 | **Playback History** | Automatically resume playback, with a toggle and one-time prompt per target |
@@ -404,12 +404,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v6.9.5 · 2026-03-11)
+### Latest (v6.9.9 · 2026-03-14)
 
-- ✨ **Unified home glass styling**: The home header search box, settings button, and top category chrome now follow the same blur / liquid-glass language as the bottom bar, with better light/dark readability tuning.
-- 🪟 **Home badge toggles now switch style instead of hiding data**: Appearance settings only control the glass-pill presentation for cover/info badges, while play count, reply count, and duration remain visible in plain mode.
-- 🎬 **Explicit playback action fixes**: Timestamp seek, replay, and play/pause gestures now share an explicit prepare + play path, preventing taps from failing to start playback when the player is still idle.
-- 💬 **Reply previews stay visible during playback**: Fixed the issue where inline comment replies disappeared while video playback was active and only came back after pausing.
+- 🎧 **Background playback and Audio Mode were tightened up**: fixed the broken previous-track path in notifications / system media controls, added a more stable compact PiP layout for Audio Mode, and surfaced a clearer sleep-timer flow.
+- ⭐ **Favorites and comment interactions are safer and more continuous**: favorite actions from fullscreen, detail actions, and the bottom bar now open the folder picker instead of toggling immediately, and "more replies" stays in the embedded comment surface whenever possible.
+- 🔎 **Search results now fully match home appearance rules**: video, uploader, bangumi, and live result cards follow the same glass/plain style toggles and badge policies as the home feed.
+- 📦 **Offline playback entry is more direct**: tapping a completed download now routes straight to the offline player target instead of depending on the online detail flow.
 
 ---
 

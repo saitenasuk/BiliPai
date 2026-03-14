@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
@@ -34,6 +35,7 @@ fun IOSModalBottomSheet(
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     containerColor: Color = MaterialTheme.colorScheme.surface,
+    scrimColor: Color = BottomSheetDefaults.ScrimColor,
     dragHandle: @Composable (() -> Unit)? = { IOSDragHandle() },
     windowInsets: androidx.compose.foundation.layout.WindowInsets = androidx.compose.material3.BottomSheetDefaults.windowInsets,
     content: @Composable () -> Unit
@@ -44,6 +46,7 @@ fun IOSModalBottomSheet(
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
         containerColor = containerColor,
+        scrimColor = scrimColor,
         dragHandle = dragHandle,
         contentWindowInsets = { windowInsets },
         content = {

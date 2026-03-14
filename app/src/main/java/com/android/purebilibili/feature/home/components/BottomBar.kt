@@ -780,11 +780,27 @@ internal fun shouldUseHomeCombinedClickable(
     return item == BottomNavItem.HOME && isSelected
 }
 
+internal enum class BottomBarPrimaryTapAction {
+    Navigate,
+    HomeReselect
+}
+
+internal fun resolveBottomBarPrimaryTapAction(
+    item: BottomNavItem,
+    isSelected: Boolean
+): BottomBarPrimaryTapAction {
+    return if (item == BottomNavItem.HOME && isSelected) {
+        BottomBarPrimaryTapAction.HomeReselect
+    } else {
+        BottomBarPrimaryTapAction.Navigate
+    }
+}
+
 internal fun shouldUseBottomReselectCombinedClickable(
     item: BottomNavItem,
     isSelected: Boolean
 ): Boolean {
-    return isSelected && (item == BottomNavItem.HOME || item == BottomNavItem.DYNAMIC)
+    return isSelected && item == BottomNavItem.DYNAMIC
 }
 
 internal data class BottomBarItemColorBinding(
@@ -1101,7 +1117,10 @@ private fun BottomBarItem(
                     ) { 
                         debounceClick(item) {
                             // 1. 立即响应点击 (Immediate Navigation)
-                            onClick()
+                            when (resolveBottomBarPrimaryTapAction(item, isSelected)) {
+                                BottomBarPrimaryTapAction.Navigate -> onClick()
+                                BottomBarPrimaryTapAction.HomeReselect -> onHomeDoubleTap()
+                            }
                             haptic(HapticType.LIGHT)
                             
                             // 2. 视觉反馈 (Visual Feedback)

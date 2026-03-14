@@ -14,4 +14,4 @@ internal fun resolveDrawerMotionBudget(
 internal fun shouldEnableDrawerBlur(
     blurActive: Boolean,
     budget: DrawerMotionBudget
-): Boolean = blurActive && budget == DrawerMotionBudget.FULL
+): Boolean = blurActive
