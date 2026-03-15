@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -39,8 +40,11 @@ import coil.transform.RoundedCornersTransformation
 import com.android.purebilibili.R
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.store.normalizeAppIconKey
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.MediaUtils
+import com.android.purebilibili.core.util.NetworkUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +53,8 @@ import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.VideoActivity
 import com.android.purebilibili.feature.video.state.isPlaybackActiveForLifecycle
+import com.android.purebilibili.feature.video.usecase.VideoLoadResult
+import com.android.purebilibili.feature.video.usecase.VideoPlaybackUseCase
 
 private const val TAG = "MiniPlayerManager"
 private const val NOTIFICATION_ID = 1002
@@ -56,6 +62,8 @@ private const val CHANNEL_ID = "mini_player_channel"
 private const val THEME_COLOR = 0xFFFB7299.toInt()
 private const val FOREGROUND_START_DEBOUNCE_MS = 1500L
 private const val USER_LEAVE_HINT_WINDOW_MS = 1500L
+private const val SESSION_COMMAND_SKIP_TO_PREVIOUS = "SKIP_TO_PREVIOUS"
+private const val SESSION_COMMAND_SKIP_TO_NEXT = "SKIP_TO_NEXT"
 
 internal fun shouldShowInAppMiniPlayerByPolicy(
     mode: SettingsManager.MiniPlayerMode,
@@ -185,7 +193,11 @@ internal fun shouldRebindMediaSessionPlayer(
     sessionPlayer: Any?,
     playbackPlayer: Any?
 ): Boolean {
-    return playbackPlayer != null && sessionPlayer !== playbackPlayer
+    val unwrappedSessionPlayer = when (sessionPlayer) {
+        is SessionPlayerBindingHandle -> sessionPlayer.boundPlayer
+        else -> sessionPlayer
+    }
+    return playbackPlayer != null && unwrappedSessionPlayer !== playbackPlayer
 }
 
 internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
@@ -216,6 +228,16 @@ internal enum class MediaControlType {
     NEXT
 }
 
+internal interface SessionPlayerBindingHandle {
+    val boundPlayer: Any?
+}
+
+internal enum class PlaylistSkipExecutionMode {
+    CALLBACK,
+    DIRECT_BACKGROUND,
+    NONE
+}
+
 internal fun resolveMediaControlType(controlType: Int): MediaControlType? {
     return when (controlType) {
         MiniPlayerManager.ACTION_PREVIOUS -> MediaControlType.PREVIOUS
@@ -234,6 +256,134 @@ internal fun resolveMediaButtonControlType(keyCode: Int, action: Int): MediaCont
         KeyEvent.KEYCODE_MEDIA_PAUSE,
         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> MediaControlType.PLAY_PAUSE
         else -> null
+    }
+}
+
+internal fun resolveExternalTransportActionOrder(): IntArray {
+    return intArrayOf(
+        MiniPlayerManager.ACTION_NEXT,
+        MiniPlayerManager.ACTION_PLAY_PAUSE,
+        MiniPlayerManager.ACTION_PREVIOUS
+    )
+}
+
+internal fun shouldEnableQueueNavigation(playlistSize: Int): Boolean {
+    return playlistSize > 1
+}
+
+internal fun resolveQueueCurrentIndexForPlaylistRebuild(
+    playlist: List<PlaylistItem>,
+    currentBvid: String?,
+    fallbackIndex: Int
+): Int {
+    if (playlist.isEmpty()) return -1
+    val targetBvid = currentBvid?.trim().orEmpty()
+    if (targetBvid.isNotEmpty()) {
+        val matchedIndex = playlist.indexOfFirst { it.bvid == targetBvid }
+        if (matchedIndex >= 0) return matchedIndex
+    }
+    return fallbackIndex.coerceIn(0, playlist.lastIndex)
+}
+
+internal fun resolvePlaylistIndexSyncFromQueue(
+    playerCurrentIndex: Int,
+    playlistSize: Int,
+    currentPlaylistIndex: Int
+): Int? {
+    if (playerCurrentIndex !in 0 until playlistSize) return null
+    if (playerCurrentIndex == currentPlaylistIndex) return null
+    return playerCurrentIndex
+}
+
+internal fun buildQueueMetadataItems(playlist: List<PlaylistItem>): List<MediaItem> {
+    return playlist.map { item ->
+        MediaItem.Builder()
+            .setMediaId(item.bvid)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(item.title)
+                    .setDisplayTitle(item.title)
+                    .setArtist(item.owner)
+                    .setIsPlayable(true)
+                    .build()
+            )
+            .build()
+    }
+}
+
+internal data class QueueNavigationAvailability(
+    val hasNext: Boolean,
+    val hasPrevious: Boolean
+) {
+    val isEnabled: Boolean
+        get() = hasNext || hasPrevious
+}
+
+internal fun resolveQueueNavigationCommandIds(
+    hasNext: Boolean,
+    hasPrevious: Boolean
+): Set<Int> {
+    val commands = mutableSetOf<Int>()
+    if (hasNext) {
+        commands.add(Player.COMMAND_SEEK_TO_NEXT)
+        commands.add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+    }
+    if (hasPrevious) {
+        commands.add(Player.COMMAND_SEEK_TO_PREVIOUS)
+        commands.add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+    }
+    return commands
+}
+
+internal fun buildQueueAwarePlayerCommands(
+    baseCommands: Player.Commands,
+    hasNext: Boolean,
+    hasPrevious: Boolean
+): Player.Commands {
+    val builder = baseCommands.buildUpon()
+    builder.remove(Player.COMMAND_SEEK_TO_NEXT)
+    builder.remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+    builder.remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+    builder.remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+    resolveQueueNavigationCommandIds(
+        hasNext = hasNext,
+        hasPrevious = hasPrevious
+    ).forEach { command ->
+        builder.add(command)
+    }
+    return builder.build()
+}
+
+internal fun shouldUseStandardQueueNavigation(
+    playlist: List<PlaylistItem>,
+    isLiveMode: Boolean
+): Boolean {
+    return !isLiveMode && playlist.isNotEmpty() && playlist.none { it.isBangumi }
+}
+
+internal fun shouldExposeVirtualQueueToSession(
+    playlistSize: Int,
+    timelineWindowCount: Int,
+    isLiveMode: Boolean
+): Boolean {
+    if (isLiveMode || playlistSize <= 0) return false
+    return timelineWindowCount == playlistSize
+}
+
+internal fun resolvePlaylistSkipExecutionMode(
+    item: PlaylistItem?,
+    callbackAvailable: Boolean,
+    hasDirectPlaybackContext: Boolean
+): PlaylistSkipExecutionMode {
+    if (item == null) return PlaylistSkipExecutionMode.NONE
+    if (item.isBangumi) {
+        return if (callbackAvailable) PlaylistSkipExecutionMode.CALLBACK else PlaylistSkipExecutionMode.NONE
+    }
+    if (callbackAvailable) return PlaylistSkipExecutionMode.CALLBACK
+    return if (hasDirectPlaybackContext) {
+        PlaylistSkipExecutionMode.DIRECT_BACKGROUND
+    } else {
+        PlaylistSkipExecutionMode.NONE
     }
 }
 
@@ -291,6 +441,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     // --- 协程作用域 ---
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val backgroundPlaybackUseCase = VideoPlaybackUseCase()
+    private var backgroundSkipJob: kotlinx.coroutines.Job? = null
     
     // 🔋 [后台优化] 低内存模式状态
     private var isLowMemoryMode = false
@@ -312,6 +464,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     private var backgroundListenerRegistered = false
     
     init {
+        backgroundPlaybackUseCase.initWithContext(context)
         //  注册媒体控制广播接收器
         val filter = android.content.IntentFilter(ACTION_MEDIA_CONTROL)
         androidx.core.content.ContextCompat.registerReceiver(
@@ -514,6 +667,138 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     // --- MediaSession ---
     var mediaSession: MediaSession? = null
+    private var mediaSessionNavigationAvailability: QueueNavigationAvailability? = null
+
+    private inner class QueueAwareSessionPlayer(
+        private val delegatePlayer: Player
+    ) : ForwardingPlayer(delegatePlayer), SessionPlayerBindingHandle {
+
+        override val boundPlayer: Any?
+            get() = delegatePlayer
+
+        private fun queueItems(): List<MediaItem> {
+            val playlist = PlaylistManager.playlist.value
+            return if (shouldUseStandardQueueNavigation(playlist, isLiveMode)) {
+                buildQueueMetadataItems(playlist)
+            } else {
+                emptyList()
+            }
+        }
+
+        private fun sessionQueueItems(): List<MediaItem> {
+            val items = queueItems()
+            return if (
+                shouldExposeVirtualQueueToSession(
+                    playlistSize = items.size,
+                    timelineWindowCount = delegatePlayer.currentTimeline.windowCount,
+                    isLiveMode = isLiveMode
+                )
+            ) {
+                items
+            } else {
+                emptyList()
+            }
+        }
+
+        private fun queueCurrentIndex(): Int {
+            val items = sessionQueueItems()
+            return resolveQueueCurrentIndexForPlaylistRebuild(
+                playlist = PlaylistManager.playlist.value,
+                currentBvid = currentBvid,
+                fallbackIndex = PlaylistManager.currentIndex.value
+                    .takeIf { it >= 0 }
+                    ?: delegatePlayer.currentMediaItemIndex
+            ).coerceIn(-1, (items.size - 1).coerceAtLeast(-1))
+        }
+
+        override fun getAvailableCommands(): Player.Commands {
+            val navigationAvailability = resolveSessionNavigationAvailability()
+            return buildQueueAwarePlayerCommands(
+                baseCommands = super.getAvailableCommands(),
+                hasNext = navigationAvailability.hasNext,
+                hasPrevious = navigationAvailability.hasPrevious
+            )
+        }
+
+        override fun isCommandAvailable(command: Int): Boolean {
+            return getAvailableCommands().contains(command)
+        }
+
+        override fun getMediaItemCount(): Int {
+            val items = sessionQueueItems()
+            return if (items.isNotEmpty()) items.size else super.getMediaItemCount()
+        }
+
+        override fun getCurrentMediaItemIndex(): Int {
+            val items = sessionQueueItems()
+            return if (items.isNotEmpty()) queueCurrentIndex() else super.getCurrentMediaItemIndex()
+        }
+
+        override fun getCurrentMediaItem(): MediaItem? {
+            val items = sessionQueueItems()
+            val index = queueCurrentIndex()
+            return items.getOrNull(index) ?: super.getCurrentMediaItem()
+        }
+
+        override fun getMediaItemAt(index: Int): MediaItem {
+            val items = sessionQueueItems()
+            return items.getOrNull(index) ?: super.getMediaItemAt(index)
+        }
+
+        override fun hasNextMediaItem(): Boolean {
+            val items = queueItems()
+            return if (items.isNotEmpty()) {
+                resolveSessionNavigationAvailability().hasNext
+            } else {
+                super.hasNextMediaItem()
+            }
+        }
+
+        override fun hasPreviousMediaItem(): Boolean {
+            val items = queueItems()
+            return if (items.isNotEmpty()) {
+                resolveSessionNavigationAvailability().hasPrevious
+            } else {
+                super.hasPreviousMediaItem()
+            }
+        }
+
+        override fun seekToNextMediaItem() {
+            val items = queueItems()
+            if (items.isNotEmpty()) {
+                playNext()
+            } else {
+                super.seekToNextMediaItem()
+            }
+        }
+
+        override fun seekToPreviousMediaItem() {
+            val items = queueItems()
+            if (items.isNotEmpty()) {
+                playPrevious()
+            } else {
+                super.seekToPreviousMediaItem()
+            }
+        }
+
+        override fun seekToNext() {
+            val items = queueItems()
+            if (items.isNotEmpty()) {
+                playNext()
+            } else {
+                super.seekToNext()
+            }
+        }
+
+        override fun seekToPrevious() {
+            val items = queueItems()
+            if (items.isNotEmpty()) {
+                playPrevious()
+            } else {
+                super.seekToPrevious()
+            }
+        }
+    }
     
     //  [新增] MediaSession 回调处理器，支持系统媒体控件
     private val mediaSessionCallback = object : MediaSession.Callback {
@@ -548,8 +833,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
         ): com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.SessionResult> {
             Logger.d(TAG, " onCustomCommand: ${customCommand.customAction}")
             when (customCommand.customAction) {
-                "SKIP_TO_PREVIOUS" -> performMediaControl(MediaControlType.PREVIOUS)
-                "SKIP_TO_NEXT" -> performMediaControl(MediaControlType.NEXT)
+                SESSION_COMMAND_SKIP_TO_PREVIOUS -> performMediaControl(MediaControlType.PREVIOUS)
+                SESSION_COMMAND_SKIP_TO_NEXT -> performMediaControl(MediaControlType.NEXT)
             }
             return com.google.common.util.concurrent.Futures.immediateFuture(
                 androidx.media3.session.SessionResult(androidx.media3.session.SessionResult.RESULT_SUCCESS)
@@ -562,16 +847,17 @@ class MiniPlayerManager private constructor(private val context: Context) :
             controller: MediaSession.ControllerInfo
         ): MediaSession.ConnectionResult {
             Logger.d(TAG, " onConnect: ${controller.packageName}")
-            // 允许所有连接并启用所有播放命令
+            val navigationAvailability = resolveSessionNavigationAvailability()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(
-                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                        .add(androidx.media3.session.SessionCommand("SKIP_TO_PREVIOUS", android.os.Bundle.EMPTY))
-                        .add(androidx.media3.session.SessionCommand("SKIP_TO_NEXT", android.os.Bundle.EMPTY))
-                        .build()
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
                 )
                 .setAvailablePlayerCommands(
-                    MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS  // 默认包含 seek/play/pause 等
+                    buildQueueAwarePlayerCommands(
+                        baseCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS,
+                        hasNext = navigationAvailability.hasNext,
+                        hasPrevious = navigationAvailability.hasPrevious
+                    )
                 )
                 .build()
         }
@@ -638,7 +924,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     fun refreshMediaSessionBinding() {
         val currentPlayer = player ?: return
-        if (shouldRebindMediaSessionPlayer(mediaSession?.player, currentPlayer)) {
+        val navigationAvailability = resolveSessionNavigationAvailability()
+        if (
+            shouldRebindMediaSessionPlayer(mediaSession?.player, currentPlayer) ||
+            mediaSessionNavigationAvailability != navigationAvailability
+        ) {
             updateMediaSession(currentPlayer)
         }
         isPlaying = resolveNotificationIsPlaying(
@@ -770,10 +1060,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 context, 0, sessionIntent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            mediaSession = MediaSession.Builder(context, _player!!)
+            mediaSession = MediaSession.Builder(context, QueueAwareSessionPlayer(_player!!))
                 .setSessionActivity(pendingIntent)
                 .setCallback(mediaSessionCallback)  //  支持系统媒体控件
                 .build()
+            mediaSessionNavigationAvailability = resolveSessionNavigationAvailability()
         }
         return _player!!
     }
@@ -927,6 +1218,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     private fun releaseMediaSession() {
         mediaSession?.release()
         mediaSession = null
+        mediaSessionNavigationAvailability = null
     }
 
     private fun clearPlaybackNotificationArtifacts() {
@@ -1057,8 +1349,15 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 允许在内部播放器和外部播放器（Activity 提供）之间平滑切换
      */
     private fun updateMediaSession(newPlayer: Player) {
-        if (mediaSession?.player != newPlayer) {
-            Logger.d(TAG, "🎯 Updating MediaSession player: ${mediaSession?.player.hashCode()} -> ${newPlayer.hashCode()}")
+        val navigationAvailability = resolveSessionNavigationAvailability()
+        if (
+            shouldRebindMediaSessionPlayer(mediaSession?.player, newPlayer) ||
+            mediaSessionNavigationAvailability != navigationAvailability
+        ) {
+            Logger.d(
+                TAG,
+                "🎯 Updating MediaSession player: ${mediaSession?.player.hashCode()} -> ${newPlayer.hashCode()}, navigation=$navigationAvailability"
+            )
             
             // 如果已经存在 session，先释放旧的
             mediaSession?.release()
@@ -1075,11 +1374,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
             )
             
             val sessionId = "bilipai_shared_session" // 使用固定 ID 保持一致性
-            mediaSession = MediaSession.Builder(context, newPlayer)
+            mediaSession = MediaSession.Builder(context, QueueAwareSessionPlayer(newPlayer))
                 .setId(sessionId)
                 .setSessionActivity(sessionActivityPendingIntent)
                 .setCallback(mediaSessionCallback)
                 .build()
+            mediaSessionNavigationAvailability = navigationAvailability
             
             Logger.d(TAG, "✅ MediaSession updated and bound to new player")
         }
@@ -1113,6 +1413,109 @@ class MiniPlayerManager private constructor(private val context: Context) :
         }
     }
 
+    private fun hasDirectBackgroundPlaybackContext(): Boolean {
+        return player != null
+    }
+
+    private fun resolveSessionNavigationAvailability(): QueueNavigationAvailability {
+        val playlist = PlaylistManager.playlist.value
+        if (!shouldUseStandardQueueNavigation(playlist, isLiveMode)) {
+            return QueueNavigationAvailability(hasNext = false, hasPrevious = false)
+        }
+        val hasNext = onHasNextNavigationCallback?.invoke()
+            ?: (shouldEnableQueueNavigation(playlist.size) && PlaylistManager.hasNext())
+        val hasPrevious = onHasPreviousNavigationCallback?.invoke()
+            ?: (shouldEnableQueueNavigation(playlist.size) && PlaylistManager.hasPrevious())
+        return QueueNavigationAvailability(
+            hasNext = hasNext,
+            hasPrevious = hasPrevious
+        )
+    }
+
+    private fun isStandardQueueNavigationEnabled(): Boolean {
+        return resolveSessionNavigationAvailability().isEnabled
+    }
+
+    private fun restorePlaylistIndexIfNeeded(index: Int) {
+        if (index >= 0) {
+            PlaylistManager.playAt(index)
+        }
+    }
+
+    private fun playVideoDirectlyFromPlaylistItem(
+        item: PlaylistItem,
+        rollbackIndex: Int
+    ): Boolean {
+        val currentPlayer = player ?: return false
+        backgroundSkipJob?.cancel()
+        backgroundSkipJob = scope.launch {
+            backgroundPlaybackUseCase.attachPlayer(currentPlayer)
+            val isLoggedIn = !TokenManager.sessDataCache.isNullOrEmpty() ||
+                !TokenManager.accessTokenCache.isNullOrEmpty()
+            val defaultQuality = NetworkUtils.getPlayableDefaultQualityId(
+                context = context,
+                isLoggedIn = isLoggedIn,
+                isVip = TokenManager.isVipCache
+            )
+            val audioQualityPreference = SettingsManager.getAudioQualitySync(context)
+            val videoCodecPreference = SettingsManager.getVideoCodecSync(context)
+            val videoSecondCodecPreference = SettingsManager.getVideoSecondCodecSync(context)
+
+            when (
+                val loadResult = backgroundPlaybackUseCase.loadVideo(
+                    bvid = item.bvid,
+                    defaultQuality = defaultQuality,
+                    audioQualityPreference = audioQualityPreference,
+                    videoCodecPreference = videoCodecPreference,
+                    videoSecondCodecPreference = videoSecondCodecPreference,
+                    playWhenReady = true,
+                    isHdrSupportedOverride = MediaUtils.isHdrSupported(context),
+                    isDolbyVisionSupportedOverride = MediaUtils.isDolbyVisionSupported(context)
+                )
+            ) {
+                is VideoLoadResult.Success -> {
+                    if (loadResult.audioUrl != null) {
+                        backgroundPlaybackUseCase.playDashVideo(
+                            videoUrl = loadResult.playUrl,
+                            audioUrl = loadResult.audioUrl,
+                            seekTo = 0L,
+                            playWhenReady = true
+                        )
+                    } else {
+                        backgroundPlaybackUseCase.playVideo(
+                            url = loadResult.playUrl,
+                            seekTo = 0L,
+                            playWhenReady = true
+                        )
+                    }
+                    currentBvid = loadResult.info.bvid
+                    currentCid = loadResult.info.cid
+                    currentAid = loadResult.info.aid
+                    currentTitle = loadResult.info.title.ifBlank { item.title }
+                    currentOwner = loadResult.info.owner.name.ifBlank { item.owner }
+                    currentCover = resolveEffectiveNotificationCoverUrl(
+                        incomingCoverUrl = loadResult.info.pic,
+                        cachedCoverUrl = item.cover
+                    )
+                    cachedUiState = null
+                    isActive = true
+                    isLiveMode = false
+                    currentRoomId = 0L
+                    currentLiveUname = ""
+                    duration = loadResult.duration.coerceAtLeast(0L)
+                    isPlaying = true
+                    updateMediaMetadata(currentTitle, currentOwner, currentCover)
+                    Logger.d(TAG, "🎵 direct background skip: ${currentTitle}")
+                }
+                is VideoLoadResult.Error -> {
+                    restorePlaylistIndexIfNeeded(rollbackIndex)
+                    Logger.w(TAG, "⚠️ direct background skip failed: ${item.bvid}, error=${loadResult.error}")
+                }
+            }
+        }
+        return true
+    }
+
     /**
      * Seek 到指定位置
      */
@@ -1126,56 +1529,124 @@ class MiniPlayerManager private constructor(private val context: Context) :
      *  播放下一曲
      */
     fun playNext(): Boolean {
-        if (onPlayNextCallback == null && onPlayNextBangumiCallback == null) {
-            Logger.w(TAG, "⚠️ playNext ignored: no callback bound")
-            return false
+        onNavigateNextCallback?.let { navigate ->
+            if (navigate()) {
+                Logger.d(TAG, "🎵 navigation callback handled next request")
+                return true
+            }
         }
+        val previousIndex = PlaylistManager.currentIndex.value
         val nextItem = PlaylistManager.playNext()
         if (nextItem?.isBangumi == true) {
-            val handled = dispatchBangumiNavigation(nextItem, onPlayNextBangumiCallback)
-            if (!handled) {
-                Logger.w(TAG, "⚠️ playNext bangumi ignored: callback/context missing")
+            return when (
+                resolvePlaylistSkipExecutionMode(
+                    item = nextItem,
+                    callbackAvailable = onPlayNextBangumiCallback != null,
+                    hasDirectPlaybackContext = false
+                )
+            ) {
+                PlaylistSkipExecutionMode.CALLBACK -> {
+                    val handled = dispatchBangumiNavigation(nextItem, onPlayNextBangumiCallback)
+                    if (!handled) {
+                        restorePlaylistIndexIfNeeded(previousIndex)
+                        Logger.w(TAG, "⚠️ playNext bangumi ignored: callback/context missing")
+                    }
+                    handled
+                }
+                PlaylistSkipExecutionMode.DIRECT_BACKGROUND,
+                PlaylistSkipExecutionMode.NONE -> {
+                    restorePlaylistIndexIfNeeded(previousIndex)
+                    Logger.w(TAG, "⚠️ playNext bangumi ignored: callback/context missing")
+                    false
+                }
             }
-            return handled
         }
-        val callback = onPlayNextCallback
-        if (callback == null) {
-            Logger.w(TAG, "⚠️ playNext ignored: callback not bound")
-            return false
+        return when (
+            resolvePlaylistSkipExecutionMode(
+                item = nextItem,
+                callbackAvailable = false,
+                hasDirectPlaybackContext = hasDirectBackgroundPlaybackContext()
+            )
+        ) {
+            PlaylistSkipExecutionMode.CALLBACK -> false
+            PlaylistSkipExecutionMode.DIRECT_BACKGROUND -> {
+                val handled = nextItem?.let { playVideoDirectlyFromPlaylistItem(it, previousIndex) } ?: false
+                if (handled) {
+                    Logger.d(TAG, "🎵 直切下一曲: ${nextItem.title}")
+                } else {
+                    restorePlaylistIndexIfNeeded(previousIndex)
+                    Logger.w(TAG, "⚠️ playNext ignored: direct playback context missing")
+                }
+                handled
+            }
+            PlaylistSkipExecutionMode.NONE -> {
+                restorePlaylistIndexIfNeeded(previousIndex)
+                Logger.w(TAG, "⚠️ playNext ignored: no callback bound")
+                false
+            }
         }
-        val handled = dispatchPlaylistNavigation(nextItem, callback)
-        if (handled) {
-            Logger.d(TAG, " 播放下一曲: ${nextItem?.title}")
-        }
-        return handled
     }
     
     /**
      *  播放上一曲
      */
     fun playPrevious(): Boolean {
-        if (onPlayPreviousCallback == null && onPlayPreviousBangumiCallback == null) {
-            Logger.w(TAG, "⚠️ playPrevious ignored: no callback bound")
-            return false
+        onNavigatePreviousCallback?.let { navigate ->
+            if (navigate()) {
+                Logger.d(TAG, "🎵 navigation callback handled previous request")
+                return true
+            }
         }
+        val previousIndex = PlaylistManager.currentIndex.value
         val prevItem = PlaylistManager.playPrevious()
         if (prevItem?.isBangumi == true) {
-            val handled = dispatchBangumiNavigation(prevItem, onPlayPreviousBangumiCallback)
-            if (!handled) {
-                Logger.w(TAG, "⚠️ playPrevious bangumi ignored: callback/context missing")
+            return when (
+                resolvePlaylistSkipExecutionMode(
+                    item = prevItem,
+                    callbackAvailable = onPlayPreviousBangumiCallback != null,
+                    hasDirectPlaybackContext = false
+                )
+            ) {
+                PlaylistSkipExecutionMode.CALLBACK -> {
+                    val handled = dispatchBangumiNavigation(prevItem, onPlayPreviousBangumiCallback)
+                    if (!handled) {
+                        restorePlaylistIndexIfNeeded(previousIndex)
+                        Logger.w(TAG, "⚠️ playPrevious bangumi ignored: callback/context missing")
+                    }
+                    handled
+                }
+                PlaylistSkipExecutionMode.DIRECT_BACKGROUND,
+                PlaylistSkipExecutionMode.NONE -> {
+                    restorePlaylistIndexIfNeeded(previousIndex)
+                    Logger.w(TAG, "⚠️ playPrevious bangumi ignored: callback/context missing")
+                    false
+                }
             }
-            return handled
         }
-        val callback = onPlayPreviousCallback
-        if (callback == null) {
-            Logger.w(TAG, "⚠️ playPrevious ignored: callback not bound")
-            return false
+        return when (
+            resolvePlaylistSkipExecutionMode(
+                item = prevItem,
+                callbackAvailable = false,
+                hasDirectPlaybackContext = hasDirectBackgroundPlaybackContext()
+            )
+        ) {
+            PlaylistSkipExecutionMode.CALLBACK -> false
+            PlaylistSkipExecutionMode.DIRECT_BACKGROUND -> {
+                val handled = prevItem?.let { playVideoDirectlyFromPlaylistItem(it, previousIndex) } ?: false
+                if (handled) {
+                    Logger.d(TAG, "🎵 直切上一曲: ${prevItem.title}")
+                } else {
+                    restorePlaylistIndexIfNeeded(previousIndex)
+                    Logger.w(TAG, "⚠️ playPrevious ignored: direct playback context missing")
+                }
+                handled
+            }
+            PlaylistSkipExecutionMode.NONE -> {
+                restorePlaylistIndexIfNeeded(previousIndex)
+                Logger.w(TAG, "⚠️ playPrevious ignored: no callback bound")
+                false
+            }
         }
-        val handled = dispatchPlaylistNavigation(prevItem, callback)
-        if (handled) {
-            Logger.d(TAG, "⏮️ 播放上一曲: ${prevItem?.title}")
-        }
-        return handled
     }
 
     /**
@@ -1191,8 +1662,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
     fun getPlayMode(): PlayMode = PlaylistManager.playMode.value
     
     // 回调函数（由 PlayerViewModel 设置）
-    var onPlayNextCallback: ((PlaylistItem) -> Unit)? = null
-    var onPlayPreviousCallback: ((PlaylistItem) -> Unit)? = null
+    var onNavigateNextCallback: (() -> Boolean)? = null
+    var onNavigatePreviousCallback: (() -> Boolean)? = null
+    var onHasNextNavigationCallback: (() -> Boolean)? = null
+    var onHasPreviousNavigationCallback: (() -> Boolean)? = null
     var onPlayNextBangumiCallback: ((PlaylistItem) -> Unit)? = null
     var onPlayPreviousBangumiCallback: ((PlaylistItem) -> Unit)? = null
 
@@ -1263,7 +1736,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun updateMediaMetadata(title: String, artist: String, coverUrl: String) {
         val currentPlayer = player ?: return
-        if (shouldRebindMediaSessionPlayer(mediaSession?.player, currentPlayer)) {
+        val navigationAvailability = resolveSessionNavigationAvailability()
+        if (
+            shouldRebindMediaSessionPlayer(mediaSession?.player, currentPlayer) ||
+            mediaSessionNavigationAvailability != navigationAvailability
+        ) {
             updateMediaSession(currentPlayer)
         }
         val previousCoverUrl = currentCover
@@ -1357,9 +1834,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
             }
         }
 
+        val compactActionOrder = resolveExternalTransportActionOrder()
         val style = androidx.media.app.NotificationCompat.MediaStyle()
             .setMediaSession(mediaSession?.sessionCompatToken)
-            .setShowActionsInCompactView(0, 1, 2)  //  显示前三个按钮
+            .setShowActionsInCompactView(0, 1, 2)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(
@@ -1391,56 +1869,45 @@ class MiniPlayerManager private constructor(private val context: Context) :
         )
         builder.setContentIntent(contentIntent)
         
-        //  [新增] 添加控制按钮
-        // 上一曲按钮
-        val prevIntent = android.app.PendingIntent.getBroadcast(
-            context, ACTION_PREVIOUS,
-            android.content.Intent(ACTION_MEDIA_CONTROL)
-                .setPackage(context.packageName)
-                .putExtra(EXTRA_CONTROL_TYPE, ACTION_PREVIOUS),
-            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        builder.addAction(
-            NotificationCompat.Action.Builder(
-                android.R.drawable.ic_media_previous,
-                "上一曲",
-                prevIntent
-            ).build()
-        )
-        
-        // 播放/暂停按钮
-        val playPauseIntent = android.app.PendingIntent.getBroadcast(
-            context, ACTION_PLAY_PAUSE,
-            android.content.Intent(ACTION_MEDIA_CONTROL)
-                .setPackage(context.packageName)
-                .putExtra(EXTRA_CONTROL_TYPE, ACTION_PLAY_PAUSE),
-            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val playPauseIcon = if (notificationIsPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-        val playPauseText = if (notificationIsPlaying) "暂停" else "播放"
-        builder.addAction(
-            NotificationCompat.Action.Builder(
-                playPauseIcon,
-                playPauseText,
-                playPauseIntent
-            ).build()
-        )
-        
-        // 下一曲按钮
-        val nextIntent = android.app.PendingIntent.getBroadcast(
-            context, ACTION_NEXT,
-            android.content.Intent(ACTION_MEDIA_CONTROL)
-                .setPackage(context.packageName)
-                .putExtra(EXTRA_CONTROL_TYPE, ACTION_NEXT),
-            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        builder.addAction(
-            NotificationCompat.Action.Builder(
-                android.R.drawable.ic_media_next,
-                "下一曲",
-                nextIntent
-            ).build()
-        )
+        compactActionOrder.forEach { actionType ->
+            val intent = android.app.PendingIntent.getBroadcast(
+                context,
+                actionType,
+                android.content.Intent(ACTION_MEDIA_CONTROL)
+                    .setPackage(context.packageName)
+                    .putExtra(EXTRA_CONTROL_TYPE, actionType),
+                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val action = when (actionType) {
+                ACTION_NEXT -> NotificationCompat.Action.Builder(
+                    android.R.drawable.ic_media_next,
+                    "下一曲",
+                    intent
+                ).build()
+                ACTION_PLAY_PAUSE -> {
+                    val playPauseIcon = if (notificationIsPlaying) {
+                        android.R.drawable.ic_media_pause
+                    } else {
+                        android.R.drawable.ic_media_play
+                    }
+                    val playPauseText = if (notificationIsPlaying) "暂停" else "播放"
+                    NotificationCompat.Action.Builder(
+                        playPauseIcon,
+                        playPauseText,
+                        intent
+                    ).build()
+                }
+                ACTION_PREVIOUS -> NotificationCompat.Action.Builder(
+                    android.R.drawable.ic_media_previous,
+                    "上一曲",
+                    intent
+                ).build()
+                else -> null
+            }
+            if (action != null) {
+                builder.addAction(action)
+            }
+        }
 
         try {
             val notification = builder.build()

@@ -233,4 +233,156 @@ class VideoPlayerSectionPolicyTest {
             )
         )
     }
+
+    @Test
+    fun autoplayChromeAutoHide_triggersOnceAfterFirstFrameWhilePlaying() {
+        assertTrue(
+            shouldAutoHidePlayerChromeOnPlaybackStart(
+                showControls = true,
+                hasAutoHiddenForCurrentVideo = false,
+                isPlaying = true,
+                isFirstFrameRendered = true,
+                forceCoverDuringReturnAnimation = false
+            )
+        )
+    }
+
+    @Test
+    fun autoplayChromeAutoHide_staysOffForPausedForcedOrAlreadyHandledStates() {
+        assertFalse(
+            shouldAutoHidePlayerChromeOnPlaybackStart(
+                showControls = false,
+                hasAutoHiddenForCurrentVideo = false,
+                isPlaying = true,
+                isFirstFrameRendered = true,
+                forceCoverDuringReturnAnimation = false
+            )
+        )
+        assertFalse(
+            shouldAutoHidePlayerChromeOnPlaybackStart(
+                showControls = true,
+                hasAutoHiddenForCurrentVideo = true,
+                isPlaying = true,
+                isFirstFrameRendered = true,
+                forceCoverDuringReturnAnimation = false
+            )
+        )
+        assertFalse(
+            shouldAutoHidePlayerChromeOnPlaybackStart(
+                showControls = true,
+                hasAutoHiddenForCurrentVideo = false,
+                isPlaying = false,
+                isFirstFrameRendered = true,
+                forceCoverDuringReturnAnimation = false
+            )
+        )
+        assertFalse(
+            shouldAutoHidePlayerChromeOnPlaybackStart(
+                showControls = true,
+                hasAutoHiddenForCurrentVideo = false,
+                isPlaying = true,
+                isFirstFrameRendered = false,
+                forceCoverDuringReturnAnimation = false
+            )
+        )
+        assertFalse(
+            shouldAutoHidePlayerChromeOnPlaybackStart(
+                showControls = true,
+                hasAutoHiddenForCurrentVideo = false,
+                isPlaying = true,
+                isFirstFrameRendered = true,
+                forceCoverDuringReturnAnimation = true
+            )
+        )
+    }
+
+    @Test
+    fun longPressSpeedLock_onlyTriggersForUpwardSwipePastThreshold() {
+        assertTrue(
+            shouldLockLongPressSpeedBySwipe(
+                isLongPressing = true,
+                alreadyLocked = false,
+                totalDragDistanceY = -96f,
+                thresholdPx = 80f
+            )
+        )
+        assertFalse(
+            shouldLockLongPressSpeedBySwipe(
+                isLongPressing = true,
+                alreadyLocked = false,
+                totalDragDistanceY = -40f,
+                thresholdPx = 80f
+            )
+        )
+        assertFalse(
+            shouldLockLongPressSpeedBySwipe(
+                isLongPressing = true,
+                alreadyLocked = true,
+                totalDragDistanceY = -120f,
+                thresholdPx = 80f
+            )
+        )
+        assertFalse(
+            shouldLockLongPressSpeedBySwipe(
+                isLongPressing = false,
+                alreadyLocked = false,
+                totalDragDistanceY = -120f,
+                thresholdPx = 80f
+            )
+        )
+    }
+
+    @Test
+    fun longPressRelease_restoresOriginalSpeedOnlyWhenNotLocked() {
+        assertTrue(
+            shouldRestorePlaybackParametersAfterLongPressRelease(
+                wasLongPressing = true,
+                longPressSpeedLocked = false
+            )
+        )
+        assertFalse(
+            shouldRestorePlaybackParametersAfterLongPressRelease(
+                wasLongPressing = true,
+                longPressSpeedLocked = true
+            )
+        )
+        assertFalse(
+            shouldRestorePlaybackParametersAfterLongPressRelease(
+                wasLongPressing = false,
+                longPressSpeedLocked = false
+            )
+        )
+    }
+
+    @Test
+    fun longPressSpeedGesture_disabledWhenScreenLockedOrVideoScaled() {
+        assertFalse(
+            shouldEnableLongPressSpeedGesture(
+                isScreenLocked = true,
+                scale = 1f,
+                isMultiTouchActive = false
+            )
+        )
+        assertFalse(
+            shouldEnableLongPressSpeedGesture(
+                isScreenLocked = false,
+                scale = 1.2f,
+                isMultiTouchActive = false
+            )
+        )
+        assertFalse(
+            shouldEnableLongPressSpeedGesture(
+                isScreenLocked = false,
+                scale = 1f,
+                isMultiTouchActive = true
+            )
+        )
+        assertTrue(
+            shouldEnableLongPressSpeedGesture(
+                isScreenLocked = false,
+                scale = 1f,
+                isMultiTouchActive = false
+            )
+        )
+    }
 }

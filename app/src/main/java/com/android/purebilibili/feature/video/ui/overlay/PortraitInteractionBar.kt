@@ -3,11 +3,14 @@ package com.android.purebilibili.feature.video.ui.overlay
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.rounded.Share
@@ -27,6 +30,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.theme.BiliPink
@@ -129,12 +133,29 @@ private fun InteractionButton(
             interactionSource = remember { MutableInteractionSource() }
         ) { onClick() }
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (isActive) activeColor else Color.White,
-            modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(layoutPolicy.iconBackingSizeDp.dp)
+                .shadow(
+                    elevation = 10.dp,
+                    shape = CircleShape,
+                    spotColor = Color.Black.copy(alpha = 0.32f),
+                    ambientColor = Color.Black.copy(alpha = 0.24f)
+                )
+                .background(
+                    color = Color.Black.copy(alpha = 0.34f),
+                    shape = CircleShape
+                )
+                .padding(layoutPolicy.iconBackingInnerPaddingDp.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isActive) activeColor else Color.White,
+                modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
+            )
+        }
         Spacer(modifier = Modifier.height(layoutPolicy.labelTopSpacingDp.dp))
         Text(
             text = countText,

@@ -917,6 +917,9 @@ fun FullscreenPlayerOverlay(
             var localAllowSpecial by remember(danmakuAllowSpecial) { mutableStateOf(danmakuAllowSpecial) }
             var localSmartOcclusion by remember(danmakuSmartOcclusion) { mutableStateOf(danmakuSmartOcclusion) }
             var localBlockRulesRaw by remember(danmakuBlockRulesRaw) { mutableStateOf(danmakuBlockRulesRaw) }
+            var localFullscreenPanelWidthMode by remember(danmakuSettings.fullscreenPanelWidthMode) {
+                mutableStateOf(danmakuSettings.fullscreenPanelWidthMode)
+            }
             
             DanmakuSettingsPanel(
                 isFullscreen = true,
@@ -933,6 +936,7 @@ fun FullscreenPlayerOverlay(
                 showBlockRuleEditor = true,
                 blockRulesRaw = localBlockRulesRaw,
                 smartOcclusion = localSmartOcclusion,
+                fullscreenWidthMode = localFullscreenPanelWidthMode,
                 smartOcclusionModuleState = smartOcclusionModuleState,
                 smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
                 onOpacityChange = { 
@@ -988,6 +992,10 @@ fun FullscreenPlayerOverlay(
                 onBlockRulesRawChange = {
                     localBlockRulesRaw = it
                     scope.launch { SettingsManager.setDanmakuBlockRulesRaw(context, it) }
+                },
+                onFullscreenWidthModeChange = {
+                    localFullscreenPanelWidthMode = it
+                    scope.launch { SettingsManager.setDanmakuFullscreenPanelWidthMode(context, it) }
                 },
                 onSmartOcclusionDownloadClick = {
                     if (smartOcclusionModuleState != FaceOcclusionModuleState.Downloading) {

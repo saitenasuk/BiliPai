@@ -154,7 +154,21 @@ data class VideoItem(
     val collectionId: Long = 0,
     val collectionMid: Long = 0,
     val collectionMediaCount: Int = 0,
-    val collectionSubtitle: String = ""
+    val collectionSubtitle: String = "",
+    val rights: VideoRights? = null
+)
+
+@Serializable
+data class VideoRights(
+    val pay: Int = 0,
+    @SerialName("arc_pay")
+    val arcPay: Int = 0,
+    @SerialName("ugc_pay")
+    val ugcPay: Int = 0,
+    @SerialName("ugc_pay_preview")
+    val ugcPayPreview: Int = 0,
+    @SerialName("pay_free_watch")
+    val payFreeWatch: Int = 0
 )
 
 @Serializable
@@ -217,7 +231,8 @@ data class RecommendItem(
     val owner: RecommendOwner? = null,
     val stat: RecommendStat? = null,
     //  [新增] 视频尺寸信息 (用于判断竖屏视频)
-    val dimension: Dimension? = null
+    val dimension: Dimension? = null,
+    val rights: VideoRights? = null
 ) {
     fun toVideoItem(): VideoItem {
         return VideoItem(
@@ -230,7 +245,8 @@ data class RecommendItem(
             owner = Owner(mid = owner?.mid ?: 0, name = owner?.name ?: "", face = owner?.face ?: ""),
             stat = Stat(view = requestStatConvert(stat?.view), like = requestStatConvert(stat?.like), danmaku = requestStatConvert(stat?.danmaku)),
             duration = duration ?: 0,
-            isVertical = dimension?.isVertical == true
+            isVertical = dimension?.isVertical == true,
+            rights = rights
         )
     }
     private fun requestStatConvert(num: Long?): Int = num?.toInt() ?: 0
@@ -274,7 +290,8 @@ data class PopularItem(
     val duration: Int = 0,
     val pubdate: Long = 0,
     val owner: Owner = Owner(),
-    val stat: PopularStat = PopularStat()
+    val stat: PopularStat = PopularStat(),
+    val rights: VideoRights? = null
 ) {
     fun toVideoItem(): VideoItem {
         val resolvedAid = if (aid > 0) aid else cid
@@ -287,7 +304,8 @@ data class PopularItem(
             pic = pic,
             owner = owner,
             stat = Stat(view = stat.view, like = stat.like, danmaku = stat.danmaku),
-            duration = duration
+            duration = duration,
+            rights = rights
         )
     }
 }
@@ -407,7 +425,8 @@ data class DynamicRegionItem(
     val duration: Int = 0,
     val pubdate: Long = 0,
     val owner: Owner = Owner(),
-    val stat: DynamicRegionStat = DynamicRegionStat()
+    val stat: DynamicRegionStat = DynamicRegionStat(),
+    val rights: VideoRights? = null
 ) {
      fun toVideoItem(): VideoItem {
         return VideoItem(
@@ -428,7 +447,8 @@ data class DynamicRegionItem(
                 share = stat.share
             ),
             duration = duration,
-            pubdate = pubdate
+            pubdate = pubdate,
+            rights = rights
         )
     }
 }

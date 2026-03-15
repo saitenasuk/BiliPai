@@ -63,9 +63,12 @@ import com.android.purebilibili.feature.video.playback.policy.shouldRefreshOnlin
 import com.android.purebilibili.feature.video.playback.policy.shouldSendPlaybackHeartbeat
 import com.android.purebilibili.feature.video.playback.policy.shouldDispatchPluginPositionUpdate
 import com.android.purebilibili.feature.video.playback.resolver.AudioNextPlaybackStrategy
+import com.android.purebilibili.feature.video.playback.resolver.PlaybackNavigationTarget
 import com.android.purebilibili.feature.video.playback.resolver.PlayInOrderNextSource
 import com.android.purebilibili.feature.video.playback.resolver.resolveAudioNextPlaybackStrategy
+import com.android.purebilibili.feature.video.playback.resolver.resolvePlaybackNavigationTargets
 import com.android.purebilibili.feature.video.playback.resolver.resolvePlayInOrderNextSource
+import com.android.purebilibili.feature.video.playback.resolver.resolvePlayInOrderPreviousSource
 import com.android.purebilibili.feature.video.playback.session.PlaybackSessionStore
 import com.android.purebilibili.feature.video.interaction.InteractiveChoicePanelUiState
 import com.android.purebilibili.feature.video.interaction.InteractiveChoiceUiModel
@@ -901,8 +904,9 @@ class PlayerViewModel : ViewModel() {
         if (_isSavingFavoriteFolders.value) return
 
         val selectedFolderIds = _favoriteSelectedFolderIds.value
+        val originalFolderIds = lastSavedFavoriteFolderIds
         val mutation = resolveFavoriteFolderMutation(
-            original = lastSavedFavoriteFolderIds,
+            original = originalFolderIds,
             selected = selectedFolderIds
         )
 
@@ -929,13 +933,39 @@ class PlayerViewModel : ViewModel() {
                         )
                     }
                 }
-                updateFavoriteUiState(selectedFolderIds)
+                applyFavoriteSaveUiState(
+                    originalFolderIds = originalFolderIds,
+                    selectedFolderIds = selectedFolderIds
+                )
                 dismissFavoriteFolderDialog()
                 toast(if (selectedFolderIds.isEmpty()) "已取消收藏" else "收藏设置已保存")
             }.onFailure { e ->
                 toast("收藏失败: ${e.message}")
             }
             _isSavingFavoriteFolders.value = false
+        }
+    }
+
+    private fun applyFavoriteSaveUiState(
+        originalFolderIds: Set<Long>,
+        selectedFolderIds: Set<Long>
+    ) {
+        _uiState.update { state ->
+            if (state is PlayerUiState.Success) {
+                val resolvedState = resolveFavoriteSaveUiState(
+                    originalFolderIds = originalFolderIds,
+                    selectedFolderIds = selectedFolderIds,
+                    currentFavoriteCount = state.info.stat.favorite
+                )
+                state.copy(
+                    isFavorited = resolvedState.isFavorited,
+                    info = state.info.copy(
+                        stat = state.info.stat.copy(favorite = resolvedState.favoriteCount)
+                    )
+                )
+            } else {
+                state
+            }
         }
     }
 
@@ -1038,15 +1068,17 @@ class PlayerViewModel : ViewModel() {
         playbackUseCase.initWithContext(context)
 
         val miniPlayerManager = MiniPlayerManager.getInstance(applicationContext)
-        miniPlayerManager.onPlayNextCallback = { item ->
-            viewModelScope.launch {
-                loadVideo(item.bvid, autoPlay = true)
-            }
+        miniPlayerManager.onNavigateNextCallback = {
+            playNextPageOrRecommended(ignoreSavedProgress = false)
         }
-        miniPlayerManager.onPlayPreviousCallback = { item ->
-            viewModelScope.launch {
-                loadVideo(item.bvid, autoPlay = true)
-            }
+        miniPlayerManager.onNavigatePreviousCallback = {
+            playPreviousPageOrRecommended(ignoreSavedProgress = false)
+        }
+        miniPlayerManager.onHasNextNavigationCallback = {
+            hasNextPageOrRecommended()
+        }
+        miniPlayerManager.onHasPreviousNavigationCallback = {
+            hasPreviousPageOrRecommended()
         }
         
         // 🎧 Start observing settings preferences
@@ -1144,9 +1176,18 @@ class PlayerViewModel : ViewModel() {
                         exoPlayer?.playWhenReady = true
                         exoPlayer?.play()
                     },
-                    playNextInOrder = { playNextInOrder() },
-                    playNextFromPlaylistLoop = { playNextFromPlaylist(loopAtEnd = true) },
-                    autoContinue = { playNextPageOrRecommended() }
+                    playNextInOrder = { ignoreSavedProgress ->
+                        playNextInOrder(ignoreSavedProgress = ignoreSavedProgress)
+                    },
+                    playNextFromPlaylistLoop = { ignoreSavedProgress ->
+                        playNextFromPlaylist(
+                            loopAtEnd = true,
+                            ignoreSavedProgress = ignoreSavedProgress
+                        )
+                    },
+                    autoContinue = { ignoreSavedProgress ->
+                        playNextPageOrRecommended(ignoreSavedProgress = ignoreSavedProgress)
+                    }
                 )
                 if (outcome.shouldHidePlaybackEndedDialog) {
                     // 自动播放关闭或后续无法连播：保持结束态，不弹窗打断
@@ -1184,7 +1225,7 @@ class PlayerViewModel : ViewModel() {
     /**
      *  [新增] 自动播放推荐视频（使用 PlaylistManager）
      */
-    fun playNextRecommended() {
+    fun playNextRecommended(ignoreSavedProgress: Boolean = false): Boolean {
         // 使用 PlaylistManager 获取下一曲
         val nextItem = PlaylistManager.playNext()
         
@@ -1193,7 +1234,12 @@ class PlayerViewModel : ViewModel() {
                 toast("正在播放: ${nextItem.title}")
             }
             // 加载新视频 (Auto-play next always forces true)
-            loadVideo(nextItem.bvid, autoPlay = true)
+            loadVideo(
+                nextItem.bvid,
+                autoPlay = true,
+                ignoreSavedProgress = ignoreSavedProgress
+            )
+            return true
         } else {
             // 根据播放模式显示不同提示
             val mode = PlaylistManager.playMode.value
@@ -1206,6 +1252,7 @@ class PlayerViewModel : ViewModel() {
                 }
                 else -> toast("没有更多视频")
             }
+            return false
         }
     }
 
@@ -1227,7 +1274,10 @@ class PlayerViewModel : ViewModel() {
         return currentIndex < items.lastIndex || loopAtEnd
     }
 
-    private fun playNextFromPlaylist(loopAtEnd: Boolean): Boolean {
+    private fun playNextFromPlaylist(
+        loopAtEnd: Boolean,
+        ignoreSavedProgress: Boolean = false
+    ): Boolean {
         val items = PlaylistManager.playlist.value
         if (items.isEmpty()) return false
 
@@ -1240,7 +1290,36 @@ class PlayerViewModel : ViewModel() {
         }
 
         val target = PlaylistManager.playAt(nextIndex) ?: return false
-        loadVideo(target.bvid, autoPlay = true)
+        loadVideo(
+            target.bvid,
+            autoPlay = true,
+            ignoreSavedProgress = ignoreSavedProgress
+        )
+        return true
+    }
+
+    private fun hasPreviousInPlaylist(): Boolean {
+        val items = PlaylistManager.playlist.value
+        if (items.isEmpty()) return false
+
+        val currentIndex = resolveCurrentPlaylistIndex(items)
+        return currentIndex > 0
+    }
+
+    private fun playPreviousFromPlaylist(ignoreSavedProgress: Boolean = false): Boolean {
+        val items = PlaylistManager.playlist.value
+        if (items.isEmpty()) return false
+
+        val currentIndex = resolveCurrentPlaylistIndex(items)
+        val previousIndex = currentIndex - 1
+        if (previousIndex !in items.indices) return false
+
+        val target = PlaylistManager.playAt(previousIndex) ?: return false
+        loadVideo(
+            target.bvid,
+            autoPlay = true,
+            ignoreSavedProgress = ignoreSavedProgress
+        )
         return true
     }
 
@@ -1265,7 +1344,28 @@ class PlayerViewModel : ViewModel() {
         return Triple(hasNextPage, hasNextSeasonEpisode, hasNextInPlaylist(loopAtEnd = false))
     }
 
-    private fun playNextInOrder(): Boolean {
+    private fun resolveCurrentPreviousAvailability(): Triple<Boolean, Boolean, Boolean> {
+        val current = _uiState.value as? PlayerUiState.Success
+        val hasPreviousPage = current?.let { success ->
+            val pages = success.info.pages
+            if (pages.size <= 1) {
+                false
+            } else {
+                val currentPageIndex = pages.indexOfFirst { it.cid == currentCid }
+                currentPageIndex > 0
+            }
+        } ?: false
+
+        val hasPreviousSeasonEpisode = current?.info?.ugc_season?.let { season ->
+            val allEpisodes = season.sections.flatMap { it.episodes }
+            val previousEpIndex = allEpisodes.indexOfFirst { it.bvid == current.info.bvid } - 1
+            previousEpIndex >= 0
+        } ?: false
+
+        return Triple(hasPreviousPage, hasPreviousSeasonEpisode, hasPreviousInPlaylist())
+    }
+
+    private fun playNextInOrder(ignoreSavedProgress: Boolean = false): Boolean {
         val (hasNextPage, hasNextSeasonEpisode, hasNextPlaylistItem) = resolveCurrentNextAvailability()
         return when (
             resolvePlayInOrderNextSource(
@@ -1275,13 +1375,21 @@ class PlayerViewModel : ViewModel() {
             )
         ) {
             PlayInOrderNextSource.PAGE_OR_SEASON ->
-                playNextPageOrSeason() || playNextFromPlaylist(loopAtEnd = false)
-            PlayInOrderNextSource.PLAYLIST -> playNextFromPlaylist(loopAtEnd = false)
+                playNextPageOrSeason(ignoreSavedProgress = ignoreSavedProgress) ||
+                    playNextFromPlaylist(
+                        loopAtEnd = false,
+                        ignoreSavedProgress = ignoreSavedProgress
+                    )
+            PlayInOrderNextSource.PLAYLIST ->
+                playNextFromPlaylist(
+                    loopAtEnd = false,
+                    ignoreSavedProgress = ignoreSavedProgress
+                )
             PlayInOrderNextSource.NONE -> false
         }
     }
 
-    private fun playNextPageOrSeason(): Boolean {
+    private fun playNextPageOrSeason(ignoreSavedProgress: Boolean = false): Boolean {
         val current = _uiState.value as? PlayerUiState.Success ?: return false
 
         // 1. 优先检查分P
@@ -1293,7 +1401,7 @@ class PlayerViewModel : ViewModel() {
             if (nextPageIndex < pages.size) {
                 val nextPage = pages[nextPageIndex]
                 Logger.d("PlayerVM", "🎵 播放下一个分P: P${nextPageIndex + 1} - ${nextPage.part}")
-                switchPage(nextPageIndex)
+                switchPage(nextPageIndex, ignoreSavedProgress = ignoreSavedProgress)
                 return true
             }
         }
@@ -1310,7 +1418,12 @@ class PlayerViewModel : ViewModel() {
                 viewModelScope.launch {
                     toast("播放合集下一集: ${nextEpisode.title}")
                 }
-                loadVideo(nextEpisode.bvid, autoPlay = true, cid = nextEpisode.cid)
+                loadVideo(
+                    nextEpisode.bvid,
+                    autoPlay = true,
+                    ignoreSavedProgress = ignoreSavedProgress,
+                    cid = nextEpisode.cid
+                )
                 return true
             }
             Logger.d("PlayerVM", "📂 合集全部播放完成")
@@ -1319,12 +1432,115 @@ class PlayerViewModel : ViewModel() {
         return false
     }
 
+    private fun playPreviousInOrder(ignoreSavedProgress: Boolean = false): Boolean {
+        val (hasPreviousPage, hasPreviousSeasonEpisode, hasPreviousPlaylistItem) =
+            resolveCurrentPreviousAvailability()
+        return when (
+            resolvePlayInOrderPreviousSource(
+                hasPreviousPage = hasPreviousPage,
+                hasPreviousSeasonEpisode = hasPreviousSeasonEpisode,
+                hasPreviousPlaylistItem = hasPreviousPlaylistItem
+            )
+        ) {
+            PlayInOrderNextSource.PAGE_OR_SEASON ->
+                playPreviousPageOrSeason(ignoreSavedProgress = ignoreSavedProgress) ||
+                    playPreviousFromPlaylist(ignoreSavedProgress = ignoreSavedProgress)
+            PlayInOrderNextSource.PLAYLIST ->
+                playPreviousFromPlaylist(ignoreSavedProgress = ignoreSavedProgress)
+            PlayInOrderNextSource.NONE -> false
+        }
+    }
+
+    private fun playPreviousPageOrSeason(ignoreSavedProgress: Boolean = false): Boolean {
+        val current = _uiState.value as? PlayerUiState.Success ?: return false
+
+        val pages = current.info.pages
+        if (pages.size > 1) {
+            val currentPageIndex = pages.indexOfFirst { it.cid == currentCid }
+            val previousPageIndex = currentPageIndex - 1
+
+            if (previousPageIndex >= 0) {
+                val previousPage = pages[previousPageIndex]
+                Logger.d("PlayerVM", "🎵 播放上一个分P: P${previousPageIndex + 1} - ${previousPage.part}")
+                switchPage(previousPageIndex, ignoreSavedProgress = ignoreSavedProgress)
+                return true
+            }
+        }
+
+        current.info.ugc_season?.let { season ->
+            val allEpisodes = season.sections.flatMap { it.episodes }
+            val currentEpIndex = allEpisodes.indexOfFirst { it.bvid == current.info.bvid }
+            val previousEpIndex = currentEpIndex - 1
+
+            if (previousEpIndex >= 0) {
+                val previousEpisode = allEpisodes[previousEpIndex]
+                Logger.d("PlayerVM", "📂 播放合集上一集: ${previousEpisode.title}")
+                viewModelScope.launch {
+                    toast("播放合集上一集: ${previousEpisode.title}")
+                }
+                loadVideo(
+                    previousEpisode.bvid,
+                    autoPlay = true,
+                    ignoreSavedProgress = ignoreSavedProgress,
+                    cid = previousEpisode.cid
+                )
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private inline fun executePlaybackNavigationTargets(
+        targets: List<PlaybackNavigationTarget>,
+        playPageOrSeason: () -> Boolean,
+        playPlaylist: () -> Boolean,
+        playDirectQueue: () -> Boolean
+    ): Boolean {
+        targets.forEach { target ->
+            val handled = when (target) {
+                PlaybackNavigationTarget.PAGE_OR_SEASON -> playPageOrSeason()
+                PlaybackNavigationTarget.PLAYLIST -> playPlaylist()
+                PlaybackNavigationTarget.DIRECT_QUEUE -> playDirectQueue()
+            }
+            if (handled) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun hasNextPageOrRecommended(): Boolean {
+        val nextStrategy = resolveAudioNextPlaybackStrategy(
+            isExternalPlaylist = PlaylistManager.isExternalPlaylist.value,
+            externalPlaylistSource = PlaylistManager.externalPlaylistSource.value
+        )
+        if (nextStrategy == AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST) {
+            return hasNextInPlaylist(loopAtEnd = false)
+        }
+        val (hasNextPage, hasNextSeasonEpisode, hasNextPlaylistItem) = resolveCurrentNextAvailability()
+        return hasNextPage || hasNextSeasonEpisode || hasNextPlaylistItem
+    }
+
+    private fun hasPreviousPageOrRecommended(): Boolean {
+        val previousStrategy = resolveAudioNextPlaybackStrategy(
+            isExternalPlaylist = PlaylistManager.isExternalPlaylist.value,
+            externalPlaylistSource = PlaylistManager.externalPlaylistSource.value
+        )
+        if (previousStrategy == AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST) {
+            return hasPreviousInPlaylist()
+        }
+        val (hasPreviousPage, hasPreviousSeasonEpisode, hasPreviousPlaylistItem) =
+            resolveCurrentPreviousAvailability()
+        return hasPreviousPage || hasPreviousSeasonEpisode || hasPreviousPlaylistItem
+    }
+
     /**
      * 🎵 [新增] 优先播放下一个分P，如果没有分P则检查合集，最后播放推荐视频
      * 用于分集视频（如音乐合集）的连续播放
      * 优先级: 分P > 合集下一集 > 推荐视频
      */
-    fun playNextPageOrRecommended() {
+    fun playNextPageOrRecommended(ignoreSavedProgress: Boolean = false): Boolean {
         val nextStrategy = resolveAudioNextPlaybackStrategy(
             isExternalPlaylist = PlaylistManager.isExternalPlaylist.value,
             externalPlaylistSource = PlaylistManager.externalPlaylistSource.value
@@ -1334,33 +1550,79 @@ class PlayerViewModel : ViewModel() {
                 "PlayerVM",
                 "🔒 外部播放队列模式：下一首按队列播放 source=${PlaylistManager.externalPlaylistSource.value}"
             )
-            playNextRecommended()
-            return
         }
-
-        if (playNextPageOrSeason()) return
-
-        // 3. 最后播放推荐视频
-        Logger.d("PlayerVM", "🎵 播放推荐视频")
-        playNextRecommended()
+        val (hasNextPage, hasNextSeasonEpisode, hasNextPlaylistItem) = resolveCurrentNextAvailability()
+        return executePlaybackNavigationTargets(
+            targets = resolvePlaybackNavigationTargets(
+                strategy = nextStrategy,
+                hasPageOrSeasonTarget = hasNextPage || hasNextSeasonEpisode,
+                hasPlaylistTarget = hasNextPlaylistItem
+            ),
+            playPageOrSeason = {
+                playNextPageOrSeason(ignoreSavedProgress = ignoreSavedProgress)
+            },
+            playPlaylist = {
+                playNextFromPlaylist(
+                    loopAtEnd = false,
+                    ignoreSavedProgress = ignoreSavedProgress
+                )
+            },
+            playDirectQueue = {
+                Logger.d("PlayerVM", "🎵 播放推荐视频")
+                playNextRecommended(ignoreSavedProgress = ignoreSavedProgress)
+            }
+        )
     }
     
     /**
-     *  [新增] 播放上一个推荐视频（使用 PlaylistManager）
+     *  [新增] 播放上一个视频，优先分P/合集，最后回退到推荐队列
      */
-    fun playPreviousRecommended() {
-        // 使用 PlaylistManager 获取上一曲
+    fun playPreviousPageOrRecommended(ignoreSavedProgress: Boolean = false): Boolean {
+        val previousStrategy = resolveAudioNextPlaybackStrategy(
+            isExternalPlaylist = PlaylistManager.isExternalPlaylist.value,
+            externalPlaylistSource = PlaylistManager.externalPlaylistSource.value
+        )
+        val (hasPreviousPage, hasPreviousSeasonEpisode, hasPreviousPlaylistItem) =
+            resolveCurrentPreviousAvailability()
+        return executePlaybackNavigationTargets(
+            targets = resolvePlaybackNavigationTargets(
+                strategy = previousStrategy,
+                hasPageOrSeasonTarget = hasPreviousPage || hasPreviousSeasonEpisode,
+                hasPlaylistTarget = hasPreviousPlaylistItem
+            ),
+            playPageOrSeason = {
+                playPreviousPageOrSeason(ignoreSavedProgress = ignoreSavedProgress)
+            },
+            playPlaylist = {
+                playPreviousFromPlaylist(ignoreSavedProgress = ignoreSavedProgress)
+            },
+            playDirectQueue = {
+                playPreviousFromRecommendedQueue(ignoreSavedProgress = ignoreSavedProgress)
+            }
+        )
+    }
+
+    fun playPreviousRecommended(ignoreSavedProgress: Boolean = false): Boolean {
+        return playPreviousPageOrRecommended(ignoreSavedProgress = ignoreSavedProgress)
+    }
+
+    private fun playPreviousFromRecommendedQueue(ignoreSavedProgress: Boolean = false): Boolean {
         val prevItem = PlaylistManager.playPrevious()
-        
+
         if (prevItem != null) {
             viewModelScope.launch {
                 toast("正在播放: ${prevItem.title}")
             }
-            // 加载新视频
-            loadVideo(prevItem.bvid, autoPlay = true)
-        } else {
-            toast("没有上一个视频")
+            loadVideo(
+                prevItem.bvid,
+                autoPlay = true,
+                ignoreSavedProgress = ignoreSavedProgress
+            )
+            return true
         }
+
+        toast("没有上一个视频")
+        return false
     }
     
     fun reloadVideo() {
@@ -1406,6 +1668,7 @@ class PlayerViewModel : ViewModel() {
         aid: Long = 0,
         force: Boolean = false,
         autoPlay: Boolean? = null,
+        ignoreSavedProgress: Boolean = false,
         audioLang: String? = null,
         videoCodecOverride: String? = null,
         cid: Long = 0L
@@ -1417,6 +1680,7 @@ class PlayerViewModel : ViewModel() {
             cid = cid,
             force = force,
             autoPlay = autoPlay,
+            ignoreSavedProgress = ignoreSavedProgress,
             audioLang = audioLang,
             videoCodecOverride = videoCodecOverride
         )
@@ -4290,7 +4554,7 @@ class PlayerViewModel : ViewModel() {
     
     // ========== Page Switch ==========
     
-    fun switchPage(pageIndex: Int) {
+    fun switchPage(pageIndex: Int, ignoreSavedProgress: Boolean = false) {
         val current = _uiState.value as? PlayerUiState.Success ?: return
         val page = current.info.pages.getOrNull(pageIndex) ?: return
         if (page.cid == currentCid) { toast("\u5df2\u662f\u5f53\u524d\u5206P"); return }
@@ -4334,7 +4598,11 @@ class PlayerViewModel : ViewModel() {
                     
                     val videoUrl = dashVideo?.getValidUrl() ?: playUrlData.durl?.firstOrNull()?.url ?: ""
                     val audioUrl = dashAudio?.getValidUrl()
-                    val restoredPosition = playbackUseCase.getCachedPosition(currentBvid, page.cid)
+                    val restoredPosition = if (ignoreSavedProgress) {
+                        0L
+                    } else {
+                        playbackUseCase.getCachedPosition(currentBvid, page.cid)
+                    }
                     
                     if (videoUrl.isNotEmpty()) {
                         if (dashVideo != null) playbackUseCase.playDashVideo(videoUrl, audioUrl, restoredPosition)
@@ -4744,8 +5012,10 @@ class PlayerViewModel : ViewModel() {
         playerInfoJob?.cancel()
         appContext?.let { context ->
             val miniPlayerManager = MiniPlayerManager.getInstance(context)
-            miniPlayerManager.onPlayNextCallback = null
-            miniPlayerManager.onPlayPreviousCallback = null
+            miniPlayerManager.onNavigateNextCallback = null
+            miniPlayerManager.onNavigatePreviousCallback = null
+            miniPlayerManager.onHasNextNavigationCallback = null
+            miniPlayerManager.onHasPreviousNavigationCallback = null
         }
         
         //  通知插件系统：视频结束

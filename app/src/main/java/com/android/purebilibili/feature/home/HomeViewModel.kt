@@ -64,6 +64,10 @@ internal fun shouldExposeHomeRefreshUndo(
     return refreshingCategory == HomeCategory.RECOMMEND && snapshot != null
 }
 
+internal fun shouldRefreshHomeUserInfoAfterFeedLoad(isLoadMore: Boolean): Boolean {
+    return !isLoadMore
+}
+
 internal fun applyHomeRefreshUndoSnapshot(
     oldState: CategoryContent,
     snapshot: HomeRefreshUndoSnapshot
@@ -132,6 +136,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     //  [新增] 刷新撤销快照
     private var _undoSnapshot: HomeRefreshUndoSnapshot? = null
     private var undoDismissJob: Job? = null
+    private var userInfoRefreshJob: Job? = null
 
     // [Feature] Blocked UPs
     private val blockedUpRepository = com.android.purebilibili.data.repository.BlockedUpRepository(application)
@@ -819,6 +824,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun refreshUserInfoInBackground() {
+        if (userInfoRefreshJob?.isActive == true) return
+        userInfoRefreshJob = viewModelScope.launch {
+            fetchUserInfo()
+        }
+    }
+
     private suspend fun fetchData(isLoadMore: Boolean, isManualRefresh: Boolean = false): Int? {
         val currentCategory = _uiState.value.currentCategory
         var refreshNewItemsCount: Int? = null
@@ -863,9 +875,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         
-        // 仅在首次加载或刷新时获取用户信息
-        if (!isLoadMore) {
-            fetchUserInfo()
+        if (shouldRefreshHomeUserInfoAfterFeedLoad(isLoadMore)) {
+            refreshUserInfoInBackground()
         }
 
         if (isLoadMore) delay(100)

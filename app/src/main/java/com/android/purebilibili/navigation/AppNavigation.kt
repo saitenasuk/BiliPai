@@ -963,7 +963,8 @@ fun AppNavigation(
                     // 由于 ViewModel 是共享的，VideoDetailScreen 会自动显示当前正在播放的视频
                     // 不需要比较 bvid，因为播放器状态已同步
                     navController.popBackStack()
-                }
+                },
+                isInPipMode = isInPipMode
             )
         }
 

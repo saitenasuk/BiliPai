@@ -52,7 +52,7 @@ internal fun shouldShowInteractiveActionsInTopControlBar(
 ): Boolean = showFullscreenActionItems
 internal fun shouldApplyStatusBarPaddingToTopControlBar(
     isFullscreen: Boolean
-): Boolean = false
+): Boolean = isFullscreen
 
 internal enum class BatteryChargeTone {
     CRITICAL,

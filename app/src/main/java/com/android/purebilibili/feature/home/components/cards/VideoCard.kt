@@ -107,6 +107,8 @@ fun ElegantVideoCard(
     scrollLiteModeEnabled: Boolean = false,
     showPublishTime: Boolean = false,   //  是否显示发布时间（搜索结果用）
     isDataSaverActive: Boolean = false, // 🚀 [性能优化] 从父级传入，避免每个卡片重复计算
+    glassEnabled: Boolean = true,
+    blurEnabled: Boolean = true,
     compactStatsOnCover: Boolean = true, // 播放量/评论数是否贴在封面底部
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
@@ -136,20 +138,20 @@ fun ElegantVideoCard(
         ).dp
     }
     val coverPillColors = rememberHomeGlassPillColors(
-        glassEnabled = true,
-        blurEnabled = true,
+        glassEnabled = glassEnabled,
+        blurEnabled = blurEnabled,
         emphasized = false,
         baseColor = Color.White
     )
     val emphasizedCoverPillColors = rememberHomeGlassPillColors(
-        glassEnabled = true,
-        blurEnabled = true,
+        glassEnabled = glassEnabled,
+        blurEnabled = blurEnabled,
         emphasized = true,
         baseColor = Color.White
     )
     val inlinePillColors = rememberHomeGlassPillColors(
-        glassEnabled = true,
-        blurEnabled = true,
+        glassEnabled = glassEnabled,
+        blurEnabled = blurEnabled,
         emphasized = false,
         baseColor = MaterialTheme.colorScheme.surface
     )
@@ -192,6 +194,9 @@ fun ElegantVideoCard(
     }
     val coverUrl = remember(video.bvid) {
         FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic)
+    }
+    val premiumBadgeLabel = remember(video.rights) {
+        resolveVideoPremiumBadgeLabel(video.rights)
     }
     
     //  判断是否为竖屏视频（通过封面图 URL 中的尺寸信息或默认不显示）
@@ -356,6 +361,26 @@ fun ElegantVideoCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
+
+            if (premiumBadgeLabel != null) {
+                HomeVideoBadgePill(
+                    style = badgeStylePolicy.coverStyle,
+                    shape = RoundedCornerShape(smallCornerRadius),
+                    containerColor = BiliPink.copy(alpha = if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) 0.78f else 1f),
+                    borderColor = Color.White.copy(alpha = 0.24f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = premiumBadgeLabel,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+            }
             
             
             //  底部渐变遮罩
@@ -960,7 +985,7 @@ fun ElegantVideoCard(
 }
 
 @Composable
-private fun HomeVideoBadgePill(
+internal fun HomeVideoBadgePill(
     style: HomeVideoBadgeStyle,
     shape: Shape,
     containerColor: Color,

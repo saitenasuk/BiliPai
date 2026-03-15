@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +66,7 @@ internal val COMMENT_URL_PATTERN =
 internal val COMMENT_INLINE_BVID_PATTERN =
     Regex("""(?<![A-Za-z0-9])BV[a-zA-Z0-9]{10}(?![A-Za-z0-9])""", RegexOption.IGNORE_CASE)
 internal const val COLLAPSED_SUB_REPLY_PREVIEW_LIMIT = 3
+const val COMMENT_PICTURE_TAG_PREFIX = "comment_picture_"
 
 private val replyVideoTitleCache = ConcurrentHashMap<String, String>()
 
@@ -1330,7 +1332,7 @@ fun formatTime(timestamp: Long): String {
 }
 
 @Composable
-private fun ReplySpecialLabelChip(text: String) {
+internal fun ReplySpecialLabelChip(text: String) {
     Text(
         text = text,
         fontSize = 12.sp,
@@ -1393,7 +1395,8 @@ fun PinnedTag() {
 @Composable
 fun CommentPictures(
     pictures: List<ReplyPicture>,
-    onImageClick: (List<String>, Int, Rect?) -> Unit
+    onImageClick: (List<String>, Int, Rect?) -> Unit,
+    testTagPrefix: String = COMMENT_PICTURE_TAG_PREFIX
 ) {
     //  获取高质量图片URL（移除分辨率限制参数）
     val imageUrls = remember(pictures) {
@@ -1438,6 +1441,7 @@ fun CommentPictures(
                 modifier = Modifier
                     .widthIn(max = 220.dp)  //  [优化] 增大最大宽度
                     .heightIn(max = 220.dp)
+                    .testTag("${testTagPrefix}0")
                     .aspectRatio(aspectRatio)
                     .clip(RoundedCornerShape(12.dp))  //  [优化] 更大圆角 8dp → 12dp
                     .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -1478,6 +1482,7 @@ fun CommentPictures(
                             Box(
                                 modifier = Modifier
                                     .size(85.dp)  //  [优化] 增大尺寸 80dp → 85dp
+                                    .testTag("${testTagPrefix}$globalIndex")
                                     .clip(RoundedCornerShape(10.dp))  //  [优化] 更大圆角 6dp → 10dp
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                                     .onGloballyPositioned { coordinates ->

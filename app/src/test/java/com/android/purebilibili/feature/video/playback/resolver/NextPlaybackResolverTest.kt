@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.playback.resolver
 
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
 class NextPlaybackResolverTest {
@@ -60,6 +61,82 @@ class NextPlaybackResolverTest {
                 hasNextPage = false,
                 hasNextSeasonEpisode = false,
                 hasNextPlaylistItem = false
+            )
+        )
+    }
+
+    @Test
+    fun `play in order previous should prefer page or season before playlist`() {
+        assertEquals(
+            PlayInOrderNextSource.PAGE_OR_SEASON,
+            resolvePlayInOrderPreviousSource(
+                hasPreviousPage = true,
+                hasPreviousSeasonEpisode = false,
+                hasPreviousPlaylistItem = true
+            )
+        )
+    }
+
+    @Test
+    fun `play in order previous should fallback to playlist when collection has no previous`() {
+        assertEquals(
+            PlayInOrderNextSource.PLAYLIST,
+            resolvePlayInOrderPreviousSource(
+                hasPreviousPage = false,
+                hasPreviousSeasonEpisode = false,
+                hasPreviousPlaylistItem = true
+            )
+        )
+    }
+
+    @Test
+    fun `play in order previous should stop when no source has previous`() {
+        assertEquals(
+            PlayInOrderNextSource.NONE,
+            resolvePlayInOrderPreviousSource(
+                hasPreviousPage = false,
+                hasPreviousSeasonEpisode = false,
+                hasPreviousPlaylistItem = false
+            )
+        )
+    }
+
+    @Test
+    fun `non external navigation should try page season then playlist then direct queue fallback`() {
+        assertContentEquals(
+            listOf(
+                PlaybackNavigationTarget.PAGE_OR_SEASON,
+                PlaybackNavigationTarget.PLAYLIST,
+                PlaybackNavigationTarget.DIRECT_QUEUE
+            ),
+            resolvePlaybackNavigationTargets(
+                strategy = AudioNextPlaybackStrategy.PAGE_THEN_SEASON_THEN_RELATED,
+                hasPageOrSeasonTarget = true,
+                hasPlaylistTarget = true
+            )
+        )
+    }
+
+    @Test
+    fun `non external navigation should still expose direct queue fallback when no earlier source exists`() {
+        assertContentEquals(
+            listOf(PlaybackNavigationTarget.DIRECT_QUEUE),
+            resolvePlaybackNavigationTargets(
+                strategy = AudioNextPlaybackStrategy.PAGE_THEN_SEASON_THEN_RELATED,
+                hasPageOrSeasonTarget = false,
+                hasPlaylistTarget = false
+            )
+        )
+    }
+
+    @Test
+    fun `external playlist navigation should use direct queue only`() {
+        assertContentEquals(
+            listOf(PlaybackNavigationTarget.DIRECT_QUEUE),
+            resolvePlaybackNavigationTargets(
+                strategy = AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST,
+                hasPageOrSeasonTarget = true,
+                hasPlaylistTarget = true
             )
         )
     }

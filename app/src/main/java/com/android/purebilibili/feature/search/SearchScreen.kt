@@ -21,6 +21,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
@@ -182,10 +183,39 @@ fun SearchScreen(
     }
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
     val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsState(initial = true)
+    val liquidGlassEnabled by SettingsManager.getLiquidGlassEnabled(context).collectAsState(initial = true)
+    val headerBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
+    val bottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(context).collectAsState(initial = true)
+    val showHomeCoverGlassBadges by SettingsManager.getHomeCoverGlassBadgesVisible(context).collectAsState(initial = true)
+    val showHomeInfoGlassBadges by SettingsManager.getHomeInfoGlassBadgesVisible(context).collectAsState(initial = true)
     val cardMotionTier = resolveEffectiveMotionTier(
         baseTier = deviceUiProfile.motionTier,
         animationEnabled = cardAnimationEnabled
     )
+    val searchCardBlurEnabled = remember(headerBlurEnabled, bottomBarBlurEnabled) {
+        resolveSearchCardBlurEnabled(
+            headerBlurEnabled = headerBlurEnabled,
+            bottomBarBlurEnabled = bottomBarBlurEnabled
+        )
+    }
+    val videoCardAppearance = remember(
+        liquidGlassEnabled,
+        searchCardBlurEnabled,
+        showHomeCoverGlassBadges,
+        showHomeInfoGlassBadges
+    ) {
+        resolveSearchVideoCardAppearance(
+            liquidGlassEnabled = liquidGlassEnabled,
+            blurEnabled = searchCardBlurEnabled,
+            showHomeCoverGlassBadges = showHomeCoverGlassBadges,
+            showHomeInfoGlassBadges = showHomeInfoGlassBadges
+        )
+    }
+    val genericResultCardAppearance = remember(liquidGlassEnabled) {
+        resolveSearchResultCardAppearance(
+            liquidGlassEnabled = liquidGlassEnabled
+        )
+    }
     val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = false)
     val isSearchResultsScrolling by remember(historyListState, resultGridState, resultListState) {
         derivedStateOf {
@@ -338,6 +368,10 @@ fun SearchScreen(
                                             motionTier = cardMotionTier,
                                             transitionEnabled = effectiveCardTransitionEnabled,
                                             showPublishTime = true,
+                                            glassEnabled = videoCardAppearance.glassEnabled,
+                                            blurEnabled = videoCardAppearance.blurEnabled,
+                                            showCoverGlassBadges = videoCardAppearance.showCoverGlassBadges,
+                                            showInfoGlassBadges = videoCardAppearance.showInfoGlassBadges,
                                             modifier = Modifier,
                                             //  [交互优化] 传递 onWatchLater 用于显示菜单选项
                                             onWatchLater = { viewModel.addToWatchLater(video.bvid, video.id) },
@@ -446,6 +480,7 @@ fun SearchScreen(
                                     itemsIndexed(state.upResults) { index, upItem ->
                                         UpSearchResultCard(
                                             upItem = upItem,
+                                            appearance = genericResultCardAppearance,
                                             onClick = { onUpClick(upItem.mid) }
                                         )
                                         if (index == state.upResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
@@ -533,6 +568,7 @@ fun SearchScreen(
                                     itemsIndexed(state.bangumiResults) { index, bangumiItem ->
                                         BangumiSearchResultCard(
                                             item = bangumiItem,
+                                            appearance = genericResultCardAppearance,
                                             onClick = {
                                                 if (bangumiItem.seasonId > 0) {
                                                     onBangumiClick(bangumiItem.seasonId)
@@ -597,6 +633,7 @@ fun SearchScreen(
                                     itemsIndexed(state.liveResults) { index, liveItem ->
                                         LiveSearchResultCard(
                                             item = liveItem,
+                                            appearance = genericResultCardAppearance,
                                             onClick = { onLiveClick(liveItem.roomid, liveItem.title, liveItem.uname) }
                                         )
                                         if (index == state.liveResults.size - 3 && state.hasMoreResults && !state.isLoadingMore) {
@@ -1650,6 +1687,30 @@ private fun FilterMenuChip(
     }
 }
 
+@Composable
+private fun SearchResultCardSurface(
+    appearance: SearchResultCardAppearance,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = appearance.containerAlpha),
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = appearance.tonalElevationDp.dp,
+        shadowElevation = appearance.shadowElevationDp.dp,
+        border = if (appearance.borderAlpha > 0f) {
+            BorderStroke(0.8.dp, Color.White.copy(alpha = appearance.borderAlpha))
+        } else {
+            null
+        }
+    ) {
+        content()
+    }
+}
+
 /**
  *  搜索结果卡片 (显示发布时间)
  */
@@ -1805,8 +1866,9 @@ fun SearchResultCard(
  *  UP主搜索结果卡片
  */
 @Composable
-fun UpSearchResultCard(
+internal fun UpSearchResultCard(
     upItem: com.android.purebilibili.data.model.response.SearchUpItem,
+    appearance: SearchResultCardAppearance,
     onClick: () -> Unit
 ) {
 
@@ -1815,12 +1877,10 @@ fun UpSearchResultCard(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
+    SearchResultCardSurface(
+        appearance = appearance,
         onClick = onClick,
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(12.dp),
-        tonalElevation = 1.dp
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
@@ -1929,15 +1989,14 @@ fun UpSearchResultCard(
  *  番剧搜索结果卡片
  */
 @Composable
-fun BangumiSearchResultCard(
+internal fun BangumiSearchResultCard(
     item: com.android.purebilibili.data.model.response.BangumiSearchItem,
+    appearance: SearchResultCardAppearance,
     onClick: () -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(12.dp),
-        shadowElevation = 1.dp
+    SearchResultCardSurface(
+        appearance = appearance,
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
@@ -2034,15 +2093,14 @@ fun BangumiSearchResultCard(
  *  直播搜索结果卡片
  */
 @Composable
-fun LiveSearchResultCard(
+internal fun LiveSearchResultCard(
     item: com.android.purebilibili.data.model.response.LiveRoomSearchItem,
+    appearance: SearchResultCardAppearance,
     onClick: () -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(12.dp),
-        shadowElevation = 1.dp
+    SearchResultCardSurface(
+        appearance = appearance,
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier

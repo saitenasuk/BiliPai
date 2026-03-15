@@ -41,6 +41,7 @@ import androidx.compose.animation.core.spring
 
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.ui.adaptive.MotionTier
@@ -103,6 +104,9 @@ fun StoryVideoCard(
             showCoverGlassBadges = showCoverGlassBadges,
             showInfoGlassBadges = showInfoGlassBadges
         )
+    }
+    val premiumBadgeLabel = remember(video.rights) {
+        resolveVideoPremiumBadgeLabel(video.rights)
     }
     
     //  [新增] 长按删除菜单状态
@@ -242,6 +246,26 @@ fun StoryVideoCard(
                     .clip(RoundedCornerShape(cardCornerRadius)),
                 contentScale = ContentScale.Crop
             )
+
+            if (premiumBadgeLabel != null) {
+                HomeVideoBadgePill(
+                    style = badgeStylePolicy.coverStyle,
+                    shape = RoundedCornerShape(6.dp),
+                    containerColor = BiliPink.copy(alpha = 0.82f),
+                    borderColor = Color.White.copy(alpha = 0.24f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = premiumBadgeLabel,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+            }
             
             //  时长标签 (保留在封面上)
             if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {

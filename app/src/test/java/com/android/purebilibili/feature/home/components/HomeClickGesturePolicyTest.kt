@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -33,10 +34,27 @@ class HomeClickGesturePolicyTest {
     }
 
     @Test
+    fun selectedHomeUsesPrimaryTapForReselect() {
+        assertEquals(
+            BottomBarPrimaryTapAction.HomeReselect,
+            resolveBottomBarPrimaryTapAction(
+                item = BottomNavItem.HOME,
+                isSelected = true
+            )
+        )
+    }
+
+    @Test
     fun dynamicUsesReselectCombinedGestureOnlyWhenSelected() {
         assertTrue(
             shouldUseBottomReselectCombinedClickable(
                 item = BottomNavItem.DYNAMIC,
+                isSelected = true
+            )
+        )
+        assertFalse(
+            shouldUseBottomReselectCombinedClickable(
+                item = BottomNavItem.HOME,
                 isSelected = true
             )
         )

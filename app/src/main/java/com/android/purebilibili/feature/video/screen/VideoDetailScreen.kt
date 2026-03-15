@@ -115,6 +115,8 @@ import com.android.purebilibili.feature.video.ui.components.VideoDetailSkeleton
 import com.android.purebilibili.feature.video.ui.components.VideoActionFeedbackHost
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog  //  评论图片预览
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
+import com.android.purebilibili.feature.video.ui.pager.resolveVideoSubReplySheetMaxHeightFraction
+import com.android.purebilibili.feature.video.ui.pager.resolveVideoSubReplySheetScrimAlpha
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayModePreference
@@ -613,6 +615,11 @@ fun VideoDetailScreen(
 
     var isPipMode by remember { mutableStateOf(isInPipMode) }
     LaunchedEffect(isInPipMode) { isPipMode = isInPipMode }
+    val openFavoriteFolders: (VideoFavoriteEntryPoint) -> Unit = { entryPoint ->
+        when (resolveVideoFavoriteAction(entryPoint)) {
+            VideoFavoriteAction.OpenFolderSheet -> viewModel.showFavoriteFolderDialog()
+        }
+    }
     
     //  [新增] 监听定时关闭状态
     val sleepTimerMinutes by viewModel.sleepTimerMinutes.collectAsState()
@@ -1715,7 +1722,9 @@ fun VideoDetailScreen(
                 onToggleLike = { viewModel.toggleLike() },
                 onDislike = { viewModel.markVideoNotInterested() },
                 onCoin = { viewModel.showCoinDialog() },
-                onToggleFavorite = { viewModel.toggleFavorite() },
+                onToggleFavorite = {
+                    openFavoriteFolders(VideoFavoriteEntryPoint.FullscreenOverlay)
+                },
                 onTriple = { viewModel.doTripleAction() },
                 onRelatedVideoClick = navigateToRelatedVideo,
                 onPageSelect = { viewModel.switchPage(it) },
@@ -2217,7 +2226,9 @@ fun VideoDetailScreen(
                                                         },
                                                         onUpOnlyToggle = { commentViewModel.toggleUpOnly() },
                                                         onFollowClick = { viewModel.toggleFollow() },
-                                                        onFavoriteClick = { viewModel.toggleFavorite() }, // 单击立即收藏/取消收藏
+                                                        onFavoriteClick = {
+                                                            openFavoriteFolders(VideoFavoriteEntryPoint.DetailActionRow)
+                                                        },
                                                         onLikeClick = { viewModel.toggleLike() },
                                                         onCoinClick = { viewModel.openCoinDialog() },
                                                         onTripleClick = { viewModel.doTripleAction() },
@@ -2290,7 +2301,9 @@ fun VideoDetailScreen(
                                                             isFavorited = success.isFavorited,
                                                             isCoined = success.coinCount > 0,
                                                             onLikeClick = { viewModel.toggleLike() },
-                                                            onFavoriteClick = { viewModel.toggleFavorite() },
+                                                            onFavoriteClick = {
+                                                                openFavoriteFolders(VideoFavoriteEntryPoint.BottomInputBar)
+                                                            },
                                                             onCoinClick = { viewModel.openCoinDialog() },
                                                             onShareClick = {
                                                                 val shareText = "【${success.info.title}】\nhttps://www.bilibili.com/video/${success.info.bvid}"
@@ -3099,6 +3112,8 @@ fun VideoDetailScreen(
                 emoteMap = successState?.emoteMap ?: emptyMap(),
                 onDismiss = { commentViewModel.closeSubReply() },
                 onLoadMore = { commentViewModel.loadMoreSubReplies() },
+                maxHeightFraction = resolveVideoSubReplySheetMaxHeightFraction(),
+                scrimAlpha = resolveVideoSubReplySheetScrimAlpha(),
                 //  [新增] 时间戳点击跳转
                 onTimestampClick = { positionMs ->
                     playerState.player.seekTo(positionMs)
