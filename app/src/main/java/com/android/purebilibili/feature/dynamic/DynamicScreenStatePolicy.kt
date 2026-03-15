@@ -37,6 +37,17 @@ internal fun shouldShowDynamicNoMoreFooter(
     return !hasMore && activeItemsCount > 0
 }
 
+internal fun shouldShowDynamicCommentSheet(selectedDynamicId: String?): Boolean {
+    return !selectedDynamicId.isNullOrBlank()
+}
+
+internal fun resolveDynamicCommentSheetTotalCount(
+    liveCount: Int,
+    fallbackCount: Int
+): Int {
+    return if (liveCount > 0) liveCount else fallbackCount.coerceAtLeast(0)
+}
+
 internal fun shouldResetFollowedUserListToTopOnRefresh(
     boundaryKey: String?,
     prependedCount: Int,

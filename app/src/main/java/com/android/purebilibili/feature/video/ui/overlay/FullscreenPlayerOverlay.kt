@@ -628,59 +628,80 @@ fun FullscreenPlayerOverlay(
         
         // 视频播放器
         player?.let { exoPlayer ->
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        this.player = exoPlayer
-                        useController = false
-                        keepScreenOn = true
-                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)  // 禁用系统缓冲指示器
-                        resizeMode = aspectRatio.resizeMode
-                        playerViewRef = this
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                val viewportLayout = remember(maxWidth, maxHeight, aspectRatio) {
+                    with(density) {
+                        com.android.purebilibili.feature.video.ui.components.resolveVideoViewportLayout(
+                            containerWidth = maxWidth.roundToPx(),
+                            containerHeight = maxHeight.roundToPx(),
+                            aspectRatio = aspectRatio
+                        )
                     }
-                },
-                update = { playerView ->
-                    playerView.player = exoPlayer
-                    playerView.resizeMode = aspectRatio.resizeMode
-                    playerViewRef = playerView
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-            
-            //  [新增] DanmakuView (覆盖在 PlayerView 上方) - 使用 DanmakuRenderEngine
-            if (danmakuEnabled) {
+                }
+                val viewportModifier = with(density) {
+                    Modifier
+                        .size(
+                            width = viewportLayout.width.toDp(),
+                            height = viewportLayout.height.toDp()
+                        )
+                }
+
                 AndroidView(
                     factory = { ctx ->
-                        FaceOcclusionDanmakuContainer(ctx).apply {
-                            setMasks(faceVisualMasks)
-                            setVideoViewport(
+                        PlayerView(ctx).apply {
+                            this.player = exoPlayer
+                            useController = false
+                            keepScreenOn = true
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                            resizeMode = aspectRatio.playerResizeMode
+                            playerViewRef = this
+                        }
+                    },
+                    update = { playerView ->
+                        playerView.player = exoPlayer
+                        playerView.resizeMode = aspectRatio.playerResizeMode
+                        playerViewRef = playerView
+                    },
+                    modifier = viewportModifier
+                )
+
+                if (danmakuEnabled) {
+                    AndroidView(
+                        factory = { ctx ->
+                            FaceOcclusionDanmakuContainer(ctx).apply {
+                                setMasks(faceVisualMasks)
+                                setVideoViewport(
+                                    videoWidth = exoPlayer.videoSize.width,
+                                    videoHeight = exoPlayer.videoSize.height,
+                                    resizeMode = aspectRatio.playerResizeMode
+                                )
+                                danmakuManager.attachView(danmakuView())
+                                com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView (RenderEngine) created for fullscreen")
+                            }
+                        },
+                        update = { container ->
+                            container.setMasks(faceVisualMasks)
+                            container.setVideoViewport(
                                 videoWidth = exoPlayer.videoSize.width,
                                 videoHeight = exoPlayer.videoSize.height,
-                                resizeMode = aspectRatio.resizeMode
+                                resizeMode = aspectRatio.playerResizeMode
                             )
-                            danmakuManager.attachView(danmakuView())
-                            com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView (RenderEngine) created for fullscreen")
-                        }
-                    },
-                    update = { container ->
-                        container.setMasks(faceVisualMasks)
-                        container.setVideoViewport(
-                            videoWidth = exoPlayer.videoSize.width,
-                            videoHeight = exoPlayer.videoSize.height,
-                            resizeMode = aspectRatio.resizeMode
-                        )
-                        val view = container.danmakuView()
-                        if (view.width > 0 && view.height > 0) {
-                            val sizeTag = "${view.width}x${view.height}"
-                            if (view.tag != sizeTag) {
-                                view.tag = sizeTag
-                                danmakuManager.attachView(view)
-                                com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView update: size=${view.width}x${view.height}")
+                            val view = container.danmakuView()
+                            if (view.width > 0 && view.height > 0) {
+                                val sizeTag = "${view.width}x${view.height}"
+                                if (view.tag != sizeTag) {
+                                    view.tag = sizeTag
+                                    danmakuManager.attachView(view)
+                                    com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView update: size=${view.width}x${view.height}")
+                                }
                             }
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
+                        },
+                        modifier = viewportModifier
+                    )
+                }
             }
         }
         

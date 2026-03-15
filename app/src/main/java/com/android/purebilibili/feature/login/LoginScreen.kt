@@ -24,8 +24,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 // Enums
 enum class LoginMethod {
-    QR_CODE,
-    PHONE_SMS
+    QR_CODE
+}
+
+internal fun resolveAvailableLoginMethods(): List<LoginMethod> = listOf(LoginMethod.QR_CODE)
+
+internal fun resolveQrLoginReason(): String {
+    return "当前仅保留扫码登录，因为只有扫码能稳定获取完整登录态，并解锁高画质播放能力（4K/HDR/1080P60）。"
 }
 
 @Composable
@@ -35,7 +40,6 @@ fun LoginScreen(
     onClose: () -> Unit
 ) {
     val state by viewModel.state.collectAsState()
-    var selectedMethod by remember { mutableStateOf(LoginMethod.QR_CODE) }
 
     // Handle navigation when login is successful
     LaunchedEffect(state) {
@@ -87,8 +91,6 @@ fun LoginScreen(
         LoginBackground()
 
         IOSLoginLayout(
-            selectedMethod = selectedMethod,
-            onMethodChange = { selectedMethod = it },
             state = state,
             viewModel = viewModel,
             onClose = onClose
@@ -98,8 +100,6 @@ fun LoginScreen(
 
 @Composable
 private fun IOSLoginLayout(
-    selectedMethod: LoginMethod,
-    onMethodChange: (LoginMethod) -> Unit,
     state: LoginState,
     viewModel: LoginViewModel,
     onClose: () -> Unit,
@@ -136,15 +136,11 @@ private fun IOSLoginLayout(
             ) {
                 if (isWide) {
                     WideLoginSheetContent(
-                        selectedMethod = selectedMethod,
-                        onMethodChange = onMethodChange,
                         state = state,
                         viewModel = viewModel
                     )
                 } else {
                     CompactLoginSheetContent(
-                        selectedMethod = selectedMethod,
-                        onMethodChange = onMethodChange,
                         state = state,
                         viewModel = viewModel
                     )
@@ -156,8 +152,6 @@ private fun IOSLoginLayout(
 
 @Composable
 private fun CompactLoginSheetContent(
-    selectedMethod: LoginMethod,
-    onMethodChange: (LoginMethod) -> Unit,
     state: LoginState,
     viewModel: LoginViewModel
 ) {
@@ -170,12 +164,8 @@ private fun CompactLoginSheetContent(
     ) {
         BrandingHeader(isSmall = false)
         Spacer(modifier = Modifier.height(24.dp))
-        LoginMethodTabs(selectedMethod, onMethodChange)
-        Spacer(modifier = Modifier.height(12.dp))
         LoginContentArea(
-            selectedMethod = selectedMethod,
             state = state,
-            viewModel = viewModel,
             onRefreshQr = { viewModel.loadQrCode() },
             modifier = Modifier.weight(1f, fill = false)
         )
@@ -191,8 +181,6 @@ private fun CompactLoginSheetContent(
 
 @Composable
 private fun WideLoginSheetContent(
-    selectedMethod: LoginMethod,
-    onMethodChange: (LoginMethod) -> Unit,
     state: LoginState,
     viewModel: LoginViewModel
 ) {
@@ -211,13 +199,13 @@ private fun WideLoginSheetContent(
             BrandingHeader(isSmall = false)
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "仅扫码登录可解锁更高画质（4K/HDR/1080P60）",
+                text = "为什么现在需要扫码登录？",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "手机号登录可正常使用，但高码率播放能力以扫码登录为准。",
+                text = resolveQrLoginReason(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 lineHeight = 18.sp
@@ -238,12 +226,8 @@ private fun WideLoginSheetContent(
                 .weight(0.58f)
                 .fillMaxHeight()
         ) {
-            LoginMethodTabs(selectedMethod, onMethodChange)
-            Spacer(modifier = Modifier.height(12.dp))
             LoginContentArea(
-                selectedMethod = selectedMethod,
                 state = state,
-                viewModel = viewModel,
                 onRefreshQr = { viewModel.loadQrCode() },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -262,24 +246,19 @@ private fun WideLoginSheetContent(
 
 @Composable
 fun LoginContentArea(
-    selectedMethod: LoginMethod,
     state: LoginState,
-    viewModel: LoginViewModel,
     onRefreshQr: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     AnimatedContent(
-        targetState = selectedMethod,
+        targetState = LoginMethod.QR_CODE,
         transitionSpec = {
             fadeIn(animationSpec = tween(300)) + slideInVertically { height -> height / 20 } togetherWith
             fadeOut(animationSpec = tween(300)) + slideOutVertically { height -> -height / 20 }
         },
         label = "login_content",
         modifier = modifier
-    ) { method ->
-        when (method) {
-            LoginMethod.QR_CODE -> QrCodeLoginContent(state, onRefreshQr)
-            LoginMethod.PHONE_SMS -> PhoneLoginContent(state, viewModel)
-        }
+    ) {
+        QrCodeLoginContent(state, onRefreshQr)
     }
 }

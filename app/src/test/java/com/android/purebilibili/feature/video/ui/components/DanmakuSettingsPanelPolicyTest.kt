@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.ui.components
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DanmakuSettingsPanelPolicyTest {
@@ -64,5 +65,25 @@ class DanmakuSettingsPanelPolicyTest {
         assertEquals(221, fullWidth.maxWidthDp)
         assertEquals(221, halfWidth.maxWidthDp)
         assertEquals(221, thirdWidth.maxWidthDp)
+    }
+
+    @Test
+    fun backdropTapDismissesPanelWhenPointerStaysWithinTouchSlop() {
+        assertTrue(
+            shouldDismissDanmakuSettingsPanelFromBackdropGesture(
+                maxDragDistancePx = 4f,
+                touchSlopPx = 8f
+            )
+        )
+    }
+
+    @Test
+    fun backdropDragDoesNotDismissPanel() {
+        assertFalse(
+            shouldDismissDanmakuSettingsPanelFromBackdropGesture(
+                maxDragDistancePx = 18f,
+                touchSlopPx = 8f
+            )
+        )
     }
 }

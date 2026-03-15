@@ -397,10 +397,9 @@ fun LoginMethodTabs(
 ) {
     val palette = rememberLoginPalette()
     val methods = remember {
-        listOf(
-            Triple(LoginMethod.QR_CODE, "扫码登录", CupertinoIcons.Filled.Camera),
-            Triple(LoginMethod.PHONE_SMS, "手机号", CupertinoIcons.Filled.Phone)
-        )
+        resolveAvailableLoginMethods().map { method ->
+            Triple(method, "扫码登录", CupertinoIcons.Filled.Camera)
+        }
     }
 
     Box(
@@ -489,7 +488,7 @@ fun QrCodeLoginContent(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "仅扫码登录可解锁更高画质（4K/HDR/1080P60）",
+            text = resolveQrLoginReason(),
             color = palette.secondaryText,
             fontSize = 13.sp,
             textAlign = TextAlign.Center

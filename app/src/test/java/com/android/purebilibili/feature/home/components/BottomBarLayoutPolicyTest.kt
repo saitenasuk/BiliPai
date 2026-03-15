@@ -18,8 +18,8 @@ class BottomBarLayoutPolicyTest {
         )
 
         val perItemWidth = (policy.maxBarWidth - (policy.rowPadding * 2)) / 5
-        assertTrue(policy.maxBarWidth.value < 340f)
-        assertTrue(policy.horizontalPadding.value > 24f)
+        assertTrue(policy.maxBarWidth.value > 340f)
+        assertTrue(policy.horizontalPadding.value < 26f)
         assertTrue(perItemWidth.value >= 52f)
     }
 
@@ -55,5 +55,11 @@ class BottomBarLayoutPolicyTest {
 
         assertEquals(0.dp, policy.horizontalPadding)
         assertEquals(393.dp, policy.maxBarWidth)
+    }
+
+    @Test
+    fun `floating default bar trims height while keeping touch comfort`() {
+        assertEquals(58f, resolveBottomBarFloatingHeightDp(labelMode = 1, isTablet = false))
+        assertEquals(12f, resolveBottomBarBottomPaddingDp(isFloating = true, isTablet = false))
     }
 }

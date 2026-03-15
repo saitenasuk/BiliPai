@@ -18,23 +18,69 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.ui.AspectRatioFrameLayout
+import kotlin.math.roundToInt
 //  已改用 MaterialTheme.colorScheme.primary
 
 /**
  * 视频比例枚举
- * 对应 ExoPlayer 的 AspectRatioFrameLayout.ResizeMode
+ * `resizeMode` 保留给旧偏好映射，真实渲染使用 `playerResizeMode`。
  */
-enum class VideoAspectRatio(val displayName: String, val resizeMode: Int) {
+enum class VideoAspectRatio(
+    val displayName: String,
+    val resizeMode: Int,
+    val targetAspectRatio: Float? = null,
+    val playerResizeMode: Int = resizeMode
+) {
     FIT("适应", AspectRatioFrameLayout.RESIZE_MODE_FIT),
     FILL("填充", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
-    RATIO_16_9("16:9", AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH),
-    RATIO_4_3("4:3", AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT),
+    RATIO_16_9(
+        "16:9",
+        AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH,
+        targetAspectRatio = 16f / 9f,
+        playerResizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    ),
+    RATIO_4_3(
+        "4:3",
+        AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT,
+        targetAspectRatio = 4f / 3f,
+        playerResizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    ),
     STRETCH("拉伸", AspectRatioFrameLayout.RESIZE_MODE_FILL);
     
     companion object {
         fun fromResizeMode(mode: Int): VideoAspectRatio {
             return entries.find { it.resizeMode == mode } ?: FIT
         }
+    }
+}
+
+internal data class VideoViewportLayout(
+    val width: Int,
+    val height: Int
+)
+
+internal fun resolveVideoViewportLayout(
+    containerWidth: Int,
+    containerHeight: Int,
+    aspectRatio: VideoAspectRatio
+): VideoViewportLayout {
+    val safeWidth = containerWidth.coerceAtLeast(1)
+    val safeHeight = containerHeight.coerceAtLeast(1)
+    val targetAspectRatio = aspectRatio.targetAspectRatio
+        ?.takeIf { it.isFinite() && it > 0f }
+        ?: return VideoViewportLayout(width = safeWidth, height = safeHeight)
+
+    val containerAspectRatio = safeWidth.toFloat() / safeHeight.toFloat()
+    return if (containerAspectRatio > targetAspectRatio) {
+        VideoViewportLayout(
+            width = (safeHeight * targetAspectRatio).roundToInt().coerceIn(1, safeWidth),
+            height = safeHeight
+        )
+    } else {
+        VideoViewportLayout(
+            width = safeWidth,
+            height = (safeWidth / targetAspectRatio).roundToInt().coerceIn(1, safeHeight)
+        )
     }
 }
 

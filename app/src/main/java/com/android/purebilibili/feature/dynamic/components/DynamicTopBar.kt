@@ -20,6 +20,8 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarHorizontalPadding
+import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarTabEndPadding
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
 import dev.chrisbanes.haze.HazeState
@@ -69,7 +71,7 @@ fun DynamicTopBarWithTabs(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp) // 固定高度 44dp
-                    .padding(horizontal = 16.dp), 
+                    .padding(horizontal = resolveDynamicTopBarHorizontalPadding()), 
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 标题
@@ -105,7 +107,7 @@ fun DynamicTopBarWithTabs(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = resolveDynamicTopBarHorizontalPadding()),
                 horizontalArrangement = Arrangement.Start
             ) {
                 tabs.forEachIndexed { index, tab ->
@@ -114,7 +116,7 @@ fun DynamicTopBarWithTabs(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .clickable { onTabSelected(index) }
-                            .padding(end = 24.dp)
+                            .padding(end = resolveDynamicTopBarTabEndPadding())
                     ) {
                         Text(
                             tab,

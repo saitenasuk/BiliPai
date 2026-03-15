@@ -54,6 +54,20 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
+    fun `comment sheet should only show when a dynamic is selected`() {
+        assertTrue(shouldShowDynamicCommentSheet("dyn:123"))
+        assertFalse(shouldShowDynamicCommentSheet(null))
+        assertFalse(shouldShowDynamicCommentSheet(""))
+    }
+
+    @Test
+    fun `comment sheet total count should prefer live comment payload`() {
+        assertEquals(26, resolveDynamicCommentSheetTotalCount(liveCount = 26, fallbackCount = 12))
+        assertEquals(12, resolveDynamicCommentSheetTotalCount(liveCount = 0, fallbackCount = 12))
+        assertEquals(0, resolveDynamicCommentSheetTotalCount(liveCount = 0, fallbackCount = -3))
+    }
+
+    @Test
     fun `followed user list reset should trigger only for fresh prepended refresh while viewing all`() {
         assertTrue(
             shouldResetFollowedUserListToTopOnRefresh(

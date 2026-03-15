@@ -1,6 +1,7 @@
 // 文件路径: data/repository/SponsorBlockRepository.kt
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.SponsorCategory
 import com.android.purebilibili.data.model.response.SponsorSegment
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +10,13 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+
+internal fun buildSponsorBlockHttpClient(baseClient: OkHttpClient): OkHttpClient {
+    return baseClient.newBuilder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
+        .build()
+}
 
 /**
  * 空降助手 (BilibiliSponsorBlock) 数据仓库
@@ -19,10 +27,7 @@ object SponsorBlockRepository {
     private const val BASE_URL = "https://bsbsb.top/api"
     private const val TAG = "SponsorBlock"
     
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .build()
+    private val client = buildSponsorBlockHttpClient(NetworkModule.okHttpClient)
     
     private val json = Json { 
         ignoreUnknownKeys = true 

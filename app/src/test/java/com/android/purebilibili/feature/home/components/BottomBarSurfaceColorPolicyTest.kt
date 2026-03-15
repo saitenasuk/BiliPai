@@ -19,7 +19,7 @@ class BottomBarSurfaceColorPolicyTest {
     }
 
     @Test
-    fun `blur disabled uses pure white layer on light theme`() {
+    fun `blur disabled keeps light theme surface color`() {
         val color = resolveBottomBarSurfaceColor(
             surfaceColor = Color.White,
             blurEnabled = false,
@@ -30,13 +30,13 @@ class BottomBarSurfaceColorPolicyTest {
     }
 
     @Test
-    fun `blur disabled uses pure white layer even on dark theme`() {
+    fun `blur disabled keeps dark theme surface color`() {
         val color = resolveBottomBarSurfaceColor(
             surfaceColor = Color(0xFF121212),
             blurEnabled = false,
             blurIntensity = BlurIntensity.THIN
         )
 
-        assertEquals(Color.White, color)
+        assertEquals(Color(0xFF121212), color)
     }
 }

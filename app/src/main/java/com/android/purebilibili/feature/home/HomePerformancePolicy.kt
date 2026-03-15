@@ -10,6 +10,14 @@ internal data class HomePerformanceConfig(
     val preloadAheadCount: Int
 )
 
+internal fun resolveHomePreloadAheadCount(
+    isDataSaverActive: Boolean,
+    normalPreloadAheadCount: Int
+): Int {
+    if (isDataSaverActive) return 0
+    return normalPreloadAheadCount.coerceAtLeast(0).coerceAtMost(3)
+}
+
 internal fun resolveHomePerformanceConfig(
     headerBlurEnabled: Boolean,
     bottomBarBlurEnabled: Boolean,
@@ -25,9 +33,11 @@ internal fun resolveHomePerformanceConfig(
     val effectiveDataSaver = isDataSaverActive
     val effectiveLiquidGlass = liquidGlassEnabled && !shouldPrioritizeSmoothness
     val effectivePreloadAheadCount = when {
-        effectiveDataSaver -> 0
         shouldPrioritizeSmoothness -> normalPreloadAheadCount.coerceAtLeast(0).coerceAtMost(2)
-        else -> normalPreloadAheadCount.coerceAtLeast(0)
+        else -> resolveHomePreloadAheadCount(
+            isDataSaverActive = effectiveDataSaver,
+            normalPreloadAheadCount = normalPreloadAheadCount
+        )
     }
 
     return HomePerformanceConfig(

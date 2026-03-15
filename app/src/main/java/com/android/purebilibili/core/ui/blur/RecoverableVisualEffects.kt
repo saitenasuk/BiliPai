@@ -25,10 +25,16 @@ internal fun shouldRecreateRecoverableHazeState(
     return sdkInt >= 36
 }
 
+internal fun shouldAllowHomeChromeLiquidGlass(
+    sdkInt: Int
+): Boolean {
+    return sdkInt >= 34
+}
+
 internal fun shouldAllowDirectHazeLiquidGlassFallback(
     sdkInt: Int
 ): Boolean {
-    return sdkInt < 36
+    return shouldAllowHomeChromeLiquidGlass(sdkInt) && sdkInt < 36
 }
 
 @Composable

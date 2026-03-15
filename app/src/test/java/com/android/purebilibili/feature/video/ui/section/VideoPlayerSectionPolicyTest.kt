@@ -85,7 +85,7 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
-    fun playerSurfaceRebind_skipsWhenPipOrVideoSizeMissing() {
+    fun playerSurfaceRebind_skipsOnlyWhenPipOrPlayerViewMissing() {
         assertFalse(
             shouldRebindPlayerSurfaceOnForeground(
                 hasPlayerView = true,
@@ -94,7 +94,7 @@ class VideoPlayerSectionPolicyTest {
                 videoHeight = 1080
             )
         )
-        assertFalse(
+        assertTrue(
             shouldRebindPlayerSurfaceOnForeground(
                 hasPlayerView = true,
                 isInPipMode = false,

@@ -1251,9 +1251,17 @@ object NetworkModule {
         coerceInputValues = true
     }
 
+    internal fun resolveSharedNetworkProtocols(): List<Protocol> {
+        return listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
+    }
+
+    internal fun resolveApiHttpCacheBudgetBytes(): Long {
+        return 32L * 1024 * 1024
+    }
+
     val okHttpClient: OkHttpClient by lazy {
         val builder = OkHttpClient.Builder()
-            .protocols(listOf(Protocol.HTTP_1_1))
+            .protocols(resolveSharedNetworkProtocols())
             //  [新增] 超时配置，提高网络稳定性
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
@@ -1261,7 +1269,7 @@ object NetworkModule {
             //  [性能优化] HTTP 磁盘缓存 - 10MB，减少重复请求
             .cache(okhttp3.Cache(
                 directory = java.io.File(appContext?.cacheDir ?: java.io.File("/tmp"), "okhttp_cache"),
-                maxSize = 10L * 1024 * 1024  // 10 MB
+                maxSize = resolveApiHttpCacheBudgetBytes()
             ))
             //  [性能优化] 连接池优化 - 保持更多空闲连接
             .connectionPool(okhttp3.ConnectionPool(
@@ -1476,7 +1484,7 @@ object NetworkModule {
     // 当登录用户遭遇风控 (-351) 时，可以尝试以游客身份获取视频
     val guestOkHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .protocols(listOf(Protocol.HTTP_1_1))
+            .protocols(resolveSharedNetworkProtocols())
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)

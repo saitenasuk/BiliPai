@@ -50,6 +50,8 @@ import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.feature.settings.GITHUB_URL
 import com.android.purebilibili.core.store.SettingsManager //  引入 SettingsManager
+import com.android.purebilibili.core.store.HomeTopTabSettings
+import com.android.purebilibili.core.store.AppNavigationSettings
 //  从 components 包导入拆分后的组件
 import com.android.purebilibili.feature.home.components.BottomNavItem
 import com.android.purebilibili.feature.home.components.FluidHomeTopBar
@@ -206,18 +208,18 @@ fun HomeScreen(
 
     // [P2] 顶栏自定义：顺序与可见项从设置读取
     val defaultTopTabIds = remember { resolveDefaultHomeTopTabIds() }
-    val topTabOrderIds by SettingsManager.getTopTabOrder(context).collectAsState(
-        initial = defaultTopTabIds
-    )
-    val topTabVisibleIds by SettingsManager.getTopTabVisibleTabs(context).collectAsState(
-        initial = defaultTopTabIds.toSet()
+    val topTabSettings by SettingsManager.getHomeTopTabSettings(context).collectAsState(
+        initial = HomeTopTabSettings(
+            orderIds = defaultTopTabIds,
+            visibleIds = defaultTopTabIds.toSet()
+        )
     )
     // [Refactor] Hoist PagerState to be available for both Content and Header
     // 确保 pagerState 在所有作用域均可见，以便传给 iOSHomeHeader
-    val topCategories = remember(topTabOrderIds, topTabVisibleIds) {
+    val topCategories = remember(topTabSettings) {
         resolveHomeTopCategories(
-            customOrderIds = topTabOrderIds,
-            visibleIds = topTabVisibleIds
+            customOrderIds = topTabSettings.orderIds,
+            visibleIds = topTabSettings.visibleIds
         )
     }
     val initialPage = resolveHomeTopTabIndex(state.currentCategory, topCategories)
@@ -346,17 +348,20 @@ fun HomeScreen(
     // [New] Broadcast Scroll Offset for Liquid Glass Effect & Parallax
     // Create the state here and provide it
 
+    //  [性能优化] 合并首页设置为单一 Flow，减少 6 个 collectAsState → 1 个
+    val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
+        initial = com.android.purebilibili.core.store.HomeSettings()
+    )
+
     
-    //  [彩蛋] 彩蛋开关设置
-    val easterEggEnabled by SettingsManager.getEasterEggEnabled(context).collectAsState(initial = true)
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var refreshDeltaTipText by remember { mutableStateOf<String?>(null) }
     var dividerRevealRefreshKey by rememberSaveable { mutableLongStateOf(0L) }
     
     //  [彩蛋] 下拉刷新成功后显示趣味提示（仅在开关开启时）
-    LaunchedEffect(state.refreshKey, easterEggEnabled) {
+    LaunchedEffect(state.refreshKey, homeSettings.easterEggEnabled) {
         val message = state.refreshMessage
-        if (message != null && state.refreshKey > 0 && easterEggEnabled) {
+        if (message != null && state.refreshKey > 0 && homeSettings.easterEggEnabled) {
             val result = snackbarHostState.showSnackbar(
                 message = message,
                 actionLabel = "关闭彩蛋",
@@ -467,11 +472,6 @@ fun HomeScreen(
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
     }
 
-    //  [性能优化] 合并首页设置为单一 Flow，减少 6 个 collectAsState → 1 个
-    val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
-        initial = com.android.purebilibili.core.store.HomeSettings()
-    )
-    
     // 解构设置值（避免每次访问都触发重组）
     val displayMode = homeSettings.displayMode
     val isBottomBarFloating = homeSettings.isBottomBarFloating
@@ -513,19 +513,16 @@ fun HomeScreen(
     val isDataSaverActive = homePerformanceConfig.isDataSaverActive
     val preloadAheadCount = homePerformanceConfig.preloadAheadCount
 
-    //  [新增] 底栏可见项目配置
-    val orderedVisibleTabIds by SettingsManager.getOrderedVisibleTabs(context).collectAsState(
-        initial = listOf("HOME", "DYNAMIC", "HISTORY", "PROFILE")
+    val appNavigationSettings by SettingsManager.getAppNavigationSettings(context).collectAsState(
+        initial = AppNavigationSettings()
     )
     // 将字符串 ID 转换为 BottomNavItem 枚举
-    val visibleBottomBarItems = remember(orderedVisibleTabIds) {
-        orderedVisibleTabIds.mapNotNull { id ->
+    val visibleBottomBarItems = remember(appNavigationSettings.orderedVisibleTabIds) {
+        appNavigationSettings.orderedVisibleTabIds.mapNotNull { id ->
             try { BottomNavItem.valueOf(id) } catch (e: Exception) { null }
         }
     }
-    
-    //  [新增] 底栏项目颜色配置
-    val bottomBarItemColors by SettingsManager.getBottomBarItemColors(context).collectAsState(initial = emptyMap<String, Int>())
+    val bottomBarItemColors = appNavigationSettings.bottomBarItemColors
 
     
     //  📐 [平板适配] 根据屏幕尺寸和展示模式动态设置网格列数
@@ -631,8 +628,7 @@ fun HomeScreen(
     }
     
     
-    //   [平板导航切换] 用户偏好设置
-    val tabletUseSidebar by SettingsManager.getTabletUseSidebar(context).collectAsState(initial = false)
+    val tabletUseSidebar = appNavigationSettings.tabletUseSidebar
     
     //  📐 [大屏适配] 平板导航模式：根据用户偏好决定
     // 仅在平板且用户选择了侧边栏时使用侧边导航
@@ -720,10 +716,7 @@ fun HomeScreen(
         }
     }
     
-    //  [新增] 底栏显示模式设置
-    val bottomBarVisibilityMode by SettingsManager.getBottomBarVisibilityMode(context).collectAsState(
-        initial = SettingsManager.BottomBarVisibilityMode.ALWAYS_VISIBLE
-    )
+    val bottomBarVisibilityMode = appNavigationSettings.bottomBarVisibilityMode
     
     //  [Refactor] 使用全局 CompositionLocal 控制底栏可见性
     val setBottomBarVisible = LocalSetBottomBarVisible.current

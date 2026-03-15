@@ -40,6 +40,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
+import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarWidth
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.feature.dynamic.SidebarUser
@@ -64,10 +65,8 @@ fun DynamicSidebar(
     onBackClick: () -> Unit, // 新增：返回按钮回调
     modifier: Modifier = Modifier
 ) {
-    val expandedWidth = 72.dp
-    val collapsedWidth = 64.dp //稍微加宽一点，让头像不拥挤
     val animatedWidth by animateFloatAsState(
-        targetValue = if (isExpanded) expandedWidth.value else collapsedWidth.value,
+        targetValue = resolveDynamicSidebarWidth(isExpanded).value,
         label = "sidebarWidth"
     )
     

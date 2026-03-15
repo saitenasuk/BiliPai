@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.home.components
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
@@ -15,6 +16,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class iOSHomeHeaderVisualPolicyTest {
+
+    @Test
+    fun `home header trims top chrome heights for better content density`() {
+        assertEquals(48.dp, resolveHomeTopSearchBarHeight())
+        assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = true))
+        assertEquals(46.dp, resolveHomeTopTabRowHeight(isTabFloating = false))
+    }
+
+    @Test
+    fun `home header trims horizontal spacing without cramping controls`() {
+        assertEquals(14.dp, resolveHomeTopSearchRowHorizontalPadding())
+        assertEquals(34.dp, resolveHomeTopSearchPillHeight())
+        assertEquals(14.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true))
+    }
 
     @Test
     fun `top chrome uses liquid glass when liquid glass is enabled`() {
@@ -340,6 +355,18 @@ class iOSHomeHeaderVisualPolicyTest {
             ),
             colors.containerColor
         )
+    }
+
+    @Test
+    fun `plain dark header keeps dark surface when blur and glass are disabled`() {
+        val surfaceColor = Color(0xFF121212)
+        val alpha = resolveHomeHeaderSurfaceAlpha(
+            isGlassEnabled = false,
+            blurEnabled = false,
+            blurIntensity = BlurIntensity.THIN
+        )
+
+        assertEquals(surfaceColor, surfaceColor.copy(alpha = alpha))
     }
 
     @Test

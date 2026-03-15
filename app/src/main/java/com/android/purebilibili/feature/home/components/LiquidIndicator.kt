@@ -31,6 +31,7 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.blur
 import com.android.purebilibili.core.store.LiquidGlassStyle
+import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
 
 /**
  * 🌊 液态玻璃选中指示器
@@ -154,7 +155,7 @@ fun LiquidIndicator(
                 .size(indicatorWidth, indicatorHeight)
                 .clip(shape)
                 .run {
-                    if (isLiquidGlassEnabled && backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (isLiquidGlassEnabled && backdrop != null && shouldAllowHomeChromeLiquidGlass(Build.VERSION.SDK_INT)) {
                         // [Effect] Strong refraction for the indicator (Magnifying Glass effect)
                         if (liquidGlassStyle == LiquidGlassStyle.SIMP_MUSIC) {
                             // [Style: SimpMusic] Frosted Glass (Blur Only, No Deformation)
@@ -307,7 +308,7 @@ fun SimpleLiquidIndicator(
                 .size(indicatorWidth, indicatorHeight)
                 .clip(RoundedCornerShape(cornerRadius))
                 .run {
-                    if (isLiquidGlassEnabled && backdrop != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (isLiquidGlassEnabled && backdrop != null && shouldAllowHomeChromeLiquidGlass(Build.VERSION.SDK_INT)) {
                         if (liquidGlassStyle == LiquidGlassStyle.SIMP_MUSIC) {
                             this.drawBackdrop(
                                 backdrop = backdrop,

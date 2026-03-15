@@ -140,6 +140,7 @@ data class HomeSettings(
     val compactVideoStatsOnCover: Boolean = true, //  播放量/评论数显示在封面底部（默认开启）
     val showHomeCoverGlassBadges: Boolean = true, // 首页封面玻璃信息显示
     val showHomeInfoGlassBadges: Boolean = true, // 首页信息区玻璃标签显示
+    val easterEggEnabled: Boolean = false, // 下拉刷新趣味提示开关
     //  [修复] 默认值改为 true，避免在 Flow 加载实际值之前错误触发弹窗
     // 当 Flow 加载完成后，如果实际值是 false，LaunchedEffect 会再次触发并显示弹窗
     val crashTrackingConsentShown: Boolean = true
@@ -183,6 +184,35 @@ data class AppNavigationSettings(
     val orderedVisibleTabIds: List<String> = listOf("HOME", "DYNAMIC", "HISTORY", "PROFILE"),
     val bottomBarItemColors: Map<String, Int> = emptyMap(),
     val tabletUseSidebar: Boolean = false
+)
+
+data class HomeTopTabSettings(
+    val orderIds: List<String> = listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME"),
+    val visibleIds: Set<String> = setOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME")
+)
+
+data class PlayerInteractionSettings(
+    val gestureSensitivity: Float = 1.0f,
+    val doubleTapLikeEnabled: Boolean = true,
+    val doubleTapSeekEnabled: Boolean = true,
+    val portraitSwipeToFullscreenEnabled: Boolean = true,
+    val centerSwipeToFullscreenEnabled: Boolean = true,
+    val slideVolumeBrightnessEnabled: Boolean = true,
+    val setSystemBrightnessEnabled: Boolean = false,
+    val pipNoDanmakuEnabled: Boolean = false,
+    val seekForwardSeconds: Int = 10,
+    val seekBackwardSeconds: Int = 10,
+    val fullscreenSwipeSeekSeconds: Int = 15,
+    val fullscreenSwipeSeekEnabled: Boolean = true,
+    val fullscreenGestureReverse: Boolean = false,
+    val autoEnterFullscreenEnabled: Boolean = false,
+    val autoExitFullscreenEnabled: Boolean = true,
+    val fixedFullscreenAspectRatio: FullscreenAspectRatio = FullscreenAspectRatio.FIT,
+    val subtitleAutoPreference: SubtitleAutoPreference = SubtitleAutoPreference.OFF,
+    val longPressSpeed: Float = 2.0f,
+    val twoFingerVerticalSpeedEnabled: Boolean = false,
+    val twoFingerHorizontalSpeedEnabled: Boolean = false,
+    val hiResLongPressCompatHintShown: Boolean = false
 )
 
 private sealed interface ShareablePreferenceDefinition {
@@ -282,6 +312,16 @@ internal fun mapDanmakuSettingsFromPreferences(preferences: Preferences): Danmak
 
 internal fun mapAppNavigationSettingsFromPreferences(preferences: Preferences): AppNavigationSettings {
     return SettingsManager.mapAppNavigationSettingsFromPreferences(preferences)
+}
+
+internal fun mapHomeTopTabSettingsFromPreferences(preferences: Preferences): HomeTopTabSettings {
+    return SettingsManager.mapHomeTopTabSettingsFromPreferences(preferences)
+}
+
+internal fun mapPlayerInteractionSettingsFromPreferences(
+    preferences: Preferences
+): PlayerInteractionSettings {
+    return SettingsManager.mapPlayerInteractionSettingsFromPreferences(preferences)
 }
 
 object SettingsManager {
@@ -439,6 +479,7 @@ object SettingsManager {
             compactVideoStatsOnCover = preferences[KEY_COMPACT_VIDEO_STATS_ON_COVER] ?: true,
             showHomeCoverGlassBadges = preferences[KEY_HOME_COVER_GLASS_BADGES_VISIBLE] ?: true,
             showHomeInfoGlassBadges = preferences[KEY_HOME_INFO_GLASS_BADGES_VISIBLE] ?: true,
+            easterEggEnabled = preferences[KEY_EASTER_EGG_ENABLED] ?: false,
             // 保持现有运行时行为：首次未配置时按 false 返回
             crashTrackingConsentShown = preferences[KEY_CRASH_TRACKING_CONSENT_SHOWN] ?: false
         )
@@ -447,6 +488,65 @@ object SettingsManager {
     fun getHomeSettings(context: Context): Flow<HomeSettings> {
         return HomeSettingsStore.observe(context)
     }
+
+    internal fun mapHomeTopTabSettingsFromPreferences(preferences: Preferences): HomeTopTabSettings {
+        val orderIds = (preferences[KEY_TOP_TAB_ORDER] ?: DEFAULT_TOP_TAB_ORDER)
+            .split(",")
+            .filter { it.isNotBlank() }
+        val visibleIds = (preferences[KEY_TOP_TAB_VISIBLE_TABS] ?: DEFAULT_TOP_TAB_VISIBLE)
+            .split(",")
+            .filter { it.isNotBlank() }
+            .toSet()
+        return HomeTopTabSettings(
+            orderIds = orderIds,
+            visibleIds = visibleIds
+        )
+    }
+
+    fun getHomeTopTabSettings(context: Context): Flow<HomeTopTabSettings> = context.settingsDataStore.data
+        .map(::mapHomeTopTabSettingsFromPreferences)
+        .distinctUntilChanged()
+
+    internal fun mapPlayerInteractionSettingsFromPreferences(
+        preferences: Preferences
+    ): PlayerInteractionSettings {
+        return PlayerInteractionSettings(
+            gestureSensitivity = (preferences[KEY_GESTURE_SENSITIVITY] ?: 1.0f).coerceIn(0.5f, 2.0f),
+            doubleTapLikeEnabled = preferences[KEY_DOUBLE_TAP_LIKE] ?: true,
+            doubleTapSeekEnabled = preferences[KEY_DOUBLE_TAP_SEEK_ENABLED] ?: true,
+            portraitSwipeToFullscreenEnabled = preferences[KEY_PORTRAIT_SWIPE_TO_FULLSCREEN] ?: true,
+            centerSwipeToFullscreenEnabled = preferences[KEY_CENTER_SWIPE_TO_FULLSCREEN] ?: true,
+            slideVolumeBrightnessEnabled = preferences[KEY_SLIDE_VOLUME_BRIGHTNESS_ENABLED] ?: true,
+            setSystemBrightnessEnabled = preferences[KEY_SET_SYSTEM_BRIGHTNESS] ?: false,
+            pipNoDanmakuEnabled = preferences[KEY_PIP_NO_DANMAKU] ?: false,
+            seekForwardSeconds = (preferences[KEY_SEEK_FORWARD_SECONDS] ?: 10).coerceIn(1, 60),
+            seekBackwardSeconds = (preferences[KEY_SEEK_BACKWARD_SECONDS] ?: 10).coerceIn(1, 60),
+            fullscreenSwipeSeekSeconds = normalizeFullscreenSwipeSeekSeconds(
+                preferences[KEY_FULLSCREEN_SWIPE_SEEK_SECONDS] ?: 15
+            ),
+            fullscreenSwipeSeekEnabled = preferences[KEY_FULLSCREEN_SWIPE_SEEK_ENABLED] ?: true,
+            fullscreenGestureReverse = preferences[KEY_FULLSCREEN_GESTURE_REVERSE] ?: false,
+            autoEnterFullscreenEnabled = preferences[KEY_AUTO_ENTER_FULLSCREEN] ?: false,
+            autoExitFullscreenEnabled = preferences[KEY_AUTO_EXIT_FULLSCREEN] ?: true,
+            fixedFullscreenAspectRatio = FullscreenAspectRatio.fromValue(
+                preferences[KEY_FULLSCREEN_ASPECT_RATIO] ?: FullscreenAspectRatio.FIT.value
+            ),
+            subtitleAutoPreference = SubtitleAutoPreference.entries.getOrElse(
+                preferences[KEY_SUBTITLE_AUTO_PREFERENCE] ?: SubtitleAutoPreference.OFF.ordinal
+            ) { SubtitleAutoPreference.OFF },
+            longPressSpeed = normalizeLongPressSpeed(
+                preferences[KEY_LONG_PRESS_SPEED] ?: DEFAULT_LONG_PRESS_SPEED
+            ),
+            twoFingerVerticalSpeedEnabled = preferences[KEY_TWO_FINGER_VERTICAL_SPEED_ENABLED] ?: false,
+            twoFingerHorizontalSpeedEnabled = preferences[KEY_TWO_FINGER_HORIZONTAL_SPEED_ENABLED] ?: false,
+            hiResLongPressCompatHintShown = preferences[KEY_HI_RES_LONG_PRESS_COMPAT_HINT_SHOWN] ?: false
+        )
+    }
+
+    fun getPlayerInteractionSettings(context: Context): Flow<PlayerInteractionSettings> =
+        context.settingsDataStore.data
+            .map(::mapPlayerInteractionSettingsFromPreferences)
+            .distinctUntilChanged()
 
     // --- Auto Play on Enter (Click to Play) ---
     private val KEY_CLICK_TO_PLAY = booleanPreferencesKey("click_to_play")

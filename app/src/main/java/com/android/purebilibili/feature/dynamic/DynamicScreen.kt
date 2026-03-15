@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +45,9 @@ import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.ui.EmptyState
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.util.responsiveContentWidth
+import com.android.purebilibili.feature.dynamic.resolveDynamicFeedMaxWidth
+import com.android.purebilibili.feature.dynamic.resolveDynamicHorizontalUserListHorizontalPadding
+import com.android.purebilibili.feature.dynamic.resolveDynamicHorizontalUserListSpacing
 
 import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicSidebar
@@ -100,11 +104,7 @@ fun DynamicScreen(
     val showHiddenUsers by viewModel.showHiddenUsers.collectAsState()
     val hiddenUserIds by viewModel.hiddenUserIds.collectAsState()
     
-    //  [新增] 评论/点赞/转发状态
-    val selectedDynamicId by viewModel.selectedDynamicId.collectAsState()
-    val comments by viewModel.comments.collectAsState()
-    val commentsLoading by viewModel.commentsLoading.collectAsState()
-    val subReplyState by viewModel.subReplyState.collectAsState()
+    //  [新增] 点赞/转发状态
     val likedDynamics by viewModel.likedDynamics.collectAsState()
     var showRepostDialog by remember { mutableStateOf<String?>(null) }  // 存储要转发的动态ID
     
@@ -492,35 +492,11 @@ fun DynamicScreen(
         }
     }
     
-    //  [新增] 评论弹窗
-    selectedDynamicId?.let { dynamicId ->
-        //  [修复] 获取动态的总评论数 (使用 ViewModel 中的实时数据)
-        val viewModelCount by viewModel.commentTotalCount.collectAsState()
-        //  作为 fallback (如果 viewModelCount 为 0)，先显示 item 里的旧数据
-        val dynamicItem = remember(dynamicId, state.items, state.userItems) {
-            state.items.find { it.id_str == dynamicId } ?: state.userItems.find { it.id_str == dynamicId }
-        }
-        val staticCount = dynamicItem?.modules?.module_stat?.comment?.count ?: 0
-        val totalCount = if (viewModelCount > 0) viewModelCount else staticCount
-        
-        DynamicCommentSheet(
-            comments = comments,
-            totalCount = totalCount, 
-            isLoading = commentsLoading,
-            onDismiss = { viewModel.closeCommentSheet() },
-            onPostComment = { message ->
-                viewModel.postComment(dynamicId, message) { success, msg ->
-                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                }
-            },
-            onViewReplies = { reply -> viewModel.openSubReply(reply) }
-        )
-    }
-
-    DynamicSubReplyPreviewHost(
-        state = subReplyState,
-        onDismiss = { viewModel.closeSubReply() },
-        onLoadMore = { viewModel.loadMoreSubReplies() }
+    DynamicInteractionOverlayHost(
+        viewModel = viewModel,
+        primaryItems = state.items,
+        secondaryItems = state.userItems,
+        toastContext = context
     )
     
     //  [新增] 转发弹窗
@@ -535,6 +511,57 @@ fun DynamicScreen(
             }
         )
     }
+}
+
+@Composable
+private fun DynamicInteractionOverlayHost(
+    viewModel: DynamicViewModel,
+    primaryItems: List<com.android.purebilibili.data.model.response.DynamicItem>,
+    secondaryItems: List<com.android.purebilibili.data.model.response.DynamicItem>,
+    toastContext: android.content.Context
+) {
+    val selectedDynamicId by viewModel.selectedDynamicId.collectAsState()
+    val comments by viewModel.comments.collectAsState()
+    val commentsLoading by viewModel.commentsLoading.collectAsState()
+    val subReplyState by viewModel.subReplyState.collectAsState()
+    val liveCommentCount by viewModel.commentTotalCount.collectAsState()
+    val inspectionMode = LocalInspectionMode.current
+
+    if (shouldShowDynamicCommentSheet(selectedDynamicId)) {
+        val dynamicId = requireNotNull(selectedDynamicId)
+        val dynamicItem = remember(dynamicId, primaryItems, secondaryItems) {
+            primaryItems.find { it.id_str == dynamicId }
+                ?: secondaryItems.find { it.id_str == dynamicId }
+        }
+        val fallbackCount = dynamicItem?.modules?.module_stat?.comment?.count ?: 0
+        val totalCount = remember(liveCommentCount, fallbackCount) {
+            resolveDynamicCommentSheetTotalCount(
+                liveCount = liveCommentCount,
+                fallbackCount = fallbackCount
+            )
+        }
+
+        DynamicCommentSheet(
+            comments = comments,
+            totalCount = totalCount,
+            isLoading = commentsLoading,
+            onDismiss = { viewModel.closeCommentSheet() },
+            onPostComment = { message ->
+                viewModel.postComment(dynamicId, message) { _, msg ->
+                    if (!inspectionMode) {
+                        android.widget.Toast.makeText(toastContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            onViewReplies = { reply -> viewModel.openSubReply(reply) }
+        )
+    }
+
+    DynamicSubReplyPreviewHost(
+        state = subReplyState,
+        onDismiss = { viewModel.closeSubReply() },
+        onLoadMore = { viewModel.loadMoreSubReplies() }
+    )
 }
 
 /**
@@ -569,7 +596,7 @@ private fun DynamicList(
             top = statusBarHeight + topPaddingExtra,
             bottom = 120.dp // [Modified] Increased to avoid occlusion by persistent BottomBar
         ),
-        modifier = modifier.fillMaxSize().responsiveContentWidth()
+        modifier = modifier.fillMaxSize().responsiveContentWidth(maxWidth = resolveDynamicFeedMaxWidth())
     ) {
         // 空状态
         if (filteredItems.isEmpty() && !state.isLoading && state.error == null) {
@@ -675,10 +702,10 @@ private fun HorizontalUserList(
     LazyRow(
         state = listState,
         contentPadding = PaddingValues(
-            horizontal = 12.dp,
+            horizontal = resolveDynamicHorizontalUserListHorizontalPadding(),
             vertical = resolveHorizontalUserListVerticalPaddingDp().dp
         ),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(resolveDynamicHorizontalUserListSpacing()),
         modifier = modifier
     ) {
             if (hiddenCount > 0 || showHiddenUsers) {

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.alpha
 import com.android.purebilibili.core.ui.blur.shouldAllowDirectHazeLiquidGlassFallback
+import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
@@ -154,6 +155,25 @@ internal data class BottomBarLayoutPolicy(
     val maxBarWidth: Dp
 )
 
+internal fun resolveBottomBarFloatingHeightDp(
+    labelMode: Int,
+    isTablet: Boolean
+): Float {
+    return when (labelMode) {
+        0 -> if (isTablet) 72f else 66f
+        2 -> if (isTablet) 54f else 52f
+        else -> if (isTablet) 64f else 58f
+    }
+}
+
+internal fun resolveBottomBarBottomPaddingDp(
+    isFloating: Boolean,
+    isTablet: Boolean
+): Float {
+    if (!isFloating) return 0f
+    return if (isTablet) 18f else 12f
+}
+
 internal data class BottomBarIndicatorPolicy(
     val widthMultiplier: Float,
     val minWidthDp: Float,
@@ -217,10 +237,10 @@ internal fun resolveBottomBarLayoutPolicy(
 
     val safeItemCount = itemCount.coerceAtLeast(1)
     val rowPadding = when {
-        isTablet && safeItemCount >= 6 -> 18.dp
-        isTablet -> 20.dp
-        safeItemCount >= 5 -> 14.dp
-        else -> 18.dp
+        isTablet && safeItemCount >= 6 -> 16.dp
+        isTablet -> 18.dp
+        safeItemCount >= 5 -> 12.dp
+        else -> 16.dp
     }
     val normalizedLabelMode = when (labelMode) {
         0, 1, 2 -> labelMode
@@ -232,7 +252,7 @@ internal fun resolveBottomBarLayoutPolicy(
         else -> if (isTablet) 58.dp else 50.dp
     }
     val preferredItemWidth = when (normalizedLabelMode) {
-        0 -> if (isTablet) 84.dp else 78.dp
+        0 -> if (isTablet) 84.dp else 80.dp
         2 -> if (isTablet) 80.dp else 74.dp
         else -> if (isTablet) 76.dp else 72.dp
     }
@@ -240,14 +260,14 @@ internal fun resolveBottomBarLayoutPolicy(
     val preferredBarWidth = (rowPadding * 2) + (preferredItemWidth * safeItemCount)
 
     val phoneRatio = when {
-        safeItemCount >= 6 -> 0.80f
-        safeItemCount == 5 -> 0.84f
-        safeItemCount == 4 -> 0.88f
-        else -> 0.90f
+        safeItemCount >= 6 -> 0.84f
+        safeItemCount == 5 -> 0.88f
+        safeItemCount == 4 -> 0.92f
+        else -> 0.93f
     }
     val widthRatio = if (isTablet) 0.86f else phoneRatio
     val visualCap = containerWidth * widthRatio
-    val hardCap = if (isTablet) 640.dp else 420.dp
+    val hardCap = if (isTablet) 640.dp else 432.dp
     val minEdgePadding = if (isTablet) 16.dp else 10.dp
     val containerCap = (containerWidth - (minEdgePadding * 2)).coerceAtLeast(0.dp)
     val maxAllowed = minOf(hardCap, visualCap, containerCap)
@@ -338,11 +358,10 @@ fun FrostedBottomBar(
     }
 
     // 📐 高度计算
-    val floatingHeight = when (labelMode) {
-        0 -> if (isTablet) 76.dp else 70.dp
-        2 -> if (isTablet) 56.dp else 54.dp
-        else -> if (isTablet) 68.dp else 62.dp
-    }
+    val floatingHeight = resolveBottomBarFloatingHeightDp(
+        labelMode = labelMode,
+        isTablet = isTablet
+    ).dp
     val dockedHeight = when (labelMode) {
         0 -> if (isTablet) 72.dp else 72.dp
         2 -> if (isTablet) 52.dp else 56.dp
@@ -356,7 +375,10 @@ fun FrostedBottomBar(
     ) {
         val totalWidth = maxWidth
         // 📐 下边距
-        val barBottomPadding = if (isFloating) (if (isTablet) 20.dp else 16.dp) else 0.dp
+        val barBottomPadding = resolveBottomBarBottomPaddingDp(
+            isFloating = isFloating,
+            isTablet = isTablet
+        ).dp
         
         // [平板适配] 侧边栏按钮也算作一个 Item，确保指示器宽度与内容一致。
         val sidebarCount = if (isTablet && onToggleSidebar != null) 1 else 0
@@ -529,7 +551,7 @@ fun FrostedBottomBar(
                 modifier = Modifier
                     .matchParentSize()
                     .run {
-                        val isSupported = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+                        val isSupported = shouldAllowHomeChromeLiquidGlass(android.os.Build.VERSION.SDK_INT)
                         val allowDirectHazeLiquidGlassFallback =
                             shouldAllowDirectHazeLiquidGlassFallback(android.os.Build.VERSION.SDK_INT)
                         val scrollState = com.android.purebilibili.feature.home.LocalHomeScrollOffset.current
@@ -653,7 +675,7 @@ fun FrostedBottomBar(
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // 内容容器 (用于占位高度) - 应用 liquidGlass 效果在这里
-                    val isSupported = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+                    val isSupported = shouldAllowHomeChromeLiquidGlass(android.os.Build.VERSION.SDK_INT)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -768,7 +790,7 @@ internal fun resolveBottomBarSurfaceColor(
     val alpha = if (blurEnabled) {
         BlurStyles.getBackgroundAlpha(blurIntensity)
     } else {
-        return Color.White
+        return surfaceColor
     }
     return surfaceColor.copy(alpha = alpha)
 }

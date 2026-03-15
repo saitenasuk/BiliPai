@@ -55,4 +55,18 @@ class RecoverableVisualEffectsPolicyTest {
             )
         )
     }
+
+    @Test
+    fun homeChromeLiquidGlassIsDisabledOnAndroid13AndEnabledOnAndroid14Plus() {
+        assertFalse(
+            shouldAllowHomeChromeLiquidGlass(
+                sdkInt = 33
+            )
+        )
+        assertTrue(
+            shouldAllowHomeChromeLiquidGlass(
+                sdkInt = 34
+            )
+        )
+    }
 }
