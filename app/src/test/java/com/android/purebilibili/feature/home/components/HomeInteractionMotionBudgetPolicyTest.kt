@@ -68,6 +68,18 @@ class HomeInteractionMotionBudgetPolicyTest {
     }
 
     @Test
+    fun fullBudget_keepsLeadingTabsVisibleWhenSelectionAlreadyInViewport() {
+        assertFalse(
+            shouldAnimateTopTabAutoScroll(
+                selectedIndex = 1,
+                firstVisibleIndex = 0,
+                lastVisibleIndex = 3,
+                budget = HomeInteractionMotionBudget.FULL
+            )
+        )
+    }
+
+    @Test
     fun topTabTapPolicy_usesImmediatePageSwitchWhenTargetChanges() {
         assertTrue(shouldSnapHomeTopTabSelection(currentPage = 0, targetPage = 1))
         assertFalse(shouldSnapHomeTopTabSelection(currentPage = 2, targetPage = 2))
@@ -94,6 +106,44 @@ class HomeInteractionMotionBudgetPolicyTest {
                 selectedIndex = 1,
                 pagerCurrentPage = 3,
                 pagerTargetPage = 4,
+                pagerIsScrolling = false
+            )
+        )
+    }
+
+    @Test
+    fun pagerSwipePosition_tracksTargetPageContinuously() {
+        assertEquals(
+            0.35f,
+            resolveTopTabPagerPosition(
+                selectedIndex = 0,
+                pagerCurrentPage = 0,
+                pagerTargetPage = 1,
+                pagerCurrentPageOffsetFraction = -0.35f,
+                pagerIsScrolling = true
+            )
+        )
+        assertEquals(
+            0.65f,
+            resolveTopTabPagerPosition(
+                selectedIndex = 1,
+                pagerCurrentPage = 1,
+                pagerTargetPage = 0,
+                pagerCurrentPageOffsetFraction = 0.35f,
+                pagerIsScrolling = true
+            )
+        )
+    }
+
+    @Test
+    fun idlePagerPosition_fallsBackToSettledSelection() {
+        assertEquals(
+            2f,
+            resolveTopTabPagerPosition(
+                selectedIndex = 2,
+                pagerCurrentPage = 1,
+                pagerTargetPage = 3,
+                pagerCurrentPageOffsetFraction = 0.4f,
                 pagerIsScrolling = false
             )
         )

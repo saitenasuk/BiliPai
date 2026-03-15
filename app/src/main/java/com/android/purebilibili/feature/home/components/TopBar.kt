@@ -362,11 +362,13 @@ fun CategoryTabRow(
             // 这是唯一的状态源，消除多状态同步问题
             val currentPosition by remember(pagerState) {
                 derivedStateOf {
-                    if (pagerState != null) {
-                        pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    } else {
-                        selectedIndex.toFloat()
-                    }
+                    resolveTopTabPagerPosition(
+                        selectedIndex = selectedIndex,
+                        pagerCurrentPage = pagerState?.currentPage,
+                        pagerTargetPage = pagerState?.targetPage,
+                        pagerCurrentPageOffsetFraction = pagerState?.currentPageOffsetFraction,
+                        pagerIsScrolling = pagerState?.isScrollInProgress == true
+                    )
                 }
             }
             val viewportAnchorIndex by remember(pagerState, selectedIndex) {
