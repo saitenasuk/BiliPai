@@ -25,14 +25,39 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.math.max
+
+internal data class DynamicStartupLoadPlan(
+    val refreshFeedImmediately: Boolean,
+    val loadLiveStatusImmediately: Boolean,
+    val loadFollowingsImmediately: Boolean,
+    val followingsHydrationDelayMs: Long,
+    val initialFollowingsPageLimit: Int
+)
+
+internal fun resolveDynamicStartupLoadPlan(): DynamicStartupLoadPlan {
+    return DynamicStartupLoadPlan(
+        refreshFeedImmediately = true,
+        loadLiveStatusImmediately = true,
+        loadFollowingsImmediately = false,
+        followingsHydrationDelayMs = 1_200L,
+        initialFollowingsPageLimit = 1
+    )
+}
+
+internal fun resolveDynamicFollowingsPageLimit(isStartupHydration: Boolean): Int {
+    return if (isStartupHydration) 1 else 3
+}
 
 /**
  *  动态页面 ViewModel
@@ -53,6 +78,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var lastFollowingsLoadMs: Long = 0L
     private var isFollowingsLoading: Boolean = false
     private var cacheSaveJob: Job? = null
+    private var startupFollowingsHydrationScheduled: Boolean = false
 
     private val _uiState = MutableStateFlow(DynamicUiState())
     val uiState: StateFlow<DynamicUiState> = _uiState.asStateFlow()
@@ -90,6 +116,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     val displayMode: StateFlow<DynamicDisplayMode> = _displayMode.asStateFlow()
 
     init {
+        val startupPlan = resolveDynamicStartupLoadPlan()
         viewModelScope.launch {
             SettingsManager.getIncrementalTimelineRefresh(appContext).collect { enabled ->
                 incrementalTimelineRefreshEnabled = enabled
@@ -98,9 +125,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         loadUserPreferences()
         loadCachedDynamics()
         rebuildFollowedUsers()
-        refreshInBackground()
-        //  [新增] 加载关注列表
-        viewModelScope.launch { loadAllFollowings() }
+        refreshInBackground(startupPlan)
     }
     
     private fun loadUserPreferences() {
@@ -158,8 +183,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun refreshInBackground() {
-        viewModelScope.launch { refreshData(showRefreshIndicator = false) }
+    private fun refreshInBackground(
+        startupPlan: DynamicStartupLoadPlan = resolveDynamicStartupLoadPlan()
+    ) {
+        viewModelScope.launch {
+            refreshData(showRefreshIndicator = false)
+            scheduleStartupFollowingsHydration(startupPlan)
+        }
     }
 
     private suspend fun refreshData(showRefreshIndicator: Boolean) {
@@ -175,7 +205,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 dynamicJob.await()
                 liveJob.await()
             }
-            requestFollowingsRefreshIfStale()
         } finally {
             if (showRefreshIndicator) {
                 _isRefreshing.value = false
@@ -200,7 +229,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     /**
      *  [新增] 加载完整的关注列表
      */
-    private suspend fun loadAllFollowings(force: Boolean = false) {
+    private suspend fun loadAllFollowings(
+        force: Boolean = false,
+        pageLimit: Int = resolveDynamicFollowingsPageLimit(isStartupHydration = false)
+    ) {
         if (isFollowingsLoading) return
         val now = System.currentTimeMillis()
         if (!force && !shouldReloadFollowings(nowMs = now, lastLoadMs = lastFollowingsLoadMs)) {
@@ -212,9 +244,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             val navResponse = NetworkModule.api.getNavInfo()
             val myMid = navResponse.data?.mid ?: return
             
-            // 加载关注列表（最多加载前 5 页，共 250 人）
+            val maxPages = pageLimit.coerceAtLeast(1)
+            // 加载关注列表（首轮保守拉取，后续按需补齐）
             val allFollowings = mutableListOf<FollowingUser>()
-            for (page in 1..5) {
+            for (page in 1..maxPages) {
                 val response = NetworkModule.api.getFollowings(vmid = myMid, pn = page, ps = 50)
                 val users = response.data?.list ?: break
                 allFollowings.addAll(users)
@@ -236,6 +269,18 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         if (!shouldReloadFollowings(nowMs = now, lastLoadMs = lastFollowingsLoadMs)) return
         viewModelScope.launch {
             loadAllFollowings(force = true)
+        }
+    }
+
+    private fun scheduleStartupFollowingsHydration(startupPlan: DynamicStartupLoadPlan) {
+        if (startupPlan.loadFollowingsImmediately || startupFollowingsHydrationScheduled) return
+        startupFollowingsHydrationScheduled = true
+        viewModelScope.launch {
+            delay(startupPlan.followingsHydrationDelayMs.coerceAtLeast(0L))
+            loadAllFollowings(
+                force = false,
+                pageLimit = startupPlan.initialFollowingsPageLimit
+            )
         }
     }
 
@@ -647,13 +692,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     // 当前选中的动态（用于评论弹窗）
     private val _selectedDynamic = MutableStateFlow<DynamicItem?>(null)
     private val _selectedCommentTarget = MutableStateFlow<DynamicCommentTarget?>(null)
-    val selectedDynamicId: StateFlow<String?> = _selectedDynamic.asStateFlow().let { flow ->
-        MutableStateFlow<String?>(null).also { derived ->
-            viewModelScope.launch {
-                flow.collect { derived.value = it?.id_str }
-            }
-        }
-    }
+    val selectedDynamicId: StateFlow<String?> = _selectedDynamic
+        .map { it?.id_str }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+            initialValue = null
+        )
     
     // 评论列表
     private val _comments = MutableStateFlow<List<com.android.purebilibili.data.model.response.ReplyItem>>(emptyList())

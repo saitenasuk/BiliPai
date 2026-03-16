@@ -1,0 +1,22 @@
+package com.android.purebilibili.feature.dynamic
+
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+internal fun resolveDynamicFeedMaxWidth(): Dp = 760.dp
+
+internal fun resolveDynamicHorizontalUserListHorizontalPadding(): Dp = 10.dp
+
+internal fun resolveDynamicHorizontalUserListSpacing(): Dp = 10.dp
+
+internal fun resolveDynamicTopBarHorizontalPadding(): Dp = 14.dp
+
+internal fun resolveDynamicTopBarTabEndPadding(): Dp = 20.dp
+
+internal fun resolveDynamicSidebarWidth(isExpanded: Boolean): Dp {
+    return if (isExpanded) 68.dp else 60.dp
+}
+
+internal fun resolveDynamicCardOuterPadding(): Dp = 10.dp
+
+internal fun resolveDynamicCardContentPadding(): Dp = 14.dp

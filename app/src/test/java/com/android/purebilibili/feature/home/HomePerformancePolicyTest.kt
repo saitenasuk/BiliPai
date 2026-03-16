@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -25,7 +26,7 @@ class HomePerformancePolicyTest {
         assertFalse(config.cardAnimationEnabled)
         assertTrue(config.cardTransitionEnabled)
         assertFalse(config.isDataSaverActive)
-        assertTrue(config.preloadAheadCount == 5)
+        assertEquals(3, config.preloadAheadCount)
     }
 
     @Test
@@ -60,6 +61,22 @@ class HomePerformancePolicyTest {
 
         assertFalse(config.isDataSaverActive)
         assertTrue(config.liquidGlassEnabled)
-        assertTrue(config.preloadAheadCount == 5)
+        assertEquals(3, config.preloadAheadCount)
+    }
+
+    @Test
+    fun normalMode_capsPreloadAheadToConservativeBudget() {
+        val config = resolveHomePerformanceConfig(
+            headerBlurEnabled = true,
+            bottomBarBlurEnabled = true,
+            liquidGlassEnabled = true,
+            cardAnimationEnabled = true,
+            cardTransitionEnabled = true,
+            isDataSaverActive = false,
+            smartVisualGuardEnabled = false,
+            normalPreloadAheadCount = 5
+        )
+
+        assertEquals(3, config.preloadAheadCount)
     }
 }

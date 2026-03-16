@@ -36,6 +36,8 @@ import coil.compose.AsyncImage
 import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.feature.dynamic.resolveDynamicCardContentPadding
+import com.android.purebilibili.feature.dynamic.resolveDynamicCardOuterPadding
 import com.android.purebilibili.data.model.response.DynamicStatModule
 import com.android.purebilibili.data.model.response.DynamicType
 
@@ -67,7 +69,7 @@ fun DynamicCardV2(
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = resolveDynamicCardOuterPadding(), vertical = 6.dp)
             .clickable(enabled = onDynamicDetailClick != null && cardClickAction != DynamicCardClickAction.None) {
                 when (cardClickAction) {
                     is DynamicCardClickAction.OpenVideo -> onVideoClick(cardClickAction.bvid)
@@ -81,7 +83,7 @@ fun DynamicCardV2(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)  // 卡片内部间距
+            .padding(resolveDynamicCardContentPadding())  // 卡片内部间距
     ) {
         //  [新增] 更多菜单状态
         var showMoreMenu by remember { mutableStateOf(false) }

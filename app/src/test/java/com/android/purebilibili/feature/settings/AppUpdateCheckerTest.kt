@@ -8,9 +8,9 @@ import org.junit.Test
 class AppUpdateCheckerTest {
 
     @Test
-    fun `normalizeVersion should trim v prefix and prerelease suffix`() {
-        assertEquals("5.3.1", AppUpdateChecker.normalizeVersion("v5.3.1-beta.1"))
-        assertEquals("5.3.1", AppUpdateChecker.normalizeVersion(" V5.3.1 "))
+    fun `normalizeVersion should trim v prefix and preserve beta suffix`() {
+        assertEquals("5.3.1 Beta1", AppUpdateChecker.normalizeVersion("v5.3.1 Beta1"))
+        assertEquals("5.3.1-beta.1", AppUpdateChecker.normalizeVersion(" V5.3.1-beta.1 "))
     }
 
     @Test
@@ -25,6 +25,99 @@ class AppUpdateCheckerTest {
     fun `isRemoteNewer should handle different part lengths`() {
         assertTrue(AppUpdateChecker.isRemoteNewer("5.3", "5.3.1"))
         assertFalse(AppUpdateChecker.isRemoteNewer("5.3.1", "5.3"))
+    }
+
+    @Test
+    fun `isRemoteNewer should detect newer beta within same base version`() {
+        assertTrue(AppUpdateChecker.isRemoteNewer("7.0.0 Beta1", "7.0.0 Beta2"))
+        assertFalse(AppUpdateChecker.isRemoteNewer("7.0.0 Beta2", "7.0.0 Beta1"))
+    }
+
+    @Test
+    fun `stable release should be newer than beta of same version`() {
+        assertTrue(AppUpdateChecker.isRemoteNewer("7.0.0 Beta2", "7.0.0"))
+        assertFalse(AppUpdateChecker.isRemoteNewer("7.0.0", "7.0.0 Beta3"))
+    }
+
+    @Test
+    fun `selectLatestReleaseCandidate should allow prerelease when current version is beta`() {
+        val release = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = """
+            [
+              {
+                "tag_name": "v7.0.0 Beta2",
+                "html_url": "https://example.com/beta2",
+                "body": "beta2 notes",
+                "published_at": "2026-03-15T10:00:00Z",
+                "draft": false,
+                "prerelease": true,
+                "assets": []
+              },
+              {
+                "tag_name": "v6.9.9",
+                "html_url": "https://example.com/stable",
+                "body": "stable notes",
+                "published_at": "2026-03-14T10:00:00Z",
+                "draft": false,
+                "prerelease": false,
+                "assets": []
+              }
+            ]
+            """.trimIndent(),
+            currentVersion = "7.0.0 Beta1"
+        )
+
+        assertEquals("v7.0.0 Beta2", release?.tagName)
+    }
+
+    @Test
+    fun `selectLatestReleaseCandidate should ignore prerelease for stable channel`() {
+        val release = AppUpdateChecker.selectLatestReleaseCandidate(
+            rawReleaseJson = """
+            [
+              {
+                "tag_name": "v7.0.1 Beta1",
+                "html_url": "https://example.com/beta",
+                "body": "beta notes",
+                "published_at": "2026-03-15T10:00:00Z",
+                "draft": false,
+                "prerelease": true,
+                "assets": []
+              },
+              {
+                "tag_name": "v7.0.0",
+                "html_url": "https://example.com/stable",
+                "body": "stable notes",
+                "published_at": "2026-03-14T10:00:00Z",
+                "draft": false,
+                "prerelease": false,
+                "assets": []
+              }
+            ]
+            """.trimIndent(),
+            currentVersion = "7.0.0"
+        )
+
+        assertEquals("v7.0.0", release?.tagName)
+    }
+
+    @Test
+    fun `parseRepositoryVersionCandidate should read version from remote gradle file`() {
+        val candidate = AppUpdateChecker.parseRepositoryVersionCandidate(
+            rawBuildGradle = """
+            android {
+                defaultConfig {
+                    versionCode = 114
+                    versionName = "7.0.0 Beta2"
+                }
+            }
+            """.trimIndent()
+        )
+
+        assertEquals("7.0.0 Beta2", candidate?.tagName)
+        assertEquals("https://github.com/jay3-yy/BiliPai", candidate?.releaseUrl)
+        assertTrue(candidate?.releaseNotes?.contains("未创建 GitHub Release") == true)
+        assertTrue(candidate?.isPrerelease == true)
     }
 
     @Test

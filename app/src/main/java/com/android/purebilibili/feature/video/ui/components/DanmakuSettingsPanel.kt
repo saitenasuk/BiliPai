@@ -9,6 +9,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -21,16 +23,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 // 主题色将在 Composable 内通过 MaterialTheme.colorScheme.primary 获取
@@ -90,6 +95,13 @@ fun resolveDanmakuSettingsPanelLayoutPolicy(
     )
 }
 
+internal fun shouldDismissDanmakuSettingsPanelFromBackdropGesture(
+    maxDragDistancePx: Float,
+    touchSlopPx: Float
+): Boolean {
+    return maxDragDistancePx <= touchSlopPx
+}
+
 /**
  * Danmaku Settings Panel
  * 
@@ -138,6 +150,7 @@ fun DanmakuSettingsPanel(
     onDismiss: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
+    val viewConfiguration = LocalViewConfiguration.current
     val layoutPolicy = remember(
         isFullscreen,
         configuration.screenWidthDp,
@@ -157,18 +170,8 @@ fun DanmakuSettingsPanel(
             progressPercent = smartOcclusionDownloadProgress
         )
     }
-    // 使用 Box + 手势检测来实现：点击面板外部关闭，面板内部正常交互
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
-            // 使用 pointerInput 检测点击位置
-            .pointerInput(Unit) {
-                detectTapGestures { 
-                    // 点击背景区域时关闭面板（面板内的点击不会传递到这里）
-                    onDismiss() 
-                }
-            },
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = if (
             layoutPolicy.presentation == DanmakuSettingsPanelPresentation.BottomSheet
         ) {
@@ -177,6 +180,41 @@ fun DanmakuSettingsPanel(
             Alignment.Center
         }
     ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .pointerInput(onDismiss, viewConfiguration.touchSlop) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var maxDragDistancePx = 0f
+                        var active = true
+                        while (active) {
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            event.changes.forEach { change ->
+                                val distance = hypot(
+                                    (change.position.x - down.position.x).toDouble(),
+                                    (change.position.y - down.position.y).toDouble()
+                                ).toFloat()
+                                maxDragDistancePx = max(maxDragDistancePx, distance)
+                                if (change.pressed || change.previousPressed) {
+                                    change.consume()
+                                }
+                            }
+                            active = event.changes.any { it.pressed }
+                        }
+                        if (
+                            shouldDismissDanmakuSettingsPanelFromBackdropGesture(
+                                maxDragDistancePx = maxDragDistancePx,
+                                touchSlopPx = viewConfiguration.touchSlop
+                            )
+                        ) {
+                            onDismiss()
+                        }
+                    }
+                }
+        )
+
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -189,8 +227,19 @@ fun DanmakuSettingsPanel(
                     min = layoutPolicy.minWidthDp.dp,
                     max = layoutPolicy.maxWidthDp.dp
                 )
-                .heightIn(max = layoutPolicy.maxHeightDp.dp),
-            // Surface 本身就会阻止触摸穿透到背景，无需额外处理
+                .heightIn(max = layoutPolicy.maxHeightDp.dp)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            event.changes.forEach { change ->
+                                if (change.pressed || change.previousPressed) {
+                                    change.consume()
+                                }
+                            }
+                        }
+                    }
+                },
             color = PanelBackground,
             shape = RoundedCornerShape(20.dp),
             tonalElevation = 16.dp,

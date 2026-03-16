@@ -59,6 +59,121 @@ data class PlaylistUiState(
     val externalPlaylistSource: ExternalPlaylistSource = ExternalPlaylistSource.NONE
 )
 
+internal data class ShuffleProgress(
+    val history: List<Int> = emptyList(),
+    val historyIndex: Int = -1,
+    val cyclePlayed: Set<Int> = emptySet()
+)
+
+internal data class ShuffleAdvanceResult(
+    val nextIndex: Int?,
+    val progress: ShuffleProgress
+)
+
+internal fun advanceShuffleProgress(
+    playlistSize: Int,
+    currentIndex: Int,
+    progress: ShuffleProgress,
+    chooseCandidate: (List<Int>) -> Int
+): ShuffleAdvanceResult {
+    if (playlistSize <= 0 || currentIndex !in 0 until playlistSize) {
+        return ShuffleAdvanceResult(nextIndex = null, progress = ShuffleProgress())
+    }
+
+    val validHistory = progress.history.filter { it in 0 until playlistSize }
+    val traversedHistory = when {
+        validHistory.isEmpty() -> listOf(currentIndex)
+        progress.historyIndex < 0 -> listOf(currentIndex)
+        else -> validHistory.take((progress.historyIndex + 1).coerceAtMost(validHistory.size))
+    }
+
+    val baseHistory = if (traversedHistory.lastOrNull() == currentIndex) {
+        traversedHistory
+    } else {
+        traversedHistory + currentIndex
+    }
+    val baseHistoryIndex = baseHistory.lastIndex
+    val baseCyclePlayed = progress.cyclePlayed
+        .filter { it in 0 until playlistSize }
+        .toSet() + currentIndex
+
+    if (baseHistoryIndex < validHistory.lastIndex) {
+        val nextIndex = validHistory[baseHistoryIndex + 1]
+        return ShuffleAdvanceResult(
+            nextIndex = nextIndex,
+            progress = ShuffleProgress(
+                history = validHistory,
+                historyIndex = baseHistoryIndex + 1,
+                cyclePlayed = baseCyclePlayed + nextIndex
+            )
+        )
+    }
+
+    val candidatesExcludingCurrent = (0 until playlistSize).filter { it != currentIndex }
+    if (candidatesExcludingCurrent.isEmpty()) {
+        return ShuffleAdvanceResult(
+            nextIndex = null,
+            progress = ShuffleProgress(
+                history = baseHistory,
+                historyIndex = baseHistoryIndex,
+                cyclePlayed = setOf(currentIndex)
+            )
+        )
+    }
+
+    var cyclePlayed = baseCyclePlayed
+    var candidates = candidatesExcludingCurrent.filter { it !in cyclePlayed }
+    if (candidates.isEmpty()) {
+        cyclePlayed = setOf(currentIndex)
+        candidates = candidatesExcludingCurrent
+    }
+
+    val nextIndex = chooseCandidate(candidates)
+    val nextHistory = baseHistory + nextIndex
+    return ShuffleAdvanceResult(
+        nextIndex = nextIndex,
+        progress = ShuffleProgress(
+            history = nextHistory,
+            historyIndex = nextHistory.lastIndex,
+            cyclePlayed = cyclePlayed + nextIndex
+        )
+    )
+}
+
+internal fun reconcileShuffleProgressForPlaylistUpdate(
+    previousPlaylist: List<PlaylistItem>,
+    newPlaylist: List<PlaylistItem>,
+    currentIndex: Int,
+    progress: ShuffleProgress
+): ShuffleProgress {
+    if (newPlaylist.isEmpty() || currentIndex !in newPlaylist.indices) {
+        return ShuffleProgress()
+    }
+
+    val newIndexByBvid = newPlaylist.mapIndexed { index, item -> item.bvid to index }.toMap()
+    val mappedHistory = progress.history
+        .take((progress.historyIndex + 1).coerceAtLeast(0))
+        .mapNotNull { oldIndex ->
+            previousPlaylist.getOrNull(oldIndex)?.bvid?.let(newIndexByBvid::get)
+        }
+    val normalizedHistory = if (mappedHistory.lastOrNull() == currentIndex) {
+        mappedHistory
+    } else {
+        mappedHistory + currentIndex
+    }
+    val mappedCyclePlayed = progress.cyclePlayed
+        .mapNotNull { oldIndex ->
+            previousPlaylist.getOrNull(oldIndex)?.bvid?.let(newIndexByBvid::get)
+        }
+        .toSet() + currentIndex
+
+    return ShuffleProgress(
+        history = normalizedHistory,
+        historyIndex = normalizedHistory.lastIndex,
+        cyclePlayed = mappedCyclePlayed
+    )
+}
+
 internal fun resolvePlaylistUiState(
     playMode: PlayMode,
     playlist: List<PlaylistItem>,
@@ -128,6 +243,7 @@ object PlaylistManager {
     // 已播放的随机索引（用于随机模式历史）
     private val shuffleHistory = mutableListOf<Int>()
     private var shuffleHistoryIndex = -1
+    private val shuffleCyclePlayed = mutableSetOf<Int>()
 
     private var appContext: Context? = null
     private val json = Json { ignoreUnknownKeys = true }
@@ -146,13 +262,20 @@ object PlaylistManager {
      * 注意：此方法会重置外部播放列表标志
      */
     fun setPlaylist(items: List<PlaylistItem>, startIndex: Int = 0) {
+        val previousPlaylist = _playlist.value
+        val previousShuffleProgress = snapshotShuffleProgress()
         Logger.d(TAG, "🎵 设置播放列表: ${items.size} 项, 从索引 $startIndex 开始")
         _playlist.value = items
         _currentIndex.value = resolveStartIndex(items, startIndex)
         _isExternalPlaylist.value = false  // 重置外部播放列表标志
         _externalPlaylistSource.value = ExternalPlaylistSource.NONE
 
-        resetShuffleHistoryForCurrentIndex()
+        restoreShuffleProgressForPlaylistUpdate(
+            previousPlaylist = previousPlaylist,
+            newPlaylist = items,
+            currentIndex = _currentIndex.value,
+            previousProgress = previousShuffleProgress
+        )
         persistState()
     }
     
@@ -167,13 +290,20 @@ object PlaylistManager {
         startIndex: Int = 0,
         source: ExternalPlaylistSource = ExternalPlaylistSource.UNKNOWN
     ) {
+        val previousPlaylist = _playlist.value
+        val previousShuffleProgress = snapshotShuffleProgress()
         Logger.d(TAG, "🔒 设置外部播放列表: ${items.size} 项, 从索引 $startIndex 开始, source=$source")
         _playlist.value = items
         _currentIndex.value = resolveStartIndex(items, startIndex)
         _isExternalPlaylist.value = true  // 标记为外部播放列表
         _externalPlaylistSource.value = source
 
-        resetShuffleHistoryForCurrentIndex()
+        restoreShuffleProgressForPlaylistUpdate(
+            previousPlaylist = previousPlaylist,
+            newPlaylist = items,
+            currentIndex = _currentIndex.value,
+            previousProgress = previousShuffleProgress
+        )
         persistState()
     }
     
@@ -231,6 +361,7 @@ object PlaylistManager {
         _externalPlaylistSource.value = ExternalPlaylistSource.NONE
         shuffleHistory.clear()
         shuffleHistoryIndex = -1
+        shuffleCyclePlayed.clear()
         Logger.d(TAG, " 清空播放列表")
         persistState()
     }
@@ -239,7 +370,11 @@ object PlaylistManager {
      * 设置播放模式
      */
     fun setPlayMode(mode: PlayMode) {
+        val previousMode = _playMode.value
         _playMode.value = mode
+        if (previousMode != PlayMode.SHUFFLE && mode == PlayMode.SHUFFLE) {
+            resetShuffleHistoryForCurrentIndex()
+        }
         Logger.d(TAG, " 播放模式: $mode")
         persistState()
     }
@@ -254,6 +389,9 @@ object PlaylistManager {
             PlayMode.REPEAT_ONE -> PlayMode.SEQUENTIAL
         }
         _playMode.value = newMode
+        if (newMode == PlayMode.SHUFFLE) {
+            resetShuffleHistoryForCurrentIndex()
+        }
         Logger.d(TAG, " 切换播放模式: $newMode")
         persistState()
         return newMode
@@ -284,26 +422,14 @@ object PlaylistManager {
                 if (currentIdx < list.lastIndex) currentIdx + 1 else null
             }
             PlayMode.SHUFFLE -> {
-                // 随机播放
-                if (shuffleHistoryIndex < shuffleHistory.lastIndex) {
-                    // 在历史记录中有下一个
-                    shuffleHistoryIndex++
-                    shuffleHistory[shuffleHistoryIndex]
-                } else {
-                    // 生成新的随机索引
-                    val remaining = list.indices.filter { it != currentIdx && it !in shuffleHistory.takeLast(minOf(5, list.size / 2)) }
-                    if (remaining.isNotEmpty()) {
-                        val next = remaining.random()
-                        shuffleHistory.add(next)
-                        shuffleHistoryIndex = shuffleHistory.lastIndex
-                        next
-                    } else if (list.size > 1) {
-                        val next = list.indices.filter { it != currentIdx }.random()
-                        shuffleHistory.add(next)
-                        shuffleHistoryIndex = shuffleHistory.lastIndex
-                        next
-                    } else null
-                }
+                val result = advanceShuffleProgress(
+                    playlistSize = list.size,
+                    currentIndex = currentIdx,
+                    progress = snapshotShuffleProgress(),
+                    chooseCandidate = { candidates -> candidates.random() }
+                )
+                applyShuffleProgress(result.progress)
+                result.nextIndex
             }
             PlayMode.REPEAT_ONE -> {
                 // 单曲循环：保持当前
@@ -368,8 +494,20 @@ object PlaylistManager {
         
         // 添加到随机历史
         if (_playMode.value == PlayMode.SHUFFLE) {
-            shuffleHistory.add(index)
+            val historyPrefix = if (shuffleHistoryIndex >= 0) {
+                shuffleHistory.take(shuffleHistoryIndex + 1)
+            } else {
+                emptyList()
+            }
+            val nextHistory = if (historyPrefix.lastOrNull() == index) {
+                historyPrefix
+            } else {
+                historyPrefix + index
+            }
+            shuffleHistory.clear()
+            shuffleHistory.addAll(nextHistory)
             shuffleHistoryIndex = shuffleHistory.lastIndex
+            shuffleCyclePlayed.add(index)
         }
         
         Logger.d(TAG, "🎯 跳转到: ${list[index].title} (索引: $index)")
@@ -431,15 +569,64 @@ object PlaylistManager {
     }
 
     private fun resetShuffleHistoryForCurrentIndex() {
-        shuffleHistory.clear()
-        val current = _currentIndex.value
-        val list = _playlist.value
-        if (current in list.indices) {
-            shuffleHistory.add(current)
-            shuffleHistoryIndex = 0
-        } else {
-            shuffleHistoryIndex = -1
+        applyShuffleProgress(
+            initialShuffleProgress(
+                playlistSize = _playlist.value.size,
+                currentIndex = _currentIndex.value
+            )
+        )
+    }
+
+    private fun initialShuffleProgress(
+        playlistSize: Int,
+        currentIndex: Int
+    ): ShuffleProgress {
+        if (playlistSize <= 0 || currentIndex !in 0 until playlistSize) {
+            return ShuffleProgress()
         }
+        return ShuffleProgress(
+            history = listOf(currentIndex),
+            historyIndex = 0,
+            cyclePlayed = setOf(currentIndex)
+        )
+    }
+
+    private fun snapshotShuffleProgress(): ShuffleProgress {
+        return ShuffleProgress(
+            history = shuffleHistory.toList(),
+            historyIndex = shuffleHistoryIndex,
+            cyclePlayed = shuffleCyclePlayed.toSet()
+        )
+    }
+
+    private fun applyShuffleProgress(progress: ShuffleProgress) {
+        shuffleHistory.clear()
+        shuffleHistory.addAll(progress.history)
+        shuffleHistoryIndex = progress.historyIndex
+        shuffleCyclePlayed.clear()
+        shuffleCyclePlayed.addAll(progress.cyclePlayed)
+    }
+
+    private fun restoreShuffleProgressForPlaylistUpdate(
+        previousPlaylist: List<PlaylistItem>,
+        newPlaylist: List<PlaylistItem>,
+        currentIndex: Int,
+        previousProgress: ShuffleProgress
+    ) {
+        val nextProgress = if (_playMode.value == PlayMode.SHUFFLE && previousPlaylist.isNotEmpty()) {
+            reconcileShuffleProgressForPlaylistUpdate(
+                previousPlaylist = previousPlaylist,
+                newPlaylist = newPlaylist,
+                currentIndex = currentIndex,
+                progress = previousProgress
+            )
+        } else {
+            initialShuffleProgress(
+                playlistSize = newPlaylist.size,
+                currentIndex = currentIndex
+            )
+        }
+        applyShuffleProgress(nextProgress)
     }
 
     private fun persistState() {

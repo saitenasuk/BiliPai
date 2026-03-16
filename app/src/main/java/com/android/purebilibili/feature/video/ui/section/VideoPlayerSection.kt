@@ -19,6 +19,7 @@ import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlUiState
 import com.android.purebilibili.feature.video.ui.components.SponsorSkipButton
 import com.android.purebilibili.feature.video.ui.components.TwoFingerSpeedFeedbackOverlay
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
+import com.android.purebilibili.feature.video.ui.components.resolveVideoViewportLayout
 import com.android.purebilibili.feature.video.ui.components.toFullscreenAspectRatio
 import com.android.purebilibili.feature.video.ui.components.toVideoAspectRatio
 import com.android.purebilibili.feature.video.ui.gesture.LockedTwoFingerSpeedAxis
@@ -90,6 +91,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -125,7 +127,6 @@ import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -581,8 +582,7 @@ internal fun shouldRebindPlayerSurfaceOnForeground(
     videoWidth: Int,
     videoHeight: Int
 ): Boolean {
-    if (!hasPlayerView || isInPipMode) return false
-    return videoWidth > 0 && videoHeight > 0
+    return hasPlayerView && !isInPipMode
 }
 
 internal fun rebindPlayerSurfaceIfNeeded(
@@ -815,89 +815,49 @@ fun VideoPlayerSection(
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     // 使用 rememberUpdatedState 确保重组时获取最新值（虽然在单一 Activity 生命周期内可能需要重启生效，但简单场景够用）
     val showStats by remember { mutableStateOf(prefs.getBoolean("show_stats", false)) }
-    
-    //  [新增] 读取手势灵敏度设置
-    val gestureSensitivity by com.android.purebilibili.core.store.SettingsManager
-        .getGestureSensitivity(context)
-        .collectAsState(initial = 1.0f)
+
+    val playerInteractionSettings by com.android.purebilibili.core.store.SettingsManager
+        .getPlayerInteractionSettings(context)
+        .collectAsState(
+            initial = com.android.purebilibili.core.store.PlayerInteractionSettings(
+                hiResLongPressCompatHintShown = com.android.purebilibili.core.store.SettingsManager
+                    .getHiResLongPressCompatHintShownSync(context)
+            )
+        )
+
+    val gestureSensitivity = playerInteractionSettings.gestureSensitivity
 
     // 📱 [优化] realResolution 现在从 playerState.videoSize 计算（见下方）
-    
-    //  读取双击点赞设置 (从 DataStore 读取)
-    val doubleTapLikeEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getDoubleTapLike(context)
-        .collectAsState(initial = true)
-    
-    //  [新增] 读取双击跳转秒数设置
-    val doubleTapSeekEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getDoubleTapSeekEnabled(context)
-        .collectAsState(initial = true)
-
-    val portraitSwipeToFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getPortraitSwipeToFullscreenEnabled(context)
-        .collectAsState(initial = true)
-    val centerSwipeToFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getCenterSwipeToFullscreenEnabled(context)
-        .collectAsState(initial = true)
-    val slideVolumeBrightnessEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getSlideVolumeBrightnessEnabled(context)
-        .collectAsState(initial = true)
-    val setSystemBrightnessEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getSetSystemBrightnessEnabled(context)
-        .collectAsState(initial = false)
-    val pipNoDanmakuEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getPipNoDanmakuEnabled(context)
-        .collectAsState(initial = false)
-
-    val seekForwardSeconds by com.android.purebilibili.core.store.SettingsManager
-        .getSeekForwardSeconds(context)
-        .collectAsState(initial = 10)
-    val seekBackwardSeconds by com.android.purebilibili.core.store.SettingsManager
-        .getSeekBackwardSeconds(context)
-        .collectAsState(initial = 10)
-    val fullscreenSwipeSeekSeconds by produceState<Int?>(initialValue = null, context) {
-        com.android.purebilibili.core.store.SettingsManager
-            .getFullscreenSwipeSeekSeconds(context)
-            .collectLatest { value = it }
-    }
-    val fullscreenSwipeSeekEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getFullscreenSwipeSeekEnabled(context)
-        .collectAsState(initial = true)
-    val fullscreenGestureReverse by com.android.purebilibili.core.store.SettingsManager
-        .getFullscreenGestureReverse(context)
-        .collectAsState(initial = false)
-    val autoEnterFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getAutoEnterFullscreen(context)
-        .collectAsState(initial = false)
-    val autoExitFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getAutoExitFullscreen(context)
-        .collectAsState(initial = true)
+    val doubleTapLikeEnabled = playerInteractionSettings.doubleTapLikeEnabled
+    val doubleTapSeekEnabled = playerInteractionSettings.doubleTapSeekEnabled
+    val portraitSwipeToFullscreenEnabled = playerInteractionSettings.portraitSwipeToFullscreenEnabled
+    val centerSwipeToFullscreenEnabled = playerInteractionSettings.centerSwipeToFullscreenEnabled
+    val slideVolumeBrightnessEnabled = playerInteractionSettings.slideVolumeBrightnessEnabled
+    val setSystemBrightnessEnabled = playerInteractionSettings.setSystemBrightnessEnabled
+    val pipNoDanmakuEnabled = playerInteractionSettings.pipNoDanmakuEnabled
+    val seekForwardSeconds = playerInteractionSettings.seekForwardSeconds
+    val seekBackwardSeconds = playerInteractionSettings.seekBackwardSeconds
+    val fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds
+    val fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled
+    val fullscreenGestureReverse = playerInteractionSettings.fullscreenGestureReverse
+    val autoEnterFullscreenEnabled = playerInteractionSettings.autoEnterFullscreenEnabled
+    val autoExitFullscreenEnabled = playerInteractionSettings.autoExitFullscreenEnabled
     val allowPlaybackStateAutoFullscreen = remember(configuration.smallestScreenWidthDp) {
         shouldAllowPlaybackStateAutoFullscreen(
             smallestScreenWidthDp = configuration.smallestScreenWidthDp
         )
     }
-    val fixedFullscreenAspectRatio by com.android.purebilibili.core.store.SettingsManager
-        .getFullscreenAspectRatio(context)
-        .collectAsState(initial = FullscreenAspectRatio.FIT)
-    val subtitleAutoPreference by com.android.purebilibili.core.store.SettingsManager
-        .getSubtitleAutoPreference(context)
-        .collectAsState(initial = SubtitleAutoPreference.OFF)
+    val fixedFullscreenAspectRatio = playerInteractionSettings.fixedFullscreenAspectRatio
+    val subtitleAutoPreference = playerInteractionSettings.subtitleAutoPreference
     
     //  [新增] 双击跳转视觉反馈状态
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
     var seekFeedbackVisible by remember { mutableStateOf(false) }
     
     //  [新增] 长按倍速设置和状态
-    val longPressSpeed by com.android.purebilibili.core.store.SettingsManager
-        .getLongPressSpeed(context)
-        .collectAsState(initial = 2.0f)
-    val twoFingerVerticalSpeedEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getTwoFingerVerticalSpeedEnabled(context)
-        .collectAsState(initial = false)
-    val twoFingerHorizontalSpeedEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getTwoFingerHorizontalSpeedEnabled(context)
-        .collectAsState(initial = false)
+    val longPressSpeed = playerInteractionSettings.longPressSpeed
+    val twoFingerVerticalSpeedEnabled = playerInteractionSettings.twoFingerVerticalSpeedEnabled
+    val twoFingerHorizontalSpeedEnabled = playerInteractionSettings.twoFingerHorizontalSpeedEnabled
     val twoFingerSpeedMode = remember(
         twoFingerVerticalSpeedEnabled,
         twoFingerHorizontalSpeedEnabled
@@ -907,12 +867,7 @@ fun VideoPlayerSection(
             horizontalEnabled = twoFingerHorizontalSpeedEnabled
         )
     }
-    val hiResCompatHintShownPersisted by com.android.purebilibili.core.store.SettingsManager
-        .getHiResLongPressCompatHintShown(context)
-        .collectAsState(
-            initial = com.android.purebilibili.core.store.SettingsManager
-                .getHiResLongPressCompatHintShownSync(context)
-        )
+    val hiResCompatHintShownPersisted = playerInteractionSettings.hiResLongPressCompatHintShown
     var isLongPressing by remember { mutableStateOf(false) }
     var originalPlaybackParameters by remember { mutableStateOf(PlaybackParameters.DEFAULT) }
     var effectiveLongPressSpeed by remember { mutableFloatStateOf(longPressSpeed) }
@@ -1971,66 +1926,87 @@ fun VideoPlayerSection(
         // 1. PlayerView (底层) - key 触发 graphicsLayer 强制更新
         //  [修复] 添加 isPortraitFullscreen 到 key，确保从全屏返回时重建 PlayerView 并重新绑定 Surface (解决黑屏问题)
         key(isFlippedHorizontal, isFlippedVertical, isPortraitFullscreen) {
-            AndroidView(
-                factory = { ctx ->
-                    val useTextureSurface = shouldUseTextureSurfaceForFlip(
-                        isFlippedHorizontal = isFlippedHorizontal,
-                        isFlippedVertical = isFlippedVertical
-                    )
-                    val basePlayerView = if (useTextureSurface) {
-                        LayoutInflater.from(ctx)
-                            .inflate(com.android.purebilibili.R.layout.view_player_texture, null, false) as PlayerView
-                    } else {
-                        PlayerView(ctx)
+            val viewportAspectRatio = if (isFullscreen) currentAspectRatio else VideoAspectRatio.FIT
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                val density = LocalDensity.current
+                val viewportLayout = remember(maxWidth, maxHeight, viewportAspectRatio) {
+                    with(density) {
+                        resolveVideoViewportLayout(
+                            containerWidth = maxWidth.roundToPx(),
+                            containerHeight = maxHeight.roundToPx(),
+                            aspectRatio = viewportAspectRatio
+                        )
                     }
-                    basePlayerView.apply {
-                        playerViewRef = this
-                        player = if (isPortraitFullscreen) null else playerState.player
-                        setKeepContentOnPlayerReset(
+                }
+
+                AndroidView(
+                    factory = { ctx ->
+                        val useTextureSurface = shouldUseTextureSurfaceForFlip(
+                            isFlippedHorizontal = isFlippedHorizontal,
+                            isFlippedVertical = isFlippedVertical
+                        )
+                        val basePlayerView = if (useTextureSurface) {
+                            LayoutInflater.from(ctx)
+                                .inflate(com.android.purebilibili.R.layout.view_player_texture, null, false) as PlayerView
+                        } else {
+                            PlayerView(ctx)
+                        }
+                        basePlayerView.apply {
+                            playerViewRef = this
+                            player = if (isPortraitFullscreen) null else playerState.player
+                            setKeepContentOnPlayerReset(
+                                shouldKeepInlinePlayerContentOnReset(
+                                    isPortraitFullscreen = isPortraitFullscreen
+                                )
+                            )
+                            setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                            useController = false
+                            keepScreenOn = true
+                            resizeMode = viewportAspectRatio.playerResizeMode
+                            visibility = if (shouldShowInlinePlayerView(isPortraitFullscreen)) {
+                                View.VISIBLE
+                            } else {
+                                View.INVISIBLE
+                            }
+                        }
+                    },
+                    update = { playerView ->
+                        playerViewRef = playerView
+                        playerView.player = if (isPortraitFullscreen) null else playerState.player
+                        playerView.setKeepContentOnPlayerReset(
                             shouldKeepInlinePlayerContentOnReset(
                                 isPortraitFullscreen = isPortraitFullscreen
                             )
                         )
-                        setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)  // 禁用系统缓冲指示器，使用自定义iOS风格加载动画
-                        useController = false
-                        keepScreenOn = true
-                        resizeMode = currentAspectRatio.resizeMode
-                        visibility = if (shouldShowInlinePlayerView(isPortraitFullscreen)) {
+                        playerView.resizeMode = viewportAspectRatio.playerResizeMode
+                        playerView.visibility = if (shouldShowInlinePlayerView(isPortraitFullscreen)) {
                             View.VISIBLE
                         } else {
                             View.INVISIBLE
                         }
+                    },
+                    modifier = with(density) {
+                        Modifier
+                            .size(
+                                width = viewportLayout.width.toDp(),
+                                height = viewportLayout.height.toDp()
+                            )
+                            .alpha(
+                                if (shouldHidePlayerSurfaceDuringForcedReturn(forceCoverDuringReturnAnimation)) 0f else 1f
+                            )
+                            .graphicsLayer {
+                                scaleX = if (isFlippedHorizontal) -scale else scale
+                                scaleY = if (isFlippedVertical) -scale else scale
+                                translationX = panX
+                                translationY = panY
+                            }
                     }
-                },
-                update = { playerView ->
-                    playerViewRef = playerView
-                    playerView.player = if (isPortraitFullscreen) null else playerState.player
-                    playerView.setKeepContentOnPlayerReset(
-                        shouldKeepInlinePlayerContentOnReset(
-                            isPortraitFullscreen = isPortraitFullscreen
-                        )
-                    )
-                    playerView.resizeMode = currentAspectRatio.resizeMode
-                    playerView.visibility = if (shouldShowInlinePlayerView(isPortraitFullscreen)) {
-                        View.VISIBLE
-                    } else {
-                        View.INVISIBLE
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .alpha(
-                        if (shouldHidePlayerSurfaceDuringForcedReturn(forceCoverDuringReturnAnimation)) 0f else 1f
-                    )
-                    .graphicsLayer {
-                        //  [新增] 应用缩放和平移
-                        scaleX = if (isFlippedHorizontal) -scale else scale
-                        scaleY = if (isFlippedVertical) -scale else scale
-                        translationX = panX
-                        translationY = panY
-                    }
-            )
+                )
+            }
         }
         
 
@@ -2237,7 +2213,8 @@ fun VideoPlayerSection(
             
             //  [修复] 移除 key(isFullscreen)，避免横竖屏切换时重建 DanmakuView 导致弹幕消失
             // 使用 remember 保存 DanmakuView 引用，在 update 回调中处理尺寸变化
-            Box(
+            val viewportAspectRatio = if (isFullscreen) currentAspectRatio else VideoAspectRatio.FIT
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(
@@ -2247,8 +2224,19 @@ fun VideoPlayerSection(
                             })
                         } else Modifier
                     )
-                    .clipToBounds()
+                    .clipToBounds(),
+                contentAlignment = Alignment.Center
             ) {
+                val density = LocalDensity.current
+                val viewportLayout = remember(maxWidth, maxHeight, viewportAspectRatio) {
+                    with(density) {
+                        resolveVideoViewportLayout(
+                            containerWidth = maxWidth.roundToPx(),
+                            containerHeight = maxHeight.roundToPx(),
+                            aspectRatio = viewportAspectRatio
+                        )
+                    }
+                }
                 AndroidView(
                     factory = { ctx ->
                         FaceOcclusionDanmakuContainer(ctx).apply {
@@ -2256,7 +2244,7 @@ fun VideoPlayerSection(
                             setVideoViewport(
                                 videoWidth = playerState.player.videoSize.width,
                                 videoHeight = playerState.player.videoSize.height,
-                                resizeMode = currentAspectRatio.resizeMode
+                                resizeMode = viewportAspectRatio.playerResizeMode
                             )
                             danmakuManager.attachView(danmakuView())
                             android.util.Log.d("VideoPlayerSection", " DanmakuView (RenderEngine) created, isFullscreen=$isFullscreen")
@@ -2267,7 +2255,7 @@ fun VideoPlayerSection(
                         container.setVideoViewport(
                             videoWidth = playerState.player.videoSize.width,
                             videoHeight = playerState.player.videoSize.height,
-                            resizeMode = currentAspectRatio.resizeMode
+                            resizeMode = viewportAspectRatio.playerResizeMode
                         )
                         val view = container.danmakuView()
                         //  [关键] 横竖屏切换后视图尺寸变化时，重新 attachView 确保弹幕正确显示
@@ -2281,7 +2269,12 @@ fun VideoPlayerSection(
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = with(density) {
+                        Modifier.size(
+                            width = viewportLayout.width.toDp(),
+                            height = viewportLayout.height.toDp()
+                        )
+                    }
                 )
             }
         }

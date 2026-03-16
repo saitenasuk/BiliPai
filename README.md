@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-14 · 文档已同步至 v6.9.9（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-03-15 · 文档已同步至 v7.0.0 Beta1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.9.9-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.0.0%20Beta1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -544,6 +544,7 @@ app/src/main/java/com/android/purebilibili
 
 ### 🚧 开发中
 
+- [ ] 首页 / 动态 / 播放器高频链路性能重构（状态拆分、减少重组、降低首屏请求扇出）
 - [ ] 文档站与 Wiki 持续补全（模块 API / 调试手册 / 回归清单）
 
 ### 📋 计划中
@@ -559,12 +560,12 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v6.9.9 · 2026-03-14)
+### 最近更新 (v7.0.0 Beta1 · 2026-03-15)
 
-- 🎧 **后台播放与听视频模式继续收敛**：修复通知栏/系统媒体中心上一首失效问题，听视频模式补齐更稳定的 PiP 紧凑布局，并支持更直观的定时关闭。
-- ⭐ **收藏与评论交互更安全连续**：全屏、详情操作区和底部交互栏的收藏入口统一改为打开收藏夹选择面板；“更多回复”优先在嵌入式评论面板内展开，减少跳出视频上下文。
-- 🔎 **搜索结果与首页外观彻底对齐**：搜索页视频、UP、番剧和直播结果都会跟随首页的玻璃/普通样式开关，付费/充电等徽标策略也同步统一。
-- 📦 **下载与离线回看路径更直接**：已完成下载任务点击后会直接进入离线播放目标，不再依赖在线详情页兜转。
+- 🎧 **听视频随机播放与画幅切换修复**：随机播放改为一轮内尽量不重复，修复全屏 `4:3` 画幅切换无效，并统一 `适应 / 填充 / 16:9 / 4:3 / 拉伸` 的显示策略。
+- 🔐 **登录入口收敛为扫码登录**：移除手机号登录 UI，登录页补充“为什么现在需要扫码”的说明，减少入口歧义。
+- 🪟 **首页与动态页空间利用率优化**：缩窄底栏和首页顶栏，收紧动态页卡片与横向 UP 列表间距，关闭玻璃效果后也修复了深色模式底栏发白问题。
+- 🚀 **流畅度与网络链路进入结构性优化阶段**：恢复共享网络栈 HTTP/2、提高 API 缓存预算、减少首页后台预加载，并把动态页评论/回复 overlay 与首页/播放器部分设置订阅从根部拆出，降低整页重组压力。
 
 ### 历史版本
 

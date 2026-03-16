@@ -305,7 +305,8 @@ fun CategoryTabRow(
     liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC,
     backdrop: LayerBackdrop? = null,
     isFloatingStyle: Boolean = false,
-    interactionBudget: HomeInteractionMotionBudget = HomeInteractionMotionBudget.FULL
+    interactionBudget: HomeInteractionMotionBudget = HomeInteractionMotionBudget.FULL,
+    isViewportSyncEnabled: Boolean = true
 ) {
     val visualTuning = remember { resolveTopTabVisualTuning() }
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -362,11 +363,23 @@ fun CategoryTabRow(
             // 这是唯一的状态源，消除多状态同步问题
             val currentPosition by remember(pagerState) {
                 derivedStateOf {
-                    if (pagerState != null) {
-                        pagerState.currentPage + pagerState.currentPageOffsetFraction
-                    } else {
-                        selectedIndex.toFloat()
-                    }
+                    resolveTopTabPagerPosition(
+                        selectedIndex = selectedIndex,
+                        pagerCurrentPage = pagerState?.currentPage,
+                        pagerTargetPage = pagerState?.targetPage,
+                        pagerCurrentPageOffsetFraction = pagerState?.currentPageOffsetFraction,
+                        pagerIsScrolling = pagerState?.isScrollInProgress == true
+                    )
+                }
+            }
+            val viewportAnchorIndex by remember(pagerState, selectedIndex) {
+                derivedStateOf {
+                    resolveTopTabViewportAnchorIndex(
+                        selectedIndex = selectedIndex,
+                        pagerCurrentPage = pagerState?.currentPage,
+                        pagerTargetPage = pagerState?.targetPage,
+                        pagerIsScrolling = pagerState?.isScrollInProgress == true
+                    )
                 }
             }
             
@@ -389,8 +402,11 @@ fun CategoryTabRow(
                 }
             }
 
-            LaunchedEffect(selectedIndex, interactionBudget, firstVisibleIndex, lastVisibleIndex) {
-                val targetIndex = selectedIndex.coerceIn(0, categories.size - 1)
+            LaunchedEffect(viewportAnchorIndex, interactionBudget, firstVisibleIndex, lastVisibleIndex) {
+                if (!isViewportSyncEnabled) {
+                    return@LaunchedEffect
+                }
+                val targetIndex = viewportAnchorIndex.coerceIn(0, categories.size - 1)
                 if (!shouldAnimateTopTabAutoScroll(targetIndex, firstVisibleIndex, lastVisibleIndex, interactionBudget)) {
                     return@LaunchedEffect
                 }

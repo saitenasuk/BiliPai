@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -33,62 +34,91 @@ data class AppUpdateCheckResult(
     val message: String
 )
 
+internal data class AppUpdateReleaseCandidate(
+    val tagName: String,
+    val releaseUrl: String,
+    val releaseNotes: String,
+    val publishedAt: String?,
+    val assets: List<AppUpdateAsset>,
+    val isPrerelease: Boolean
+)
+
 object AppUpdateChecker {
-    private const val LATEST_RELEASE_API = "https://api.github.com/repos/jay3-yy/BiliPai/releases/latest"
+    private const val RELEASES_API = "https://api.github.com/repos/jay3-yy/BiliPai/releases"
+    private const val REPOSITORY_BUILD_GRADLE_URL =
+        "https://raw.githubusercontent.com/jay3-yy/BiliPai/main/app/build.gradle.kts"
+    private const val REPOSITORY_URL = "https://github.com/jay3-yy/BiliPai"
     private const val CONNECT_TIMEOUT_MS = 6000
     private const val READ_TIMEOUT_MS = 8000
     private val releaseJson = Json { ignoreUnknownKeys = true }
 
     suspend fun check(currentVersion: String): Result<AppUpdateCheckResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val connection = (URL(LATEST_RELEASE_API).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                setRequestProperty("Accept", "application/vnd.github+json")
-                setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-                setRequestProperty("User-Agent", "BiliPai-UpdateChecker")
+            val releaseCandidate = fetchRemoteText(RELEASES_API, required = false)
+                ?.let { body -> selectLatestReleaseCandidate(body, currentVersion) }
+            val repositoryCandidate = fetchRemoteText(REPOSITORY_BUILD_GRADLE_URL, required = false)
+                ?.let { body -> parseRepositoryVersionCandidate(body) }
+                ?.takeIf { candidate ->
+                    !candidate.isPrerelease || isPrereleaseVersion(currentVersion)
+                }
+            val release = selectPreferredUpdateCandidate(
+                releaseCandidate = releaseCandidate,
+                repositoryCandidate = repositoryCandidate
+            ) ?: throw IllegalStateException("未获取到有效版本信息")
+
+            val latestTag = release.tagName
+            val latestVersion = normalizeVersion(latestTag)
+            if (latestVersion.isEmpty()) {
+                throw IllegalStateException("未获取到有效版本号")
             }
-            try {
-                val conn = connection
-                val responseCode = conn.responseCode
-                if (responseCode !in 200..299) {
+
+            val releaseUrl = release.releaseUrl
+            val releaseNotes = release.releaseNotes
+            val publishedAt = release.publishedAt
+            val assets = release.assets
+            val updateAvailable = isRemoteNewer(currentVersion, latestVersion)
+            val message = if (updateAvailable) {
+                "发现新版本 v$latestVersion"
+            } else {
+                "已是最新版本"
+            }
+
+            AppUpdateCheckResult(
+                isUpdateAvailable = updateAvailable,
+                currentVersion = normalizeVersion(currentVersion),
+                latestVersion = latestVersion,
+                releaseUrl = releaseUrl,
+                releaseNotes = releaseNotes,
+                publishedAt = publishedAt,
+                assets = assets,
+                message = message
+            )
+        }
+    }
+
+    private fun fetchRemoteText(
+        url: String,
+        required: Boolean
+    ): String? {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            setRequestProperty("User-Agent", "BiliPai-UpdateChecker")
+        }
+        return try {
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                if (required) {
                     throw IllegalStateException("更新接口异常: HTTP $responseCode")
                 }
-
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(JSONTokener(body))
-
-                val latestTag = json.optString("tag_name", "")
-                val latestVersion = normalizeVersion(latestTag)
-                if (latestVersion.isEmpty()) {
-                    throw IllegalStateException("未获取到有效版本号")
-                }
-
-                val releaseUrl = json.optString("html_url", "https://github.com/jay3-yy/BiliPai/releases")
-                val releaseNotes = json.optString("body", "").trim()
-                val publishedAt = json.optString("published_at", "").takeIf { it.isNotBlank() }
-                val assets = parseReleaseAssets(body)
-                val updateAvailable = isRemoteNewer(currentVersion, latestVersion)
-                val message = if (updateAvailable) {
-                    "发现新版本 v$latestVersion"
-                } else {
-                    "已是最新版本"
-                }
-
-                AppUpdateCheckResult(
-                    isUpdateAvailable = updateAvailable,
-                    currentVersion = normalizeVersion(currentVersion),
-                    latestVersion = latestVersion,
-                    releaseUrl = releaseUrl,
-                    releaseNotes = releaseNotes,
-                    publishedAt = publishedAt,
-                    assets = assets,
-                    message = message
-                )
-            } finally {
-                connection.disconnect()
+                return null
             }
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
         }
     }
 
@@ -97,21 +127,14 @@ object AppUpdateChecker {
             .trim()
             .removePrefix("v")
             .removePrefix("V")
-            .substringBefore("-")
             .trim()
     }
 
     internal fun isRemoteNewer(localVersion: String, remoteVersion: String): Boolean {
-        val local = parseVersionParts(normalizeVersion(localVersion))
-        val remote = parseVersionParts(normalizeVersion(remoteVersion))
-        val maxSize = maxOf(local.size, remote.size)
-        for (index in 0 until maxSize) {
-            val localPart = local.getOrElse(index) { 0 }
-            val remotePart = remote.getOrElse(index) { 0 }
-            if (remotePart > localPart) return true
-            if (remotePart < localPart) return false
-        }
-        return false
+        return compareVersions(
+            localVersion = normalizeVersion(localVersion),
+            remoteVersion = normalizeVersion(remoteVersion)
+        ) < 0
     }
 
     internal fun parseVersionParts(version: String): List<Int> {
@@ -119,6 +142,152 @@ object AppUpdateChecker {
         return version
             .split('.')
             .mapNotNull { part -> part.toIntOrNull() }
+    }
+
+    private data class ParsedVersion(
+        val numericParts: List<Int>,
+        val stabilityRank: Int,
+        val qualifierNumber: Int
+    )
+
+    private fun parseComparableVersion(version: String): ParsedVersion {
+        val normalized = normalizeVersion(version)
+        val match = Regex(
+            pattern = """^(\d+(?:\.\d+)*)(?:[\s._-]*(alpha|beta|rc)[\s._-]*(\d+)?)?$""",
+            option = RegexOption.IGNORE_CASE
+        ).matchEntire(normalized)
+        if (match != null) {
+            val numeric = parseVersionParts(match.groupValues[1])
+            val qualifier = match.groupValues[2].lowercase()
+            val qualifierNumber = match.groupValues[3].toIntOrNull() ?: 0
+            val stabilityRank = when (qualifier) {
+                "alpha" -> 0
+                "beta" -> 1
+                "rc" -> 2
+                else -> 3
+            }
+            return ParsedVersion(
+                numericParts = numeric,
+                stabilityRank = stabilityRank,
+                qualifierNumber = qualifierNumber
+            )
+        }
+
+        val numericPrefix = normalized
+            .takeWhile { it.isDigit() || it == '.' }
+            .trimEnd('.')
+        return ParsedVersion(
+            numericParts = parseVersionParts(numericPrefix),
+            stabilityRank = 3,
+            qualifierNumber = 0
+        )
+    }
+
+    private fun compareVersions(localVersion: String, remoteVersion: String): Int {
+        val local = parseComparableVersion(localVersion)
+        val remote = parseComparableVersion(remoteVersion)
+        val maxSize = maxOf(local.numericParts.size, remote.numericParts.size)
+        for (index in 0 until maxSize) {
+            val localPart = local.numericParts.getOrElse(index) { 0 }
+            val remotePart = remote.numericParts.getOrElse(index) { 0 }
+            if (localPart != remotePart) {
+                return localPart.compareTo(remotePart)
+            }
+        }
+        if (local.stabilityRank != remote.stabilityRank) {
+            return local.stabilityRank.compareTo(remote.stabilityRank)
+        }
+        return local.qualifierNumber.compareTo(remote.qualifierNumber)
+    }
+
+    private fun isPrereleaseVersion(version: String): Boolean {
+        val normalized = normalizeVersion(version).lowercase()
+        return normalized.contains("alpha") || normalized.contains("beta") || normalized.contains("rc")
+    }
+
+    internal fun selectLatestReleaseCandidate(
+        rawReleaseJson: String,
+        currentVersion: String
+    ): AppUpdateReleaseCandidate? {
+        val releasesJson = runCatching {
+            releaseJson.parseToJsonElement(rawReleaseJson).jsonArray
+        }.getOrNull() ?: return null
+
+        val allowPrerelease = isPrereleaseVersion(currentVersion)
+        return releasesJson
+            .mapNotNull { releaseElement ->
+                parseReleaseCandidateElement(releaseElement)
+            }
+            .filter { !it.isPrerelease || allowPrerelease }
+            .maxWithOrNull { left, right ->
+                compareVersions(
+                    localVersion = normalizeVersion(left.tagName),
+                    remoteVersion = normalizeVersion(right.tagName)
+                )
+            }
+    }
+
+    internal fun parseRepositoryVersionCandidate(
+        rawBuildGradle: String
+    ): AppUpdateReleaseCandidate? {
+        val versionName = Regex("""versionName\s*=\s*"([^"]+)"""")
+            .find(rawBuildGradle)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+            .orEmpty()
+        if (versionName.isBlank()) return null
+        return AppUpdateReleaseCandidate(
+            tagName = versionName,
+            releaseUrl = REPOSITORY_URL,
+            releaseNotes = "当前版本来自仓库默认分支，尚未创建 GitHub Release。",
+            publishedAt = null,
+            assets = emptyList(),
+            isPrerelease = isPrereleaseVersion(versionName)
+        )
+    }
+
+    internal fun selectPreferredUpdateCandidate(
+        releaseCandidate: AppUpdateReleaseCandidate?,
+        repositoryCandidate: AppUpdateReleaseCandidate?
+    ): AppUpdateReleaseCandidate? {
+        if (releaseCandidate == null) return repositoryCandidate
+        if (repositoryCandidate == null) return releaseCandidate
+        return if (
+            compareVersions(
+                localVersion = normalizeVersion(releaseCandidate.tagName),
+                remoteVersion = normalizeVersion(repositoryCandidate.tagName)
+            ) >= 0
+        ) {
+            releaseCandidate
+        } else {
+            repositoryCandidate
+        }
+    }
+
+    private fun parseReleaseCandidateElement(
+        releaseElement: JsonElement
+    ): AppUpdateReleaseCandidate? {
+        val releaseObject = releaseElement.jsonObject
+        val isDraft = releaseObject["draft"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+        if (isDraft) return null
+        val tagName = releaseObject["tag_name"]?.jsonPrimitive?.content.orEmpty().trim()
+        if (tagName.isBlank()) return null
+        val releaseUrl = releaseObject["html_url"]?.jsonPrimitive?.content
+            ?.takeIf { it.isNotBlank() }
+            ?: "https://github.com/jay3-yy/BiliPai/releases"
+        val releaseNotes = releaseObject["body"]?.jsonPrimitive?.content.orEmpty().trim()
+        val publishedAt = releaseObject["published_at"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        val isPrerelease = releaseObject["prerelease"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
+        val assets = parseReleaseAssets(releaseObject.toString())
+        return AppUpdateReleaseCandidate(
+            tagName = tagName,
+            releaseUrl = releaseUrl,
+            releaseNotes = releaseNotes,
+            publishedAt = publishedAt,
+            assets = assets,
+            isPrerelease = isPrerelease
+        )
     }
 
     internal fun parseReleaseAssets(rawReleaseJson: String): List<AppUpdateAsset> {

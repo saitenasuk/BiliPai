@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-14 · Synced to v6.9.9 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-15 · Synced to v7.0.0 Beta1 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-6.9.9-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.0.0%20Beta1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -389,6 +389,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ### 🚧 WIP
 
+- [ ] Home / Dynamic / Player performance refactor (state isolation, fewer root recompositions, lower startup fanout)
 - [ ] Wiki and module-level documentation expansion
 
 ### 📋 Planned
@@ -404,12 +405,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v6.9.9 · 2026-03-14)
+### Latest (v7.0.0 Beta1 · 2026-03-15)
 
-- 🎧 **Background playback and Audio Mode were tightened up**: fixed the broken previous-track path in notifications / system media controls, added a more stable compact PiP layout for Audio Mode, and surfaced a clearer sleep-timer flow.
-- ⭐ **Favorites and comment interactions are safer and more continuous**: favorite actions from fullscreen, detail actions, and the bottom bar now open the folder picker instead of toggling immediately, and "more replies" stays in the embedded comment surface whenever possible.
-- 🔎 **Search results now fully match home appearance rules**: video, uploader, bangumi, and live result cards follow the same glass/plain style toggles and badge policies as the home feed.
-- 📦 **Offline playback entry is more direct**: tapping a completed download now routes straight to the offline player target instead of depending on the online detail flow.
+- 🎧 **Shuffle playback and aspect ratio fixes**: audio-mode shuffle now avoids repeating the same few tracks within a round, and fullscreen `4:3` switching now works with the full aspect-ratio policy aligned across `Fit / Fill / 16:9 / 4:3 / Stretch`.
+- 🔐 **Login entry is now QR-only**: the phone-login UI entry was removed and the QR login screen now explains why QR login is currently required.
+- 🪟 **Space usage was tightened across home and dynamic screens**: the bottom bar and top header are narrower, dynamic cards and the horizontal uploader row use denser spacing, and dark-mode bottom bar color is now correct when glass/blur is disabled.
+- 🚀 **Performance and network refactor has started landing**: the shared network stack is back on HTTP/2, API cache budget was raised, background preload was reduced, and several root-level subscriptions were moved off the main home/dynamic/player trees to reduce full-screen recomposition pressure.
 
 ---
 
