@@ -196,9 +196,10 @@ internal fun shouldLockLongPressSpeedBySwipe(
 
 internal fun shouldRestorePlaybackParametersAfterLongPressRelease(
     wasLongPressing: Boolean,
-    longPressSpeedLocked: Boolean
+    longPressSpeedLocked: Boolean,
+    gestureEnded: Boolean
 ): Boolean {
-    return wasLongPressing && !longPressSpeedLocked
+    return gestureEnded && wasLongPressing && !longPressSpeedLocked
 }
 
 internal fun resolveVerticalGestureMode(
@@ -758,6 +759,7 @@ fun VideoPlayerSection(
     isVerticalVideo: Boolean = false,
     onPortraitFullscreen: () -> Unit = {},
     isPortraitFullscreen: Boolean = false,
+    viewportWidthDpOverride: Int? = null,
     // 📲 [新增] 小窗模式
     // 📲 [新增] 小窗模式
     onPipClick: () -> Unit = {},
@@ -802,9 +804,12 @@ fun VideoPlayerSection(
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
-    val uiLayoutPolicy = remember(configuration.screenWidthDp) {
+    val uiLayoutWidthDp = remember(configuration.screenWidthDp, viewportWidthDpOverride) {
+        (viewportWidthDpOverride ?: configuration.screenWidthDp).coerceAtLeast(1)
+    }
+    val uiLayoutPolicy = remember(uiLayoutWidthDp) {
         resolveVideoPlayerUiLayoutPolicy(
-            widthDp = configuration.screenWidthDp
+            widthDp = uiLayoutWidthDp
         )
     }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
@@ -1129,7 +1134,8 @@ fun VideoPlayerSection(
                             if (
                                 shouldRestorePlaybackParametersAfterLongPressRelease(
                                     wasLongPressing = isLongPressing,
-                                    longPressSpeedLocked = longPressSpeedLocked
+                                    longPressSpeedLocked = longPressSpeedLocked,
+                                    gestureEnded = true
                                 )
                             ) {
                                 playerState.player.playbackParameters = originalPlaybackParameters
@@ -1274,6 +1280,25 @@ fun VideoPlayerSection(
                             }
                         },
                         onDragEnd = {
+                            if (isLongPressing) {
+                                if (
+                                    shouldRestorePlaybackParametersAfterLongPressRelease(
+                                        wasLongPressing = isLongPressing,
+                                        longPressSpeedLocked = longPressSpeedLocked,
+                                        gestureEnded = true
+                                    )
+                                ) {
+                                    playerState.player.playbackParameters = originalPlaybackParameters
+                                }
+                                isLongPressing = false
+                                longPressSpeedFeedbackVisible = false
+                                totalDragDistanceY = 0f
+                                totalDragDistanceX = 0f
+                                isGestureVisible = false
+                                gestureMode = VideoGestureMode.None
+                                dragStartX = -1f
+                                return@detectDragGestures
+                            }
                             if (gestureMode == VideoGestureMode.Seek) {
                                 val currentPosition = playerState.player.currentPosition
                                 if (shouldCommitGestureSeek(
@@ -1314,8 +1339,22 @@ fun VideoPlayerSection(
                         },
                         onDragCancel = {
                             if (isLongPressing) {
+                                if (
+                                    shouldRestorePlaybackParametersAfterLongPressRelease(
+                                        wasLongPressing = isLongPressing,
+                                        longPressSpeedLocked = longPressSpeedLocked,
+                                        gestureEnded = true
+                                    )
+                                ) {
+                                    playerState.player.playbackParameters = originalPlaybackParameters
+                                }
+                                isLongPressing = false
+                                longPressSpeedFeedbackVisible = false
                                 totalDragDistanceX = 0f
                                 totalDragDistanceY = 0f
+                                isGestureVisible = false
+                                gestureMode = VideoGestureMode.None
+                                dragStartX = -1f
                                 return@detectDragGestures
                             }
                             isGestureVisible = false
@@ -1605,13 +1644,14 @@ fun VideoPlayerSection(
                     },
                     onPress = { offset ->
                         //  等待手指抬起
-                        tryAwaitRelease()
+                        val released = tryAwaitRelease()
                         //  如果之前是长按状态，松开时恢复原速度
-                        if (isLongPressing) {
+                        if (released && isLongPressing) {
                             if (
                                 shouldRestorePlaybackParametersAfterLongPressRelease(
                                     wasLongPressing = isLongPressing,
-                                    longPressSpeedLocked = longPressSpeedLocked
+                                    longPressSpeedLocked = longPressSpeedLocked,
+                                    gestureEnded = true
                                 )
                             ) {
                                 playerState.player.playbackParameters = originalPlaybackParameters

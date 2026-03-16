@@ -38,6 +38,9 @@ import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataShar
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.AiSummaryData
+import com.android.purebilibili.feature.video.ui.FollowButtonTone
+import com.android.purebilibili.feature.video.ui.FollowTextTone
+import com.android.purebilibili.feature.video.ui.resolveVideoFollowVisualPolicy
 import androidx.compose.ui.platform.LocalUriHandler
 
 
@@ -532,9 +535,15 @@ fun UpInfoSection(
         }
 
         // Follow button
+        val followVisualPolicy = remember(isFollowing) {
+            resolveVideoFollowVisualPolicy(isFollowing = isFollowing)
+        }
         Surface(
             onClick = onFollowClick,
-            color = if (isFollowing) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+            color = when (followVisualPolicy.detailButtonTone) {
+                FollowButtonTone.PRIMARY -> MaterialTheme.colorScheme.primary
+                FollowButtonTone.PRIMARY_CONTAINER -> MaterialTheme.colorScheme.primaryContainer
+            },
             shape = RoundedCornerShape(18.dp),
             modifier = followActionModifier
         ) {
@@ -546,7 +555,7 @@ fun UpInfoSection(
                     Icon(
                         CupertinoIcons.Default.Plus,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(Modifier.width(2.dp))
@@ -554,7 +563,10 @@ fun UpInfoSection(
                 Text(
                     text = if (isFollowing) "\u5df2\u5173\u6ce8" else "\u5173\u6ce8",
                     fontSize = 13.sp,
-                    color = if (isFollowing) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+                    color = when (followVisualPolicy.detailTextTone) {
+                        FollowTextTone.ON_PRIMARY -> MaterialTheme.colorScheme.onPrimary
+                        FollowTextTone.ON_PRIMARY_CONTAINER -> MaterialTheme.colorScheme.onPrimaryContainer
+                    },
                     fontWeight = FontWeight.Medium
                 )
             }

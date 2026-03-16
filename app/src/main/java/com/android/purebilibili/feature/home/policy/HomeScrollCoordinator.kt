@@ -13,6 +13,28 @@ internal data class HomeScrollUpdate(
     val globalScrollOffset: Float?
 )
 
+internal fun shouldExpandHomeHeaderForSettledPage(
+    currentHeaderOffsetPx: Float,
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    nearTopScrollOffsetPx: Int = 50
+): Boolean {
+    if (currentHeaderOffsetPx >= 0f) return false
+    if (firstVisibleItemIndex != 0) return false
+    return firstVisibleItemScrollOffset <= nearTopScrollOffsetPx
+}
+
+internal fun resolveHomeHeaderOffsetForSettledPage(
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    maxHeaderCollapsePx: Float
+): Float {
+    if (maxHeaderCollapsePx <= 0f) return 0f
+    if (firstVisibleItemIndex > 0) return -maxHeaderCollapsePx
+    val collapsedOffsetPx = firstVisibleItemScrollOffset.toFloat().coerceIn(0f, maxHeaderCollapsePx)
+    return if (collapsedOffsetPx == 0f) 0f else -collapsedOffsetPx
+}
+
 internal fun reduceHomePreScroll(
     currentHeaderOffsetPx: Float,
     deltaY: Float,

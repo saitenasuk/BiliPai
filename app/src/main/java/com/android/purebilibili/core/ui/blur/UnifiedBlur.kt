@@ -6,12 +6,14 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.store.SettingsManager
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.ExperimentalHazeApi
@@ -24,6 +26,14 @@ internal fun resolveUnifiedBlurIntensity(
     fallback: BlurIntensity
 ): BlurIntensity {
     return provided ?: fallback
+}
+
+internal fun resolveUnifiedBlurredEdgeTreatment(shape: Shape?): BlurredEdgeTreatment {
+    return if (shape != null) {
+        BlurredEdgeTreatment(shape)
+    } else {
+        BlurredEdgeTreatment.Rectangle
+    }
 }
 
 @Composable
@@ -97,6 +107,7 @@ fun Modifier.unifiedBlur(
         style = blurStyle
     ) {
         blurEnabled = true
+        blurredEdgeTreatment = resolveUnifiedBlurredEdgeTreatment(shape)
         @OptIn(ExperimentalHazeApi::class)
         run {
             val inputScaleFactor = resolveBlurInputScale(

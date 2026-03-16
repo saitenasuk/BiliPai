@@ -104,4 +104,70 @@ class HomeScrollCoordinatorTest {
 
         assertEquals(128f, result.globalScrollOffset)
     }
+
+    @Test
+    fun settledPageAtTop_expandsCollapsedHeader() {
+        val result = shouldExpandHomeHeaderForSettledPage(
+            currentHeaderOffsetPx = -96f,
+            firstVisibleItemIndex = 0,
+            firstVisibleItemScrollOffset = 0
+        )
+
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun settledPageAwayFromTop_keepsCollapsedHeader() {
+        val result = shouldExpandHomeHeaderForSettledPage(
+            currentHeaderOffsetPx = -96f,
+            firstVisibleItemIndex = 1,
+            firstVisibleItemScrollOffset = 0
+        )
+
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun expandedHeader_doesNotNeedResetOnPageSettle() {
+        val result = shouldExpandHomeHeaderForSettledPage(
+            currentHeaderOffsetPx = 0f,
+            firstVisibleItemIndex = 0,
+            firstVisibleItemScrollOffset = 0
+        )
+
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun settledTopPage_resolvesExpandedHeaderOffset() {
+        val result = resolveHomeHeaderOffsetForSettledPage(
+            firstVisibleItemIndex = 0,
+            firstVisibleItemScrollOffset = 0,
+            maxHeaderCollapsePx = 120f
+        )
+
+        assertEquals(0f, result)
+    }
+
+    @Test
+    fun settledFirstItemScroll_resolvesPartialHeaderOffset() {
+        val result = resolveHomeHeaderOffsetForSettledPage(
+            firstVisibleItemIndex = 0,
+            firstVisibleItemScrollOffset = 36,
+            maxHeaderCollapsePx = 120f
+        )
+
+        assertEquals(-36f, result)
+    }
+
+    @Test
+    fun settledPagePastFirstItem_resolvesFullyCollapsedHeaderOffset() {
+        val result = resolveHomeHeaderOffsetForSettledPage(
+            firstVisibleItemIndex = 2,
+            firstVisibleItemScrollOffset = 0,
+            maxHeaderCollapsePx = 120f
+        )
+
+        assertEquals(-120f, result)
+    }
 }

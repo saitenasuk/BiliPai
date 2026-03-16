@@ -32,6 +32,7 @@ internal fun HomeTopTabChrome(
     currentTabHeight: Dp,
     tabAlpha: Float,
     tabContentAlpha: Float,
+    containerZIndex: Float = -1f,
     tabHorizontalPadding: Dp,
     tabVerticalPadding: Dp,
     tabVerticalOffset: Dp,
@@ -56,7 +57,7 @@ internal fun HomeTopTabChrome(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .zIndex(-1f)
+            .zIndex(containerZIndex)
             .height(currentTabHeight)
             .graphicsLayer { alpha = tabAlpha * tabContentAlpha }
             .offset { IntOffset(x = 0, y = tabVerticalOffset.roundToPx()) }

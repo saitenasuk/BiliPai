@@ -337,19 +337,29 @@ class VideoPlayerSectionPolicyTest {
         assertTrue(
             shouldRestorePlaybackParametersAfterLongPressRelease(
                 wasLongPressing = true,
-                longPressSpeedLocked = false
+                longPressSpeedLocked = false,
+                gestureEnded = true
             )
         )
         assertFalse(
             shouldRestorePlaybackParametersAfterLongPressRelease(
                 wasLongPressing = true,
-                longPressSpeedLocked = true
+                longPressSpeedLocked = true,
+                gestureEnded = true
             )
         )
         assertFalse(
             shouldRestorePlaybackParametersAfterLongPressRelease(
                 wasLongPressing = false,
-                longPressSpeedLocked = false
+                longPressSpeedLocked = false,
+                gestureEnded = true
+            )
+        )
+        assertFalse(
+            shouldRestorePlaybackParametersAfterLongPressRelease(
+                wasLongPressing = true,
+                longPressSpeedLocked = false,
+                gestureEnded = false
             )
         )
     }

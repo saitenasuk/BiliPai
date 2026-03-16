@@ -68,11 +68,15 @@ import com.android.purebilibili.feature.home.components.resolveHomeDrawerScrimAl
 import com.android.purebilibili.feature.home.components.shouldSnapHomeTopTabSelection
 import com.android.purebilibili.feature.home.components.resolveTopTabStyle
 import com.android.purebilibili.feature.home.components.resolveHomeTopChromeMaterialMode
+import com.android.purebilibili.feature.home.components.resolveHomeTopSearchBarHeight
+import com.android.purebilibili.feature.home.components.resolveHomeTopReservedListPadding
+import com.android.purebilibili.feature.home.components.resolveHomeTopTabRowHeight
 import com.android.purebilibili.feature.home.policy.BottomBarVisibilityIntent
 import com.android.purebilibili.feature.home.policy.HomeBottomBarScrollState
 import com.android.purebilibili.feature.home.policy.reduceHomePreScroll
 import com.android.purebilibili.feature.home.policy.reduceHomeBottomBarListScroll
 import com.android.purebilibili.feature.home.policy.resolveHomeBottomBarBaseVisibility
+import com.android.purebilibili.feature.home.policy.resolveHomeHeaderOffsetForSettledPage
 import com.android.purebilibili.feature.home.policy.shouldAnimateHomePagerToCategory
 import com.android.purebilibili.feature.home.policy.shouldSwitchHomeCategoryFromPager
 import com.android.purebilibili.feature.home.policy.shouldUseInitialHomePagerSnap
@@ -684,7 +688,6 @@ fun HomeScreen(
 
     //  [修复] 动态计算内容顶部边距，防止被头部遮挡
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val listTopPadding = statusBarHeight + 120.dp  // [调整] 优化顶部间距 (110 -> 120) 增加呼吸感
     val homeStartupElapsedAt = remember { SystemClock.elapsedRealtime() }
     var todayWatchStartupRevealHandled by rememberSaveable { mutableStateOf(false) }
 
@@ -854,17 +857,38 @@ fun HomeScreen(
             isLiquidGlassEnabled = isLiquidGlassEnabled
         )
     }
-    val searchBarHeightDp = 52.dp 
-    val tabRowHeightDp = if (topTabStyle.floating) 62.dp else 48.dp
-    val headerHeightDp = searchBarHeightDp + tabRowHeightDp // Total height
+    val searchBarHeightDp = resolveHomeTopSearchBarHeight(uiPreset)
+    val tabRowHeightDp = resolveHomeTopTabRowHeight(
+        isTabFloating = topTabStyle.floating,
+        uiPreset = uiPreset
+    )
+    val listTopPadding = resolveHomeTopReservedListPadding(
+        statusBarHeight = statusBarHeight,
+        searchBarHeight = searchBarHeightDp,
+        tabRowHeight = tabRowHeightDp,
+        uiPreset = uiPreset
+    )
     
     // Pixels
-    val searchBarHeightPx = with(density) { searchBarHeightDp.toPx() }
     val tabRowHeightPx = with(density) { tabRowHeightDp.toPx() }
-    val headerHeightPx = with(density) { headerHeightDp.toPx() }
-    
-    // Thresholds
-    val searchCollapseThreshold = searchBarHeightPx // Collapse search bar first
+
+    LaunchedEffect(pagerState, topCategories, tabRowHeightPx) {
+        snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { (page, scrolling) ->
+                if (scrolling) return@collect
+                val settledCategory = resolveHomeTopCategoryOrNull(topCategories, page) ?: return@collect
+                val settledGridState = gridStates[settledCategory] ?: return@collect
+                val settledHeaderOffsetPx = resolveHomeHeaderOffsetForSettledPage(
+                    firstVisibleItemIndex = settledGridState.firstVisibleItemIndex,
+                    firstVisibleItemScrollOffset = settledGridState.firstVisibleItemScrollOffset,
+                    maxHeaderCollapsePx = tabRowHeightPx
+                )
+                if (kotlin.math.abs(headerOffsetHeightPx - settledHeaderOffsetPx) > 0.5f) {
+                    headerOffsetHeightPx = settledHeaderOffsetPx
+                }
+            }
+    }
     
     // [Feature] Sticky Header Options
     // If true, header will shrink but stay visible. If false, it scrolls away.
@@ -883,7 +907,7 @@ fun HomeScreen(
                 val scrollUpdate = reduceHomePreScroll(
                     currentHeaderOffsetPx = headerOffsetHeightPx,
                     deltaY = available.y,
-                    minHeaderOffsetPx = -headerHeightPx,
+                    minHeaderOffsetPx = -tabRowHeightPx,
                     isHeaderCollapseEnabled = isHeaderCollapseEnabled,
                     isBottomBarAutoHideEnabled = isBottomBarAutoHideEnabled,
                     useSideNavigation = useSideNavigation,

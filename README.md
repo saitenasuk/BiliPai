@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-15 · 文档已同步至 v7.0.0 Beta1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-03-16 · 文档已同步至 v7.0.0 Beta4（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.0.0%20Beta1-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.0.0%20Beta4-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -560,12 +560,12 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.0.0 Beta1 · 2026-03-15)
+### 最近更新 (v7.0.0 Beta4 · 2026-03-16)
 
-- 🎧 **听视频随机播放与画幅切换修复**：随机播放改为一轮内尽量不重复，修复全屏 `4:3` 画幅切换无效，并统一 `适应 / 填充 / 16:9 / 4:3 / 拉伸` 的显示策略。
-- 🔐 **登录入口收敛为扫码登录**：移除手机号登录 UI，登录页补充“为什么现在需要扫码”的说明，减少入口歧义。
-- 🪟 **首页与动态页空间利用率优化**：缩窄底栏和首页顶栏，收紧动态页卡片与横向 UP 列表间距，关闭玻璃效果后也修复了深色模式底栏发白问题。
-- 🚀 **流畅度与网络链路进入结构性优化阶段**：恢复共享网络栈 HTTP/2、提高 API 缓存预算、减少首页后台预加载，并把动态页评论/回复 overlay 与首页/播放器部分设置订阅从根部拆出，降低整页重组压力。
+- 🫧 **首页顶部毛玻璃与一体化头部继续修复**：修复搜索框/标签栏模糊断层、统一顶部面板在普通模糊下局部失效、顶部其它区域不模糊、首屏卡片被头部压住，以及搜索框滚动时错误消失的问题，iOS 预设下的首页头部也改成了更统一的一体式结构。
+- 🧭 **首页分页与顶部收缩同步更稳定**：修复左右切换到“关注”等分页时顶部空白的问题，header 停稳后会按目标分页自己的滚动位置恢复展开或收缩状态。
+- 🎬 **视频详情页布局、手势和发送链路修复**：修复竖屏视频收缩时控件不跟随缩放、长按倍速上滑锁定失效，以及评论发送后一直转圈无法继续发送下一条的问题。
+- 🎨 **主题色与 MD3 细节校正**：`已关注` 视觉统一回到主题语义色，`MD3` 预设下“清除缓存”对话框的超高空白面板问题也已修复。
 
 ### 历史版本
 

@@ -38,6 +38,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -83,38 +84,94 @@ internal fun shouldShowDanmakuSendInput(isPlayerCollapsed: Boolean): Boolean = !
 
 internal data class VideoContentTabBarLayoutSpec(
     val tabsRowWeight: Float,
-    val tabsRowScrollable: Boolean
+    val tabsRowScrollable: Boolean,
+    val containerHorizontalPaddingDp: Int,
+    val tabHorizontalPaddingDp: Int,
+    val tabVerticalPaddingDp: Int,
+    val tabSpacingDp: Int,
+    val selectedTabFontSizeSp: Int,
+    val unselectedTabFontSizeSp: Int,
+    val indicatorWidthDp: Int
 )
 
-internal fun resolveVideoContentTabBarLayoutSpec(): VideoContentTabBarLayoutSpec {
-    return VideoContentTabBarLayoutSpec(
-        tabsRowWeight = 1f,
-        tabsRowScrollable = true
-    )
+internal fun resolveVideoContentTabBarLayoutSpec(widthDp: Int): VideoContentTabBarLayoutSpec {
+    return if (widthDp < 400) {
+        VideoContentTabBarLayoutSpec(
+            tabsRowWeight = 1f,
+            tabsRowScrollable = true,
+            containerHorizontalPaddingDp = 8,
+            tabHorizontalPaddingDp = 8,
+            tabVerticalPaddingDp = 9,
+            tabSpacingDp = 10,
+            selectedTabFontSizeSp = 16,
+            unselectedTabFontSizeSp = 15,
+            indicatorWidthDp = 28
+        )
+    } else {
+        VideoContentTabBarLayoutSpec(
+            tabsRowWeight = 1f,
+            tabsRowScrollable = true,
+            containerHorizontalPaddingDp = 12,
+            tabHorizontalPaddingDp = 12,
+            tabVerticalPaddingDp = 10,
+            tabSpacingDp = 16,
+            selectedTabFontSizeSp = 17,
+            unselectedTabFontSizeSp = 16,
+            indicatorWidthDp = 32
+        )
+    }
 }
 
 internal data class VideoContentTabBarDanmakuActionLayoutPolicy(
     val toggleIconSizeDp: Int,
     val toggleHorizontalPaddingDp: Int,
     val toggleVerticalPaddingDp: Int,
+    val toggleTextSizeSp: Int,
+    val toggleTrailingPaddingDp: Int,
     val sendHorizontalPaddingDp: Int,
     val sendVerticalPaddingDp: Int,
+    val sendTextSizeSp: Int,
+    val sendLabel: String,
     val sendBadgeSizeDp: Int,
     val settingsButtonSizeDp: Int,
-    val settingsIconSizeDp: Int
+    val settingsIconSizeDp: Int,
+    val settingsLeadingPaddingDp: Int
 )
 
-internal fun resolveVideoContentTabBarDanmakuActionLayoutPolicy(): VideoContentTabBarDanmakuActionLayoutPolicy {
-    return VideoContentTabBarDanmakuActionLayoutPolicy(
-        toggleIconSizeDp = 16,
-        toggleHorizontalPaddingDp = 10,
-        toggleVerticalPaddingDp = 6,
-        sendHorizontalPaddingDp = 12,
-        sendVerticalPaddingDp = 8,
-        sendBadgeSizeDp = 22,
-        settingsButtonSizeDp = 40,
-        settingsIconSizeDp = 20
-    )
+internal fun resolveVideoContentTabBarDanmakuActionLayoutPolicy(widthDp: Int): VideoContentTabBarDanmakuActionLayoutPolicy {
+    return if (widthDp < 400) {
+        VideoContentTabBarDanmakuActionLayoutPolicy(
+            toggleIconSizeDp = 14,
+            toggleHorizontalPaddingDp = 8,
+            toggleVerticalPaddingDp = 5,
+            toggleTextSizeSp = 10,
+            toggleTrailingPaddingDp = 6,
+            sendHorizontalPaddingDp = 10,
+            sendVerticalPaddingDp = 7,
+            sendTextSizeSp = 11,
+            sendLabel = "发弹幕",
+            sendBadgeSizeDp = 20,
+            settingsButtonSizeDp = 36,
+            settingsIconSizeDp = 18,
+            settingsLeadingPaddingDp = 4
+        )
+    } else {
+        VideoContentTabBarDanmakuActionLayoutPolicy(
+            toggleIconSizeDp = 16,
+            toggleHorizontalPaddingDp = 10,
+            toggleVerticalPaddingDp = 6,
+            toggleTextSizeSp = 11,
+            toggleTrailingPaddingDp = 8,
+            sendHorizontalPaddingDp = 12,
+            sendVerticalPaddingDp = 8,
+            sendTextSizeSp = 12,
+            sendLabel = "点我发弹幕",
+            sendBadgeSizeDp = 22,
+            settingsButtonSizeDp = 40,
+            settingsIconSizeDp = 20,
+            settingsLeadingPaddingDp = 6
+        )
+    }
 }
 
 /**
@@ -903,8 +960,13 @@ private fun VideoContentTabBar(
     isPlayerCollapsed: Boolean = false,
     onRestorePlayer: () -> Unit = {}
 ) {
-    val layoutSpec = remember { resolveVideoContentTabBarLayoutSpec() }
-    val danmakuActionLayoutPolicy = remember { resolveVideoContentTabBarDanmakuActionLayoutPolicy() }
+    val configuration = LocalConfiguration.current
+    val layoutSpec = remember(configuration.screenWidthDp) {
+        resolveVideoContentTabBarLayoutSpec(widthDp = configuration.screenWidthDp)
+    }
+    val danmakuActionLayoutPolicy = remember(configuration.screenWidthDp) {
+        resolveVideoContentTabBarDanmakuActionLayoutPolicy(widthDp = configuration.screenWidthDp)
+    }
     Column(
         modifier = modifier
     ) {
@@ -912,7 +974,7 @@ private fun VideoContentTabBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = layoutSpec.containerHorizontalPaddingDp.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
@@ -933,11 +995,18 @@ private fun VideoContentTabBar(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .clickable { onTabSelected(index) }
-                            .padding(vertical = 10.dp, horizontal = 12.dp) // Increased padding
+                            .padding(
+                                vertical = layoutSpec.tabVerticalPaddingDp.dp,
+                                horizontal = layoutSpec.tabHorizontalPaddingDp.dp
+                            )
                     ) {
                         Text(
                             text = title,
-                            fontSize = if (isSelected) 17.sp else 16.sp, // Increased font size
+                            fontSize = if (isSelected) {
+                                layoutSpec.selectedTabFontSizeSp.sp
+                            } else {
+                                layoutSpec.unselectedTabFontSizeSp.sp
+                            },
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, // Slightly bolder unselected
                             color = if (isSelected) MaterialTheme.colorScheme.primary
                                    else MaterialTheme.colorScheme.onSurface, // More visible unselected color
@@ -947,14 +1016,14 @@ private fun VideoContentTabBar(
                         Spacer(modifier = Modifier.height(4.dp))
                         Box(
                             modifier = Modifier
-                                .width(if (isSelected) 32.dp else 0.dp) // Wider indicator, hide when unselected
+                                .width(if (isSelected) layoutSpec.indicatorWidthDp.dp else 0.dp)
                                 .height(3.dp)
                                 .clip(RoundedCornerShape(1.5.dp))
                                 .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
                         )
                     }
                     if (index < tabs.lastIndex) {
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(layoutSpec.tabSpacingDp.dp))
                     }
                 }
             }
@@ -997,7 +1066,7 @@ private fun VideoContentTabBar(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .padding(end = 8.dp)
+                    .padding(end = danmakuActionLayoutPolicy.toggleTrailingPaddingDp.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(
                         if (danmakuEnabled) {
@@ -1025,7 +1094,7 @@ private fun VideoContentTabBar(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = if (danmakuEnabled) "开" else "关",
-                    fontSize = 11.sp,
+                    fontSize = danmakuActionLayoutPolicy.toggleTextSizeSp.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor
                 )
@@ -1051,8 +1120,8 @@ private fun VideoContentTabBar(
                         )
                 ) {
                     Text(
-                        text = "点我发弹幕",
-                        fontSize = 12.sp,
+                        text = danmakuActionLayoutPolicy.sendLabel,
+                        fontSize = danmakuActionLayoutPolicy.sendTextSizeSp.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -1075,7 +1144,7 @@ private fun VideoContentTabBar(
 
             Surface(
                 modifier = Modifier
-                    .padding(start = 6.dp)
+                    .padding(start = danmakuActionLayoutPolicy.settingsLeadingPaddingDp.dp)
                     .size(danmakuActionLayoutPolicy.settingsButtonSizeDp.dp)
                     .clickable(onClick = onDanmakuSettingsClick),
                 shape = RoundedCornerShape(16.dp),

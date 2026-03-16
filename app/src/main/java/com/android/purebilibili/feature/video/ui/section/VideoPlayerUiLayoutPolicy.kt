@@ -17,6 +17,18 @@ fun resolveVideoPlayerUiLayoutPolicy(
     widthDp: Int
 ): VideoPlayerUiLayoutPolicy {
     return when {
+        widthDp < 240 -> VideoPlayerUiLayoutPolicy(
+            gestureOverlaySizeDp = 96,
+            gestureIconSizeDp = 36,
+            seekFeedbackSizeDp = 84,
+            gestureBoundaryPaddingDp = 16,
+            restoreButtonBottomOffsetDp = 72,
+            restoreButtonHorizontalPaddingDp = 12,
+            restoreButtonVerticalPaddingDp = 6,
+            restoreButtonIconSizeDp = 14,
+            longPressBadgeHorizontalPaddingDp = 16,
+            longPressBadgeVerticalPaddingDp = 10
+        )
         widthDp >= 1600 -> VideoPlayerUiLayoutPolicy(
             gestureOverlaySizeDp = 140,
             gestureIconSizeDp = 56,

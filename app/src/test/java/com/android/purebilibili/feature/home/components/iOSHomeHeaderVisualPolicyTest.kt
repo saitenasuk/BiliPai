@@ -89,13 +89,63 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `header scroll keeps search row visible while collapsing top tabs`() {
+        val layout = resolveHomeHeaderScrollLayout(
+            headerOffsetPx = -96f,
+            searchBarHeightPx = 48f,
+            tabRowHeightPx = 56f,
+            isHeaderCollapseEnabled = true
+        )
+
+        assertEquals(48f, layout.searchBarHeightPx, 0.0001f)
+        assertEquals(1f, layout.searchAlpha, 0.0001f)
+        assertEquals(0f, layout.tabRowHeightPx, 0.0001f)
+        assertEquals(0f, layout.tabAlpha, 0.0001f)
+    }
+
+    @Test
     fun `home header trims horizontal spacing without cramping controls`() {
         assertEquals(14.dp, resolveHomeTopSearchRowHorizontalPadding())
         assertEquals(16.dp, resolveHomeTopSearchRowHorizontalPadding(UiPreset.MD3))
         assertEquals(34.dp, resolveHomeTopSearchPillHeight())
         assertEquals(14.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true))
         assertEquals(12.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true, uiPreset = UiPreset.MD3))
+        assertEquals(6.dp, resolveHomeTopSearchToTabsSpacing())
         assertEquals(8.dp, resolveHomeTopSearchToTabsSpacing(UiPreset.MD3))
+    }
+
+    @Test
+    fun `ios home header prefers a unified panel with embedded tabs`() {
+        assertTrue(shouldUseUnifiedHomeTopPanel(UiPreset.IOS))
+        assertFalse(shouldUseUnifiedHomeTopPanel(UiPreset.MD3))
+        assertFalse(shouldShowUnifiedHomeTopPanelDivider(UiPreset.IOS))
+        assertTrue(shouldShowUnifiedHomeTopPanelDivider(UiPreset.MD3))
+        assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding())
+        assertEquals(8.dp, resolveHomeTopUnifiedPanelInnerPadding())
+        assertEquals(28.dp, resolveHomeTopUnifiedPanelCornerRadius())
+        assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding())
+    }
+
+    @Test
+    fun `home list top padding grows with unified ios header height`() {
+        assertEquals(
+            175.dp,
+            resolveHomeTopReservedListPadding(
+                statusBarHeight = 44.dp,
+                searchBarHeight = 48.dp,
+                tabRowHeight = 56.dp,
+                uiPreset = UiPreset.IOS
+            )
+        )
+        assertEquals(
+            146.dp,
+            resolveHomeTopReservedListPadding(
+                statusBarHeight = 44.dp,
+                searchBarHeight = 48.dp,
+                tabRowHeight = 46.dp,
+                uiPreset = UiPreset.MD3
+            )
+        )
     }
 
     @Test
@@ -206,6 +256,39 @@ class iOSHomeHeaderVisualPolicyTest {
                 uiPreset = UiPreset.MD3
             )
         )
+    }
+
+    @Test
+    fun `ios unified home header keeps blur on the local panel while preserving top backdrop blur`() {
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopPanelChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.IOS,
+                useUnifiedPanel = true
+            )
+        )
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopContinuousSlabRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.IOS
+            )
+        )
+    }
+
+    @Test
+    fun `ios unified home header uses inset search styling instead of standalone blur pill`() {
+        assertEquals(
+            HomeTopChromeRenderMode.PLAIN,
+            resolveHomeTopSearchChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.IOS,
+                useUnifiedPanel = true
+            )
+        )
+        assertTrue(resolveHomeTopUnifiedSearchContainerColor(isLightMode = true).alpha < 0.4f)
+        assertTrue(resolveHomeTopUnifiedSearchBorderColor(isLightMode = true).alpha < 0.25f)
     }
 
     @Test

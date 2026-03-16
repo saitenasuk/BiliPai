@@ -19,6 +19,18 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.theme.iOSBlue
 
+internal data class IOSDialogActionLayoutPolicy(
+    val expandToContainer: Boolean
+)
+
+internal fun resolveIosDialogActionLayoutPolicy(
+    uiPreset: UiPreset
+): IOSDialogActionLayoutPolicy {
+    return IOSDialogActionLayoutPolicy(
+        expandToContainer = uiPreset != UiPreset.MD3
+    )
+}
+
 /**
  * iOS-style Alert Dialog.
  * Mimics the look of standard iOS UIAlertController (Alert style).
@@ -169,9 +181,16 @@ fun IOSDialogAction(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val layoutPolicy = resolveIosDialogActionLayoutPolicy(LocalUiPreset.current)
     Box(
         modifier = modifier
-            .fillMaxSize()
+            .then(
+                if (layoutPolicy.expandToContainer) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 40.dp)
+                }
+            )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

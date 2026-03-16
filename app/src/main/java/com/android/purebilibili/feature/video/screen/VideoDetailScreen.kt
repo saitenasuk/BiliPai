@@ -118,6 +118,7 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextConte
 import com.android.purebilibili.feature.video.ui.pager.resolveVideoSubReplySheetMaxHeightFraction
 import com.android.purebilibili.feature.video.ui.pager.resolveVideoSubReplySheetScrimAlpha
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
+import kotlin.math.roundToInt
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayModePreference
 import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
@@ -2070,8 +2071,9 @@ fun VideoDetailScreen(
                                     enterPortraitFullscreen()
                                 }
                             }
-                        },
-                        isPortraitFullscreen = isPortraitFullscreen,
+	                        },
+	                        isPortraitFullscreen = isPortraitFullscreen,
+	                        viewportWidthDpOverride = animatedViewportWidth.value.roundToInt(),
 
                                 // 📲 [修复] 小窗模式 - 转移到应用内小窗而非直接进入系统 PiP
                                 onPipClick = handlePipClick,
