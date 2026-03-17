@@ -36,4 +36,31 @@ class TopTabLayoutPolicyTest {
         assertFalse(shouldRouteTopTabToLivePage("推荐"))
         assertFalse(shouldRouteTopTabToLivePage("LIVE"))
     }
+
+    @Test
+    fun `md3 top tabs keep four visible slots on every device width`() {
+        assertEquals(4, resolveMd3TopTabVisibleSlots())
+        assertEquals(80f, resolveMd3TopTabItemWidthDp(containerWidthDp = 320f), 0.001f)
+        assertEquals(90f, resolveMd3TopTabItemWidthDp(containerWidthDp = 360f), 0.001f)
+        assertEquals(160f, resolveMd3TopTabItemWidthDp(containerWidthDp = 640f), 0.001f)
+    }
+
+    @Test
+    fun `md3 top tabs keep selected category within four visible slots`() {
+        assertEquals(
+            listOf(0, 1, 2, 3),
+            resolveMd3VisibleTabIndices(totalCount = 5, selectedIndex = 0)
+        )
+        assertEquals(
+            listOf(0, 1, 2, 4),
+            resolveMd3VisibleTabIndices(totalCount = 5, selectedIndex = 4)
+        )
+        assertEquals(
+            3,
+            resolveMd3SelectedVisibleIndex(
+                visibleIndices = listOf(0, 1, 2, 4),
+                selectedIndex = 4
+            )
+        )
+    }
 }

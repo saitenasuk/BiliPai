@@ -1019,7 +1019,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun ensurePlayer(): ExoPlayer {
         if (_player == null) {
-            Logger.d(TAG, "Creating new ExoPlayer instance")
+            Logger.d(TAG) { "Creating new ExoPlayer instance" }
             
             val headers = mapOf(
                 "Referer" to "https://www.bilibili.com",
@@ -1081,13 +1081,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
         videoUrl: String,
         audioUrl: String?
     ) {
-        Logger.d(TAG, "startVideo: bvid=$bvid, title=$title")
+        Logger.d(TAG) { "startVideo: bvid=$bvid, title=$title" }
         
         ensurePlayer()
         
         // 如果是同一个视频，不重新加载
         if (currentBvid == bvid && _player?.isPlaying == true) {
-            Logger.d(TAG, "Same video already playing, skip reload")
+            Logger.d(TAG) { "Same video already playing, skip reload" }
             return
         }
 
@@ -1133,11 +1133,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun enterMiniMode(forced: Boolean = false) {
         val mode = getCurrentMode()
-        Logger.d(TAG, "📲 enterMiniMode called: isActive=$isActive, forced=$forced, mode=$mode")
+        Logger.d(TAG) { "📲 enterMiniMode called: isActive=$isActive, forced=$forced, mode=$mode" }
         
         // 非强制模式下，只有 IN_APP_ONLY 才自动进入小窗
         if (!forced && mode != com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY) {
-            Logger.d(TAG, "⚠️ Auto mini player only works in IN_APP_ONLY mode, current mode=$mode")
+            Logger.d(TAG) { "⚠️ Auto mini player only works in IN_APP_ONLY mode, current mode=$mode" }
             return
         }
         
@@ -1145,7 +1145,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             Logger.w(TAG, "⚠️ Cannot enter mini mode: isActive is false!")
             return
         }
-        Logger.d(TAG, "📲 Entering mini mode for video: $currentTitle (forced=$forced)")
+        Logger.d(TAG) { "📲 Entering mini mode for video: $currentTitle (forced=$forced)" }
         isMiniMode = true
         
         // 🔔 [修复] 进入小窗时更新媒体通知（系统控制中心显示）
@@ -1163,7 +1163,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * @param animate 是否执行退出动画
      */
     fun exitMiniMode(animate: Boolean = true) {
-        Logger.d(TAG, "Exiting mini mode, animate=$animate")
+        Logger.d(TAG) { "Exiting mini mode, animate=$animate" }
         shouldAnimateExit = animate
         isMiniMode = false
     }
@@ -1172,13 +1172,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 停止播放并关闭小窗
      */
     fun dismiss() {
-        Logger.d(TAG, "Dismissing mini player (isLiveMode=$isLiveMode)")
+        Logger.d(TAG) { "Dismissing mini player (isLiveMode=$isLiveMode)" }
         
         //  [修复] 先停止所有播放器的声音
         _externalPlayer?.let { 
             it.pause()
             it.stop()
-            Logger.d(TAG, "🔇 Stopped external player")
+            Logger.d(TAG) { "🔇 Stopped external player" }
         }
         _player?.let {
             it.pause()

@@ -180,6 +180,8 @@ internal fun resolveCommentReplyTargets(replyRpid: Long?, replyRoot: Long?): Pai
     return root to parent
 }
 
+internal fun resolvePlayerTransientEventChannelCapacity(): Int = Channel.BUFFERED
+
 internal data class FavoriteFolderMutation(
     val addFolderIds: Set<Long>,
     val removeFolderIds: Set<Long>
@@ -2623,7 +2625,7 @@ class PlayerViewModel : ViewModel() {
                     // 本地即时显示弹幕
                     // 注意：这需要在 Composable 中通过 DanmakuManager 调用
                     // 这里只发送事件通知
-                    _danmakuSentEvent.send(DanmakuSentData(message, color, mode, fontSize))
+                    _danmakuSentEvent.trySend(DanmakuSentData(message, color, mode, fontSize))
                 }
                 .onFailure { error ->
                     toast(error.message ?: "发送失败")
@@ -2635,7 +2637,9 @@ class PlayerViewModel : ViewModel() {
     
     // 弹幕发送成功事件（用于本地显示）
     data class DanmakuSentData(val text: String, val color: Int, val mode: Int, val fontSize: Int)
-    private val _danmakuSentEvent = Channel<DanmakuSentData>()
+    private val _danmakuSentEvent = Channel<DanmakuSentData>(
+        capacity = resolvePlayerTransientEventChannelCapacity()
+    )
     val danmakuSentEvent = _danmakuSentEvent.receiveAsFlow()
     
     // ========== 弹幕上下文菜单 ==========
@@ -2878,7 +2882,7 @@ class PlayerViewModel : ViewModel() {
                     _replyingToComment.value = null
                     
                     // 通知 UI 刷新评论列表
-                    _commentSentEvent.send(reply)
+                    _commentSentEvent.trySend(reply)
                 }
                 .onFailure { error ->
                     Logger.e(
@@ -2938,7 +2942,9 @@ class PlayerViewModel : ViewModel() {
     }
     
     // 评论发送成功事件
-    private val _commentSentEvent = Channel<com.android.purebilibili.data.model.response.ReplyItem?>()
+    private val _commentSentEvent = Channel<com.android.purebilibili.data.model.response.ReplyItem?>(
+        capacity = resolvePlayerTransientEventChannelCapacity()
+    )
     val commentSentEvent = _commentSentEvent.receiveAsFlow()
 
     

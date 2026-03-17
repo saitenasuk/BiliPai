@@ -32,9 +32,9 @@ import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
 import com.android.purebilibili.core.util.FormatUtils
-import io.github.alexzhirkevich.cupertino.CupertinoSwitch
-import io.github.alexzhirkevich.cupertino.CupertinoSwitchDefaults
 import kotlinx.coroutines.launch
 
 /**
@@ -75,7 +75,7 @@ fun PluginsScreen(
                 title = { Text("插件中心", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -715,18 +715,12 @@ private fun PluginItem(
             Spacer(modifier = Modifier.width(8.dp))
             
             // 开关
-            val primaryColor = MaterialTheme.colorScheme.primary
-            CupertinoSwitch(
+            AppAdaptiveSwitch(
                 checked = pluginInfo.enabled,
                 onCheckedChange = { enabled ->
                     if (!plugin.unavailable) onToggle(enabled)
                 },
-                enabled = !plugin.unavailable,
-                colors = CupertinoSwitchDefaults.colors(
-                    thumbColor = androidx.compose.ui.graphics.Color.White,
-                    checkedTrackColor = primaryColor,
-                    uncheckedTrackColor = androidx.compose.ui.graphics.Color(0xFFE9E9EA)
-                )
+                enabled = !plugin.unavailable
             )
             
             // 展开箭头
@@ -880,15 +874,9 @@ private fun JsonPluginItem(
             }
             
             // 开关
-            val primaryColor = MaterialTheme.colorScheme.primary
-            CupertinoSwitch(
+            AppAdaptiveSwitch(
                 checked = loaded.enabled,
-                onCheckedChange = onToggle,
-                colors = CupertinoSwitchDefaults.colors(
-                    thumbColor = androidx.compose.ui.graphics.Color.White,
-                    checkedTrackColor = primaryColor,
-                    uncheckedTrackColor = androidx.compose.ui.graphics.Color(0xFFE9E9EA)
-                )
+                onCheckedChange = onToggle
             )
             
             // 展开箭头

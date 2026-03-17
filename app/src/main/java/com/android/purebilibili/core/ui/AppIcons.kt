@@ -1,5 +1,37 @@
 package com.android.purebilibili.core.ui
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.MailOutline
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.PersonAddAlt1
+import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.TouchApp
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material.icons.outlined.Folder as MaterialFolder
+import androidx.compose.material.icons.outlined.Photo as MaterialPhoto
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
@@ -8,6 +40,20 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
+import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
+import io.github.alexzhirkevich.cupertino.icons.filled.*
+import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowClockwise
+import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowCounterclockwise
+import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowDownCircle
+import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronBackward
+import io.github.alexzhirkevich.cupertino.icons.outlined.Ellipsis
+import io.github.alexzhirkevich.cupertino.icons.outlined.Gearshape
+import io.github.alexzhirkevich.cupertino.icons.filled.ExclamationmarkTriangle
+import io.github.alexzhirkevich.cupertino.icons.outlined.Folder as CupertinoFolder
+import io.github.alexzhirkevich.cupertino.icons.outlined.Photo as CupertinoPhoto
 
 object AppIcons {
     val Telegram: ImageVector
@@ -275,3 +321,201 @@ object AppIcons {
         }
     private var _biliCoin: ImageVector? = null
 }
+
+@Composable
+fun rememberAppBackIcon(): ImageVector {
+    return resolveAppBackIcon(LocalUiPreset.current)
+}
+
+@Composable
+fun rememberAppSettingsIcon(): ImageVector {
+    return resolveAppSettingsIcon(LocalUiPreset.current)
+}
+
+@Composable
+fun rememberAppMoreIcon(): ImageVector {
+    return resolveAppMoreIcon(LocalUiPreset.current)
+}
+
+@Composable
+fun rememberAppPhotoIcon(): ImageVector {
+    return resolveAppPhotoIcon(LocalUiPreset.current)
+}
+
+@Composable
+fun rememberAppFolderIcon(): ImageVector {
+    return resolveAppFolderIcon(LocalUiPreset.current)
+}
+
+@Composable
+fun rememberAppRestoreIcon(): ImageVector {
+    return resolveAppRestoreIcon(LocalUiPreset.current)
+}
+
+@Composable
+fun rememberAppWarningIcon(): ImageVector {
+    return resolveAppWarningIcon(LocalUiPreset.current)
+}
+
+@Composable
+fun rememberAppRefreshIcon(): ImageVector {
+    return resolveAppRefreshIcon(LocalUiPreset.current)
+}
+
+@Composable
+fun rememberAppDownloadIcon(): ImageVector {
+    return resolveAppDownloadIcon(LocalUiPreset.current)
+}
+
+@Composable
+fun rememberAppSearchIcon(): ImageVector = resolveAppSearchIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppClearIcon(): ImageVector = resolveAppClearIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppHistoryIcon(): ImageVector = resolveAppHistoryIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppBookmarkIcon(): ImageVector = resolveAppBookmarkIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppInboxIcon(): ImageVector = resolveAppInboxIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppTvIcon(): ImageVector = resolveAppTvIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppLogoutIcon(): ImageVector = resolveAppLogoutIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppTimerIcon(): ImageVector = resolveAppTimerIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppMusicIcon(): ImageVector = resolveAppMusicIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppFlipHorizontalIcon(): ImageVector = resolveAppFlipHorizontalIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppFlipVerticalIcon(): ImageVector = resolveAppFlipVerticalIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppHeadphonesIcon(): ImageVector = resolveAppHeadphonesIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppQualityIcon(): ImageVector = resolveAppQualityIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppCodecIcon(): ImageVector = resolveAppCodecIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppSpeedIcon(): ImageVector = resolveAppSpeedIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppGestureTapIcon(): ImageVector = resolveAppGestureTapIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppWifiIcon(): ImageVector = resolveAppWifiIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppChevronForwardIcon(): ImageVector = resolveAppChevronForwardIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppChevronDownIcon(): ImageVector = resolveAppChevronDownIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppProfileAddIcon(): ImageVector = resolveAppProfileAddIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppLockIcon(): ImageVector = resolveAppLockIcon(LocalUiPreset.current)
+
+fun resolveAppBackIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.AutoMirrored.Filled.ArrowBack else CupertinoIcons.Outlined.ChevronBackward
+
+fun resolveAppSettingsIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Settings else CupertinoIcons.Outlined.Gearshape
+
+fun resolveAppMoreIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Filled.MoreVert else CupertinoIcons.Outlined.Ellipsis
+
+fun resolveAppPhotoIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.MaterialPhoto else CupertinoIcons.Outlined.CupertinoPhoto
+
+fun resolveAppFolderIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.MaterialFolder else CupertinoIcons.Outlined.CupertinoFolder
+
+fun resolveAppRestoreIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Restore else CupertinoIcons.Outlined.ArrowCounterclockwise
+
+fun resolveAppWarningIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.WarningAmber else CupertinoIcons.Filled.ExclamationmarkTriangle
+
+fun resolveAppRefreshIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Refresh else CupertinoIcons.Outlined.ArrowClockwise
+
+fun resolveAppDownloadIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Download else CupertinoIcons.Outlined.ArrowDownCircle
+
+fun resolveAppSearchIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Filled.Search else CupertinoIcons.Outlined.MagnifyingGlass
+
+fun resolveAppClearIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Filled.Clear else CupertinoIcons.Outlined.XmarkCircle
+
+fun resolveAppHistoryIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.History else CupertinoIcons.Outlined.Clock
+
+fun resolveAppBookmarkIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.BookmarkBorder else CupertinoIcons.Outlined.Bookmark
+
+fun resolveAppInboxIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.MailOutline else CupertinoIcons.Outlined.Envelope
+
+fun resolveAppTvIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.LiveTv else CupertinoIcons.Filled.Tv
+
+fun resolveAppLogoutIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.AutoMirrored.Outlined.ExitToApp else CupertinoIcons.Outlined.RectanglePortraitAndArrowForward
+
+fun resolveAppTimerIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Timer else CupertinoIcons.Outlined.Timer
+
+fun resolveAppMusicIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.MusicNote else CupertinoIcons.Outlined.MusicNote
+
+fun resolveAppFlipHorizontalIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.SwapHoriz else CupertinoIcons.Outlined.ArrowLeftArrowRight
+
+fun resolveAppFlipVerticalIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.SwapVert else CupertinoIcons.Outlined.ArrowUpArrowDown
+
+fun resolveAppHeadphonesIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Headphones else CupertinoIcons.Outlined.Headphones
+
+fun resolveAppQualityIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.PlayCircleOutline else CupertinoIcons.Outlined.PlayCircle
+
+fun resolveAppCodecIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Memory else CupertinoIcons.Outlined.Cpu
+
+fun resolveAppSpeedIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Speed else CupertinoIcons.Outlined.Speedometer
+
+fun resolveAppGestureTapIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.TouchApp else CupertinoIcons.Outlined.HandTap
+
+fun resolveAppWifiIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Wifi else CupertinoIcons.Outlined.Wifi
+
+fun resolveAppChevronForwardIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.KeyboardArrowRight else CupertinoIcons.Outlined.ChevronForward
+
+fun resolveAppChevronDownIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.KeyboardArrowDown else CupertinoIcons.Outlined.ChevronDown
+
+fun resolveAppProfileAddIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.PersonAddAlt1 else CupertinoIcons.Outlined.PersonCropCircleBadgePlus
+
+fun resolveAppLockIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Lock else CupertinoIcons.Outlined.Lock

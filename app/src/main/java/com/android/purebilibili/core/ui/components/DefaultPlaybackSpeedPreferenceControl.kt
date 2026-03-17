@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import io.github.alexzhirkevich.cupertino.CupertinoSlider
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -69,6 +72,7 @@ fun DefaultPlaybackSpeedPreferenceControl(
     subtitle: String? = null,
     showCurrentValue: Boolean = true
 ) {
+    val uiPreset = LocalUiPreset.current
     var sliderValue by remember(currentSpeed) {
         mutableFloatStateOf(normalizeDefaultPlaybackPreferenceSpeed(currentSpeed))
     }
@@ -130,16 +134,29 @@ fun DefaultPlaybackSpeedPreferenceControl(
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            CupertinoSlider(
-                value = sliderValue,
-                onValueChange = { sliderValue = normalizeDefaultPlaybackPreferenceSpeed(it) },
-                onValueChangeFinished = { onSpeedChange(sliderValue) },
-                valueRange = DEFAULT_PLAYBACK_SPEED_MIN..DEFAULT_PLAYBACK_SPEED_MAX,
-                steps = DEFAULT_PLAYBACK_SPEED_STEPS,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp)
-            )
+            if (uiPreset == UiPreset.MD3) {
+                Slider(
+                    value = sliderValue,
+                    onValueChange = { sliderValue = normalizeDefaultPlaybackPreferenceSpeed(it) },
+                    onValueChangeFinished = { onSpeedChange(sliderValue) },
+                    valueRange = DEFAULT_PLAYBACK_SPEED_MIN..DEFAULT_PLAYBACK_SPEED_MAX,
+                    steps = DEFAULT_PLAYBACK_SPEED_STEPS,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                )
+            } else {
+                CupertinoSlider(
+                    value = sliderValue,
+                    onValueChange = { sliderValue = normalizeDefaultPlaybackPreferenceSpeed(it) },
+                    onValueChangeFinished = { onSpeedChange(sliderValue) },
+                    valueRange = DEFAULT_PLAYBACK_SPEED_MIN..DEFAULT_PLAYBACK_SPEED_MAX,
+                    steps = DEFAULT_PLAYBACK_SPEED_STEPS,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                )
+            }
             Text(
                 text = formatDefaultPlaybackSpeed(DEFAULT_PLAYBACK_SPEED_MAX),
                 fontSize = 12.sp,

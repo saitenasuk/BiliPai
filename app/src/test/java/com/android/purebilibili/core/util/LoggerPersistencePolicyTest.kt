@@ -9,6 +9,62 @@ import kotlin.test.assertTrue
 class LoggerPersistencePolicyTest {
 
     @Test
+    fun verboseRuntimeLogsRequireDebugBuildAndExplicitOptIn() {
+        assertFalse(
+            shouldEnableVerboseRuntimeLogs(
+                isDebugBuild = false,
+                verboseDebugLogsEnabled = true
+            )
+        )
+        assertFalse(
+            shouldEnableVerboseRuntimeLogs(
+                isDebugBuild = true,
+                verboseDebugLogsEnabled = false
+            )
+        )
+        assertTrue(
+            shouldEnableVerboseRuntimeLogs(
+                isDebugBuild = true,
+                verboseDebugLogsEnabled = true
+            )
+        )
+    }
+
+    @Test
+    fun runtimeLogPersistenceAlwaysKeepsWarningsAndErrors() {
+        assertFalse(
+            shouldPersistRuntimeLogEntry(
+                level = "D",
+                verboseRuntimeLogPersistenceEnabled = false
+            )
+        )
+        assertFalse(
+            shouldPersistRuntimeLogEntry(
+                level = "I",
+                verboseRuntimeLogPersistenceEnabled = false
+            )
+        )
+        assertTrue(
+            shouldPersistRuntimeLogEntry(
+                level = "W",
+                verboseRuntimeLogPersistenceEnabled = false
+            )
+        )
+        assertTrue(
+            shouldPersistRuntimeLogEntry(
+                level = "E",
+                verboseRuntimeLogPersistenceEnabled = false
+            )
+        )
+        assertTrue(
+            shouldPersistRuntimeLogEntry(
+                level = "D",
+                verboseRuntimeLogPersistenceEnabled = true
+            )
+        )
+    }
+
+    @Test
     fun resolvesStableFilePathsUnderLogDirectory() {
         val baseDir = File("/tmp/bilipai")
 

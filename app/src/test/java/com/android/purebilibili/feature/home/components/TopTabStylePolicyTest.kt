@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.theme.UiPreset
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -123,5 +125,27 @@ class TopTabStylePolicyTest {
         assertTrue(textSize > 11f)
         assertTrue(textSize < 12f)
         assertTrue(lineHeight >= textSize)
+    }
+
+    @Test
+    fun `md3 preset uses material tab indicator style`() {
+        assertEquals(
+            TopTabIndicatorStyle.MATERIAL,
+            resolveTopTabIndicatorStyle(UiPreset.MD3)
+        )
+        assertEquals(
+            TopTabIndicatorStyle.CAPSULE,
+            resolveTopTabIndicatorStyle(UiPreset.IOS)
+        )
+    }
+
+    @Test
+    fun `md3 top tabs use secondary scrollable row semantics and tighter action shape`() {
+        assertEquals(
+            Md3TopTabRowVariant.SECONDARY_FIXED,
+            resolveMd3TopTabRowVariant()
+        )
+        assertEquals(18.dp, resolveMd3TopTabActionButtonCorner(isFloatingStyle = true))
+        assertEquals(16.dp, resolveMd3TopTabActionButtonCorner(isFloatingStyle = false))
     }
 }

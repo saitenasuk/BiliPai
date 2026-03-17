@@ -12,6 +12,23 @@ plugins {
     // id("com.google.firebase.crashlytics")
 }
 
+val debugVerboseLogsEnabled = providers.gradleProperty("bili.debug.verboseLogs")
+    .map(String::toBoolean)
+    .orElse(false)
+    .get()
+val debugVerboseRuntimeLogPersistenceEnabled = providers.gradleProperty("bili.debug.persistVerboseLogs")
+    .map(String::toBoolean)
+    .orElse(false)
+    .get()
+val debugLeakCanaryEnabled = providers.gradleProperty("bili.debug.leakCanary")
+    .map(String::toBoolean)
+    .orElse(false)
+    .get()
+val debugUiToolingRuntimeEnabled = providers.gradleProperty("bili.debug.uiTooling")
+    .map(String::toBoolean)
+    .orElse(false)
+    .get()
+
 android {
     namespace = "com.android.purebilibili"
     compileSdk = 36
@@ -28,8 +45,8 @@ android {
         targetSdk = 35  // 保持35以避免Android 16的新运行时行为
         // 🔥🔥 [版本号] 发布新版前记得更新！格式：versionCode +1, versionName 递增
         // 更新日志：CHANGELOG.md
-        versionCode = 114
-        versionName = "7.0.0 Beta2"
+        versionCode = 116
+        versionName = "7.0.0 Beta4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -58,6 +75,8 @@ android {
             // Disable PNG crunching to avoid AAPT errors
             isCrunchPngs = false
             buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "false")
+            buildConfigField("boolean", "ENABLE_VERBOSE_DEBUG_LOGS", "false")
+            buildConfigField("boolean", "ENABLE_VERBOSE_RUNTIME_LOG_PERSISTENCE", "false")
             // 🔥 启用 R8 代码压缩
             isMinifyEnabled = true
             // 🔥 启用资源压缩 (移除未使用的资源)
@@ -66,20 +85,32 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            
-            // Explicitly disable mapping file upload to avoid network errors
-            // Explicitly disable mapping file upload to avoid network errors
-            pluginManager.withPlugin("com.google.firebase.crashlytics") {
-                configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
-                    mappingFileUploadEnabled = false
-                }
-            }
         }
         debug {
             // Debug 构建保持快速编译
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            resValue("string", "app_name", "BiliPai Debug")
             buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "true")
+            buildConfigField("boolean", "ENABLE_VERBOSE_DEBUG_LOGS", debugVerboseLogsEnabled.toString())
+            buildConfigField(
+                "boolean",
+                "ENABLE_VERBOSE_RUNTIME_LOG_PERSISTENCE",
+                debugVerboseRuntimeLogPersistenceEnabled.toString()
+            )
             isMinifyEnabled = false
             isShrinkResources = false
+        }
+        create("dev") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "BiliPai Dev")
+            buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "true")
+            buildConfigField("boolean", "ENABLE_VERBOSE_DEBUG_LOGS", "false")
+            buildConfigField("boolean", "ENABLE_VERBOSE_RUNTIME_LOG_PERSISTENCE", "false")
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
     }
 
@@ -129,7 +160,7 @@ android {
         val variant = this
         outputs.configureEach {
             val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
-            output.outputFileName = "BiliPai-${variant.versionName}-universal.apk"
+            output.outputFileName = "BiliPai-${variant.name}-${variant.versionName}-universal.apk"
         }
     }
 }
@@ -277,10 +308,14 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics-ktx")
 
     // --- 11. Debug (调试工具) ---
-    debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-    // 🔥 LeakCanary - 内存泄漏检测 (仅 Debug 构建)
-    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.13")
+    if (debugUiToolingRuntimeEnabled) {
+        debugImplementation("androidx.compose.ui:ui-tooling")
+    }
+    if (debugLeakCanaryEnabled) {
+        // 🔥 LeakCanary - 内存泄漏检测 (按需启用)
+        debugImplementation("com.squareup.leakcanary:leakcanary-android:2.13")
+    }
     
     // --- 12. Testing (测试框架) ---
     // JUnit 4 (兼容旧测试)
@@ -309,4 +344,10 @@ dependencies {
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
     apply(plugin = "com.google.firebase.crashlytics")
+    tasks.matching { task ->
+        task.name.startsWith("uploadCrashlyticsMappingFile")
+    }.configureEach {
+        // 本地构建不上传 mapping，避免 release/dev 在离线环境失败。
+        enabled = false
+    }
 }

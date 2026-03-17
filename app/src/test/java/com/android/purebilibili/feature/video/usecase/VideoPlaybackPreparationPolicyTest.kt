@@ -8,8 +8,8 @@ import kotlin.test.assertTrue
 class VideoPlaybackPreparationPolicyTest {
 
     @Test
-    fun `shouldPreparePlayerOnLoad returns false when autoplay is disabled`() {
-        assertFalse(shouldPreparePlayerOnLoad(playWhenReady = false))
+    fun `shouldPreparePlayerOnLoad still prepares when autoplay is disabled`() {
+        assertTrue(shouldPreparePlayerOnLoad(playWhenReady = false))
     }
 
     @Test

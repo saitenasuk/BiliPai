@@ -6,12 +6,23 @@ import kotlin.test.assertEquals
 class ProfileWallpaperActionLayoutPolicyTest {
 
     @Test
-    fun regularPhoneWidth_keepsWallpaperActionsSideBySide() {
-        assertEquals(2, resolveProfileWallpaperActionColumnCount(screenWidthDp = 393))
+    fun regularPhoneWidth_usesCompactThreeUpWallpaperStrip() {
+        assertEquals(3, resolveProfileWallpaperActionColumnCount(screenWidthDp = 393))
     }
 
     @Test
-    fun narrowPhoneWidth_stacksWallpaperActionsVertically() {
-        assertEquals(1, resolveProfileWallpaperActionColumnCount(screenWidthDp = 320))
+    fun narrowPhoneWidth_wrapsCompactWallpaperStripToTwoColumns() {
+        assertEquals(2, resolveProfileWallpaperActionColumnCount(screenWidthDp = 320))
+    }
+
+    @Test
+    fun wallpaperStripBlurFollowsSharedBlurToggle() {
+        assertEquals(
+            true,
+            resolveProfileWallpaperActionBlurEnabled(
+                headerBlurEnabled = false,
+                bottomBarBlurEnabled = true
+            )
+        )
     }
 }

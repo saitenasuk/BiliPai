@@ -74,7 +74,7 @@ data class QualitySwitchResult(
     val cachedDashAudios: List<DashAudio>
 )
 
-internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = playWhenReady
+internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = true
 
 internal fun shouldPreparePlayerBeforeExplicitPlay(
     playbackState: Int,

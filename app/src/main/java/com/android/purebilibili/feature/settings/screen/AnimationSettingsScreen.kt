@@ -4,6 +4,8 @@ package com.android.purebilibili.feature.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable // [Fix] Missing import
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -21,6 +23,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -61,7 +64,7 @@ fun AnimationSettingsScreen(
                 title = { Text("动画与效果", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -158,8 +161,8 @@ fun AnimationSettingsContent(
                         )
                         Divider()
                         IOSSwitchItem(
-                            icon = CupertinoIcons.Default.ArrowLeftArrowRight,
-                            title = "预测性返回联动动画",
+                            icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                            title = predictiveBackToggleState.title,
                             subtitle = predictiveBackToggleState.subtitle,
                             checked = predictiveBackToggleState.checked,
                             onCheckedChange = {

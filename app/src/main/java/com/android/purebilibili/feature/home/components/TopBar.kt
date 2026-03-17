@@ -2,6 +2,17 @@
 package com.android.purebilibili.feature.home.components
 
 import android.os.SystemClock
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuOpen
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.TrendingUp
+import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.animation.*
@@ -13,6 +24,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,7 +34,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.foundation.shape.CircleShape
@@ -53,6 +65,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.feature.home.HomeCategory
@@ -87,6 +101,42 @@ internal fun resolveTopTabRowHorizontalPaddingDp(isFloatingStyle: Boolean): Floa
 
 internal fun resolveTopTabVisibleSlots(categoryCount: Int): Int {
     return categoryCount.coerceIn(4, 5)
+}
+
+internal fun resolveMd3TopTabVisibleSlots(): Int = 4
+
+internal fun resolveMd3TopTabItemWidthDp(
+    containerWidthDp: Float,
+    visibleSlots: Int = resolveMd3TopTabVisibleSlots()
+): Float {
+    if (containerWidthDp <= 0f) return 80f
+    return containerWidthDp / visibleSlots.coerceAtLeast(1)
+}
+
+internal fun resolveMd3VisibleTabIndices(
+    totalCount: Int,
+    selectedIndex: Int,
+    visibleSlots: Int = resolveMd3TopTabVisibleSlots()
+): List<Int> {
+    if (totalCount <= 0) return emptyList()
+    if (totalCount <= visibleSlots) return List(totalCount) { it }
+    val safeSelected = selectedIndex.coerceIn(0, totalCount - 1)
+    if (safeSelected < visibleSlots) {
+        return List(visibleSlots) { it }
+    }
+    val pinnedPrefixCount = (visibleSlots - 1).coerceAtLeast(0)
+    return buildList {
+        repeat(pinnedPrefixCount) { add(it) }
+        add(safeSelected)
+    }
+}
+
+internal fun resolveMd3SelectedVisibleIndex(
+    visibleIndices: List<Int>,
+    selectedIndex: Int
+): Int {
+    val resolved = visibleIndices.indexOf(selectedIndex)
+    return if (resolved >= 0) resolved else 0
 }
 
 internal fun resolveTopTabMinItemWidthDp(isFloatingStyle: Boolean): Float {
@@ -125,19 +175,55 @@ internal fun shouldShowTopTabText(mode: Int): Boolean {
     return normalized == 0 || normalized == 2
 }
 
-internal fun resolveTopTabCategoryIcon(category: String): ImageVector {
-    return when (category) {
-        "推荐" -> CupertinoIcons.Default.House
-        "关注" -> CupertinoIcons.Default.PersonCropCircleBadgePlus
-        "热门" -> CupertinoIcons.Default.ChartBar
-        "直播" -> CupertinoIcons.Default.Video
-        "追番" -> CupertinoIcons.Default.Tv
-        "游戏" -> CupertinoIcons.Default.PlayCircle
-        "知识" -> CupertinoIcons.Default.Lightbulb
-        "科技" -> CupertinoIcons.Default.Cpu
-        else -> CupertinoIcons.Default.ListBullet
+internal fun resolveMd3TopTabLabelMode(@Suppress("UNUSED_PARAMETER") requestedLabelMode: Int): Int = 0
+
+internal fun resolveTopTabCategoryIcon(
+    category: String,
+    uiPreset: UiPreset = UiPreset.IOS
+): ImageVector {
+    return when (uiPreset) {
+        UiPreset.MD3 -> when (category) {
+            "推荐" -> Icons.Outlined.Home
+            "关注" -> Icons.Outlined.Person
+            "热门" -> Icons.AutoMirrored.Outlined.TrendingUp
+            "直播" -> Icons.Outlined.LiveTv
+            "追番" -> Icons.Outlined.Tv
+            "游戏" -> Icons.Outlined.PlayCircleOutline
+            "知识" -> Icons.Outlined.Lightbulb
+            "科技" -> Icons.Outlined.SmartToy
+            else -> Icons.AutoMirrored.Outlined.MenuOpen
+        }
+        UiPreset.IOS -> when (category) {
+            "推荐" -> CupertinoIcons.Default.House
+            "关注" -> CupertinoIcons.Default.PersonCropCircleBadgePlus
+            "热门" -> CupertinoIcons.Default.ChartBar
+            "直播" -> CupertinoIcons.Default.Video
+            "追番" -> CupertinoIcons.Default.Tv
+            "游戏" -> CupertinoIcons.Default.PlayCircle
+            "知识" -> CupertinoIcons.Default.Lightbulb
+            "科技" -> CupertinoIcons.Default.Cpu
+            else -> CupertinoIcons.Default.ListBullet
+        }
     }
 }
+
+internal fun resolveTopTabPartitionIcon(uiPreset: UiPreset): ImageVector {
+    return if (uiPreset == UiPreset.MD3) {
+        Icons.AutoMirrored.Outlined.MenuOpen
+    } else {
+        CupertinoIcons.Default.ListBullet
+    }
+}
+
+internal enum class Md3TopTabRowVariant {
+    SECONDARY_FIXED
+}
+
+internal fun resolveMd3TopTabRowVariant(): Md3TopTabRowVariant =
+    Md3TopTabRowVariant.SECONDARY_FIXED
+
+internal fun resolveMd3TopTabActionButtonCorner(isFloatingStyle: Boolean) =
+    if (isFloatingStyle) 18.dp else 16.dp
 
 /**
  * Q弹点击效果
@@ -308,6 +394,7 @@ fun CategoryTabRow(
     interactionBudget: HomeInteractionMotionBudget = HomeInteractionMotionBudget.FULL,
     isViewportSyncEnabled: Boolean = true
 ) {
+    val uiPreset = LocalUiPreset.current
     val visualTuning = remember { resolveTopTabVisualTuning() }
     val primaryColor = MaterialTheme.colorScheme.primary
     val isLightMode = MaterialTheme.colorScheme.surface.luminance() > 0.5f
@@ -337,6 +424,19 @@ fun CategoryTabRow(
     val floatingLiquidHeight = visualTuning.floatingIndicatorHeightDp.dp
     val floatingIndicatorEdgeInset = 0.dp
     val floatingIndicatorLeftBias = 0.dp
+
+    if (resolveTopTabIndicatorStyle(uiPreset) == TopTabIndicatorStyle.MATERIAL) {
+        Md3CategoryTabRow(
+            categories = categories,
+            selectedIndex = selectedIndex,
+            onCategorySelected = onCategorySelected,
+            onPartitionClick = onPartitionClick,
+            onLiveClick = onLiveClick,
+            labelMode = labelMode,
+            isFloatingStyle = isFloatingStyle
+        )
+        return
+    }
 
     Row(
         modifier = Modifier
@@ -636,13 +736,155 @@ fun CategoryTabRow(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                CupertinoIcons.Default.ListBullet,
+                resolveTopTabPartitionIcon(uiPreset),
                 contentDescription = "浏览全部分区",
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.size(actionIconSize)
             )
         }
         
+        Spacer(modifier = Modifier.width(8.dp))
+    }
+}
+
+@Composable
+private fun Md3CategoryTabRow(
+    categories: List<String>,
+    selectedIndex: Int,
+    onCategorySelected: (Int) -> Unit,
+    onPartitionClick: () -> Unit,
+    onLiveClick: () -> Unit,
+    labelMode: Int,
+    isFloatingStyle: Boolean
+) {
+    val uiPreset = LocalUiPreset.current
+    val scrollChannel = com.android.purebilibili.feature.home.LocalHomeScrollChannel.current
+    val tabRowHeight = if (isFloatingStyle) 62.dp else 48.dp
+    val actionButtonSize = if (isFloatingStyle) 50.dp else 44.dp
+    val actionButtonCorner = resolveMd3TopTabActionButtonCorner(isFloatingStyle)
+    val actionIconSize = if (isFloatingStyle) 22.dp else 20.dp
+    val normalizedLabelMode = resolveMd3TopTabLabelMode(labelMode)
+    val visibleIndices = remember(categories, selectedIndex) {
+        resolveMd3VisibleTabIndices(
+            totalCount = categories.size,
+            selectedIndex = selectedIndex
+        )
+    }
+    val selectedVisibleIndex = remember(visibleIndices, selectedIndex) {
+        resolveMd3SelectedVisibleIndex(
+            visibleIndices = visibleIndices,
+            selectedIndex = selectedIndex
+        )
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(tabRowHeight)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SecondaryTabRow(
+            selectedTabIndex = selectedVisibleIndex,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            divider = {},
+            indicator = {
+                if (visibleIndices.isNotEmpty()) {
+                    TabRowDefaults.SecondaryIndicator(
+                        modifier = Modifier
+                            .tabIndicatorOffset(selectedVisibleIndex)
+                            .padding(horizontal = 10.dp),
+                        height = 3.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            },
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            visibleIndices.forEachIndexed { visibleIndex, originalIndex ->
+                val category = categories[originalIndex]
+                val showIcon = shouldShowTopTabIcon(normalizedLabelMode)
+                val showText = shouldShowTopTabText(normalizedLabelMode)
+                val icon = resolveTopTabCategoryIcon(category, uiPreset)
+                val onTabClick = {
+                    if (shouldRouteTopTabToLivePage(category)) {
+                        onLiveClick()
+                    } else {
+                        onCategorySelected(originalIndex)
+                    }
+                }
+
+                Tab(
+                    selected = selectedVisibleIndex == visibleIndex,
+                    onClick = {},
+                    selectedContentColor = MaterialTheme.colorScheme.primary,
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = if (showText) {
+                        {
+                            Text(
+                                text = category,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontSize = resolveTopTabLabelTextSizeSp(normalizedLabelMode).sp,
+                                lineHeight = resolveTopTabLabelLineHeightSp(normalizedLabelMode).sp,
+                                fontWeight = if (selectedVisibleIndex == visibleIndex) {
+                                    FontWeight.SemiBold
+                                } else {
+                                    FontWeight.Medium
+                                }
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                    icon = if (showIcon) {
+                        {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(if (showText) 18.dp else 20.dp)
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                    modifier = Modifier.combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = LocalIndication.current,
+                        onClick = onTabClick,
+                        onDoubleClick = {
+                            if (selectedVisibleIndex == visibleIndex) {
+                                scrollChannel?.trySend(Unit)
+                            }
+                        }
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        Box(
+            modifier = Modifier
+                .size(actionButtonSize)
+                .clip(RoundedCornerShape(actionButtonCorner))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = LocalIndication.current
+                ) { onPartitionClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                resolveTopTabPartitionIcon(uiPreset),
+                contentDescription = "浏览全部分区",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(actionIconSize)
+            )
+        }
+
         Spacer(modifier = Modifier.width(8.dp))
     }
 }
@@ -711,6 +953,7 @@ fun CategoryTabItem(
     onClick: () -> Unit,
     onDoubleTap: () -> Unit = {}
 ) {
+     val uiPreset = LocalUiPreset.current
      // [Optimized] Calculate fraction from the position
      val selectionFraction = remember(currentPosition, index) {
          val distance = kotlin.math.abs(currentPosition - index)
@@ -726,7 +969,7 @@ fun CategoryTabItem(
      val normalizedLabelMode = normalizeTopTabLabelMode(labelMode)
      val showIcon = shouldShowTopTabIcon(normalizedLabelMode)
      val showText = shouldShowTopTabText(normalizedLabelMode)
-     val icon = resolveTopTabCategoryIcon(category)
+     val icon = resolveTopTabCategoryIcon(category, uiPreset)
      val iconSize = if (showText) 16.dp else 18.dp
      val textSize = resolveTopTabLabelTextSizeSp(normalizedLabelMode).sp
      val textLineHeight = resolveTopTabLabelLineHeightSp(normalizedLabelMode).sp

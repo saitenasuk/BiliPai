@@ -24,4 +24,14 @@ class TopTabLabelModePolicyTest {
         assertFalse(shouldShowTopTabIcon(mode))
         assertTrue(shouldShowTopTabText(mode))
     }
+
+    @Test
+    fun `md3 top tabs force icon and text visibility`() {
+        assertTrue(shouldShowTopTabIcon(resolveMd3TopTabLabelMode(requestedLabelMode = 0)))
+        assertTrue(shouldShowTopTabText(resolveMd3TopTabLabelMode(requestedLabelMode = 0)))
+        assertTrue(shouldShowTopTabIcon(resolveMd3TopTabLabelMode(requestedLabelMode = 1)))
+        assertTrue(shouldShowTopTabText(resolveMd3TopTabLabelMode(requestedLabelMode = 1)))
+        assertTrue(shouldShowTopTabIcon(resolveMd3TopTabLabelMode(requestedLabelMode = 2)))
+        assertTrue(shouldShowTopTabText(resolveMd3TopTabLabelMode(requestedLabelMode = 2)))
+    }
 }

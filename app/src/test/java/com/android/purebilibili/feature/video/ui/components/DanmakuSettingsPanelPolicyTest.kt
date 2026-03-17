@@ -68,6 +68,22 @@ class DanmakuSettingsPanelPolicyTest {
     }
 
     @Test
+    fun wideTabletInlinePanel_usesCenteredDialogInsteadOfFullWidthSheet() {
+        val policy = resolveDanmakuSettingsPanelLayoutPolicy(
+            isFullscreen = false,
+            screenWidthDp = 1280,
+            screenHeightDp = 800
+        )
+
+        assertEquals(
+            DanmakuSettingsPanelPresentation.CenteredDialog,
+            policy.presentation
+        )
+        assertEquals(640, policy.maxWidthDp)
+        assertEquals(0, policy.bottomPaddingDp)
+    }
+
+    @Test
     fun backdropTapDismissesPanelWhenPointerStaysWithinTouchSlop() {
         assertTrue(
             shouldDismissDanmakuSettingsPanelFromBackdropGesture(

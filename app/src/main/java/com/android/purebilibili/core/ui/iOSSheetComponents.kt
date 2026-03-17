@@ -17,12 +17,36 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.iOSSystemGray4
+
+internal data class AdaptiveBottomSheetVisualSpec(
+    val cornerRadiusDp: Int,
+    val useMaterialDragHandle: Boolean
+)
+
+internal fun resolveAdaptiveBottomSheetVisualSpec(
+    uiPreset: UiPreset
+): AdaptiveBottomSheetVisualSpec {
+    return if (uiPreset == UiPreset.MD3) {
+        AdaptiveBottomSheetVisualSpec(
+            cornerRadiusDp = 28,
+            useMaterialDragHandle = true
+        )
+    } else {
+        AdaptiveBottomSheetVisualSpec(
+            cornerRadiusDp = 14,
+            useMaterialDragHandle = false
+        )
+    }
+}
 
 /**
  * iOS-style Modal Bottom Sheet wrapper.
@@ -40,14 +64,27 @@ fun IOSModalBottomSheet(
     windowInsets: androidx.compose.foundation.layout.WindowInsets = androidx.compose.material3.BottomSheetDefaults.windowInsets,
     content: @Composable () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val visualSpec = remember(uiPreset) { resolveAdaptiveBottomSheetVisualSpec(uiPreset) }
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp),
-        containerColor = containerColor,
+        shape = RoundedCornerShape(
+            topStart = visualSpec.cornerRadiusDp.dp,
+            topEnd = visualSpec.cornerRadiusDp.dp
+        ),
+        containerColor = if (uiPreset == UiPreset.MD3) {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        } else {
+            containerColor
+        },
         scrimColor = scrimColor,
-        dragHandle = dragHandle,
+        dragHandle = if (visualSpec.useMaterialDragHandle) {
+            { BottomSheetDefaults.DragHandle() }
+        } else {
+            dragHandle
+        },
         contentWindowInsets = { windowInsets },
         content = {
             content()

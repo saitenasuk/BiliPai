@@ -21,7 +21,6 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
@@ -66,6 +65,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.ui.LoadingAnimation
+import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppChevronDownIcon
+import com.android.purebilibili.core.ui.rememberAppClearIcon
+import com.android.purebilibili.core.ui.rememberAppHistoryIcon
+import com.android.purebilibili.core.ui.rememberAppSearchIcon
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard  //  使用首页卡片
 import com.android.purebilibili.core.store.SettingsManager  //  读取动画设置
@@ -89,6 +93,8 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.data.model.response.HotItem
 import kotlinx.coroutines.launch
@@ -113,6 +119,36 @@ internal fun resolveSearchTopBarLayoutSpec(): SearchTopBarLayoutSpec {
         showInlineHotToggle = false,
         placeholderMaxLines = 1
     )
+}
+
+internal data class SearchChromeVisualSpec(
+    val inputHeightDp: Int,
+    val inputCornerRadiusDp: Int,
+    val actionContainerCornerRadiusDp: Int,
+    val useFilledSearchAction: Boolean,
+    val suggestionContainerCornerRadiusDp: Int
+)
+
+internal fun resolveSearchChromeVisualSpec(
+    uiPreset: UiPreset
+): SearchChromeVisualSpec {
+    return if (uiPreset == UiPreset.MD3) {
+        SearchChromeVisualSpec(
+            inputHeightDp = 48,
+            inputCornerRadiusDp = 28,
+            actionContainerCornerRadiusDp = 18,
+            useFilledSearchAction = true,
+            suggestionContainerCornerRadiusDp = 20
+        )
+    } else {
+        SearchChromeVisualSpec(
+            inputHeightDp = 42,
+            inputCornerRadiusDp = 50,
+            actionContainerCornerRadiusDp = 18,
+            useFilledSearchAction = false,
+            suggestionContainerCornerRadiusDp = 12
+        )
+    }
 }
 
 internal data class SearchHomeContentMotionSpec(
@@ -163,6 +199,8 @@ fun SearchScreen(
     onLiveClick: (Long, String, String) -> Unit, // [新增] 直播点击
     onAvatarClick: () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val searchChromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
     val state by viewModel.uiState.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
     val configuration = LocalConfiguration.current
@@ -912,9 +950,13 @@ fun SearchScreen(
                         .padding(horizontal = searchLayoutPolicy.resultHorizontalPaddingDp.dp)
                         .align(Alignment.TopCenter)
                         .responsiveContentWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(searchChromeSpec.suggestionContainerCornerRadiusDp.dp),
                     shadowElevation = 8.dp,
-                    color = MaterialTheme.colorScheme.surface
+                    color = if (uiPreset == UiPreset.MD3) {
+                        MaterialTheme.colorScheme.surfaceContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    }
                 ) {
                     Column(
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -932,7 +974,7 @@ fun SearchScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    CupertinoIcons.Default.MagnifyingGlass,
+                                    rememberAppSearchIcon(),
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
                                     modifier = Modifier.size(18.dp)
@@ -965,7 +1007,12 @@ fun SearchTopBar(
     reducedMotionBudget: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val uiPreset = LocalUiPreset.current
     val layoutSpec = remember { resolveSearchTopBarLayoutSpec() }
+    val chromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val backIcon = rememberAppBackIcon()
+    val searchIcon = rememberAppSearchIcon()
+    val clearIcon = rememberAppClearIcon()
     //  Focus 状态追踪
     var isFocused by remember { mutableStateOf(false) }
     
@@ -1009,7 +1056,7 @@ fun SearchTopBar(
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
-                        CupertinoIcons.Default.ChevronBackward,
+                        backIcon,
                         contentDescription = "Back",
                         tint = MaterialTheme.colorScheme.onSurface
                     )
@@ -1021,19 +1068,25 @@ fun SearchTopBar(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .height(42.dp)
-                        .clip(RoundedCornerShape(50))
+                        .height(chromeSpec.inputHeightDp.dp)
+                        .clip(RoundedCornerShape(chromeSpec.inputCornerRadiusDp.dp))
                         .border(
                             width = borderWidth,
                             color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(50)
+                            shape = RoundedCornerShape(chromeSpec.inputCornerRadiusDp.dp)
                         )
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        .background(
+                            if (uiPreset == UiPreset.MD3) {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            }
+                        )
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        CupertinoIcons.Default.MagnifyingGlass,
+                        searchIcon,
                         null,
                         tint = searchIconColor,
                         modifier = Modifier.size(20.dp)
@@ -1080,7 +1133,7 @@ fun SearchTopBar(
                             modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
-                                CupertinoIcons.Default.XmarkCircle,
+                                clearIcon,
                                 null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
@@ -1091,15 +1144,27 @@ fun SearchTopBar(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                TextButton(
-                    onClick = { onSearch(query) },
-                    enabled = query.isNotEmpty()
-                ) {
-                    Text(
-                        "搜索",
-                        color = if (query.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
-                        fontSize = 16.sp
-                    )
+                if (chromeSpec.useFilledSearchAction) {
+                    FilledTonalButton(
+                        onClick = { onSearch(query) },
+                        enabled = query.isNotEmpty(),
+                        shape = RoundedCornerShape(chromeSpec.actionContainerCornerRadiusDp.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                        modifier = Modifier.height(40.dp)
+                    ) {
+                        Text("搜索", fontSize = 15.sp)
+                    }
+                } else {
+                    TextButton(
+                        onClick = { onSearch(query) },
+                        enabled = query.isNotEmpty()
+                    ) {
+                        Text(
+                            "搜索",
+                            color = if (query.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
+                            fontSize = 16.sp
+                        )
+                    }
                 }
             }
         }
@@ -1113,10 +1178,18 @@ fun HistoryChip(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val historyIcon = rememberAppHistoryIcon()
+    val clearIcon = rememberAppClearIcon()
+    val chromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
     Surface(
         onClick = onClick,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-        shape = RoundedCornerShape(20.dp),
+        color = if (uiPreset == UiPreset.MD3) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+        },
+        shape = RoundedCornerShape(chromeSpec.actionContainerCornerRadiusDp.dp),
         tonalElevation = 0.dp
     ) {
         Row(
@@ -1126,7 +1199,7 @@ fun HistoryChip(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                CupertinoIcons.Default.Clock,
+                historyIcon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
                 modifier = Modifier.size(16.dp)
@@ -1143,7 +1216,7 @@ fun HistoryChip(
                 modifier = Modifier.size(28.dp)
             ) {
                 Icon(
-                    CupertinoIcons.Default.Xmark,
+                    clearIcon,
                     contentDescription = "删除",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
                     modifier = Modifier.size(14.dp)
@@ -1160,6 +1233,8 @@ fun HistoryItem(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val historyIcon = rememberAppHistoryIcon()
+    val clearIcon = rememberAppClearIcon()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1167,11 +1242,11 @@ fun HistoryItem(
             .padding(vertical = 12.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(CupertinoIcons.Default.Clock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f), modifier = Modifier.size(20.dp))
+        Icon(historyIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f), modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(12.dp))
         Text(text = history.keyword, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.weight(1f))
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-            Icon(CupertinoIcons.Default.Xmark, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f), modifier = Modifier.size(16.dp))
+            Icon(clearIcon, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f), modifier = Modifier.size(16.dp))
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, thickness = 0.5.dp)
@@ -1693,14 +1768,20 @@ private fun FilterMenuChip(
     highlighted: Boolean,
     onClick: () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val chevronIcon = rememberAppChevronDownIcon()
     Surface(
         onClick = onClick,
         color = if (highlighted) {
             MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
         } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            if (uiPreset == UiPreset.MD3) {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            }
         },
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(if (uiPreset == UiPreset.MD3) 14.dp else 8.dp)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -1713,7 +1794,7 @@ private fun FilterMenuChip(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
-                CupertinoIcons.Default.ChevronDown,
+                chevronIcon,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
                 tint = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -1737,7 +1818,7 @@ private fun SearchResultCardSurface(
         tonalElevation = appearance.tonalElevationDp.dp,
         shadowElevation = appearance.shadowElevationDp.dp,
         border = if (appearance.borderAlpha > 0f) {
-            BorderStroke(0.8.dp, Color.White.copy(alpha = appearance.borderAlpha))
+            androidx.compose.foundation.BorderStroke(0.8.dp, Color.White.copy(alpha = appearance.borderAlpha))
         } else {
             null
         }

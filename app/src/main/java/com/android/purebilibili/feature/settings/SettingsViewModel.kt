@@ -8,6 +8,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.allManagedAppIconLauncherAliases
 import com.android.purebilibili.core.store.normalizeAppIconKey
 import com.android.purebilibili.core.store.resolveAppIconLauncherAlias
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.util.CacheUtils
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
+    val uiPreset: UiPreset = UiPreset.IOS,
     val hwDecode: Boolean = true,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     val dynamicColor: Boolean = true,
@@ -35,7 +37,7 @@ data class SettingsUiState(
     val displayMode: Int = 0,
     val cardAnimationEnabled: Boolean = false,     //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = false,    //  卡片过渡动画（默认关闭）
-    val predictiveBackAnimationEnabled: Boolean = true, // [New] 预测性返回联动动画
+    val predictiveBackAnimationEnabled: Boolean = true, // [New] 预测性返回手势支持
     val smartVisualGuardEnabled: Boolean = false, // [Retired] 智能流畅优先已下线
     val cacheSize: String = "计算中...",
     val cacheBreakdown: CacheUtils.CacheBreakdown? = null,  //  详细缓存统计
@@ -62,6 +64,7 @@ data class SettingsUiState(
 
 // 内部数据类，用于分批合并流
 private data class CoreSettings(
+    val uiPreset: UiPreset,
     val hwDecode: Boolean,
     val themeMode: AppThemeMode,
     val dynamicColor: Boolean,
@@ -103,6 +106,7 @@ data class ExperimentalSettings(
 )
 
 private data class BaseSettings(
+    val uiPreset: UiPreset,
     val hwDecode: Boolean,
     val themeMode: AppThemeMode,
     val dynamicColor: Boolean,
@@ -141,12 +145,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     //  [核心修复] 分步合并，解决 combine 参数限制报错
     // 第 1 步：合并前 4 个设置
     private val coreSettingsFlow = combine(
+        SettingsManager.getUiPreset(context),
         SettingsManager.getHwDecode(context),
         SettingsManager.getThemeMode(context),
         SettingsManager.getDynamicColor(context),
         SettingsManager.getBgPlay(context)
-    ) { hwDecode, themeMode, dynamicColor, bgPlay ->
-        CoreSettings(hwDecode, themeMode, dynamicColor, bgPlay)
+    ) { uiPreset, hwDecode, themeMode, dynamicColor, bgPlay ->
+        CoreSettings(uiPreset, hwDecode, themeMode, dynamicColor, bgPlay)
     }
     
     // 第 2 步：合并界面设置 (分两组，每组最多5个)
@@ -286,6 +291,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // 第 5 步：合并两组设置
     private val baseSettingsFlow = combine(coreSettingsFlow, extraSettingsFlow) { core, extra ->
         BaseSettings(
+            uiPreset = core.uiPreset,
             hwDecode = core.hwDecode,
             themeMode = core.themeMode,
             dynamicColor = core.dynamicColor,
@@ -324,6 +330,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         experimentalSettingsFlow
     ) { settings, cache, experimental ->
         SettingsUiState(
+            uiPreset = settings.uiPreset,
             hwDecode = settings.hwDecode,
             themeMode = settings.themeMode,
             dynamicColor = settings.dynamicColor,
@@ -391,6 +398,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleHwDecode(value: Boolean) { viewModelScope.launch { SettingsManager.setHwDecode(context, value) } }
+    fun setUiPreset(preset: UiPreset) {
+        viewModelScope.launch {
+            SettingsManager.setUiPreset(context, preset)
+        }
+    }
     fun setThemeMode(mode: AppThemeMode) { 
         viewModelScope.launch { 
             SettingsManager.setThemeMode(context, mode)
@@ -494,7 +506,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     //  [新增] 卡片过渡动画开关
     fun toggleCardTransition(value: Boolean) { viewModelScope.launch { SettingsManager.setCardTransitionEnabled(context, value) } }
 
-    // [New] 预测性返回联动动画开关
+    // [New] 预测性返回手势支持开关
     fun togglePredictiveBackAnimation(value: Boolean) {
         viewModelScope.launch {
             SettingsManager.setPredictiveBackAnimationEnabled(context, value)

@@ -22,6 +22,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -47,11 +48,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.feature.settings.GITHUB_URL
 import com.android.purebilibili.core.store.SettingsManager //  引入 SettingsManager
 import com.android.purebilibili.core.store.HomeTopTabSettings
 import com.android.purebilibili.core.store.AppNavigationSettings
+import com.android.purebilibili.core.store.resolveHomeHeaderBlurEnabled
 //  从 components 包导入拆分后的组件
 import com.android.purebilibili.feature.home.components.BottomNavItem
 import com.android.purebilibili.feature.home.components.FluidHomeTopBar
@@ -65,11 +68,15 @@ import com.android.purebilibili.feature.home.components.resolveHomeDrawerScrimAl
 import com.android.purebilibili.feature.home.components.shouldSnapHomeTopTabSelection
 import com.android.purebilibili.feature.home.components.resolveTopTabStyle
 import com.android.purebilibili.feature.home.components.resolveHomeTopChromeMaterialMode
+import com.android.purebilibili.feature.home.components.resolveHomeTopSearchBarHeight
+import com.android.purebilibili.feature.home.components.resolveHomeTopReservedListPadding
+import com.android.purebilibili.feature.home.components.resolveHomeTopTabRowHeight
 import com.android.purebilibili.feature.home.policy.BottomBarVisibilityIntent
 import com.android.purebilibili.feature.home.policy.HomeBottomBarScrollState
 import com.android.purebilibili.feature.home.policy.reduceHomePreScroll
 import com.android.purebilibili.feature.home.policy.reduceHomeBottomBarListScroll
 import com.android.purebilibili.feature.home.policy.resolveHomeBottomBarBaseVisibility
+import com.android.purebilibili.feature.home.policy.resolveHomeHeaderOffsetForSettledPage
 import com.android.purebilibili.feature.home.policy.shouldAnimateHomePagerToCategory
 import com.android.purebilibili.feature.home.policy.shouldSwitchHomeCategoryFromPager
 import com.android.purebilibili.feature.home.policy.shouldUseInitialHomePagerSnap
@@ -352,6 +359,10 @@ fun HomeScreen(
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
         initial = com.android.purebilibili.core.store.HomeSettings()
     )
+    val uiPreset = LocalUiPreset.current
+    val pullRefreshMotionStyle = remember(uiPreset) {
+        resolveHomePullRefreshMotionStyle(uiPreset)
+    }
 
     
     var showEasterEggDialog by remember { mutableStateOf(false) }
@@ -476,8 +487,12 @@ fun HomeScreen(
     val displayMode = homeSettings.displayMode
     val isBottomBarFloating = homeSettings.isBottomBarFloating
     val bottomBarLabelMode = homeSettings.bottomBarLabelMode
-    // 顶部模糊开关直接读独立 Flow，避免聚合设置延迟/不同步导致首页状态错误。
-    val baseIsHeaderBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
+    val baseIsHeaderBlurEnabled = remember(homeSettings.headerBlurMode, uiPreset) {
+        resolveHomeHeaderBlurEnabled(
+            mode = homeSettings.headerBlurMode,
+            uiPreset = uiPreset
+        )
+    }
     val baseIsBottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled
     val crashTrackingConsentShown = homeSettings.crashTrackingConsentShown
     val baseCardAnimationEnabled = homeSettings.cardAnimationEnabled      //  卡片进场动画开关
@@ -673,7 +688,6 @@ fun HomeScreen(
 
     //  [修复] 动态计算内容顶部边距，防止被头部遮挡
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val listTopPadding = statusBarHeight + 120.dp  // [调整] 优化顶部间距 (110 -> 120) 增加呼吸感
     val homeStartupElapsedAt = remember { SystemClock.elapsedRealtime() }
     var todayWatchStartupRevealHandled by rememberSaveable { mutableStateOf(false) }
 
@@ -836,23 +850,45 @@ fun HomeScreen(
             isLiquidGlassEnabled = isLiquidGlassEnabled
         )
     }
-    val topChromeMaterialMode = remember(isBottomBarBlurEnabled, isLiquidGlassEnabled) {
+    val topChromeMaterialMode = remember(isHeaderBlurEnabled, isBottomBarBlurEnabled, isLiquidGlassEnabled) {
         resolveHomeTopChromeMaterialMode(
+            isHeaderBlurEnabled = isHeaderBlurEnabled,
             isBottomBarBlurEnabled = isBottomBarBlurEnabled,
             isLiquidGlassEnabled = isLiquidGlassEnabled
         )
     }
-    val searchBarHeightDp = 52.dp 
-    val tabRowHeightDp = if (topTabStyle.floating) 62.dp else 48.dp
-    val headerHeightDp = searchBarHeightDp + tabRowHeightDp // Total height
+    val searchBarHeightDp = resolveHomeTopSearchBarHeight(uiPreset)
+    val tabRowHeightDp = resolveHomeTopTabRowHeight(
+        isTabFloating = topTabStyle.floating,
+        uiPreset = uiPreset
+    )
+    val listTopPadding = resolveHomeTopReservedListPadding(
+        statusBarHeight = statusBarHeight,
+        searchBarHeight = searchBarHeightDp,
+        tabRowHeight = tabRowHeightDp,
+        uiPreset = uiPreset
+    )
     
     // Pixels
-    val searchBarHeightPx = with(density) { searchBarHeightDp.toPx() }
     val tabRowHeightPx = with(density) { tabRowHeightDp.toPx() }
-    val headerHeightPx = with(density) { headerHeightDp.toPx() }
-    
-    // Thresholds
-    val searchCollapseThreshold = searchBarHeightPx // Collapse search bar first
+
+    LaunchedEffect(pagerState, topCategories, tabRowHeightPx) {
+        snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { (page, scrolling) ->
+                if (scrolling) return@collect
+                val settledCategory = resolveHomeTopCategoryOrNull(topCategories, page) ?: return@collect
+                val settledGridState = gridStates[settledCategory] ?: return@collect
+                val settledHeaderOffsetPx = resolveHomeHeaderOffsetForSettledPage(
+                    firstVisibleItemIndex = settledGridState.firstVisibleItemIndex,
+                    firstVisibleItemScrollOffset = settledGridState.firstVisibleItemScrollOffset,
+                    maxHeaderCollapsePx = tabRowHeightPx
+                )
+                if (kotlin.math.abs(headerOffsetHeightPx - settledHeaderOffsetPx) > 0.5f) {
+                    headerOffsetHeightPx = settledHeaderOffsetPx
+                }
+            }
+    }
     
     // [Feature] Sticky Header Options
     // If true, header will shrink but stay visible. If false, it scrolls away.
@@ -871,7 +907,7 @@ fun HomeScreen(
                 val scrollUpdate = reduceHomePreScroll(
                     currentHeaderOffsetPx = headerOffsetHeightPx,
                     deltaY = available.y,
-                    minHeaderOffsetPx = -headerHeightPx,
+                    minHeaderOffsetPx = -tabRowHeightPx,
                     isHeaderCollapseEnabled = isHeaderCollapseEnabled,
                     isBottomBarAutoHideEnabled = isBottomBarAutoHideEnabled,
                     useSideNavigation = useSideNavigation,
@@ -996,7 +1032,8 @@ fun HomeScreen(
                         //  [新增] 下拉回弹物理动画状态 (Moved from outer scope)
                         val targetPullOffset = resolvePullContentOffsetFraction(
                             distanceFraction = pullDistanceFraction,
-                            isRefreshing = isPageRefreshing
+                            isRefreshing = isPageRefreshing,
+                            motionStyle = pullRefreshMotionStyle
                         )
                         
                         //  使用 animateFloatAsState 包装偏移量
@@ -1030,26 +1067,35 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxSize(),
                              //  iOS 风格下拉刷新指示器 (位于内容上方)
                              indicator = {
-                                iOSRefreshIndicator(
-                                    state = pullRefreshState,
-                                    isRefreshing = isRefreshing,
-                                     modifier = Modifier
-                                         .align(Alignment.TopCenter)
-                                         // [物理优化] 指示器跟随拖拽移动，保持在 Gap 中央
-                                         .padding(top = listTopPadding) 
-                                         .graphicsLayer {
-                                            val currentDragOffset = calculateDragOffset()
-                                            val indicatorHeight = 40.dp.toPx()
-                                            val minGap = 8.dp.toPx()
-                                            translationY = resolvePullIndicatorTranslationY(
-                                                dragOffsetPx = currentDragOffset,
-                                                indicatorHeightPx = indicatorHeight,
-                                                minGapPx = minGap,
-                                                isRefreshing = isPageRefreshing
-                                            )
-                                         }
-                                         .fillMaxWidth()
-                                 )
+                                if (pullRefreshMotionStyle == HomePullRefreshMotionStyle.MD3) {
+                                    PullToRefreshDefaults.Indicator(
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .padding(top = listTopPadding),
+                                        isRefreshing = isPageRefreshing,
+                                        state = pullRefreshState
+                                    )
+                                } else {
+                                    iOSRefreshIndicator(
+                                        state = pullRefreshState,
+                                        isRefreshing = isPageRefreshing,
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .padding(top = listTopPadding)
+                                            .graphicsLayer {
+                                                val currentDragOffset = calculateDragOffset()
+                                                val indicatorHeight = 40.dp.toPx()
+                                                val minGap = 8.dp.toPx()
+                                                translationY = resolvePullIndicatorTranslationY(
+                                                    dragOffsetPx = currentDragOffset,
+                                                    indicatorHeightPx = indicatorHeight,
+                                                    minGapPx = minGap,
+                                                    isRefreshing = isPageRefreshing
+                                                )
+                                            }
+                                            .fillMaxWidth()
+                                    )
+                                }
                              }
                         ) {
                              // [物理优化] 内容容器应用下沉效果

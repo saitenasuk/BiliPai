@@ -24,6 +24,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 
 /**
  * 骨架屏闪光特效 Modifier
@@ -300,16 +302,21 @@ fun Modifier.iOSTapEffect(
     hapticEnabled: Boolean = true,
     onClick: () -> Unit
 ): Modifier = composed {
+    val uiPreset = LocalUiPreset.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val haptic = rememberHapticFeedback()
+    val targetScale = if (isPressed) {
+        if (uiPreset == UiPreset.MD3) 0.985f else scale
+    } else {
+        1f
+    }
     
-    //  iOS 风格弹性动画
     val animatedScale by animateFloatAsState(
-        targetValue = if (isPressed) scale else 1f,
+        targetValue = targetScale,
         animationSpec = spring(
-            dampingRatio = 0.6f,    // iOS 弹性感
-            stiffness = 400f        // 适中的动画速度
+            dampingRatio = if (uiPreset == UiPreset.MD3) 0.9f else 0.6f,
+            stiffness = if (uiPreset == UiPreset.MD3) 650f else 400f
         ),
         label = "ios_tap_scale"
     )
@@ -338,14 +345,19 @@ fun Modifier.iOSTapEffect(
 fun Modifier.iOSTapScale(
     scale: Float = 0.96f
 ): Modifier = composed {
+    val uiPreset = LocalUiPreset.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
     val animatedScale by animateFloatAsState(
-        targetValue = if (isPressed) scale else 1f,
+        targetValue = if (isPressed) {
+            if (uiPreset == UiPreset.MD3) 0.985f else scale
+        } else {
+            1f
+        },
         animationSpec = spring(
-            dampingRatio = 0.6f,
-            stiffness = 400f
+            dampingRatio = if (uiPreset == UiPreset.MD3) 0.9f else 0.6f,
+            stiffness = if (uiPreset == UiPreset.MD3) 650f else 400f
         ),
         label = "ios_tap_scale_only"
     )
@@ -375,25 +387,35 @@ fun Modifier.iOSCardTapEffect(
     hapticEnabled: Boolean = true,
     onClick: () -> Unit
 ): Modifier = composed {
+    val uiPreset = LocalUiPreset.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val haptic = rememberHapticFeedback()
+    val targetScale = if (isPressed) {
+        if (uiPreset == UiPreset.MD3) 0.985f else pressScale
+    } else {
+        1f
+    }
+    val targetTranslation = if (isPressed) {
+        if (uiPreset == UiPreset.MD3) 2f else pressTranslationY
+    } else {
+        0f
+    }
     
-    // 🚀 [性能优化] 减少为 2 个动画状态（移除 alpha 动画，视觉差异小）
     val animatedScale by animateFloatAsState(
-        targetValue = if (isPressed) pressScale else 1f,
+        targetValue = targetScale,
         animationSpec = spring(
-            dampingRatio = if (isPressed) 0.75f else 0.55f,
-            stiffness = if (isPressed) 600f else 300f
+            dampingRatio = if (uiPreset == UiPreset.MD3) 0.92f else if (isPressed) 0.75f else 0.55f,
+            stiffness = if (uiPreset == UiPreset.MD3) 700f else if (isPressed) 600f else 300f
         ),
         label = "card_tap_scale"
     )
     
     val animatedTranslationY by animateFloatAsState(
-        targetValue = if (isPressed) pressTranslationY else 0f,
+        targetValue = targetTranslation,
         animationSpec = spring(
-            dampingRatio = if (isPressed) 0.85f else 0.5f,
-            stiffness = if (isPressed) 800f else 250f
+            dampingRatio = if (uiPreset == UiPreset.MD3) 0.95f else if (isPressed) 0.85f else 0.5f,
+            stiffness = if (uiPreset == UiPreset.MD3) 850f else if (isPressed) 800f else 250f
         ),
         label = "card_tap_translationY"
     )

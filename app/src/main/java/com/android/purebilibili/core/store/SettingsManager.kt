@@ -14,6 +14,7 @@ import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.store.home.HomeSettingsStore
 import com.android.purebilibili.core.store.navigation.NavigationSettingsStore
 import com.android.purebilibili.core.store.player.PlayerSettingsStore
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.feature.settings.share.SettingsShareApplyResult
 import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinition
 import com.android.purebilibili.feature.settings.share.SettingsShareSection
@@ -51,6 +52,42 @@ enum class LiquidGlassStyle(val value: Int) {
 
     companion object {
         fun fromValue(value: Int): LiquidGlassStyle = entries.find { it.value == value } ?: CLASSIC
+    }
+}
+
+enum class HomeHeaderBlurMode(val value: Int, val label: String) {
+    FOLLOW_PRESET(0, "跟随预设"),
+    ALWAYS_ON(1, "始终开启"),
+    ALWAYS_OFF(2, "始终关闭");
+
+    companion object {
+        fun fromValue(value: Int): HomeHeaderBlurMode {
+            return entries.find { it.value == value } ?: FOLLOW_PRESET
+        }
+    }
+}
+
+internal fun resolveHomeHeaderBlurEnabled(
+    mode: HomeHeaderBlurMode,
+    uiPreset: UiPreset
+): Boolean {
+    return when (mode) {
+        HomeHeaderBlurMode.FOLLOW_PRESET -> uiPreset == UiPreset.IOS
+        HomeHeaderBlurMode.ALWAYS_ON -> true
+        HomeHeaderBlurMode.ALWAYS_OFF -> false
+    }
+}
+
+internal fun resolveHomeHeaderBlurModePreference(
+    rawMode: Int?,
+    legacyEnabled: Boolean?
+): HomeHeaderBlurMode {
+    return if (rawMode != null) {
+        HomeHeaderBlurMode.fromValue(rawMode)
+    } else if (legacyEnabled == false) {
+        HomeHeaderBlurMode.ALWAYS_OFF
+    } else {
+        HomeHeaderBlurMode.FOLLOW_PRESET
     }
 }
 
@@ -128,6 +165,7 @@ data class HomeSettings(
     val bottomBarLabelMode: Int = 0,       // (0=图标+文字, 1=仅图标, 2=仅文字)
     val topTabLabelMode: Int = 2,          // (0=图标+文字, 1=仅图标, 2=仅文字)
     val isHeaderBlurEnabled: Boolean = true,
+    val headerBlurMode: HomeHeaderBlurMode = HomeHeaderBlurMode.FOLLOW_PRESET,
     val isBottomBarBlurEnabled: Boolean = true,
     val isLiquidGlassEnabled: Boolean = true, // [New]
     val liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC, // [New]
@@ -135,7 +173,7 @@ data class HomeSettings(
     val gridColumnCount: Int = 0, // [New] 网格列数 (0=自动, 1-6=固定)
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = true,    //  卡片过渡动画（默认开启）
-    val predictiveBackAnimationEnabled: Boolean = true, // [New] 预测性返回联动动画（默认开启）
+    val predictiveBackAnimationEnabled: Boolean = true, // [New] 预测性返回手势支持（默认开启）
     val smartVisualGuardEnabled: Boolean = false, // [Retired] 智能流畅优先已下线，固定关闭
     val compactVideoStatsOnCover: Boolean = true, //  播放量/评论数显示在封面底部（默认开启）
     val showHomeCoverGlassBadges: Boolean = true, // 首页封面玻璃信息显示
@@ -145,6 +183,10 @@ data class HomeSettings(
     // 当 Flow 加载完成后，如果实际值是 false，LaunchedEffect 会再次触发并显示弹窗
     val crashTrackingConsentShown: Boolean = true
 )
+
+internal fun resolveUiPresetPreferenceValue(rawValue: Int?): UiPreset {
+    return UiPreset.fromValue(rawValue ?: UiPreset.IOS.value)
+}
 
 enum class DanmakuPanelWidthMode(val value: Int, val label: String, val widthFraction: Float) {
     FULL(0, "全宽", 1f),
@@ -330,6 +372,7 @@ object SettingsManager {
     private val KEY_PLAYBACK_COMPLETION_BEHAVIOR = intPreferencesKey("playback_completion_behavior")
     private val KEY_HW_DECODE = booleanPreferencesKey("hw_decode")
     private val KEY_THEME_MODE = intPreferencesKey("theme_mode_v2")
+    private val KEY_UI_PRESET = intPreferencesKey("ui_preset")
     private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     private val KEY_BG_PLAY = booleanPreferencesKey("bg_play")
     //  [新增] 触感反馈 (默认开启)
@@ -408,6 +451,7 @@ object SettingsManager {
     private const val DEFAULT_TOP_TAB_VISIBLE = "RECOMMEND,FOLLOW,POPULAR,LIVE,GAME"
     //  [新增] 模糊效果开关
     private val KEY_HEADER_BLUR_ENABLED = booleanPreferencesKey("header_blur_enabled")
+    private val KEY_HOME_HEADER_BLUR_MODE = intPreferencesKey("home_header_blur_mode")
     //  [新增] 首页顶部栏自动收缩 (Shrink)
     private val KEY_HEADER_COLLAPSE_ENABLED = booleanPreferencesKey("header_collapse_enabled")
     private val KEY_BOTTOM_BAR_BLUR_ENABLED = booleanPreferencesKey("bottom_bar_blur_enabled")
@@ -428,7 +472,7 @@ object SettingsManager {
     private val KEY_CARD_ANIMATION_ENABLED = booleanPreferencesKey("card_animation_enabled")
     //  [新增] 卡片过渡动画开关
     private val KEY_CARD_TRANSITION_ENABLED = booleanPreferencesKey("card_transition_enabled")
-    // [New] 预测性返回联动动画开关
+    // [New] 预测性返回手势支持开关
     private val KEY_PREDICTIVE_BACK_ANIMATION_ENABLED = booleanPreferencesKey("predictive_back_animation_enabled")
     // [New] 运行时视觉降级守卫开关
     private val KEY_SMART_VISUAL_GUARD_ENABLED = booleanPreferencesKey("smart_visual_guard_enabled")
@@ -459,12 +503,17 @@ object SettingsManager {
      * 避免 HomeScreen 中多个 collectAsState 导致频繁重组
      */
     internal fun mapHomeSettingsFromPreferences(preferences: Preferences): HomeSettings {
+        val headerBlurMode = resolveHomeHeaderBlurModePreference(
+            rawMode = preferences[KEY_HOME_HEADER_BLUR_MODE],
+            legacyEnabled = preferences[KEY_HEADER_BLUR_ENABLED]
+        )
         return HomeSettings(
             displayMode = preferences[KEY_DISPLAY_MODE] ?: 0,
             isBottomBarFloating = preferences[KEY_BOTTOM_BAR_FLOATING] ?: true,
             bottomBarLabelMode = preferences[KEY_BOTTOM_BAR_LABEL_MODE] ?: BottomBarLabelMode.ICON_AND_TEXT,
             topTabLabelMode = preferences[KEY_TOP_TAB_LABEL_MODE] ?: TopTabLabelMode.TEXT_ONLY,
-            isHeaderBlurEnabled = preferences[KEY_HEADER_BLUR_ENABLED] ?: true,
+            isHeaderBlurEnabled = headerBlurMode != HomeHeaderBlurMode.ALWAYS_OFF,
+            headerBlurMode = headerBlurMode,
             isHeaderCollapseEnabled = preferences[KEY_HEADER_COLLAPSE_ENABLED] ?: true,
             isBottomBarBlurEnabled = preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: true,
             isLiquidGlassEnabled = preferences[KEY_LIQUID_GLASS_ENABLED] ?: true,
@@ -716,6 +765,17 @@ object SettingsManager {
             AppThemeMode.AMOLED -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
         }
         androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(nightMode)
+    }
+
+    fun getUiPreset(context: Context): Flow<UiPreset> = context.settingsDataStore.data
+        .map { preferences ->
+            resolveUiPresetPreferenceValue(preferences[KEY_UI_PRESET])
+        }
+
+    suspend fun setUiPreset(context: Context, preset: UiPreset) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_UI_PRESET] = preset.value
+        }
     }
 
     // --- Dynamic Color ---
@@ -1239,10 +1299,38 @@ object SettingsManager {
     
     //  [新增] --- 搜索框模糊效果 ---
     fun getHeaderBlurEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_HEADER_BLUR_ENABLED] ?: true }
+        .map { preferences ->
+            val mode = resolveHomeHeaderBlurModePreference(
+                rawMode = preferences[KEY_HOME_HEADER_BLUR_MODE],
+                legacyEnabled = preferences[KEY_HEADER_BLUR_ENABLED]
+            )
+            mode != HomeHeaderBlurMode.ALWAYS_OFF
+        }
 
     suspend fun setHeaderBlurEnabled(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { preferences -> preferences[KEY_HEADER_BLUR_ENABLED] = value }
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HEADER_BLUR_ENABLED] = value
+            preferences[KEY_HOME_HEADER_BLUR_MODE] = if (value) {
+                HomeHeaderBlurMode.FOLLOW_PRESET.value
+            } else {
+                HomeHeaderBlurMode.ALWAYS_OFF.value
+            }
+        }
+    }
+
+    fun getHomeHeaderBlurMode(context: Context): Flow<HomeHeaderBlurMode> = context.settingsDataStore.data
+        .map { preferences ->
+            resolveHomeHeaderBlurModePreference(
+                rawMode = preferences[KEY_HOME_HEADER_BLUR_MODE],
+                legacyEnabled = preferences[KEY_HEADER_BLUR_ENABLED]
+            )
+        }
+
+    suspend fun setHomeHeaderBlurMode(context: Context, mode: HomeHeaderBlurMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HOME_HEADER_BLUR_MODE] = mode.value
+            preferences[KEY_HEADER_BLUR_ENABLED] = mode != HomeHeaderBlurMode.ALWAYS_OFF
+        }
     }
     
     //  [新增] --- 首页顶部栏自动收缩 ---
@@ -2796,6 +2884,7 @@ object SettingsManager {
 
     private val shareableSettingDefinitions: List<ShareablePreferenceDefinition> by lazy {
         listOf(
+            IntShareablePreferenceDefinition(KEY_UI_PRESET, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_THEME_MODE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_DYNAMIC_COLOR, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_THEME_COLOR_INDEX, SettingsShareSection.APPEARANCE),

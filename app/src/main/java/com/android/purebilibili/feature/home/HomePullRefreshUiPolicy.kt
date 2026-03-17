@@ -1,9 +1,23 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.theme.UiPreset
 import kotlin.math.min
 import kotlin.math.max
 
 internal fun resolvePullRefreshThresholdDp(): Float = 56f
+
+enum class HomePullRefreshMotionStyle {
+    IOS,
+    MD3
+}
+
+internal fun resolveHomePullRefreshMotionStyle(uiPreset: UiPreset): HomePullRefreshMotionStyle {
+    return if (uiPreset == UiPreset.MD3) {
+        HomePullRefreshMotionStyle.MD3
+    } else {
+        HomePullRefreshMotionStyle.IOS
+    }
+}
 
 internal fun resolveRequiredPullDistanceDp(
     thresholdDp: Float,
@@ -78,8 +92,10 @@ internal fun resolvePullIndicatorTranslationY(
 
 internal fun resolvePullContentOffsetFraction(
     distanceFraction: Float,
-    isRefreshing: Boolean
+    isRefreshing: Boolean,
+    motionStyle: HomePullRefreshMotionStyle = HomePullRefreshMotionStyle.IOS
 ): Float {
+    if (motionStyle == HomePullRefreshMotionStyle.MD3) return 0f
     val clampedDistance = distanceFraction.coerceAtMost(2f).coerceAtLeast(0f)
     return clampedDistance * 0.5f
 }

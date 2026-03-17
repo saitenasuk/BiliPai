@@ -47,6 +47,7 @@ import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.EasterEggs
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LogCollector
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.plugin.PluginManager
@@ -890,7 +891,7 @@ private fun MobileSettingsLayout(
                         onClick = onBack
                     ) {
                         Icon(
-                            CupertinoIcons.Outlined.ChevronBackward,
+                            rememberAppBackIcon(),
                             contentDescription = "返回"
                         )
                     }

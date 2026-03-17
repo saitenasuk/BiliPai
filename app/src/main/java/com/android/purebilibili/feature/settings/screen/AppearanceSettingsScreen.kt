@@ -38,6 +38,7 @@ import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -97,7 +98,7 @@ fun AppearanceSettingsScreen(
                 title = { Text("外观设置", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -186,6 +187,20 @@ fun AppearanceSettingsContent(
                 IOSGroup {
                     // 主题模式选择 (横向卡片)
                     Column(modifier = Modifier.padding(16.dp)) {
+                        IOSSlidingSegmentedSetting(
+                            title = "界面预设：${state.uiPreset.label}",
+                            subtitle = "在 iOS 与安卓原生视觉之间无缝切换",
+                            options = resolveUiPresetSegmentOptions(),
+                            selectedValue = state.uiPreset,
+                            onSelectionChange = { preset ->
+                                viewModel.setUiPreset(preset)
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Divider()
+                        Spacer(modifier = Modifier.height(8.dp))
+
                         IOSSlidingSegmentedSetting(
                             title = "主题模式：${state.themeMode.label}",
                             subtitle = "支持点击或左右滑动切换",

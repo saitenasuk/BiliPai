@@ -1,6 +1,15 @@
 // 文件路径: feature/settings/BottomBarSettingsScreen.kt
 package com.android.purebilibili.feature.settings
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,10 +43,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.store.HomeHeaderBlurMode
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.BottomBarColors  //  统一底栏颜色配置
 import com.android.purebilibili.core.theme.BottomBarColorPalette  //  调色板
 import com.android.purebilibili.core.theme.BottomBarColorNames  //  颜色名称
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.util.LocalWindowSizeClass
@@ -77,17 +90,33 @@ internal fun resolveBottomBarTabIcon(id: String): ImageVector {
     }
 }
 
-internal fun resolveTopTabIcon(id: String): ImageVector {
-    return when (id) {
-        "RECOMMEND" -> CupertinoIcons.Default.House
-        "FOLLOW" -> CupertinoIcons.Default.PersonCropCircleBadgePlus
-        "POPULAR" -> CupertinoIcons.Default.ChartBar
-        "LIVE" -> CupertinoIcons.Default.Video
-        "ANIME" -> CupertinoIcons.Default.Tv
-        "GAME" -> CupertinoIcons.Default.PlayCircle
-        "KNOWLEDGE" -> CupertinoIcons.Default.Lightbulb
-        "TECH" -> CupertinoIcons.Default.Cpu
-        else -> CupertinoIcons.Default.House
+internal fun resolveTopTabIcon(
+    id: String,
+    uiPreset: UiPreset = UiPreset.IOS
+): ImageVector {
+    return when (uiPreset) {
+        UiPreset.MD3 -> when (id) {
+            "RECOMMEND" -> Icons.Outlined.Home
+            "FOLLOW" -> Icons.Outlined.Person
+            "POPULAR" -> Icons.AutoMirrored.Outlined.TrendingUp
+            "LIVE" -> Icons.Outlined.LiveTv
+            "ANIME" -> Icons.Outlined.Tv
+            "GAME" -> Icons.Outlined.PlayCircleOutline
+            "KNOWLEDGE" -> Icons.Outlined.Lightbulb
+            "TECH" -> Icons.Outlined.SmartToy
+            else -> Icons.Outlined.Home
+        }
+        UiPreset.IOS -> when (id) {
+            "RECOMMEND" -> CupertinoIcons.Default.House
+            "FOLLOW" -> CupertinoIcons.Default.PersonCropCircleBadgePlus
+            "POPULAR" -> CupertinoIcons.Default.ChartBar
+            "LIVE" -> CupertinoIcons.Default.Video
+            "ANIME" -> CupertinoIcons.Default.Tv
+            "GAME" -> CupertinoIcons.Default.PlayCircle
+            "KNOWLEDGE" -> CupertinoIcons.Default.Lightbulb
+            "TECH" -> CupertinoIcons.Default.Cpu
+            else -> CupertinoIcons.Default.House
+        }
     }
 }
 
@@ -108,15 +137,15 @@ val allBottomBarTabs = listOf(
 
 private val defaultTopTabIds = listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME")
 
-val allTopTabs = listOf(
-    TopTabConfig("RECOMMEND", "推荐", resolveTopTabIcon("RECOMMEND"), fixedVisible = true),
-    TopTabConfig("FOLLOW", "关注", resolveTopTabIcon("FOLLOW")),
-    TopTabConfig("POPULAR", "热门", resolveTopTabIcon("POPULAR")),
-    TopTabConfig("LIVE", "直播", resolveTopTabIcon("LIVE")),
-    TopTabConfig("ANIME", "追番", resolveTopTabIcon("ANIME")),
-    TopTabConfig("GAME", "游戏", resolveTopTabIcon("GAME")),
-    TopTabConfig("KNOWLEDGE", "知识", resolveTopTabIcon("KNOWLEDGE")),
-    TopTabConfig("TECH", "科技", resolveTopTabIcon("TECH"))
+internal fun resolveAllTopTabs(uiPreset: UiPreset = UiPreset.IOS): List<TopTabConfig> = listOf(
+    TopTabConfig("RECOMMEND", "推荐", resolveTopTabIcon("RECOMMEND", uiPreset), fixedVisible = true),
+    TopTabConfig("FOLLOW", "关注", resolveTopTabIcon("FOLLOW", uiPreset)),
+    TopTabConfig("POPULAR", "热门", resolveTopTabIcon("POPULAR", uiPreset)),
+    TopTabConfig("LIVE", "直播", resolveTopTabIcon("LIVE", uiPreset)),
+    TopTabConfig("ANIME", "追番", resolveTopTabIcon("ANIME", uiPreset)),
+    TopTabConfig("GAME", "游戏", resolveTopTabIcon("GAME", uiPreset)),
+    TopTabConfig("KNOWLEDGE", "知识", resolveTopTabIcon("KNOWLEDGE", uiPreset)),
+    TopTabConfig("TECH", "科技", resolveTopTabIcon("TECH", uiPreset))
 )
 
 /**
@@ -134,7 +163,7 @@ fun BottomBarSettingsScreen(
                 title = { Text("底栏管理", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -157,6 +186,7 @@ fun BottomBarSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val uiPreset = LocalUiPreset.current
     val windowSizeClass = LocalWindowSizeClass.current
     val scope = rememberCoroutineScope()
     var isVisible by remember { mutableStateOf(false) }
@@ -172,6 +202,7 @@ fun BottomBarSettingsContent(
             animationEnabled = cardAnimationEnabled
         )
     }
+    val allTopTabs = remember(uiPreset) { resolveAllTopTabs(uiPreset) }
 
     LaunchedEffect(Unit) {
         isVisible = true
@@ -297,6 +328,8 @@ fun BottomBarSettingsContent(
                         val labelMode by SettingsManager.getBottomBarLabelMode(context).collectAsState(initial = 0)
                         val topTabLabelMode by SettingsManager.getTopTabLabelMode(context)
                             .collectAsState(initial = SettingsManager.TopTabLabelMode.TEXT_ONLY)
+                        val headerBlurMode by SettingsManager.getHomeHeaderBlurMode(context)
+                            .collectAsState(initial = HomeHeaderBlurMode.FOLLOW_PRESET)
                         
                         //  底栏显示模式选择（抽屉式）
                         var visibilityModeExpanded by remember { mutableStateOf(false) }
@@ -541,6 +574,84 @@ fun BottomBarSettingsContent(
                                 }
                             }
                         }
+
+                        Divider()
+
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    CupertinoIcons.Default.Drop,
+                                    contentDescription = null,
+                                    tint = com.android.purebilibili.core.theme.iOSTeal,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text(
+                                        text = "顶部模糊",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = when (headerBlurMode) {
+                                            HomeHeaderBlurMode.FOLLOW_PRESET -> "跟随预设"
+                                            HomeHeaderBlurMode.ALWAYS_ON -> "始终开启"
+                                            HomeHeaderBlurMode.ALWAYS_OFF -> "始终关闭"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                listOf(
+                                    HomeHeaderBlurMode.FOLLOW_PRESET to "跟随预设",
+                                    HomeHeaderBlurMode.ALWAYS_ON to "始终开",
+                                    HomeHeaderBlurMode.ALWAYS_OFF to "始终关"
+                                ).forEach { (mode, label) ->
+                                    val isSelected = headerBlurMode == mode
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable {
+                                                scope.launch {
+                                                    SettingsManager.setHomeHeaderBlurMode(context, mode)
+                                                }
+                                            }
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                                else Color.Transparent
+                                            )
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = when (mode) {
+                                                HomeHeaderBlurMode.FOLLOW_PRESET -> "iOS 开 / MD3 关"
+                                                HomeHeaderBlurMode.ALWAYS_ON -> "两套都开"
+                                                HomeHeaderBlurMode.ALWAYS_OFF -> "两套都关"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -651,10 +762,10 @@ fun BottomBarSettingsContent(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    io.github.alexzhirkevich.cupertino.CupertinoSwitch(
+                                    AppAdaptiveSwitch(
                                         checked = isVisibleTab,
                                         onCheckedChange = { checked ->
-                                            if (!canToggle) return@CupertinoSwitch
+                                            if (!canToggle) return@AppAdaptiveSwitch
                                             localTopTabVisible = if (checked) {
                                                 localTopTabVisible + tab.id
                                             } else {
@@ -668,10 +779,7 @@ fun BottomBarSettingsContent(
                                             localTopTabOrder = listOf("RECOMMEND") + withoutRecommend
                                             saveTopTabConfig()
                                         },
-                                        enabled = canToggle,
-                                        colors = io.github.alexzhirkevich.cupertino.CupertinoSwitchDefaults.colors(
-                                            checkedTrackColor = MaterialTheme.colorScheme.primary
-                                        )
+                                        enabled = canToggle
                                     )
                                 }
                             }
@@ -774,6 +882,9 @@ fun BottomBarSettingsContent(
                                 localTopTabVisible = defaultTopTabIds.toSet()
                                 saveConfig()
                                 saveTopTabConfig()
+                                scope.launch {
+                                    SettingsManager.setHomeHeaderBlurMode(context, HomeHeaderBlurMode.FOLLOW_PRESET)
+                                }
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = io.github.alexzhirkevich.cupertino.CupertinoButtonDefaults.borderedButtonColors(
@@ -970,13 +1081,10 @@ private fun BottomBarTabItem(
         }
         
         // 开关
-        io.github.alexzhirkevich.cupertino.CupertinoSwitch(
+        AppAdaptiveSwitch(
             checked = isVisible,
             onCheckedChange = { newValue -> if (canToggle) onToggle(newValue) },
-            enabled = canToggle,
-            colors = io.github.alexzhirkevich.cupertino.CupertinoSwitchDefaults.colors(
-                checkedTrackColor = MaterialTheme.colorScheme.primary
-            )
+            enabled = canToggle
         )
     }
     

@@ -3,12 +3,14 @@ package com.android.purebilibili.feature.home.components
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.feature.home.HomeGlassResolvedColors
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.theme.UiPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -79,15 +81,71 @@ class iOSHomeHeaderVisualPolicyTest {
     @Test
     fun `home header trims top chrome heights for better content density`() {
         assertEquals(48.dp, resolveHomeTopSearchBarHeight())
+        assertEquals(48.dp, resolveHomeTopSearchBarHeight(UiPreset.MD3))
         assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = true))
+        assertEquals(54.dp, resolveHomeTopTabRowHeight(isTabFloating = true, uiPreset = UiPreset.MD3))
         assertEquals(46.dp, resolveHomeTopTabRowHeight(isTabFloating = false))
+        assertEquals(44.dp, resolveHomeTopTabRowHeight(isTabFloating = false, uiPreset = UiPreset.MD3))
+    }
+
+    @Test
+    fun `header scroll keeps search row visible while collapsing top tabs`() {
+        val layout = resolveHomeHeaderScrollLayout(
+            headerOffsetPx = -96f,
+            searchBarHeightPx = 48f,
+            tabRowHeightPx = 56f,
+            isHeaderCollapseEnabled = true
+        )
+
+        assertEquals(48f, layout.searchBarHeightPx, 0.0001f)
+        assertEquals(1f, layout.searchAlpha, 0.0001f)
+        assertEquals(0f, layout.tabRowHeightPx, 0.0001f)
+        assertEquals(0f, layout.tabAlpha, 0.0001f)
     }
 
     @Test
     fun `home header trims horizontal spacing without cramping controls`() {
         assertEquals(14.dp, resolveHomeTopSearchRowHorizontalPadding())
+        assertEquals(16.dp, resolveHomeTopSearchRowHorizontalPadding(UiPreset.MD3))
         assertEquals(34.dp, resolveHomeTopSearchPillHeight())
         assertEquals(14.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true))
+        assertEquals(12.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true, uiPreset = UiPreset.MD3))
+        assertEquals(6.dp, resolveHomeTopSearchToTabsSpacing())
+        assertEquals(8.dp, resolveHomeTopSearchToTabsSpacing(UiPreset.MD3))
+    }
+
+    @Test
+    fun `ios home header prefers a unified panel with embedded tabs`() {
+        assertTrue(shouldUseUnifiedHomeTopPanel(UiPreset.IOS))
+        assertFalse(shouldUseUnifiedHomeTopPanel(UiPreset.MD3))
+        assertFalse(shouldShowUnifiedHomeTopPanelDivider(UiPreset.IOS))
+        assertTrue(shouldShowUnifiedHomeTopPanelDivider(UiPreset.MD3))
+        assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding())
+        assertEquals(8.dp, resolveHomeTopUnifiedPanelInnerPadding())
+        assertEquals(28.dp, resolveHomeTopUnifiedPanelCornerRadius())
+        assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding())
+    }
+
+    @Test
+    fun `home list top padding grows with unified ios header height`() {
+        assertEquals(
+            175.dp,
+            resolveHomeTopReservedListPadding(
+                statusBarHeight = 44.dp,
+                searchBarHeight = 48.dp,
+                tabRowHeight = 56.dp,
+                uiPreset = UiPreset.IOS
+            )
+        )
+        assertEquals(
+            146.dp,
+            resolveHomeTopReservedListPadding(
+                statusBarHeight = 44.dp,
+                searchBarHeight = 48.dp,
+                tabRowHeight = 46.dp,
+                uiPreset = UiPreset.MD3
+            )
+        )
     }
 
     @Test
@@ -97,6 +155,53 @@ class iOSHomeHeaderVisualPolicyTest {
         assertEquals(30.dp, resolveHomeTopAvatarInnerSize())
         assertEquals(20.dp, resolveHomeTopSettingsIconSize())
         assertEquals(6.dp, resolveHomeTopEdgeControlGap())
+        assertEquals(8.dp, resolveHomeTopEdgeControlGap(UiPreset.MD3))
+    }
+
+    @Test
+    fun `md3 home header keeps search pill and edge controls less circular`() {
+        val searchShape = resolveHomeTopSearchContainerShape(UiPreset.MD3)
+        val edgeShape = resolveHomeTopEdgeButtonShape(UiPreset.MD3)
+
+        assertTrue(searchShape is RoundedCornerShape)
+        assertTrue(edgeShape is RoundedCornerShape)
+        assertNotEquals(CircleShape, edgeShape as Shape)
+        assertEquals(38.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
+        assertEquals(14.dp, resolveHomeTopSearchContentHorizontalPadding(UiPreset.MD3))
+        assertEquals(10.dp, resolveHomeTopSearchIconTextGap(UiPreset.MD3))
+    }
+
+    @Test
+    fun `md3 home header prefers material surface container tiers`() {
+        val chromeColors = resolveHomeTopContainerColors(
+            uiPreset = UiPreset.MD3,
+            emphasized = false,
+            fallbackColors = HomeGlassResolvedColors(
+                containerColor = Color.Red,
+                borderColor = Color.Blue,
+                highlightColor = Color.White
+            ),
+            surfaceContainerColor = Color(0xFFF3F3F3),
+            surfaceContainerHighColor = Color(0xFFE7E7E7),
+            outlineVariantColor = Color(0xFF777777)
+        )
+        val searchColors = resolveHomeTopContainerColors(
+            uiPreset = UiPreset.MD3,
+            emphasized = true,
+            fallbackColors = HomeGlassResolvedColors(
+                containerColor = Color.Red,
+                borderColor = Color.Blue,
+                highlightColor = Color.White
+            ),
+            surfaceContainerColor = Color(0xFFF3F3F3),
+            surfaceContainerHighColor = Color(0xFFE7E7E7),
+            outlineVariantColor = Color(0xFF777777)
+        )
+
+        assertEquals(Color(0xFFF3F3F3), chromeColors.containerColor)
+        assertEquals(Color(0xFFE7E7E7), searchColors.containerColor)
+        assertEquals(Color.Transparent, chromeColors.highlightColor)
+        assertTrue(searchColors.borderColor.alpha >= chromeColors.borderColor.alpha)
     }
 
     @Test
@@ -104,6 +209,7 @@ class iOSHomeHeaderVisualPolicyTest {
         assertEquals(
             TopTabMaterialMode.LIQUID_GLASS,
             resolveHomeTopChromeMaterialMode(
+                isHeaderBlurEnabled = true,
                 isBottomBarBlurEnabled = true,
                 isLiquidGlassEnabled = true
             )
@@ -115,6 +221,7 @@ class iOSHomeHeaderVisualPolicyTest {
         assertEquals(
             TopTabMaterialMode.BLUR,
             resolveHomeTopChromeMaterialMode(
+                isHeaderBlurEnabled = true,
                 isBottomBarBlurEnabled = true,
                 isLiquidGlassEnabled = false
             )
@@ -126,10 +233,62 @@ class iOSHomeHeaderVisualPolicyTest {
         assertEquals(
             TopTabMaterialMode.PLAIN,
             resolveHomeTopChromeMaterialMode(
+                isHeaderBlurEnabled = true,
                 isBottomBarBlurEnabled = false,
                 isLiquidGlassEnabled = false
             )
         )
+    }
+
+    @Test
+    fun `md3 top chrome keeps blur local instead of using full width slab`() {
+        assertEquals(
+            HomeTopChromeRenderMode.PLAIN,
+            resolveHomeTopContinuousSlabRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.MD3
+            )
+        )
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopLocalChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.MD3
+            )
+        )
+    }
+
+    @Test
+    fun `ios unified home header keeps blur on the local panel while preserving top backdrop blur`() {
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopPanelChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.IOS,
+                useUnifiedPanel = true
+            )
+        )
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopContinuousSlabRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.IOS
+            )
+        )
+    }
+
+    @Test
+    fun `ios unified home header uses inset search styling instead of standalone blur pill`() {
+        assertEquals(
+            HomeTopChromeRenderMode.PLAIN,
+            resolveHomeTopSearchChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.IOS,
+                useUnifiedPanel = true
+            )
+        )
+        assertTrue(resolveHomeTopUnifiedSearchContainerColor(isLightMode = true).alpha < 0.4f)
+        assertTrue(resolveHomeTopUnifiedSearchBorderColor(isLightMode = true).alpha < 0.25f)
     }
 
     @Test

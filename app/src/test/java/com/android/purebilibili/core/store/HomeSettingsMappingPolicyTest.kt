@@ -3,6 +3,7 @@ package com.android.purebilibili.core.store
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
+import com.android.purebilibili.core.theme.UiPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -21,6 +22,7 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(0, result.bottomBarLabelMode)
         assertEquals(SettingsManager.TopTabLabelMode.TEXT_ONLY, result.topTabLabelMode)
         assertTrue(result.isHeaderBlurEnabled)
+        assertEquals(HomeHeaderBlurMode.FOLLOW_PRESET, result.headerBlurMode)
         assertTrue(result.isBottomBarBlurEnabled)
         assertTrue(result.isLiquidGlassEnabled)
         assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
@@ -62,6 +64,7 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(2, result.bottomBarLabelMode)
         assertEquals(1, result.topTabLabelMode)
         assertFalse(result.isHeaderBlurEnabled)
+        assertEquals(HomeHeaderBlurMode.ALWAYS_OFF, result.headerBlurMode)
         assertFalse(result.isHeaderCollapseEnabled)
         assertFalse(result.isBottomBarBlurEnabled)
         assertFalse(result.isLiquidGlassEnabled)
@@ -74,5 +77,34 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.compactVideoStatsOnCover)
         assertTrue(result.easterEggEnabled)
         assertTrue(result.crashTrackingConsentShown)
+    }
+
+    @Test
+    fun explicitHeaderBlurMode_overridesLegacyBoolean() {
+        val prefs = mutablePreferencesOf(
+            booleanPreferencesKey("header_blur_enabled") to false,
+            intPreferencesKey("home_header_blur_mode") to HomeHeaderBlurMode.ALWAYS_ON.value
+        )
+
+        val result = mapHomeSettingsFromPreferences(prefs)
+
+        assertEquals(HomeHeaderBlurMode.ALWAYS_ON, result.headerBlurMode)
+        assertTrue(result.isHeaderBlurEnabled)
+    }
+
+    @Test
+    fun followPresetHeaderBlur_resolvesDifferentlyForIosAndMd3() {
+        assertTrue(
+            resolveHomeHeaderBlurEnabled(
+                mode = HomeHeaderBlurMode.FOLLOW_PRESET,
+                uiPreset = UiPreset.IOS
+            )
+        )
+        assertFalse(
+            resolveHomeHeaderBlurEnabled(
+                mode = HomeHeaderBlurMode.FOLLOW_PRESET,
+                uiPreset = UiPreset.MD3
+            )
+        )
     }
 }

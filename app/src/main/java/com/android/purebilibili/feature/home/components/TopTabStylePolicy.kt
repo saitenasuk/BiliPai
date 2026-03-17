@@ -1,9 +1,16 @@
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.theme.UiPreset
+
 enum class TopTabMaterialMode {
     PLAIN,
     BLUR,
     LIQUID_GLASS
+}
+
+enum class TopTabIndicatorStyle {
+    CAPSULE,
+    MATERIAL
 }
 
 data class TopTabVisualTuning(
@@ -28,6 +35,14 @@ data class TopTabVisualState(
 )
 
 fun resolveTopTabVisualTuning(): TopTabVisualTuning = TopTabVisualTuning()
+
+internal fun resolveTopTabIndicatorStyle(uiPreset: UiPreset): TopTabIndicatorStyle {
+    return if (uiPreset == UiPreset.MD3) {
+        TopTabIndicatorStyle.MATERIAL
+    } else {
+        TopTabIndicatorStyle.CAPSULE
+    }
+}
 
 fun resolveTopTabLabelTextSizeSp(labelMode: Int): Float {
     val tuning = resolveTopTabVisualTuning()

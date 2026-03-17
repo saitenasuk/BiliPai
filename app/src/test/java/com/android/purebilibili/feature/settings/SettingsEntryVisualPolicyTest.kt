@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.settings
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Security
+import com.android.purebilibili.core.theme.UiPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -43,6 +47,24 @@ class SettingsEntryVisualPolicyTest {
         val visual = resolveSettingsEntryVisual(SettingsSearchTarget.DONATE)
         assertNotNull(visual.icon)
         assertEquals(CupertinoIcons.Default.Gift, visual.icon)
+    }
+
+    @Test
+    fun `md3 preset should use material semantic icons for key settings entries`() {
+        assertEquals(
+            Icons.Outlined.Palette,
+            resolveSettingsEntryVisual(
+                SettingsSearchTarget.APPEARANCE,
+                UiPreset.MD3
+            ).icon
+        )
+        assertEquals(
+            Icons.Outlined.Security,
+            resolveSettingsEntryVisual(
+                SettingsSearchTarget.PERMISSION,
+                UiPreset.MD3
+            ).icon
+        )
     }
 
     @Test
@@ -91,5 +113,35 @@ class SettingsEntryVisualPolicyTest {
 
         val allHomepageIcons = sectionTargetIcons + homepageDirectSwitchIcons
         assertEquals(allHomepageIcons.size, allHomepageIcons.toSet().size)
+    }
+
+    @Test
+    fun `md3 settings homepage icons should also remain distinct`() {
+        val sectionTargetIcons = listOf(
+            SettingsSearchTarget.APPEARANCE,
+            SettingsSearchTarget.PLAYBACK,
+            SettingsSearchTarget.BOTTOM_BAR,
+            SettingsSearchTarget.PERMISSION,
+            SettingsSearchTarget.BLOCKED_LIST,
+            SettingsSearchTarget.WEBDAV_BACKUP,
+            SettingsSearchTarget.DOWNLOAD_PATH,
+            SettingsSearchTarget.CLEAR_CACHE,
+            SettingsSearchTarget.PLUGINS,
+            SettingsSearchTarget.EXPORT_LOGS,
+            SettingsSearchTarget.DISCLAIMER,
+            SettingsSearchTarget.OPEN_SOURCE_LICENSES,
+            SettingsSearchTarget.OPEN_SOURCE_HOME,
+            SettingsSearchTarget.CHECK_UPDATE,
+            SettingsSearchTarget.VIEW_RELEASE_NOTES,
+            SettingsSearchTarget.REPLAY_ONBOARDING,
+            SettingsSearchTarget.TIPS,
+            SettingsSearchTarget.OPEN_LINKS,
+            SettingsSearchTarget.DONATE,
+            SettingsSearchTarget.TWITTER
+        ).map {
+            resolveSettingsEntryVisual(it, UiPreset.MD3)
+        }.mapNotNull { it.icon }
+
+        assertEquals(sectionTargetIcons.size, sectionTargetIcons.toSet().size)
     }
 }

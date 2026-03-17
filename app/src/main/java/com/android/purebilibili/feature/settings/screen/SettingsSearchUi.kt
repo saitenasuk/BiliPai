@@ -8,12 +8,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.ui.rememberAppSettingsIcon
 import com.android.purebilibili.core.ui.components.IOSClickableItem
 import com.android.purebilibili.core.ui.components.IOSDivider
 import com.android.purebilibili.core.ui.components.IOSGroup
 import com.android.purebilibili.core.ui.components.IOSSearchBar
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.Gearshape
 
 @Composable
 internal fun SettingsSearchBarSection(
@@ -33,11 +33,12 @@ internal fun SettingsSearchResultsSection(
     results: List<SettingsSearchResult>,
     onResultClick: (SettingsSearchTarget) -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
     SettingsCategoryHeader("搜索结果")
     IOSGroup {
         if (results.isEmpty()) {
             IOSClickableItem(
-                icon = CupertinoIcons.Outlined.Gearshape,
+                icon = rememberAppSettingsIcon(),
                 title = "未找到匹配项",
                 subtitle = "试试其他关键词",
                 onClick = null,
@@ -46,7 +47,7 @@ internal fun SettingsSearchResultsSection(
             )
         } else {
             results.forEachIndexed { index, result ->
-                val visual = resolveSettingsEntryVisual(result.target)
+                val visual = resolveSettingsEntryVisual(result.target, uiPreset)
                 IOSClickableItem(
                     icon = visual.icon,
                     iconPainter = visual.iconResId?.let { painterResource(id = it) },

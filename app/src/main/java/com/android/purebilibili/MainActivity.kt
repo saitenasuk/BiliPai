@@ -63,6 +63,7 @@ import com.android.purebilibili.feature.settings.AppUpdateDownloadState
 import com.android.purebilibili.feature.settings.AppUpdateDownloadStatus
 import com.android.purebilibili.feature.settings.AppUpdateInstallAction
 import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
 import com.android.purebilibili.feature.settings.completeAppUpdateDownload
 import com.android.purebilibili.feature.settings.downloadAppUpdateApk
@@ -761,6 +762,7 @@ class MainActivity : ComponentActivity() {
             // var showWelcome by remember { mutableStateOf(!prefs.getBoolean(KEY_FIRST_LAUNCH, false)) }
 
             // 1. 获取存储的模式 (默认为跟随系统)
+            val uiPreset by SettingsManager.getUiPreset(context).collectAsState(initial = UiPreset.IOS)
             val themeMode by SettingsManager.getThemeMode(context).collectAsState(initial = AppThemeMode.FOLLOW_SYSTEM)
 
             //  检查并请求所有文件访问权限 (Android 11+)
@@ -809,6 +811,7 @@ class MainActivity : ComponentActivity() {
 
             // 6. 传入参数
             PureBiliBiliTheme(
+                uiPreset = uiPreset,
                 darkTheme = useDarkTheme,
                 dynamicColor = effectiveDynamicColor,
                 amoledDarkTheme = useAmoledDarkTheme,

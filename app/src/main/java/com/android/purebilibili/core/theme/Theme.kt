@@ -5,6 +5,7 @@ import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -80,8 +81,45 @@ private fun createLightColorScheme(primaryColor: Color) = lightColorScheme(
 private val DarkColorScheme = createDarkColorScheme(iOSSystemBlue)
 private val LightColorScheme = createLightColorScheme(iOSSystemBlue)
 
+private fun createMd3DarkColorScheme(primaryColor: Color) = darkColorScheme(
+    primary = primaryColor,
+    onPrimary = White,
+    primaryContainer = primaryColor.copy(alpha = 0.28f),
+    onPrimaryContainer = White,
+    secondary = primaryColor.copy(alpha = 0.82f),
+    secondaryContainer = primaryColor.copy(alpha = 0.2f),
+    onSecondaryContainer = White,
+    background = Color(0xFF121212),
+    surface = Color(0xFF1E1E1E),
+    onSurface = White,
+    surfaceVariant = Color(0xFF2B2B2B),
+    onSurfaceVariant = Color(0xFFD1D1D1),
+    surfaceContainer = Color(0xFF242424),
+    outline = Color(0xFF8D8D8D),
+    outlineVariant = Color(0xFF4C4C4C)
+)
+
+private fun createMd3LightColorScheme(primaryColor: Color) = lightColorScheme(
+    primary = primaryColor,
+    onPrimary = White,
+    primaryContainer = primaryColor.copy(alpha = 0.14f),
+    onPrimaryContainer = primaryColor,
+    secondary = primaryColor.copy(alpha = 0.84f),
+    secondaryContainer = primaryColor.copy(alpha = 0.1f),
+    onSecondaryContainer = primaryColor,
+    background = Color(0xFFFFFBFE),
+    surface = Color(0xFFFFFBFE),
+    onSurface = Color(0xFF1C1B1F),
+    surfaceVariant = Color(0xFFE7E0EC),
+    onSurfaceVariant = Color(0xFF49454F),
+    surfaceContainer = Color(0xFFF3EDF7),
+    outline = Color(0xFF79747E),
+    outlineVariant = Color(0xFFCAC4D0)
+)
+
 @Composable
 fun PureBiliBiliTheme(
+    uiPreset: UiPreset = UiPreset.IOS,
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     amoledDarkTheme: Boolean = false,
@@ -95,8 +133,12 @@ fun PureBiliBiliTheme(
     //  获取自定义主题色 (默认 iOS 蓝)
     val customPrimaryColor = ThemeColors.getOrElse(themeColorIndex) { iOSSystemBlue }
     
-    //  [优化] 使用固定 iOS 风格圆角
-    val shapes = iOSShapes
+    val renderingProfile = resolveUiRenderingProfile(uiPreset)
+    val shapes = if (renderingProfile.useMaterialChrome) {
+        Shapes()
+    } else {
+        iOSShapes
+    }
     
     val colorScheme = when {
         // 如果开启了动态取色 且 系统版本 >= Android 12 (S)
@@ -109,9 +151,20 @@ fun PureBiliBiliTheme(
             }
         }
         darkTheme && amoledDarkTheme -> createAmoledDarkColorScheme(customPrimaryColor)
-        //  [新增] 使用自定义主题色
-        darkTheme -> createDarkColorScheme(customPrimaryColor)
-        else -> createLightColorScheme(customPrimaryColor)
+        darkTheme -> {
+            if (renderingProfile.useMaterialChrome) {
+                createMd3DarkColorScheme(customPrimaryColor)
+            } else {
+                createDarkColorScheme(customPrimaryColor)
+            }
+        }
+        else -> {
+            if (renderingProfile.useMaterialChrome) {
+                createMd3LightColorScheme(customPrimaryColor)
+            } else {
+                createLightColorScheme(customPrimaryColor)
+            }
+        }
     }
 
     //  [新增] 动态设置状态栏图标颜色
@@ -126,10 +179,15 @@ fun PureBiliBiliTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = BiliTypography,
-        shapes = shapes,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalUiPreset provides uiPreset,
+        LocalCornerRadiusScale provides if (renderingProfile.useMaterialChrome) 0.9f else 1f
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = BiliTypography,
+            shapes = shapes,
+            content = content
+        )
+    }
 }

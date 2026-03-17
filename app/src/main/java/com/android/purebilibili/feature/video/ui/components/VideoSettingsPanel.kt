@@ -32,6 +32,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PhotoCamera
 import com.android.purebilibili.core.store.LONG_PRESS_SPEED_OPTIONS
+import com.android.purebilibili.core.ui.rememberAppChevronForwardIcon
+import com.android.purebilibili.core.ui.rememberAppCodecIcon
+import com.android.purebilibili.core.ui.rememberAppDownloadIcon
+import com.android.purebilibili.core.ui.rememberAppFlipHorizontalIcon
+import com.android.purebilibili.core.ui.rememberAppFlipVerticalIcon
+import com.android.purebilibili.core.ui.rememberAppGestureTapIcon
+import com.android.purebilibili.core.ui.rememberAppHeadphonesIcon
+import com.android.purebilibili.core.ui.rememberAppMusicIcon
+import com.android.purebilibili.core.ui.rememberAppPhotoIcon
+import com.android.purebilibili.core.ui.rememberAppQualityIcon
+import com.android.purebilibili.core.ui.rememberAppRefreshIcon
+import com.android.purebilibili.core.ui.rememberAppSpeedIcon
+import com.android.purebilibili.core.ui.rememberAppTimerIcon
+import com.android.purebilibili.core.ui.rememberAppWifiIcon
 import com.android.purebilibili.core.ui.components.DefaultPlaybackSpeedPreferenceControl
 import com.android.purebilibili.core.ui.components.formatDefaultPlaybackSpeed
 import com.android.purebilibili.data.model.response.AiAudioInfo
@@ -126,6 +140,19 @@ fun VideoSettingsPanel(
     val rememberLastPlaybackSpeed by com.android.purebilibili.core.store.SettingsManager
         .getRememberLastPlaybackSpeed(context)
         .collectAsState(initial = false)
+    val timerIcon = rememberAppTimerIcon()
+    val refreshIcon = rememberAppRefreshIcon()
+    val photoIcon = rememberAppPhotoIcon()
+    val downloadIcon = rememberAppDownloadIcon()
+    val musicIcon = rememberAppMusicIcon()
+    val flipHorizontalIcon = rememberAppFlipHorizontalIcon()
+    val flipVerticalIcon = rememberAppFlipVerticalIcon()
+    val headphonesIcon = rememberAppHeadphonesIcon()
+    val qualityIcon = rememberAppQualityIcon()
+    val codecIcon = rememberAppCodecIcon()
+    val wifiIcon = rememberAppWifiIcon()
+    val speedIcon = rememberAppSpeedIcon()
+    val gestureTapIcon = rememberAppGestureTapIcon()
     
     com.android.purebilibili.core.ui.IOSModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -149,7 +176,7 @@ fun VideoSettingsPanel(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.Timer,
+                            imageVector = timerIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -175,7 +202,7 @@ fun VideoSettingsPanel(
             item {
                 //  重载视频
                 SettingsItem(
-                    icon = CupertinoIcons.Default.ArrowClockwise,
+                    icon = refreshIcon,
                     title = "重载视频",
                     onClick = {
                         onReload()
@@ -194,7 +221,7 @@ fun VideoSettingsPanel(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Filled.Download,
+                            imageVector = downloadIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -214,7 +241,7 @@ fun VideoSettingsPanel(
                         horizontalArrangement = Arrangement.spacedBy(actionPolicy.rowItemSpacingDp.dp)
                     ) {
                         SettingsActionPill(
-                            icon = CupertinoIcons.Default.Photo,
+                            icon = photoIcon,
                             label = "保存封面",
                             onClick = {
                                 onSaveCover()
@@ -232,7 +259,7 @@ fun VideoSettingsPanel(
                             policy = actionPolicy
                         )
                         SettingsActionPill(
-                            icon = CupertinoIcons.Default.MusicNote,
+                            icon = musicIcon,
                             label = "下载音频",
                             onClick = {
                                 onDownloadAudio()
@@ -256,7 +283,7 @@ fun VideoSettingsPanel(
                 ) {
                     // 左右翻转
                     FlipButton(
-                        icon = CupertinoIcons.Default.ArrowLeftArrowRight,
+                        icon = flipHorizontalIcon,
                         label = "左右翻转",
                         isActive = isFlippedHorizontal,
                         onClick = {
@@ -268,7 +295,7 @@ fun VideoSettingsPanel(
                     
                     // 上下翻转
                     FlipButton(
-                        icon = CupertinoIcons.Default.ArrowUpArrowDown,
+                        icon = flipVerticalIcon,
                         label = "上下翻转",
                         isActive = isFlippedVertical,
                         onClick = {
@@ -280,7 +307,7 @@ fun VideoSettingsPanel(
                     
                     // 听视频（音频模式）
                     FlipButton(
-                        icon = CupertinoIcons.Default.Headphones,
+                        icon = headphonesIcon,
                         label = "听视频",
                         isActive = isAudioOnly,
                         onClick = {
@@ -305,7 +332,7 @@ fun VideoSettingsPanel(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = CupertinoIcons.Default.PlayCircle,
+                                imageVector = qualityIcon,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(24.dp)
@@ -375,7 +402,7 @@ fun VideoSettingsPanel(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.Cpu, // Assuming CPU icon represents encode/decode
+                            imageVector = codecIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -438,7 +465,7 @@ fun VideoSettingsPanel(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.Cpu,
+                            imageVector = codecIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -501,7 +528,7 @@ fun VideoSettingsPanel(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.MusicNote,
+                            imageVector = musicIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -630,7 +657,7 @@ fun VideoSettingsPanel(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = CupertinoIcons.Default.Wifi,
+                                imageVector = wifiIcon,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(24.dp)
@@ -702,7 +729,7 @@ fun VideoSettingsPanel(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.Speedometer,
+                            imageVector = speedIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -811,7 +838,7 @@ fun VideoSettingsPanel(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.Forward,
+                            imageVector = speedIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -901,7 +928,7 @@ fun VideoSettingsPanel(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.HandTap,
+                            imageVector = gestureTapIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -947,7 +974,7 @@ fun VideoSettingsPanel(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.ArrowUpArrowDown,
+                            imageVector = flipVerticalIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -985,7 +1012,7 @@ fun VideoSettingsPanel(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.ArrowLeftArrowRight,
+                            imageVector = flipHorizontalIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
@@ -1032,6 +1059,7 @@ private fun SettingsItem(
     onClick: () -> Unit,
     trailing: @Composable (() -> Unit)? = null
 ) {
+    val chevronIcon = rememberAppChevronForwardIcon()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1072,7 +1100,7 @@ private fun SettingsItem(
             trailing()
         } else {
             Icon(
-                imageVector = CupertinoIcons.Default.ChevronForward,
+                imageVector = chevronIcon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(16.dp)

@@ -32,6 +32,19 @@ internal fun resolveCrashSnapshotMarkerFile(baseDir: File): File =
 internal fun resolveCrashSnapshotExportRelativePath(): String =
     "$DOWNLOAD_LOG_RELATIVE_PATH/$CRASH_SNAPSHOT_FILE_NAME"
 
+internal fun shouldEnableVerboseRuntimeLogs(
+    isDebugBuild: Boolean,
+    verboseDebugLogsEnabled: Boolean
+): Boolean = isDebugBuild && verboseDebugLogsEnabled
+
+internal fun shouldPersistRuntimeLogEntry(
+    level: String,
+    verboseRuntimeLogPersistenceEnabled: Boolean
+): Boolean = when (level) {
+    "W", "E" -> true
+    else -> verboseRuntimeLogPersistenceEnabled
+}
+
 internal fun resolveLogArtifactDirsToClear(
     filesDir: File,
     cacheDir: File
@@ -84,7 +97,14 @@ internal fun buildCrashSnapshotContent(
  */
 object Logger {
     
-    private val isDebug = BuildConfig.DEBUG
+    @PublishedApi
+    internal val verboseRuntimeLogsEnabled = shouldEnableVerboseRuntimeLogs(
+        isDebugBuild = BuildConfig.DEBUG,
+        verboseDebugLogsEnabled = BuildConfig.ENABLE_VERBOSE_DEBUG_LOGS
+    )
+    @PublishedApi
+    internal val verboseRuntimeLogPersistenceEnabled =
+        verboseRuntimeLogsEnabled && BuildConfig.ENABLE_VERBOSE_RUNTIME_LOG_PERSISTENCE
 
     fun init(context: Context) {
         LogCollector.init(context.applicationContext)
@@ -94,16 +114,32 @@ object Logger {
      * Debug 日志 - 仅在 Debug 版本输出
      */
     fun d(tag: String, message: String) {
-        if (isDebug) Log.d(tag, message)
-        LogCollector.add("D", tag, message)
+        if (!verboseRuntimeLogsEnabled) return
+        Log.d(tag, message)
+        if (shouldPersistRuntimeLogEntry("D", verboseRuntimeLogPersistenceEnabled)) {
+            LogCollector.add("D", tag, message)
+        }
+    }
+
+    inline fun d(tag: String, message: () -> String) {
+        if (!verboseRuntimeLogsEnabled) return
+        d(tag, message())
     }
     
     /**
      * Info 日志 - 仅在 Debug 版本输出
      */
     fun i(tag: String, message: String) {
-        if (isDebug) Log.i(tag, message)
-        LogCollector.add("I", tag, message)
+        if (!verboseRuntimeLogsEnabled) return
+        Log.i(tag, message)
+        if (shouldPersistRuntimeLogEntry("I", verboseRuntimeLogPersistenceEnabled)) {
+            LogCollector.add("I", tag, message)
+        }
+    }
+
+    inline fun i(tag: String, message: () -> String) {
+        if (!verboseRuntimeLogsEnabled) return
+        i(tag, message())
     }
     
     /**
@@ -119,7 +155,9 @@ object Logger {
         } else {
             Log.w(tag, message)
         }
-        LogCollector.add("W", tag, fullMessage)
+        if (shouldPersistRuntimeLogEntry("W", verboseRuntimeLogPersistenceEnabled)) {
+            LogCollector.add("W", tag, fullMessage)
+        }
     }
     
     /**
@@ -135,7 +173,9 @@ object Logger {
         } else {
             Log.e(tag, message)
         }
-        LogCollector.add("E", tag, fullMessage)
+        if (shouldPersistRuntimeLogEntry("E", verboseRuntimeLogPersistenceEnabled)) {
+            LogCollector.add("E", tag, fullMessage)
+        }
     }
 
     fun persistCrashSnapshot(throwable: Throwable) {

@@ -23,10 +23,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.theme.iOSYellow
+import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
+import com.android.purebilibili.core.ui.rememberAppChevronForwardIcon
+import com.android.purebilibili.core.ui.rememberAppDownloadIcon
+import com.android.purebilibili.core.ui.rememberAppHistoryIcon
+import com.android.purebilibili.core.ui.rememberAppInboxIcon
+import com.android.purebilibili.core.ui.rememberAppLogoutIcon
+import com.android.purebilibili.core.ui.rememberAppTvIcon
 import com.android.purebilibili.core.ui.components.IOSClickableItem
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.feature.home.UserState
@@ -40,6 +49,31 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.Clock
 import io.github.alexzhirkevich.cupertino.icons.outlined.Envelope
 import io.github.alexzhirkevich.cupertino.icons.outlined.RectanglePortraitAndArrowForward
 import kotlinx.coroutines.launch
+
+internal data class MineSideDrawerChromeSpec(
+    val useMaterialIcons: Boolean,
+    val preferOpaqueMd3Container: Boolean,
+    val profileChevronSizeDp: Int
+)
+
+internal fun resolveMineSideDrawerChromeSpec(
+    uiPreset: UiPreset,
+    blurEnabled: Boolean
+): MineSideDrawerChromeSpec {
+    return if (uiPreset == UiPreset.MD3) {
+        MineSideDrawerChromeSpec(
+            useMaterialIcons = true,
+            preferOpaqueMd3Container = !blurEnabled,
+            profileChevronSizeDp = 20
+        )
+    } else {
+        MineSideDrawerChromeSpec(
+            useMaterialIcons = false,
+            preferOpaqueMd3Container = false,
+            profileChevronSizeDp = 18
+        )
+    }
+}
 
 /**
  * 首页侧边栏 - 优化版 (带毛玻璃效果)
@@ -62,6 +96,7 @@ fun MineSideDrawer(
     hazeState: HazeState? = null, // 毛玻璃效果状态
     isBlurEnabled: Boolean = true // [新增] 模糊开关状态
 ) {
+    val uiPreset = LocalUiPreset.current
     val scope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
     val layoutPolicy = remember(configuration.screenWidthDp) {
@@ -96,7 +131,20 @@ fun MineSideDrawer(
         blurActive = blurActive,
         budget = drawerMotionBudget
     )
+    val chromeSpec = remember(uiPreset, effectiveBlurActive) {
+        resolveMineSideDrawerChromeSpec(
+            uiPreset = uiPreset,
+            blurEnabled = effectiveBlurActive
+        )
+    }
     val palette = resolveDrawerGlassPalette(isDark = isDark, blurEnabled = effectiveBlurActive)
+    val downloadIcon = rememberAppDownloadIcon()
+    val historyIcon = rememberAppHistoryIcon()
+    val tvIcon = rememberAppTvIcon()
+    val bookmarkIcon = rememberAppBookmarkIcon()
+    val inboxIcon = rememberAppInboxIcon()
+    val logoutIcon = rememberAppLogoutIcon()
+    val chevronForwardIcon = rememberAppChevronForwardIcon()
 
     // 动态文字颜色
     val activeContentColor = if (isDark) Color(0xFFF8FAFF) else Color(0xFF101114)
@@ -104,8 +152,16 @@ fun MineSideDrawer(
     val secondaryContentColor = if (isDark) Color(0xFFC4C8D1) else Color(0xFF2E2F33).copy(alpha = 0.86f)
     // 动态分割线颜色
     val dividerColor = if (isDark) Color.White.copy(alpha = palette.dividerAlpha) else Color.Black.copy(alpha = palette.dividerAlpha)
-    val drawerBaseColor = if (isDark) Color(0xFF0B0D12).copy(alpha = palette.drawerBaseAlpha) else Color.White.copy(alpha = palette.drawerBaseAlpha)
-    val itemSurfaceColor = if (isDark) {
+    val drawerBaseColor = if (chromeSpec.preferOpaqueMd3Container) {
+        MaterialTheme.colorScheme.surfaceContainer
+    } else if (isDark) {
+        Color(0xFF0B0D12).copy(alpha = palette.drawerBaseAlpha)
+    } else {
+        Color.White.copy(alpha = palette.drawerBaseAlpha)
+    }
+    val itemSurfaceColor = if (chromeSpec.preferOpaqueMd3Container) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    } else if (isDark) {
         Color.White.copy(alpha = palette.itemSurfaceAlpha)
     } else {
         Color(0xFFFDFEFF).copy(alpha = palette.itemSurfaceAlpha)
@@ -254,10 +310,10 @@ fun MineSideDrawer(
                     
                     // 右箭头
                     Icon(
-                        imageVector = CupertinoIcons.Outlined.ChevronForward,
+                        imageVector = chevronForwardIcon,
                         contentDescription = null,
                         tint = secondaryContentColor,
-                        modifier = Modifier.size(layoutPolicy.profileChevronSizeDp.dp)
+                        modifier = Modifier.size(chromeSpec.profileChevronSizeDp.dp)
                     )
                 }
             }
@@ -288,7 +344,7 @@ fun MineSideDrawer(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     IOSClickableItem(
-                        icon = CupertinoIcons.Outlined.ArrowDownCircle,
+                        icon = downloadIcon,
                         title = "离线缓存",
                         onClick = { closeAndRun(onDownloadClick) },
                         iconTint = MaterialTheme.colorScheme.primary,
@@ -298,7 +354,7 @@ fun MineSideDrawer(
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 48.dp), thickness = dividerThickness, color = dividerColor)
                     IOSClickableItem(
-                        icon = CupertinoIcons.Outlined.Clock,
+                        icon = historyIcon,
                         title = "历史记录",
                         onClick = { closeAndRun(onHistoryClick) },
                         iconTint = iOSBlue,
@@ -308,7 +364,7 @@ fun MineSideDrawer(
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 48.dp), thickness = dividerThickness, color = dividerColor)
                     IOSClickableItem(
-                        icon = CupertinoIcons.Filled.Tv,
+                        icon = tvIcon,
                         title = "番剧影视",
                         onClick = { closeAndRun(onBangumiClick) },
                         iconTint = iOSPink,
@@ -318,7 +374,7 @@ fun MineSideDrawer(
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 48.dp), thickness = dividerThickness, color = dividerColor)
                     IOSClickableItem(
-                        icon = CupertinoIcons.Outlined.Bookmark,
+                        icon = bookmarkIcon,
                         title = "我的收藏",
                         onClick = { closeAndRun(onFavoriteClick) },
                         iconTint = iOSYellow,
@@ -328,7 +384,7 @@ fun MineSideDrawer(
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 48.dp), thickness = dividerThickness, color = dividerColor)
                     IOSClickableItem(
-                        icon = CupertinoIcons.Outlined.Bookmark,
+                        icon = bookmarkIcon,
                         title = "稍后再看",
                         onClick = { closeAndRun(onWatchLaterClick) },
                         iconTint = iOSGreen,
@@ -338,7 +394,7 @@ fun MineSideDrawer(
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 48.dp), thickness = dividerThickness, color = dividerColor)
                     IOSClickableItem(
-                        icon = CupertinoIcons.Outlined.Envelope,
+                        icon = inboxIcon,
                         title = "我的私信",
                         onClick = { closeAndRun(onInboxClick) },
                         iconTint = iOSPink,
@@ -370,7 +426,7 @@ fun MineSideDrawer(
                     border = BorderStroke(0.8.dp, itemBorderColor)
                 ) {
                     IOSClickableItem(
-                        icon = CupertinoIcons.Outlined.RectanglePortraitAndArrowForward,
+                        icon = logoutIcon,
                         title = "退出登录",
                         onClick = { closeAndRun(onLogout) },
                         iconTint = Color(0xFFFF453A), // iOS 红色

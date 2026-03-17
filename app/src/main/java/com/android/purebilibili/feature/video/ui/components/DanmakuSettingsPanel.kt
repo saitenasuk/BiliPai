@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -43,6 +45,8 @@ private val PanelBackground = Color(0xFF1E1E1E)
 private val CardBackground = Color(0xFF2A2A2A)
 private const val FULLSCREEN_DANMAKU_PANEL_WIDTH_FRACTION = 0.25f
 private const val FULLSCREEN_DANMAKU_PANEL_MIN_WIDTH_DP = 220
+private const val WIDE_INLINE_DANMAKU_PANEL_MAX_WIDTH_DP = 640
+private const val WIDE_INLINE_DANMAKU_PANEL_SCREEN_WIDTH_DP = 840
 
 enum class DanmakuSettingsPanelPresentation {
     CenteredDialog,
@@ -79,6 +83,23 @@ fun resolveDanmakuSettingsPanelLayoutPolicy(
             minWidthDp = FULLSCREEN_DANMAKU_PANEL_MIN_WIDTH_DP,
             maxWidthDp = resolvedMaxWidth,
             maxHeightDp = 480
+        )
+    }
+
+    if (
+        screenWidthDp >= WIDE_INLINE_DANMAKU_PANEL_SCREEN_WIDTH_DP &&
+        screenWidthDp > screenHeightDp
+    ) {
+        return DanmakuSettingsPanelLayoutPolicy(
+            presentation = DanmakuSettingsPanelPresentation.CenteredDialog,
+            horizontalPaddingDp = 24,
+            bottomPaddingDp = 0,
+            minWidthDp = 520,
+            maxWidthDp = minOf(
+                WIDE_INLINE_DANMAKU_PANEL_MAX_WIDTH_DP,
+                (screenWidthDp - 48).coerceAtLeast(520)
+            ),
+            maxHeightDp = (screenHeightDp - 96).coerceIn(420, 560)
         )
     }
 
@@ -170,268 +191,170 @@ fun DanmakuSettingsPanel(
             progressPercent = smartOcclusionDownloadProgress
         )
     }
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = if (
-            layoutPolicy.presentation == DanmakuSettingsPanelPresentation.BottomSheet
-        ) {
-            Alignment.BottomCenter
-        } else {
-            Alignment.Center
-        }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnClickOutside = false
+        )
     ) {
         Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(Color.Black.copy(alpha = 0.6f))
-                .pointerInput(onDismiss, viewConfiguration.touchSlop) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        var maxDragDistancePx = 0f
-                        var active = true
-                        while (active) {
-                            val event = awaitPointerEvent(PointerEventPass.Final)
-                            event.changes.forEach { change ->
-                                val distance = hypot(
-                                    (change.position.x - down.position.x).toDouble(),
-                                    (change.position.y - down.position.y).toDouble()
-                                ).toFloat()
-                                maxDragDistancePx = max(maxDragDistancePx, distance)
-                                if (change.pressed || change.previousPressed) {
-                                    change.consume()
-                                }
-                            }
-                            active = event.changes.any { it.pressed }
-                        }
-                        if (
-                            shouldDismissDanmakuSettingsPanelFromBackdropGesture(
-                                maxDragDistancePx = maxDragDistancePx,
-                                touchSlopPx = viewConfiguration.touchSlop
-                            )
-                        ) {
-                            onDismiss()
-                        }
-                    }
-                }
-        )
-
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = layoutPolicy.horizontalPaddingDp.dp,
-                    end = layoutPolicy.horizontalPaddingDp.dp,
-                    bottom = layoutPolicy.bottomPaddingDp.dp
-                )
-                .widthIn(
-                    min = layoutPolicy.minWidthDp.dp,
-                    max = layoutPolicy.maxWidthDp.dp
-                )
-                .heightIn(max = layoutPolicy.maxHeightDp.dp)
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Final)
-                            event.changes.forEach { change ->
-                                if (change.pressed || change.previousPressed) {
-                                    change.consume()
-                                }
-                            }
-                        }
-                    }
-                },
-            color = PanelBackground,
-            shape = RoundedCornerShape(20.dp),
-            tonalElevation = 16.dp,
-            shadowElevation = 24.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())  // [修复] 先滚动再加 padding，确保可以滚动
-                    .padding(24.dp)
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = if (
+                layoutPolicy.presentation == DanmakuSettingsPanelPresentation.BottomSheet
             ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "弹幕设置",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(Color.White.copy(0.1f), CircleShape)
-                    ) {
-                        Icon(
-                            CupertinoIcons.Default.Xmark,
-                            contentDescription = "关闭",
-                            tint = Color.White.copy(0.8f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Settings Card
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = CardBackground,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp)
-                    ) {
-                        // Opacity slider
-                        DanmakuSliderItem(
-                            label = "透明度",
-                            value = opacity,
-                            valueRange = 0.3f..1f,
-                            displayValue = { "${(it * 100).toInt()}%" },
-                            onValueChange = onOpacityChange
-                        )
-                        
-                        // Font scale slider - [问题9修复] 支持更小的字体 (30%-200%)
-                        DanmakuSliderItem(
-                            label = "字体大小",
-                            value = fontScale,
-                            valueRange = 0.3f..2f,
-                            displayValue = { "${(it * 100).toInt()}%" },
-                            onValueChange = onFontScaleChange
-                        )
-                        
-                        // Speed slider
-                        DanmakuSliderItem(
-                            label = "弹幕速度",
-                            value = speed,
-                            valueRange = 0.5f..2f,
-                            displayValue = { v ->
-                                when {
-                                    v >= 1.5f -> "慢"
-                                    v <= 0.7f -> "快"
-                                    else -> "中"
+                Alignment.BottomCenter
+            } else {
+                Alignment.Center
+            }
+        ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .pointerInput(onDismiss, viewConfiguration.touchSlop) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var maxDragDistancePx = 0f
+                            var active = true
+                            while (active) {
+                                val event = awaitPointerEvent(PointerEventPass.Final)
+                                event.changes.forEach { change ->
+                                    val distance = hypot(
+                                        (change.position.x - down.position.x).toDouble(),
+                                        (change.position.y - down.position.y).toDouble()
+                                    ).toFloat()
+                                    maxDragDistancePx = max(maxDragDistancePx, distance)
+                                    if (change.pressed || change.previousPressed) {
+                                        change.consume()
+                                    }
                                 }
-                            },
-                            onValueChange = onSpeedChange
-                        )
+                                active = event.changes.any { it.pressed }
+                            }
+                            if (
+                                shouldDismissDanmakuSettingsPanelFromBackdropGesture(
+                                    maxDragDistancePx = maxDragDistancePx,
+                                    touchSlopPx = viewConfiguration.touchSlop
+                                )
+                            ) {
+                                onDismiss()
+                            }
+                        }
                     }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Display area selector
-                DanmakuAreaSelector(
-                    currentArea = displayArea,
-                    onAreaChange = onDisplayAreaChange
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Merge Duplicates Switch
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = CardBackground,
-                    shape = RoundedCornerShape(16.dp),
-                    onClick = { onMergeDuplicatesChange(!mergeDuplicates) }
+            )
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = layoutPolicy.horizontalPaddingDp.dp,
+                        end = layoutPolicy.horizontalPaddingDp.dp,
+                        bottom = layoutPolicy.bottomPaddingDp.dp
+                    )
+                    .widthIn(
+                        min = layoutPolicy.minWidthDp.dp,
+                        max = layoutPolicy.maxWidthDp.dp
+                    )
+                    .heightIn(max = layoutPolicy.maxHeightDp.dp)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { },
+                color = PanelBackground,
+                shape = RoundedCornerShape(20.dp),
+                tonalElevation = 16.dp,
+                shadowElevation = 24.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(24.dp)
                 ) {
+                    // Header
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(
-                                text = "合并重复弹幕",
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "减少刷屏干扰，将重复内容合并显示",
-                                color = Color.White.copy(0.5f),
-                                fontSize = 11.sp
+                        Text(
+                            text = "弹幕设置",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(Color.White.copy(0.1f), CircleShape)
+                        ) {
+                            Icon(
+                                CupertinoIcons.Default.Xmark,
+                                contentDescription = "关闭",
+                                tint = Color.White.copy(0.8f),
+                                modifier = Modifier.size(18.dp)
                             )
                         }
-                        
-                        Switch(
-                            checked = mergeDuplicates,
-                            onCheckedChange = onMergeDuplicatesChange,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                uncheckedThumbColor = Color.White,
-                                uncheckedTrackColor = Color.White.copy(0.1f)
-                            )
-                        )
                     }
-                }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                if (showSmartOcclusionSection) {
+                    // Settings Card
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = CardBackground,
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(20.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(
-                                    text = "人脸模型",
-                                    color = Color.White,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = moduleUiState.statusText,
-                                    color = Color.White.copy(0.65f),
-                                    fontSize = 11.sp
-                                )
-                            }
-                            if (moduleUiState.showAction) {
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Button(
-                                    onClick = onSmartOcclusionDownloadClick,
-                                    enabled = moduleUiState.isActionEnabled,
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                                ) {
-                                    Text(
-                                        text = moduleUiState.actionText,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
+                            DanmakuSliderItem(
+                                label = "透明度",
+                                value = opacity,
+                                valueRange = 0.3f..1f,
+                                displayValue = { "${(it * 100).toInt()}%" },
+                                onValueChange = onOpacityChange
+                            )
+                            
+                            DanmakuSliderItem(
+                                label = "字体大小",
+                                value = fontScale,
+                                valueRange = 0.3f..2f,
+                                displayValue = { "${(it * 100).toInt()}%" },
+                                onValueChange = onFontScaleChange
+                            )
+                            
+                            DanmakuSliderItem(
+                                label = "弹幕速度",
+                                value = speed,
+                                valueRange = 0.5f..2f,
+                                displayValue = { v ->
+                                    when {
+                                        v >= 1.5f -> "慢"
+                                        v <= 0.7f -> "快"
+                                        else -> "中"
+                                    }
+                                },
+                                onValueChange = onSpeedChange
+                            )
                         }
                     }
-
+                
                     Spacer(modifier = Modifier.height(16.dp))
-
+                
+                    DanmakuAreaSelector(
+                        currentArea = displayArea,
+                        onAreaChange = onDisplayAreaChange
+                    )
+                
+                    Spacer(modifier = Modifier.height(16.dp))
+                
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = CardBackground,
                         shape = RoundedCornerShape(16.dp),
-                        onClick = { onSmartOcclusionChange(!smartOcclusion) }
+                        onClick = { onMergeDuplicatesChange(!mergeDuplicates) }
                     ) {
                         Row(
                             modifier = Modifier
@@ -442,22 +365,22 @@ fun DanmakuSettingsPanel(
                         ) {
                             Column {
                                 Text(
-                                    text = "智能避脸遮挡",
+                                    text = "合并重复弹幕",
                                     color = Color.White,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "实时识别人脸并避让弹幕轨道",
+                                    text = "减少刷屏干扰，将重复内容合并显示",
                                     color = Color.White.copy(0.5f),
                                     fontSize = 11.sp
                                 )
                             }
-
+                            
                             Switch(
-                                checked = smartOcclusion,
-                                onCheckedChange = onSmartOcclusionChange,
+                                checked = mergeDuplicates,
+                                onCheckedChange = onMergeDuplicatesChange,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = MaterialTheme.colorScheme.primary,
@@ -467,62 +390,102 @@ fun DanmakuSettingsPanel(
                             )
                         }
                     }
-
+    
                     Spacer(modifier = Modifier.height(16.dp))
-                }
 
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = CardBackground,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "屏蔽类型",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "关闭对应开关即可屏蔽",
-                            color = Color.White.copy(0.5f),
-                            fontSize = 11.sp
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        DanmakuFilterSwitchRow(
-                            label = "滚动弹幕",
-                            checked = allowScroll,
-                            onCheckedChange = onAllowScrollChange
-                        )
-                        DanmakuFilterSwitchRow(
-                            label = "顶部弹幕",
-                            checked = allowTop,
-                            onCheckedChange = onAllowTopChange
-                        )
-                        DanmakuFilterSwitchRow(
-                            label = "底部弹幕",
-                            checked = allowBottom,
-                            onCheckedChange = onAllowBottomChange
-                        )
-                        DanmakuFilterSwitchRow(
-                            label = "彩色弹幕",
-                            checked = allowColorful,
-                            onCheckedChange = onAllowColorfulChange
-                        )
-                        DanmakuFilterSwitchRow(
-                            label = "高级弹幕",
-                            checked = allowSpecial,
-                            onCheckedChange = onAllowSpecialChange,
-                            showDivider = false
-                        )
+                    if (showSmartOcclusionSection) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = CardBackground,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = "人脸模型",
+                                        color = Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = moduleUiState.statusText,
+                                        color = Color.White.copy(0.65f),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                if (moduleUiState.showAction) {
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Button(
+                                        onClick = onSmartOcclusionDownloadClick,
+                                        enabled = moduleUiState.isActionEnabled,
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = moduleUiState.actionText,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+    
+                        Spacer(modifier = Modifier.height(16.dp))
+    
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = CardBackground,
+                            shape = RoundedCornerShape(16.dp),
+                            onClick = { onSmartOcclusionChange(!smartOcclusion) }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "智能避脸遮挡",
+                                        color = Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "实时识别人脸并避让弹幕轨道",
+                                        color = Color.White.copy(0.5f),
+                                        fontSize = 11.sp
+                                    )
+                                }
+    
+                                Switch(
+                                    checked = smartOcclusion,
+                                    onCheckedChange = onSmartOcclusionChange,
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                        uncheckedThumbColor = Color.White,
+                                        uncheckedTrackColor = Color.White.copy(0.1f)
+                                    )
+                                )
+                            }
+                        }
+    
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                if (showBlockRuleEditor) {
+    
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = CardBackground,
@@ -530,41 +493,94 @@ fun DanmakuSettingsPanel(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "自定义屏蔽词",
+                                text = "屏蔽类型",
                                 color = Color.White,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "每行一个，支持普通关键词与正则：regex:xxx / re:xxx / /xxx/",
+                                text = "关闭对应开关即可屏蔽",
                                 color = Color.White.copy(0.5f),
                                 fontSize = 11.sp
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            OutlinedTextField(
-                                value = blockRulesRaw,
-                                onValueChange = onBlockRulesRawChange,
-                                placeholder = {
-                                    Text(
-                                        text = "例如：剧透\\nregex:第\\\\d+集\\n/哈{3,}/",
-                                        color = Color.White.copy(0.35f),
-                                        fontSize = 12.sp
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 3,
-                                maxLines = 6,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                                    focusedContainerColor = Color.White.copy(alpha = 0.02f),
-                                    unfocusedContainerColor = Color.White.copy(alpha = 0.02f)
-                                ),
-                                shape = RoundedCornerShape(12.dp)
+                            Spacer(modifier = Modifier.height(12.dp))
+    
+                            DanmakuFilterSwitchRow(
+                                label = "滚动弹幕",
+                                checked = allowScroll,
+                                onCheckedChange = onAllowScrollChange
                             )
+                            DanmakuFilterSwitchRow(
+                                label = "顶部弹幕",
+                                checked = allowTop,
+                                onCheckedChange = onAllowTopChange
+                            )
+                            DanmakuFilterSwitchRow(
+                                label = "底部弹幕",
+                                checked = allowBottom,
+                                onCheckedChange = onAllowBottomChange
+                            )
+                            DanmakuFilterSwitchRow(
+                                label = "彩色弹幕",
+                                checked = allowColorful,
+                                onCheckedChange = onAllowColorfulChange
+                            )
+                            DanmakuFilterSwitchRow(
+                                label = "高级弹幕",
+                                checked = allowSpecial,
+                                onCheckedChange = onAllowSpecialChange,
+                                showDivider = false
+                            )
+                        }
+                    }
+    
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (showBlockRuleEditor) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = CardBackground,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "自定义屏蔽词",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "每行一个，支持普通关键词与正则：regex:xxx / re:xxx / /xxx/",
+                                    color = Color.White.copy(0.5f),
+                                    fontSize = 11.sp
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedTextField(
+                                    value = blockRulesRaw,
+                                    onValueChange = onBlockRulesRawChange,
+                                    placeholder = {
+                                        Text(
+                                            text = "例如：剧透\\nregex:第\\\\d+集\\n/哈{3,}/",
+                                            color = Color.White.copy(0.35f),
+                                            fontSize = 12.sp
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    minLines = 3,
+                                    maxLines = 6,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                        focusedContainerColor = Color.White.copy(alpha = 0.02f),
+                                        unfocusedContainerColor = Color.White.copy(alpha = 0.02f)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                            }
                         }
                     }
                 }

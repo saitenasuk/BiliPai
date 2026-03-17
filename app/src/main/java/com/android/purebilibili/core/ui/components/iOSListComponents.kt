@@ -4,8 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -18,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
@@ -30,14 +37,93 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 //  Common iOS List Components (Reused across Settings, Profile, etc.)
 // ═══════════════════════════════════════════════════
 
+internal data class AdaptiveListComponentVisualSpec(
+    val sectionStartPaddingDp: Int,
+    val groupCornerRadiusDp: Int,
+    val groupTonalElevationDp: Int,
+    val iconCornerRadiusDp: Int,
+    val gridCornerRadiusDp: Int,
+    val searchBarCornerRadiusDp: Int,
+    val searchBarHeightDp: Int,
+    val dividerThicknessDp: Float,
+    val dividerStartIndentDp: Int
+)
+
+internal fun resolveAdaptiveListComponentVisualSpec(
+    uiPreset: UiPreset
+): AdaptiveListComponentVisualSpec {
+    return if (uiPreset == UiPreset.MD3) {
+        AdaptiveListComponentVisualSpec(
+            sectionStartPaddingDp = 20,
+            groupCornerRadiusDp = 28,
+            groupTonalElevationDp = 3,
+            iconCornerRadiusDp = 12,
+            gridCornerRadiusDp = 24,
+            searchBarCornerRadiusDp = 28,
+            searchBarHeightDp = 48,
+            dividerThicknessDp = 1f,
+            dividerStartIndentDp = 16
+        )
+    } else {
+        AdaptiveListComponentVisualSpec(
+            sectionStartPaddingDp = 32,
+            groupCornerRadiusDp = 20,
+            groupTonalElevationDp = 1,
+            iconCornerRadiusDp = 10,
+            gridCornerRadiusDp = 20,
+            searchBarCornerRadiusDp = 10,
+            searchBarHeightDp = 40,
+            dividerThicknessDp = 0.5f,
+            dividerStartIndentDp = 66
+        )
+    }
+}
+
+@Composable
+fun AppAdaptiveSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val uiPreset = LocalUiPreset.current
+    if (uiPreset == UiPreset.MD3) {
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = modifier
+        )
+    } else {
+        val primaryColor = MaterialTheme.colorScheme.primary
+        CupertinoSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = modifier,
+            colors = CupertinoSwitchDefaults.colors(
+                thumbColor = Color.White,
+                checkedTrackColor = primaryColor,
+                uncheckedTrackColor = Color(0xFFE9E9EA)
+            )
+        )
+    }
+}
+
 @Composable
 fun IOSSectionTitle(title: String) {
+    val uiPreset = LocalUiPreset.current
+    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     Text(
-        text = title.uppercase(),
+        text = if (uiPreset == UiPreset.MD3) title else title.uppercase(),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        letterSpacing = 0.5.sp,
-        modifier = Modifier.padding(start = 32.dp, top = 24.dp, bottom = 8.dp)
+        letterSpacing = if (uiPreset == UiPreset.MD3) 0.sp else 0.5.sp,
+        modifier = Modifier.padding(
+            start = visualSpec.sectionStartPaddingDp.dp,
+            top = 24.dp,
+            bottom = 8.dp
+        )
     )
 }
 
@@ -49,17 +135,21 @@ fun IOSGroup(
     border: androidx.compose.foundation.BorderStroke? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
     val cornerRadiusScale = LocalCornerRadiusScale.current
+    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     val groupCornerRadius = iOSCornerRadius.Medium * cornerRadiusScale
-    val appliedShape = shape ?: RoundedCornerShape(groupCornerRadius)
+    val appliedShape = shape ?: RoundedCornerShape(
+        if (uiPreset == UiPreset.MD3) visualSpec.groupCornerRadiusDp.dp else groupCornerRadius
+    )
     
     Surface(
         modifier = modifier
             .padding(horizontal = 16.dp)
             .clip(appliedShape),
         color = containerColor,
-        shadowElevation = 0.dp,
-        tonalElevation = 1.dp,
+        shadowElevation = if (uiPreset == UiPreset.MD3) 0.dp else 0.dp,
+        tonalElevation = visualSpec.groupTonalElevationDp.dp,
         border = border
     ) {
         Column(content = content)
@@ -78,8 +168,10 @@ fun IOSSwitchItem(
     textColor: Color = MaterialTheme.colorScheme.onSurface,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
+    val uiPreset = LocalUiPreset.current
+    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     val cornerRadiusScale = LocalCornerRadiusScale.current
-    val iconCornerRadius = iOSCornerRadius.Small * cornerRadiusScale
+    val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
     
     Row(
         modifier = Modifier
@@ -108,16 +200,10 @@ fun IOSSwitchItem(
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = subtitleColor)
             }
         }
-        val primaryColor = MaterialTheme.colorScheme.primary
-        CupertinoSwitch(
+        AppAdaptiveSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            enabled = enabled,
-            colors = CupertinoSwitchDefaults.colors(
-                thumbColor = Color.White,
-                checkedTrackColor = primaryColor,
-                uncheckedTrackColor = Color(0xFFE9E9EA)
-            )
+            enabled = enabled
         )
     }
 }
@@ -139,8 +225,10 @@ fun IOSClickableItem(
     enableCopy: Boolean = false,
     showChevron: Boolean = true
 ) {
+    val uiPreset = LocalUiPreset.current
+    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     val cornerRadiusScale = LocalCornerRadiusScale.current
-    val iconCornerRadius = iOSCornerRadius.Small * cornerRadiusScale
+    val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
     
     Row(
         modifier = Modifier
@@ -228,7 +316,16 @@ fun IOSClickableItem(
                 }
                 if (onClick != null && showChevron) {
                     Spacer(modifier = Modifier.width(6.dp))
-                    Icon(CupertinoIcons.Default.ChevronForward, null, tint = chevronTint, modifier = Modifier.size(20.dp))
+                    if (uiPreset == UiPreset.MD3) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            contentDescription = null,
+                            tint = chevronTint,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Icon(CupertinoIcons.Default.ChevronForward, null, tint = chevronTint, modifier = Modifier.size(20.dp))
+                    }
                 }
             }
         }
@@ -237,11 +334,13 @@ fun IOSClickableItem(
 
 @Composable
 fun IOSDivider(startIndent: androidx.compose.ui.unit.Dp = 66.dp) {
+    val uiPreset = LocalUiPreset.current
+    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = startIndent)
-            .height(0.5.dp) // Hairline
+            .padding(start = if (uiPreset == UiPreset.MD3) visualSpec.dividerStartIndentDp.dp else startIndent)
+            .height(visualSpec.dividerThicknessDp.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) // Subtle separator
     )
 }
@@ -257,8 +356,10 @@ fun IOSGridItem(
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     modifier: Modifier = Modifier
 ) {
+    val uiPreset = LocalUiPreset.current
+    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     val cornerRadiusScale = LocalCornerRadiusScale.current
-    val itemCornerRadius = iOSCornerRadius.Medium * cornerRadiusScale
+    val itemCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.gridCornerRadiusDp.dp else iOSCornerRadius.Medium * cornerRadiusScale
 
     Column(
         modifier = modifier
@@ -306,15 +407,17 @@ fun IOSSearchBar(
     placeholder: String = "搜索",
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
 ) {
+    val uiPreset = LocalUiPreset.current
+    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     val cornerRadiusScale = LocalCornerRadiusScale.current
-    val searchBarCornerRadius = iOSCornerRadius.Small * cornerRadiusScale
+    val searchBarCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.searchBarCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
 
     BasicTextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp) // iOS standard search bar height is usually around 36-44dp
+            .height(visualSpec.searchBarHeightDp.dp)
             .clip(RoundedCornerShape(searchBarCornerRadius))
             .background(containerColor),
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
@@ -325,12 +428,21 @@ fun IOSSearchBar(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 12.dp)
             ) {
-                Icon(
-                    imageVector = CupertinoIcons.Default.MagnifyingGlass,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
+                if (uiPreset == UiPreset.MD3) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = CupertinoIcons.Default.MagnifyingGlass,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.weight(1f)) {
                     if (query.isEmpty()) {
@@ -347,8 +459,13 @@ fun IOSSearchBar(
                         onClick = { onQueryChange("") },
                         modifier = Modifier.size(20.dp)
                     ) {
+                        val clearIcon = if (uiPreset == UiPreset.MD3) {
+                            Icons.Default.Clear
+                        } else {
+                            CupertinoIcons.Default.XmarkCircle
+                        }
                         Icon(
-                            imageVector = CupertinoIcons.Default.XmarkCircle,
+                            imageVector = clearIcon,
                             contentDescription = "Clear",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)

@@ -1,11 +1,24 @@
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.core.theme.UiPreset
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomePullRefreshUiPolicyTest {
+
+    @Test
+    fun `md3 preset uses material refresh motion style`() {
+        assertEquals(
+            HomePullRefreshMotionStyle.MD3,
+            resolveHomePullRefreshMotionStyle(UiPreset.MD3)
+        )
+        assertEquals(
+            HomePullRefreshMotionStyle.IOS,
+            resolveHomePullRefreshMotionStyle(UiPreset.IOS)
+        )
+    }
 
     @Test
     fun `resolvePullRefreshThresholdDp returns comfortable trigger distance`() {
@@ -151,7 +164,8 @@ class HomePullRefreshUiPolicyTest {
             0f,
             resolvePullContentOffsetFraction(
                 distanceFraction = 0f,
-                isRefreshing = true
+                isRefreshing = true,
+                motionStyle = HomePullRefreshMotionStyle.IOS
             ),
             0.001f
         )
@@ -163,7 +177,21 @@ class HomePullRefreshUiPolicyTest {
             0f,
             resolvePullContentOffsetFraction(
                 distanceFraction = 0f,
-                isRefreshing = false
+                isRefreshing = false,
+                motionStyle = HomePullRefreshMotionStyle.IOS
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `resolvePullContentOffsetFraction keeps md3 content pinned during pull`() {
+        assertEquals(
+            0f,
+            resolvePullContentOffsetFraction(
+                distanceFraction = 1.2f,
+                isRefreshing = false,
+                motionStyle = HomePullRefreshMotionStyle.MD3
             ),
             0.001f
         )

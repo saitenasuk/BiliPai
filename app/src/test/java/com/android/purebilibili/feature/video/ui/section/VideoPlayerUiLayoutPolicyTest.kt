@@ -45,4 +45,15 @@ class VideoPlayerUiLayoutPolicyTest {
         assertEquals(112, policy.seekFeedbackSizeDp)
         assertEquals(28, policy.gestureBoundaryPaddingDp)
     }
+
+    @Test
+    fun collapsedInlineViewport_scalesGestureAndRestoreTargetsDown() {
+        val policy = resolveVideoPlayerUiLayoutPolicy(widthDp = 168)
+
+        assertEquals(96, policy.gestureOverlaySizeDp)
+        assertEquals(36, policy.gestureIconSizeDp)
+        assertEquals(84, policy.seekFeedbackSizeDp)
+        assertEquals(16, policy.gestureBoundaryPaddingDp)
+        assertEquals(72, policy.restoreButtonBottomOffsetDp)
+    }
 }

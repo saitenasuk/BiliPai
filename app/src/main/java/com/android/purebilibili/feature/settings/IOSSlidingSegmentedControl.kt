@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,6 +32,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.animation.horizontalDragGesture
 import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
 import kotlin.math.roundToInt
@@ -43,6 +48,7 @@ internal fun <T> IOSSlidingSegmentedSetting(
     enabled: Boolean = true,
     onSelectionChange: (T) -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -51,7 +57,11 @@ internal fun <T> IOSSlidingSegmentedSetting(
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.bodyLarge,
+            style = if (uiPreset == UiPreset.MD3) {
+                MaterialTheme.typography.titleSmall
+            } else {
+                MaterialTheme.typography.bodyLarge
+            },
             color = MaterialTheme.colorScheme.onSurface
         )
         if (!subtitle.isNullOrBlank()) {
@@ -79,6 +89,66 @@ internal fun <T> IOSSlidingSegmentedControl(
     onSelectionChange: (T) -> Unit
 ) {
     if (options.isEmpty()) return
+    val uiPreset = LocalUiPreset.current
+    if (uiPreset == UiPreset.MD3) {
+        Md3SegmentedControl(
+            options = options,
+            selectedValue = selectedValue,
+            modifier = modifier,
+            enabled = enabled,
+            onSelectionChange = onSelectionChange
+        )
+        return
+    }
+    IOSSlidingSegmentedControlImpl(
+        options = options,
+        selectedValue = selectedValue,
+        modifier = modifier,
+        enabled = enabled,
+        onSelectionChange = onSelectionChange
+    )
+}
+
+@Composable
+private fun <T> Md3SegmentedControl(
+    options: List<PlaybackSegmentOption<T>>,
+    selectedValue: T,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onSelectionChange: (T) -> Unit
+) {
+    SingleChoiceSegmentedButtonRow(
+        modifier = modifier.fillMaxWidth()
+    ) {
+        options.forEachIndexed { index, option ->
+            SegmentedButton(
+                selected = option.value == selectedValue,
+                onClick = { onSelectionChange(option.value) },
+                enabled = enabled,
+                shape = SegmentedButtonDefaults.itemShape(
+                    index = index,
+                    count = options.size
+                ),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = option.label,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> IOSSlidingSegmentedControlImpl(
+    options: List<PlaybackSegmentOption<T>>,
+    selectedValue: T,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onSelectionChange: (T) -> Unit
+) {
     val selectedIndex = resolveSelectionIndex(options = options, selectedValue = selectedValue)
     val dragState = rememberDampedDragAnimationState(
         initialIndex = selectedIndex,

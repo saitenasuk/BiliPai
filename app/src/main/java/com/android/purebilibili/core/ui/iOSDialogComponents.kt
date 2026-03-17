@@ -13,9 +13,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.theme.iOSBlue
+
+internal data class IOSDialogActionLayoutPolicy(
+    val expandToContainer: Boolean
+)
+
+internal fun resolveIosDialogActionLayoutPolicy(
+    uiPreset: UiPreset
+): IOSDialogActionLayoutPolicy {
+    return IOSDialogActionLayoutPolicy(
+        expandToContainer = uiPreset != UiPreset.MD3
+    )
+}
 
 /**
  * iOS-style Alert Dialog.
@@ -30,6 +44,20 @@ fun IOSAlertDialog(
     dismissButton: @Composable (() -> Unit)? = null,
     properties: DialogProperties = DialogProperties()
 ) {
+    if (LocalUiPreset.current == UiPreset.MD3) {
+        AlertDialog(
+            onDismissRequest = onDismissRequest,
+            title = title,
+            text = text,
+            confirmButton = { confirmButton?.invoke() ?: Spacer(modifier = Modifier) },
+            dismissButton = dismissButton,
+            properties = properties,
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+        return
+    }
+
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = properties
@@ -153,9 +181,16 @@ fun IOSDialogAction(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val layoutPolicy = resolveIosDialogActionLayoutPolicy(LocalUiPreset.current)
     Box(
         modifier = modifier
-            .fillMaxSize()
+            .then(
+                if (layoutPolicy.expandToContainer) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 40.dp)
+                }
+            )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

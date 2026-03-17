@@ -30,11 +30,12 @@ import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.RelatedVideo
-import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
+import com.android.purebilibili.feature.video.ui.FollowBadgeTone
+import com.android.purebilibili.feature.video.ui.resolveVideoFollowVisualPolicy
 
 /**
  * Related Video Components
@@ -299,10 +300,14 @@ fun RelatedVideoItem(
                             name = video.owner.name,
                             badgeTrailingContent = if (isFollowed) {
                                 {
+                                    val followVisualPolicy = resolveVideoFollowVisualPolicy(isFollowing = true)
                                     Text(
                                         text = "已关注",
                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                        color = iOSBlue,
+                                        color = when (followVisualPolicy.relatedBadgeTone) {
+                                            FollowBadgeTone.PRIMARY -> MaterialTheme.colorScheme.primary
+                                            null -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
                                         modifier = followActionModifier
                                     )
                                 }

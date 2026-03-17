@@ -20,6 +20,7 @@ import com.android.purebilibili.core.plugin.json.JsonPluginManager
 import com.android.purebilibili.core.plugin.json.JsonRulePlugin
 import com.android.purebilibili.core.plugin.json.Rule
 import com.android.purebilibili.core.theme.iOSBlue
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
@@ -42,7 +43,7 @@ fun JsonPluginEditorScreen(
                 title = { Text("编辑 JSON 插件") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, null)
+                        Icon(rememberAppBackIcon(), null)
                     }
                 },
                 actions = {

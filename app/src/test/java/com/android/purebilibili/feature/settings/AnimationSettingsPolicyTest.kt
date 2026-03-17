@@ -8,13 +8,14 @@ import kotlin.test.assertTrue
 class AnimationSettingsPolicyTest {
 
     @Test
-    fun predictiveBackToggle_cardTransitionEnabled_usesPredictiveState() {
+    fun predictiveBackToggle_cardTransitionEnabled_usesPredictiveGestureState() {
         val enabledAndChecked = resolvePredictiveBackToggleUiState(
             cardTransitionEnabled = true,
             predictiveBackAnimationEnabled = true
         )
         assertTrue(enabledAndChecked.enabled)
         assertTrue(enabledAndChecked.checked)
+        assertEquals(PREDICTIVE_BACK_TOGGLE_TITLE, enabledAndChecked.title)
         assertEquals(PREDICTIVE_BACK_TOGGLE_ACTIVE_SUBTITLE, enabledAndChecked.subtitle)
 
         val enabledAndUnchecked = resolvePredictiveBackToggleUiState(
@@ -23,7 +24,8 @@ class AnimationSettingsPolicyTest {
         )
         assertTrue(enabledAndUnchecked.enabled)
         assertFalse(enabledAndUnchecked.checked)
-        assertEquals(PREDICTIVE_BACK_TOGGLE_ACTIVE_SUBTITLE, enabledAndUnchecked.subtitle)
+        assertEquals(PREDICTIVE_BACK_TOGGLE_TITLE, enabledAndUnchecked.title)
+        assertEquals(PREDICTIVE_BACK_TOGGLE_INACTIVE_SUBTITLE, enabledAndUnchecked.subtitle)
     }
 
     @Test
@@ -34,6 +36,7 @@ class AnimationSettingsPolicyTest {
         )
         assertFalse(disabledState.enabled)
         assertFalse(disabledState.checked)
+        assertEquals(PREDICTIVE_BACK_TOGGLE_TITLE, disabledState.title)
         assertEquals(PREDICTIVE_BACK_TOGGLE_DEPENDENCY_SUBTITLE, disabledState.subtitle)
     }
 }

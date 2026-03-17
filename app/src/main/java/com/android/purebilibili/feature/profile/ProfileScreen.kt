@@ -59,6 +59,19 @@ import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.ui.BiliGradientButton
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
+import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
+import com.android.purebilibili.core.ui.rememberAppDownloadIcon
+import com.android.purebilibili.core.ui.rememberAppFolderIcon
+import com.android.purebilibili.core.ui.rememberAppHistoryIcon
+import com.android.purebilibili.core.ui.rememberAppInboxIcon
+import com.android.purebilibili.core.ui.rememberAppLockIcon
+import com.android.purebilibili.core.ui.rememberAppPhotoIcon
+import com.android.purebilibili.core.ui.rememberAppProfileAddIcon
+import com.android.purebilibili.core.ui.rememberAppRefreshIcon
+import com.android.purebilibili.core.ui.rememberAppRestoreIcon
+import com.android.purebilibili.core.ui.rememberAppSettingsIcon
+import com.android.purebilibili.core.ui.rememberAppWarningIcon
 import com.android.purebilibili.core.ui.wallpaper.ProfileWallpaperLayout
 import com.android.purebilibili.core.ui.wallpaper.ProfileWallpaperTransform
 import com.android.purebilibili.core.ui.wallpaper.resolveProfileWallpaperLayout
@@ -92,7 +105,14 @@ import androidx.compose.foundation.gestures.detectTapGestures
 internal fun shouldEnableProfileHeaderLoginClick(isLogin: Boolean): Boolean = !isLogin
 
 internal fun resolveProfileWallpaperActionColumnCount(screenWidthDp: Int): Int {
-    return if (screenWidthDp < 360) 1 else 2
+    return if (screenWidthDp < 360) 2 else 3
+}
+
+internal fun resolveProfileWallpaperActionBlurEnabled(
+    headerBlurEnabled: Boolean,
+    bottomBarBlurEnabled: Boolean
+): Boolean {
+    return headerBlurEnabled || bottomBarBlurEnabled
 }
 
 internal fun resolveProfileTopBarScrimAlpha(
@@ -256,12 +276,12 @@ fun ProfileScreen(
                         title = { Text("我的") },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
-                                Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back")
+                                Icon(rememberAppBackIcon(), contentDescription = "Back")
                             }
                         },
                         actions = {
                             IconButton(onClick = onSettingsClick) {
-                                Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings")
+                                Icon(rememberAppSettingsIcon(), contentDescription = "Settings")
                             }
                         }
                     )
@@ -277,7 +297,7 @@ fun ProfileScreen(
                 ) {
                     // 错误图标
                     Icon(
-                        CupertinoIcons.Default.ExclamationmarkTriangle,
+                        rememberAppWarningIcon(),
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -300,7 +320,7 @@ fun ProfileScreen(
                             containerColor = MaterialTheme.colorScheme.primary
                         )
                     ) {
-                        Icon(CupertinoIcons.Default.ArrowClockwise, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(rememberAppRefreshIcon(), contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("重试")
                     }
@@ -309,7 +329,7 @@ fun ProfileScreen(
                     
                     // 离线缓存入口
                     OutlinedButton(onClick = onDownloadClick) {
-                        Icon(CupertinoIcons.Default.ArrowDownCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(rememberAppDownloadIcon(), contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("查看离线缓存")
                     }
@@ -338,12 +358,12 @@ fun ProfileScreen(
                                 title = { Text("我的", fontWeight = FontWeight.Bold) },
                                 navigationIcon = {
                                     IconButton(onClick = onBack) {
-                                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                                        Icon(rememberAppBackIcon(), contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
                                     }
                                 },
                                 actions = {
                                     IconButton(onClick = onSettingsClick) {
-                                        Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
+                                        Icon(rememberAppSettingsIcon(), contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
                                     }
                                 },
                                 scrollBehavior = scrollBehavior,
@@ -654,10 +674,10 @@ fun TabletProfileContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
+                        Icon(rememberAppBackIcon(), contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                     IconButton(onClick = onSettingsClick) {
-                        Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(rememberAppSettingsIcon(), contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 
@@ -798,7 +818,7 @@ fun MobileProfileContent(
             onDismissRequest = { showPhotoPickerDialog = false },
             icon = {
                 Icon(
-                    CupertinoIcons.Default.Photo,
+                    rememberAppPhotoIcon(),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(32.dp)
@@ -906,6 +926,7 @@ fun MobileProfileContent(
                     )
                     ProfileWallpaperActionCard(
                         isImmersive = isImmersive,
+                        hazeState = hazeState,
                         onOfficialWallpaperClick = { showWallpaperSheet = true },
                         onLocalAlbumClick = { showPhotoPickerDialog = true },
                         onResetWallpaperClick = { viewModel.clearCustomBackground() },
@@ -973,12 +994,12 @@ fun MobileProfileContent(
             title = { Text("我的", fontWeight = FontWeight.Bold) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = contentColor)
+                    Icon(rememberAppBackIcon(), contentDescription = "Back", tint = contentColor)
                 }
             },
             actions = {
                 IconButton(onClick = onSettingsClick) {
-                    Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = contentColor)
+                    Icon(rememberAppSettingsIcon(), contentDescription = "Settings", tint = contentColor)
                 }
             },
             scrollBehavior = scrollBehavior,
@@ -999,6 +1020,8 @@ fun GuestProfileContent(
     onBack: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
+    val loginIcon = rememberAppProfileAddIcon()
+    val lockIcon = rememberAppLockIcon()
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1022,10 +1045,10 @@ fun GuestProfileContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = Color.White)
+                Icon(rememberAppBackIcon(), contentDescription = "Back", tint = Color.White)
             }
             IconButton(onClick = onSettingsClick) {
-                Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = Color.White)
+                Icon(rememberAppSettingsIcon(), contentDescription = "Settings", tint = Color.White)
             }
         }
         
@@ -1076,7 +1099,7 @@ fun GuestProfileContent(
             BiliGradientButton(
                 text = "安全登录",
                 onClick = onGoToLogin,
-                leadingIcon = CupertinoIcons.Outlined.PersonCropCircleBadgePlus,
+                leadingIcon = loginIcon,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
@@ -1090,7 +1113,7 @@ fun GuestProfileContent(
                 modifier = Modifier.alpha(0.5f)
             ) {
                 Icon(
-                    CupertinoIcons.Outlined.Lock,
+                    lockIcon,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(14.dp)
@@ -1149,139 +1172,112 @@ fun UserInfoSection(
 @Composable
 private fun ProfileWallpaperActionCard(
     isImmersive: Boolean,
+    hazeState: HazeState? = null,
     onOfficialWallpaperClick: () -> Unit,
     onLocalAlbumClick: () -> Unit,
     onResetWallpaperClick: () -> Unit,
     isResetEnabled: Boolean
 ) {
+    val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val columnCount = remember(configuration.screenWidthDp) {
         resolveProfileWallpaperActionColumnCount(configuration.screenWidthDp)
+    }
+    val headerBlurEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getHeaderBlurEnabled(context)
+        .collectAsState(initial = true)
+    val bottomBarBlurEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getBottomBarBlurEnabled(context)
+        .collectAsState(initial = true)
+    val blurEnabled = remember(headerBlurEnabled, bottomBarBlurEnabled) {
+        resolveProfileWallpaperActionBlurEnabled(
+            headerBlurEnabled = headerBlurEnabled,
+            bottomBarBlurEnabled = bottomBarBlurEnabled
+        )
     }
     val sectionLabelColor = if (isImmersive) {
         Color.White.copy(alpha = 0.76f)
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val cardColor = if (isImmersive) {
-        Color.White.copy(alpha = 0.14f)
+    val buttonColor = if (isImmersive) {
+        if (blurEnabled) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.16f)
     } else {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
     }
-    val borderColor = if (isImmersive) {
-        Color.White.copy(alpha = 0.18f)
+    val contentColor = if (isImmersive) Color.White else MaterialTheme.colorScheme.onSurface
+    val buttonBorderColor = if (isImmersive) {
+        Color.White.copy(alpha = if (blurEnabled) 0.16f else 0.10f)
     } else {
         MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
     }
-    val buttonColor = if (isImmersive) {
-        Color.White.copy(alpha = 0.10f)
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-    }
-    val contentColor = if (isImmersive) Color.White else MaterialTheme.colorScheme.onSurface
-    val secondaryColor = if (isImmersive) {
-        Color.White.copy(alpha = 0.68f)
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val showSectionLabel = !isImmersive
+    val actionRows = listOf(
+        ProfileWallpaperActionItem(
+            title = "官方壁纸",
+            icon = rememberAppPhotoIcon(),
+            onClick = onOfficialWallpaperClick
+        ),
+        ProfileWallpaperActionItem(
+            title = "本地相册",
+            icon = rememberAppFolderIcon(),
+            onClick = onLocalAlbumClick
+        ),
+        ProfileWallpaperActionItem(
+            title = "恢复默认",
+            icon = rememberAppRestoreIcon(),
+            enabled = isResetEnabled,
+            onClick = onResetWallpaperClick
+        )
+    ).chunked(columnCount)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 10.dp)
+            .padding(
+                start = 24.dp,
+                end = 24.dp,
+                top = if (isImmersive) 2.dp else 10.dp,
+                bottom = if (isImmersive) 4.dp else 10.dp
+            )
     ) {
-        Text(
-            text = "背景装扮",
-            style = MaterialTheme.typography.labelMedium,
-            color = sectionLabelColor,
-            modifier = Modifier.padding(start = 4.dp, bottom = 10.dp)
-        )
+        if (showSectionLabel) {
+            Text(
+                text = "背景装扮",
+                style = MaterialTheme.typography.labelMedium,
+                color = sectionLabelColor,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            )
+        }
 
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = cardColor,
-            border = BorderStroke(0.5.dp, borderColor),
-            shadowElevation = 0.dp,
-            tonalElevation = 0.dp
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (columnCount == 2) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+            actionRows.forEach { rowActions ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
+                    rowActions.forEach { action ->
                         ProfileWallpaperActionButton(
                             modifier = Modifier.weight(1f),
-                            title = "官方壁纸",
-                            subtitle = "精选背景",
-                            icon = CupertinoIcons.Default.Photo,
+                            title = action.title,
+                            subtitle = "",
+                            icon = action.icon,
                             containerColor = buttonColor,
                             contentColor = contentColor,
-                            secondaryColor = secondaryColor,
-                            onClick = onOfficialWallpaperClick
-                        )
-                        ProfileWallpaperActionButton(
-                            modifier = Modifier.weight(1f),
-                            title = "本地相册",
-                            subtitle = "自定义照片",
-                            icon = CupertinoIcons.Default.Folder,
-                            containerColor = buttonColor,
-                            contentColor = contentColor,
-                            secondaryColor = secondaryColor,
-                            onClick = onLocalAlbumClick
+                            secondaryColor = Color.Transparent,
+                            enabled = action.enabled,
+                            blurEnabled = blurEnabled,
+                            hazeState = hazeState,
+                            borderColor = buttonBorderColor,
+                            onClick = action.onClick
                         )
                     }
-                    ProfileWallpaperActionButton(
-                        title = "恢复默认",
-                        subtitle = "移除自定义背景",
-                        icon = CupertinoIcons.Default.ArrowCounterclockwise,
-                        containerColor = buttonColor,
-                        contentColor = contentColor,
-                        secondaryColor = secondaryColor,
-                        enabled = isResetEnabled,
-                        onClick = onResetWallpaperClick
-                    )
-                }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    ProfileWallpaperActionButton(
-                        title = "官方壁纸",
-                        subtitle = "精选背景",
-                        icon = CupertinoIcons.Default.Photo,
-                        containerColor = buttonColor,
-                        contentColor = contentColor,
-                        secondaryColor = secondaryColor,
-                        onClick = onOfficialWallpaperClick
-                    )
-                    ProfileWallpaperActionButton(
-                        title = "本地相册",
-                        subtitle = "自定义照片",
-                        icon = CupertinoIcons.Default.Folder,
-                        containerColor = buttonColor,
-                        contentColor = contentColor,
-                        secondaryColor = secondaryColor,
-                        onClick = onLocalAlbumClick
-                    )
-                    ProfileWallpaperActionButton(
-                        title = "恢复默认",
-                        subtitle = "移除自定义背景",
-                        icon = CupertinoIcons.Default.ArrowCounterclockwise,
-                        containerColor = buttonColor,
-                        contentColor = contentColor,
-                        secondaryColor = secondaryColor,
-                        enabled = isResetEnabled,
-                        onClick = onResetWallpaperClick
-                    )
+                    repeat(columnCount - rowActions.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -1298,42 +1294,57 @@ private fun ProfileWallpaperActionButton(
     secondaryColor: Color,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    blurEnabled: Boolean = false,
+    hazeState: HazeState? = null,
+    borderColor: Color = Color.Transparent,
     modifier: Modifier = Modifier
 ) {
+    val shape = RoundedCornerShape(20.dp)
     val effectiveContentColor = if (enabled) contentColor else contentColor.copy(alpha = 0.38f)
     val effectiveSecondaryColor = if (enabled) secondaryColor else secondaryColor.copy(alpha = 0.5f)
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .then(
+                if (blurEnabled && hazeState != null) {
+                    Modifier.unifiedBlur(
+                        hazeState = hazeState,
+                        shape = shape
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .clip(shape)
             .clickable(enabled = enabled, onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
+        shape = shape,
         color = if (enabled) containerColor else containerColor.copy(alpha = 0.55f),
+        border = BorderStroke(0.5.dp, borderColor),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 54.dp)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .heightIn(min = 46.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
                 color = Color.White.copy(alpha = if (effectiveContentColor == Color.White) 0.16f else 0.55f),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp),
+                        .size(30.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = title,
                         tint = effectiveContentColor,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -1342,16 +1353,18 @@ private fun ProfileWallpaperActionButton(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = effectiveContentColor
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = effectiveSecondaryColor
-                )
+                if (subtitle.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = effectiveSecondaryColor
+                    )
+                }
             }
         }
     }
@@ -1386,6 +1399,13 @@ fun UserInfoText(user: UserState, centered: Boolean = false, forceWhite: Boolean
         }
     }
 }
+
+private data class ProfileWallpaperActionItem(
+    val title: String,
+    val icon: ImageVector,
+    val enabled: Boolean = true,
+    val onClick: () -> Unit
+)
 
 @Composable
 fun LevelTag(level: Int) {
@@ -1487,14 +1507,18 @@ fun ServicesSection(
     isLogin: Boolean = true,
     isTablet: Boolean = false // [New]
 ) {
+    val downloadIcon = rememberAppDownloadIcon()
+    val historyIcon = rememberAppHistoryIcon()
+    val bookmarkIcon = rememberAppBookmarkIcon()
+    val inboxIcon = rememberAppInboxIcon()
     if (isTablet) {
         // [New] Grid Layout for Tablet
         val items = listOf(
-            Triple("离线缓存", CupertinoIcons.Default.ArrowDownCircle, onDownloadClick),
-            Triple("历史记录", CupertinoIcons.Default.Clock, onHistoryClick),
-            Triple("我的收藏", CupertinoIcons.Default.Bookmark, onFavoriteClick),
-            Triple("稍后再看", CupertinoIcons.Default.Bookmark, onWatchLaterClick),
-            Triple("我的私信", CupertinoIcons.Default.Envelope, onInboxClick)  //  [新增]
+            Triple("离线缓存", downloadIcon, onDownloadClick),
+            Triple("历史记录", historyIcon, onHistoryClick),
+            Triple("我的收藏", bookmarkIcon, onFavoriteClick),
+            Triple("稍后再看", bookmarkIcon, onWatchLaterClick),
+            Triple("我的私信", inboxIcon, onInboxClick)  //  [新增]
         )
         
         // Simple Grid implementation since LazyVerticalGrid might be overkill inside a Column if not scrolling?
@@ -1553,35 +1577,35 @@ fun ServicesSection(
     ) {
         Column {
             IOSClickableItem(
-                icon = CupertinoIcons.Default.ArrowDownCircle,
+                icon = downloadIcon,
                 title = "离线缓存",
                 onClick = onDownloadClick,
                 iconTint = MaterialTheme.colorScheme.primary,
                 textColor = contentColor
             )
             IOSClickableItem(
-                icon = CupertinoIcons.Default.Clock,
+                icon = historyIcon,
                 title = "历史记录",
                 onClick = onHistoryClick,
                 iconTint = iOSBlue,
                 textColor = contentColor
             )
             IOSClickableItem(
-                icon = CupertinoIcons.Default.Bookmark,
+                icon = bookmarkIcon,
                 title = "我的收藏",
                 onClick = onFavoriteClick,
                 iconTint = iOSYellow,
                 textColor = contentColor
             )
             IOSClickableItem(
-                icon = CupertinoIcons.Default.Bookmark,
+                icon = bookmarkIcon,
                 title = "稍后再看",
                 onClick = onWatchLaterClick,
                 iconTint = iOSGreen,
                 textColor = contentColor
             )
             IOSClickableItem(
-                icon = CupertinoIcons.Default.Envelope,
+                icon = inboxIcon,
                 title = "我的私信",
                 onClick = onInboxClick,
                 iconTint = com.android.purebilibili.core.theme.iOSPink,  //  粉色图标

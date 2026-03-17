@@ -17,6 +17,26 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuOpen
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.CollectionsBookmark
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.CollectionsBookmark
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -57,6 +77,8 @@ import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.theme.BottomBarColors  // 统一底栏颜色配置
 import com.android.purebilibili.core.theme.BottomBarColorPalette  // 调色板
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.iOSCornerRadius
 import kotlinx.coroutines.launch  //  延迟导航
 //  Cupertino Icons - iOS SF Symbols 风格图标
@@ -317,6 +339,18 @@ fun FrostedBottomBar(
     isTransitionRunning: Boolean = false,
     forceLowBlurBudget: Boolean = false
 ) {
+    if (LocalUiPreset.current == UiPreset.MD3) {
+        MaterialBottomBar(
+            currentItem = currentItem,
+            onItemClick = onItemClick,
+            modifier = modifier,
+            visibleItems = visibleItems,
+            onToggleSidebar = onToggleSidebar,
+            isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet
+        )
+        return
+    }
+
     val isDarkTheme = MaterialTheme.colorScheme.background.red < 0.5f // Simple darkness check
     val haptic = rememberHapticFeedback()
     
@@ -780,6 +814,88 @@ fun FrostedBottomBar(
             }
         }
     }
+}
+
+@Composable
+private fun MaterialBottomBar(
+    currentItem: BottomNavItem,
+    onItemClick: (BottomNavItem) -> Unit,
+    modifier: Modifier = Modifier,
+    visibleItems: List<BottomNavItem>,
+    onToggleSidebar: (() -> Unit)?,
+    isTablet: Boolean
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        tonalElevation = 3.dp,
+        shadowElevation = 0.dp,
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        NavigationBar(
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
+            visibleItems.forEach { item ->
+                NavigationBarItem(
+                    selected = currentItem == item,
+                    onClick = { onItemClick(item) },
+                    icon = {
+                        Icon(
+                            imageVector = resolveMaterialBottomBarIcon(item = item, selected = currentItem == item),
+                            contentDescription = item.label
+                        )
+                    },
+                    label = { Text(item.label) },
+                    alwaysShowLabel = true,
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
+
+            if (isTablet && onToggleSidebar != null) {
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onToggleSidebar,
+                    icon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.MenuOpen,
+                            contentDescription = "侧边栏"
+                        )
+                    },
+                    label = { Text("侧边栏") },
+                    alwaysShowLabel = true,
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
+        }
+    }
+}
+
+private fun resolveMaterialBottomBarIcon(
+    item: BottomNavItem,
+    selected: Boolean
+) = when (item) {
+    BottomNavItem.HOME -> if (selected) Icons.Filled.Home else Icons.Outlined.Home
+    BottomNavItem.DYNAMIC -> if (selected) Icons.Filled.Notifications else Icons.Outlined.NotificationsNone
+    BottomNavItem.STORY -> if (selected) Icons.Filled.PlayCircle else Icons.Outlined.PlayCircleOutline
+    BottomNavItem.HISTORY -> if (selected) Icons.Filled.History else Icons.Outlined.History
+    BottomNavItem.PROFILE -> if (selected) Icons.Filled.Person else Icons.Outlined.Person
+    BottomNavItem.FAVORITE -> if (selected) Icons.Filled.CollectionsBookmark else Icons.Outlined.CollectionsBookmark
+    BottomNavItem.LIVE -> if (selected) Icons.Filled.LiveTv else Icons.Outlined.LiveTv
+    BottomNavItem.WATCHLATER -> if (selected) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder
+    BottomNavItem.SETTINGS -> if (selected) Icons.Filled.Settings else Icons.Outlined.Settings
 }
 
 internal fun resolveBottomBarSurfaceColor(
