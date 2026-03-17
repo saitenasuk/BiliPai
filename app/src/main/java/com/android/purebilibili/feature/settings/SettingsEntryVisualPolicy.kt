@@ -75,7 +75,7 @@ internal data class SettingsEntryThemePalette(
     val error: Color
 )
 
-private enum class SettingsEntryTintRole {
+internal enum class SettingsEntryTintRole {
     PRIMARY,
     SECONDARY,
     TERTIARY,
@@ -105,6 +105,25 @@ private fun SettingsEntryThemePalette.resolve(
     SettingsEntryTintRole.SECONDARY -> secondary
     SettingsEntryTintRole.TERTIARY -> tertiary
     SettingsEntryTintRole.ERROR -> error
+}
+
+@Composable
+internal fun rememberSettingsEntryTint(
+    role: SettingsEntryTintRole,
+    iosTint: Color,
+    uiPreset: UiPreset = LocalUiPreset.current
+): Color {
+    val colorScheme = MaterialTheme.colorScheme
+    val md3Palette = remember(colorScheme) {
+        resolveMd3SettingsEntryThemePalette(colorScheme)
+    }
+    return remember(role, iosTint, uiPreset, md3Palette) {
+        if (uiPreset == UiPreset.MD3) {
+            md3Palette.resolve(role)
+        } else {
+            iosTint
+        }
+    }
 }
 
 private fun resolveMd3SettingsEntryTintRole(

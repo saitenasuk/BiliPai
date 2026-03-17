@@ -254,6 +254,11 @@ fun SettingsSubpageEntrySection(
     onExtensionsAndDebugClick: () -> Unit,
     onAboutAndSupportClick: () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val storageTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSBlue, uiPreset)
+    val privacyTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSPurple, uiPreset)
+    val developerTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSTeal, uiPreset)
+    val aboutTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSOrange, uiPreset)
     val contentAndStorageIcon = rememberAppCollectionIcon()
     val privacyIcon = rememberAppLockIcon()
     SettingsCardGroup {
@@ -262,7 +267,7 @@ fun SettingsSubpageEntrySection(
             title = "内容与存储",
             value = "推荐流、下载与缓存",
             onClick = onContentAndStorageClick,
-            iconTint = iOSBlue
+            iconTint = storageTint
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
@@ -270,7 +275,7 @@ fun SettingsSubpageEntrySection(
             title = "隐私与安全",
             value = "无痕模式、权限与黑名单",
             onClick = onPrivacyAndSecurityClick,
-            iconTint = iOSPurple
+            iconTint = privacyTint
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
@@ -278,7 +283,7 @@ fun SettingsSubpageEntrySection(
             title = "扩展与调试",
             value = "插件、日志与数据采集",
             onClick = onExtensionsAndDebugClick,
-            iconTint = iOSTeal
+            iconTint = developerTint
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
@@ -286,7 +291,7 @@ fun SettingsSubpageEntrySection(
             title = "关于与支持",
             value = "版本、开源、帮助与作者",
             onClick = onAboutAndSupportClick,
-            iconTint = iOSOrange
+            iconTint = aboutTint
         )
     }
 }
@@ -298,6 +303,9 @@ fun FeedApiSection(
     incrementalTimelineRefreshEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val feedTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSOrange, uiPreset)
+    val incrementalRefreshTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSGreen, uiPreset)
     val feedIcon = rememberAppDynamicIcon()
     SettingsCardGroup {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -309,7 +317,7 @@ fun FeedApiSection(
                     imageVector = feedIcon,
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
-                    tint = iOSOrange
+                    tint = feedTint
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -341,7 +349,7 @@ fun FeedApiSection(
             subtitle = "下拉刷新时不重置列表，仅在顶部插入新内容",
             checked = incrementalTimelineRefreshEnabled,
             onCheckedChange = onIncrementalTimelineRefreshChange,
-            iconTint = iOSGreen
+            iconTint = incrementalRefreshTint
         )
     }
 }
@@ -414,6 +422,7 @@ fun PrivacySection(
     onBlockedListClick: () -> Unit // [New]
 ) {
     val uiPreset = LocalUiPreset.current
+    val privacyModeTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSPurple, uiPreset)
     val permissionVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PERMISSION, uiPreset)
     val blockedListVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BLOCKED_LIST, uiPreset)
 
@@ -424,7 +433,7 @@ fun PrivacySection(
             subtitle = "启用后不记录播放历史和搜索历史",
             checked = privacyModeEnabled,
             onCheckedChange = onPrivacyModeChange,
-            iconTint = iOSPurple
+            iconTint = privacyModeTint
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
@@ -513,6 +522,8 @@ fun DeveloperSection(
     onExportLogsClick: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
+    val crashTrackingTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSTeal, uiPreset)
+    val analyticsTint = rememberSettingsEntryTint(SettingsEntryTintRole.PRIMARY, iOSBlue, uiPreset)
     val pluginsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLUGINS, uiPreset)
     val exportLogsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.EXPORT_LOGS, uiPreset)
 
@@ -523,7 +534,7 @@ fun DeveloperSection(
             subtitle = "帮助开发者发现和修复问题",
             checked = crashTrackingEnabled,
             onCheckedChange = onCrashTrackingChange,
-            iconTint = iOSTeal
+            iconTint = crashTrackingTint
         )
         SettingsDivider(startIndent = 66.dp)
         SettingSwitchItem(
@@ -532,7 +543,7 @@ fun DeveloperSection(
             subtitle = "帮助改进应用体验，不收集个人信息",
             checked = analyticsEnabled,
             onCheckedChange = onAnalyticsChange,
-            iconTint = iOSBlue
+            iconTint = analyticsTint
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
@@ -575,6 +586,8 @@ fun AboutSection(
     versionClickThreshold: Int = EasterEggs.VERSION_EASTER_EGG_THRESHOLD
 ) {
     val uiPreset = LocalUiPreset.current
+    val autoCheckTint = rememberSettingsEntryTint(SettingsEntryTintRole.PRIMARY, iOSBlue, uiPreset)
+    val easterEggTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSYellow, uiPreset)
     val disclaimerVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DISCLAIMER, uiPreset)
     val licensesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_LICENSES, uiPreset)
     val openSourceHomeVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_HOME, uiPreset)
@@ -661,7 +674,7 @@ fun AboutSection(
             subtitle = resolveAutoCheckUpdateSubtitle(autoCheckEnabled = autoCheckUpdateEnabled),
             checked = autoCheckUpdateEnabled,
             onCheckedChange = onAutoCheckUpdateChange,
-            iconTint = iOSBlue
+            iconTint = autoCheckTint
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
@@ -688,7 +701,7 @@ fun AboutSection(
             subtitle = "刷新、点赞、投币、搜索时显示趣味提示",
             checked = easterEggEnabled,
             onCheckedChange = onEasterEggChange,
-            iconTint = iOSYellow
+            iconTint = easterEggTint
         )
     }
 }
