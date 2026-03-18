@@ -47,4 +47,25 @@ class SettingsSearchPolicyTest {
 
         assertTrue(results.any { it.target == SettingsSearchTarget.SETTINGS_SHARE })
     }
+
+    @Test
+    fun queryByGlassKeyword_hitsAppearanceEntry() {
+        val results = resolveSettingsSearchResults("玻璃")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
+
+    @Test
+    fun queryByMd3Alias_hitsAppearanceEntry() {
+        val results = resolveSettingsSearchResults("md3")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
+
+    @Test
+    fun queryByPinyin_hitsChineseAlias() {
+        val results = resolveSettingsSearchResults("waiguan")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
 }

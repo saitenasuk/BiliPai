@@ -39,6 +39,7 @@ import com.android.purebilibili.core.ui.rememberAppFlipHorizontalIcon
 import com.android.purebilibili.core.ui.rememberAppFlipVerticalIcon
 import com.android.purebilibili.core.ui.rememberAppGestureTapIcon
 import com.android.purebilibili.core.ui.rememberAppHeadphonesIcon
+import com.android.purebilibili.core.ui.rememberAppSettingsIcon
 import com.android.purebilibili.core.ui.rememberAppMusicIcon
 import com.android.purebilibili.core.ui.rememberAppPhotoIcon
 import com.android.purebilibili.core.ui.rememberAppQualityIcon
@@ -153,6 +154,7 @@ fun VideoSettingsPanel(
     val wifiIcon = rememberAppWifiIcon()
     val speedIcon = rememberAppSpeedIcon()
     val gestureTapIcon = rememberAppGestureTapIcon()
+    val settingsIcon = rememberAppSettingsIcon()
     
     com.android.purebilibili.core.ui.IOSModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -769,7 +771,7 @@ fun VideoSettingsPanel(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.Gearshape,
+                            imageVector = settingsIcon,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)

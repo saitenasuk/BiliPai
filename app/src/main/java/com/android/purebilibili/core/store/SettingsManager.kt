@@ -14,6 +14,8 @@ import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.store.home.HomeSettingsStore
 import com.android.purebilibili.core.store.navigation.NavigationSettingsStore
 import com.android.purebilibili.core.store.player.PlayerSettingsStore
+import com.android.purebilibili.core.theme.AppFontSizePreset
+import com.android.purebilibili.core.theme.AppUiScalePreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.feature.settings.share.SettingsShareApplyResult
 import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinition
@@ -400,6 +402,9 @@ object SettingsManager {
     private val KEY_REMEMBER_LAST_PLAYBACK_SPEED = booleanPreferencesKey("remember_last_playback_speed")
     private val KEY_LAST_PLAYBACK_SPEED = floatPreferencesKey("last_playback_speed")
     private val KEY_THEME_COLOR_INDEX = intPreferencesKey("theme_color_index")
+    private val KEY_APP_FONT_SIZE_PRESET = intPreferencesKey("app_font_size_preset")
+    private val KEY_APP_UI_SCALE_PRESET = intPreferencesKey("app_ui_scale_preset")
+    private val KEY_APP_DPI_OVERRIDE_PERCENT = intPreferencesKey("app_dpi_override_percent")
     //  [新增] 应用图标 Key (Blue, Red, Green...)
     private val KEY_APP_ICON = androidx.datastore.preferences.core.stringPreferencesKey("app_icon_key")
     //  [新增] 底部栏样式 (true=悬浮, false=贴底)
@@ -784,6 +789,44 @@ object SettingsManager {
 
     suspend fun setDynamicColor(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_DYNAMIC_COLOR] = value }
+    }
+
+    fun getAppFontSizePreset(context: Context): Flow<AppFontSizePreset> = context.settingsDataStore.data
+        .map { preferences ->
+            AppFontSizePreset.fromValue(
+                preferences[KEY_APP_FONT_SIZE_PRESET] ?: AppFontSizePreset.DEFAULT.value
+            )
+        }
+
+    suspend fun setAppFontSizePreset(context: Context, preset: AppFontSizePreset) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_APP_FONT_SIZE_PRESET] = preset.value
+        }
+    }
+
+    fun getAppUiScalePreset(context: Context): Flow<AppUiScalePreset> = context.settingsDataStore.data
+        .map { preferences ->
+            AppUiScalePreset.fromValue(
+                preferences[KEY_APP_UI_SCALE_PRESET] ?: AppUiScalePreset.STANDARD.value
+            )
+        }
+
+    suspend fun setAppUiScalePreset(context: Context, preset: AppUiScalePreset) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_APP_UI_SCALE_PRESET] = preset.value
+        }
+    }
+
+    fun getAppDpiOverridePercent(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            val rawValue = preferences[KEY_APP_DPI_OVERRIDE_PERCENT] ?: 0
+            if (rawValue == 0) 0 else rawValue.coerceIn(85, 115)
+        }
+
+    suspend fun setAppDpiOverridePercent(context: Context, percent: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_APP_DPI_OVERRIDE_PERCENT] = if (percent == 0) 0 else percent.coerceIn(85, 115)
+        }
     }
 
     /**

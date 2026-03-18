@@ -52,6 +52,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.VideoActivity
+import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackWakeMode
 import com.android.purebilibili.feature.video.state.isPlaybackActiveForLifecycle
 import com.android.purebilibili.feature.video.usecase.VideoLoadResult
 import com.android.purebilibili.feature.video.usecase.VideoPlaybackUseCase
@@ -1032,13 +1033,19 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 .setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
                 .build()
+            val miniPlayerMode = SettingsManager.getMiniPlayerModeSync(context)
+            val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
 
             _player = ExoPlayer.Builder(context)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
                 .setAudioAttributes(audioAttributes, true)
                 .setHandleAudioBecomingNoisy(true)
-                // 🔋 [修复] 防止息屏时音频停止，保持网络连接和 CPU 唤醒
-                .setWakeMode(C.WAKE_MODE_NETWORK)
+                .setWakeMode(
+                    resolvePlaybackWakeMode(
+                        miniPlayerMode = miniPlayerMode,
+                        stopPlaybackOnExit = stopPlaybackOnExit
+                    )
+                )
                 .build()
                 .apply {
                     addListener(playerListener)

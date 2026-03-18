@@ -8,6 +8,8 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.allManagedAppIconLauncherAliases
 import com.android.purebilibili.core.store.normalizeAppIconKey
 import com.android.purebilibili.core.store.resolveAppIconLauncherAlias
+import com.android.purebilibili.core.theme.AppFontSizePreset
+import com.android.purebilibili.core.theme.AppUiScalePreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.util.CacheUtils
@@ -25,6 +27,9 @@ data class SettingsUiState(
     val hwDecode: Boolean = true,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     val dynamicColor: Boolean = true,
+    val appFontSizePreset: AppFontSizePreset = AppFontSizePreset.DEFAULT,
+    val appUiScalePreset: AppUiScalePreset = AppUiScalePreset.STANDARD,
+    val appDpiOverridePercent: Int = 0,
     val bgPlay: Boolean = false,
     val gestureSensitivity: Float = 1.0f,
     val themeColorIndex: Int = 0,
@@ -75,6 +80,9 @@ data class ExtraSettings(
     val gestureSensitivity: Float,
     val themeColorIndex: Int,
     val appIcon: String,
+    val appFontSizePreset: AppFontSizePreset,
+    val appUiScalePreset: AppUiScalePreset,
+    val appDpiOverridePercent: Int,
     val isBottomBarFloating: Boolean,
     val bottomBarLabelMode: Int,
     val headerBlurEnabled: Boolean,
@@ -110,6 +118,9 @@ private data class BaseSettings(
     val hwDecode: Boolean,
     val themeMode: AppThemeMode,
     val dynamicColor: Boolean,
+    val appFontSizePreset: AppFontSizePreset,
+    val appUiScalePreset: AppUiScalePreset,
+    val appDpiOverridePercent: Int,
     val bgPlay: Boolean,
     val gestureSensitivity: Float,
     val themeColorIndex: Int,
@@ -138,6 +149,15 @@ private fun <T> Flow<T>.asAnyFlow(): Flow<Any?> = map { it }
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
 
+    private data class UiSettingsGroup1(
+        val gestureSensitivity: Float,
+        val themeColorIndex: Int,
+        val appIcon: String,
+        val appFontSizePreset: AppFontSizePreset,
+        val appUiScalePreset: AppUiScalePreset,
+        val appDpiOverridePercent: Int
+    )
+
     // 本地状态流：缓存大小
     private val _cacheSize = MutableStateFlow("计算中...")
     private val _cacheBreakdown = MutableStateFlow<CacheUtils.CacheBreakdown?>(null)
@@ -156,11 +176,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     
     // 第 2 步：合并界面设置 (分两组，每组最多5个)
     private val uiSettingsFlow1 = combine(
-        SettingsManager.getGestureSensitivity(context),
-        SettingsManager.getThemeColorIndex(context),
-        SettingsManager.getAppIcon(context)
-    ) { gestureSensitivity, themeColorIndex, appIcon ->
-        Triple(gestureSensitivity, themeColorIndex, appIcon)
+        SettingsManager.getGestureSensitivity(context).asAnyFlow(),
+        SettingsManager.getThemeColorIndex(context).asAnyFlow(),
+        SettingsManager.getAppIcon(context).asAnyFlow(),
+        SettingsManager.getAppFontSizePreset(context).asAnyFlow(),
+        SettingsManager.getAppUiScalePreset(context).asAnyFlow(),
+        SettingsManager.getAppDpiOverridePercent(context).asAnyFlow()
+    ) { values ->
+        UiSettingsGroup1(
+            gestureSensitivity = values[0] as Float,
+            themeColorIndex = values[1] as Int,
+            appIcon = values[2] as String,
+            appFontSizePreset = values[3] as AppFontSizePreset,
+            appUiScalePreset = values[4] as AppUiScalePreset,
+            appDpiOverridePercent = values[5] as Int
+        )
     }
     
     private val uiSettingsFlow2 = combine(
@@ -226,12 +256,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     // 合并所有 UI 设置
     private val uiSettingsFlow = combine(uiSettingsFlow1, uiSettingsFlow2) { ui1, ui2 ->
-        // ui1: Triple(gesture, color, icon)
         // ui2: Ui2 class
         ExtraSettings(
-            gestureSensitivity = ui1.first,
-            themeColorIndex = ui1.second,
-            appIcon = ui1.third,
+            gestureSensitivity = ui1.gestureSensitivity,
+            themeColorIndex = ui1.themeColorIndex,
+            appIcon = ui1.appIcon,
+            appFontSizePreset = ui1.appFontSizePreset,
+            appUiScalePreset = ui1.appUiScalePreset,
+            appDpiOverridePercent = ui1.appDpiOverridePercent,
             isBottomBarFloating = ui2.f,
             bottomBarLabelMode = ui2.l,
             displayMode = ui2.d,
@@ -295,6 +327,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             hwDecode = core.hwDecode,
             themeMode = core.themeMode,
             dynamicColor = core.dynamicColor,
+            appFontSizePreset = extra.appFontSizePreset,
+            appUiScalePreset = extra.appUiScalePreset,
+            appDpiOverridePercent = extra.appDpiOverridePercent,
             bgPlay = core.bgPlay,
             gestureSensitivity = extra.gestureSensitivity,
             themeColorIndex = extra.themeColorIndex,
@@ -334,6 +369,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             hwDecode = settings.hwDecode,
             themeMode = settings.themeMode,
             dynamicColor = settings.dynamicColor,
+            appFontSizePreset = settings.appFontSizePreset,
+            appUiScalePreset = settings.appUiScalePreset,
+            appDpiOverridePercent = settings.appDpiOverridePercent,
             bgPlay = settings.bgPlay,
             gestureSensitivity = settings.gestureSensitivity,
             themeColorIndex = settings.themeColorIndex,
@@ -409,6 +447,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         } 
     }
     fun toggleDynamicColor(value: Boolean) { viewModelScope.launch { SettingsManager.setDynamicColor(context, value) } }
+    fun setAppFontSizePreset(preset: AppFontSizePreset) {
+        viewModelScope.launch { SettingsManager.setAppFontSizePreset(context, preset) }
+    }
+    fun setAppUiScalePreset(preset: AppUiScalePreset) {
+        viewModelScope.launch { SettingsManager.setAppUiScalePreset(context, preset) }
+    }
+    fun setAppDpiOverridePercent(percent: Int) {
+        viewModelScope.launch { SettingsManager.setAppDpiOverridePercent(context, percent) }
+    }
     fun toggleBgPlay(value: Boolean) { viewModelScope.launch { SettingsManager.setBgPlay(context, value) } }
     //  [新增] 手势灵敏度和主题色
     fun setGestureSensitivity(value: Float) { viewModelScope.launch { SettingsManager.setGestureSensitivity(context, value) } }

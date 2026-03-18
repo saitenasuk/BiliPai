@@ -34,3 +34,4 @@ fun resolveUiRenderingProfile(preset: UiPreset): UiRenderingProfile {
 }
 
 val LocalUiPreset = staticCompositionLocalOf { UiPreset.IOS }
+val LocalDynamicColorActive = staticCompositionLocalOf { false }

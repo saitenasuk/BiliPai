@@ -12,6 +12,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,11 +22,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
+import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppCollectionIcon
+import com.android.purebilibili.core.ui.rememberAppInfoIcon
+import com.android.purebilibili.core.ui.rememberAppLockIcon
+import com.android.purebilibili.core.ui.rememberAppSettingsIcon
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
@@ -32,21 +38,17 @@ import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSTeal
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.filled.*
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.launch
 
 enum class SettingsCategory(
-    val title: String, 
-    val icon: ImageVector,
+    val title: String,
     val color: Color
 ) {
-    GENERAL("常规", CupertinoIcons.Filled.Gearshape, iOSPink),
-    PRIVACY("隐私与安全", CupertinoIcons.Filled.HandRaised, iOSPurple),
-    STORAGE("内容与存储", CupertinoIcons.Filled.Folder, iOSBlue),
-    DEVELOPER("开发者选项", CupertinoIcons.Filled.Hammer, iOSTeal),
-    ABOUT("关于", CupertinoIcons.Filled.InfoCircle, iOSOrange)
+    GENERAL("常规", iOSPink),
+    PRIVACY("隐私与安全", iOSPurple),
+    STORAGE("内容与存储", iOSBlue),
+    DEVELOPER("开发者选项", iOSTeal),
+    ABOUT("关于", iOSOrange)
 }
 
 @Composable
@@ -109,6 +111,7 @@ fun TabletSettingsLayout(
     modifier: Modifier = Modifier
 ) {
     var selectedCategory by remember { mutableStateOf(SettingsCategory.GENERAL) }
+    val uiPreset = com.android.purebilibili.core.theme.LocalUiPreset.current
     val configuration = LocalConfiguration.current
     val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveSettingsTabletLayoutPolicy(
@@ -129,6 +132,11 @@ fun TabletSettingsLayout(
     val viewModel: SettingsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val context = androidx.compose.ui.platform.LocalContext.current
     val state by viewModel.state.collectAsState()
+    val generalIcon = rememberAppSettingsIcon()
+    val privacyIcon = rememberAppLockIcon()
+    val storageIcon = rememberAppCollectionIcon()
+    val developerIcon = rememberSettingsEntryVisual(SettingsSearchTarget.PLUGINS, uiPreset).icon
+    val aboutIcon = rememberAppInfoIcon()
 
     AdaptiveSplitLayout(
         modifier = modifier,
@@ -150,7 +158,7 @@ fun TabletSettingsLayout(
                         .padding(4.dp)
                 ) {
                     Icon(
-                        CupertinoIcons.Default.ChevronBackward, 
+                        rememberAppBackIcon(),
                         contentDescription = "返回", 
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -174,7 +182,14 @@ fun TabletSettingsLayout(
                 )
 
                 SettingsCategory.entries.forEach { category ->
-                            val isSelected = category == selectedCategory
+                    val isSelected = category == selectedCategory
+                    val categoryIcon = when (category) {
+                        SettingsCategory.GENERAL -> generalIcon
+                        SettingsCategory.PRIVACY -> privacyIcon
+                        SettingsCategory.STORAGE -> storageIcon
+                        SettingsCategory.DEVELOPER -> developerIcon ?: generalIcon
+                        SettingsCategory.ABOUT -> aboutIcon
+                    }
                     NavigationDrawerItem(
                         label = { Text(category.title) },
                         selected = isSelected,
@@ -184,7 +199,7 @@ fun TabletSettingsLayout(
                         },
                         icon = { 
                             Icon(
-                                category.icon, 
+                                categoryIcon,
                                 contentDescription = null,
                                 tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else category.color
                             ) 
@@ -249,7 +264,7 @@ fun TabletSettingsLayout(
                                 }
                                 .padding(8.dp)
                         ) {
-                            Icon(CupertinoIcons.Default.ChevronBackward, null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(rememberAppBackIcon(), null, tint = MaterialTheme.colorScheme.primary)
                             Text("返回", color = MaterialTheme.colorScheme.primary)
                         }
                         
@@ -333,7 +348,7 @@ fun TabletSettingsLayout(
                                                 verticalAlignment = Alignment.CenterVertically, 
                                                 modifier = Modifier.clickable { editingPlugin = null }.padding(8.dp)
                                             ) {
-                                                Icon(CupertinoIcons.Default.ChevronBackward, null, tint = MaterialTheme.colorScheme.primary)
+                                                Icon(rememberAppBackIcon(), null, tint = MaterialTheme.colorScheme.primary)
                                                 Text("返回插件列表", color = MaterialTheme.colorScheme.primary)
                                             }
                                             
@@ -347,7 +362,7 @@ fun TabletSettingsLayout(
                                                 com.android.purebilibili.core.plugin.json.JsonPluginManager.updatePlugin(updated)
                                                 editingPlugin = null
                                             }) {
-                                                Icon(CupertinoIcons.Default.CheckmarkCircle, contentDescription = "保存", tint = MaterialTheme.colorScheme.primary)
+                                                Icon(Icons.Filled.CheckCircle, contentDescription = "保存", tint = MaterialTheme.colorScheme.primary)
                                             }
                                         }
                                         

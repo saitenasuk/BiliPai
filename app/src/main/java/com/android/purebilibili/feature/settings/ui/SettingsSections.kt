@@ -21,7 +21,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.rememberAppCollectionIcon
 import com.android.purebilibili.core.ui.rememberAppDynamicIcon
+import com.android.purebilibili.core.ui.rememberAppInfoIcon
 import com.android.purebilibili.core.ui.rememberAppLockIcon
+import com.android.purebilibili.core.ui.rememberAppNotificationIcon
+import com.android.purebilibili.core.ui.rememberAppRefreshIcon
+import com.android.purebilibili.core.ui.rememberAppShareIcon
+import com.android.purebilibili.core.ui.rememberAppSparklesIcon
+import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
+import com.android.purebilibili.core.ui.rememberAppWarningIcon
+import com.android.purebilibili.core.ui.rememberAppAnalyticsIcon
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.util.EasterEggs
@@ -30,6 +38,7 @@ import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
+import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.ui.components.resolveAdaptiveListComponentVisualSpec
 
 // ═══════════════════════════════════════════════════
@@ -200,6 +209,8 @@ fun ReleaseChannelPinnedCard(
     onTelegramClick: () -> Unit,
     onDisclaimerClick: () -> Unit
 ) {
+    val disclaimerTint = rememberAdaptiveSemanticIconTint(iOSBlue)
+    val releaseChannelIcon = rememberAppShareIcon()
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -212,9 +223,9 @@ fun ReleaseChannelPinnedCard(
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = CupertinoIcons.Default.Link,
+                    imageVector = releaseChannelIcon,
                     contentDescription = null,
-                    tint = iOSBlue,
+                    tint = disclaimerTint,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
@@ -261,6 +272,8 @@ fun SettingsSubpageEntrySection(
     val aboutTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSOrange, uiPreset)
     val contentAndStorageIcon = rememberAppCollectionIcon()
     val privacyIcon = rememberAppLockIcon()
+    val developerVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLUGINS, uiPreset)
+    val aboutIcon = rememberAppInfoIcon()
     SettingsCardGroup {
         SettingClickableItem(
             icon = contentAndStorageIcon,
@@ -279,7 +292,8 @@ fun SettingsSubpageEntrySection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.PuzzlepieceExtension,
+            icon = developerVisual.icon,
+            iconPainter = developerVisual.iconResId?.let { painterResource(id = it) },
             title = "扩展与调试",
             value = "插件、日志与数据采集",
             onClick = onExtensionsAndDebugClick,
@@ -287,7 +301,7 @@ fun SettingsSubpageEntrySection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.InfoCircle,
+            icon = aboutIcon,
             title = "关于与支持",
             value = "版本、开源、帮助与作者",
             onClick = onAboutAndSupportClick,
@@ -307,6 +321,7 @@ fun FeedApiSection(
     val feedTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSOrange, uiPreset)
     val incrementalRefreshTint = rememberSettingsEntryTint(SettingsEntryTintRole.SECONDARY, iOSGreen, uiPreset)
     val feedIcon = rememberAppDynamicIcon()
+    val refreshIcon = rememberAppRefreshIcon()
     SettingsCardGroup {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -344,7 +359,7 @@ fun FeedApiSection(
         }
         SettingsDivider(startIndent = 66.dp)
         FeedSwitchItem(
-            icon = CupertinoIcons.Default.ArrowClockwise,
+            icon = refreshIcon,
             title = "动态增量刷新",
             subtitle = "下拉刷新时不重置列表，仅在顶部插入新内容",
             checked = incrementalTimelineRefreshEnabled,
@@ -425,10 +440,11 @@ fun PrivacySection(
     val privacyModeTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSPurple, uiPreset)
     val permissionVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PERMISSION, uiPreset)
     val blockedListVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BLOCKED_LIST, uiPreset)
+    val visibilityOffIcon = rememberAppVisibilityOffIcon()
 
     SettingsCardGroup {
         SettingSwitchItem(
-            icon = CupertinoIcons.Default.EyeSlash,
+            icon = visibilityOffIcon,
             title = "隐私无痕模式",
             subtitle = "启用后不记录播放历史和搜索历史",
             checked = privacyModeEnabled,
@@ -526,10 +542,12 @@ fun DeveloperSection(
     val analyticsTint = rememberSettingsEntryTint(SettingsEntryTintRole.PRIMARY, iOSBlue, uiPreset)
     val pluginsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PLUGINS, uiPreset)
     val exportLogsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.EXPORT_LOGS, uiPreset)
+    val crashTrackingIcon = rememberAppWarningIcon()
+    val analyticsIcon = rememberAppAnalyticsIcon()
 
     SettingsCardGroup {
         SettingSwitchItem(
-            icon = CupertinoIcons.Default.Bolt,
+            icon = crashTrackingIcon,
             title = "崩溃追踪",
             subtitle = "帮助开发者发现和修复问题",
             checked = crashTrackingEnabled,
@@ -538,7 +556,7 @@ fun DeveloperSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingSwitchItem(
-            icon = CupertinoIcons.Default.ChartBar,
+            icon = analyticsIcon,
             title = "使用情况统计",
             subtitle = "帮助改进应用体验，不收集个人信息",
             checked = analyticsEnabled,
@@ -594,6 +612,9 @@ fun AboutSection(
     val checkUpdateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CHECK_UPDATE, uiPreset)
     val releaseNotesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.VIEW_RELEASE_NOTES, uiPreset)
     val replayOnboardingVisual = rememberSettingsEntryVisual(SettingsSearchTarget.REPLAY_ONBOARDING, uiPreset)
+    val notificationIcon = rememberAppNotificationIcon()
+    val infoIcon = rememberAppInfoIcon()
+    val sparklesIcon = rememberAppSparklesIcon()
 
     val safeThreshold = versionClickThreshold.coerceAtLeast(1)
     val normalizedClickCount = versionClickCount.coerceAtLeast(0)
@@ -669,7 +690,7 @@ fun AboutSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingSwitchItem(
-            icon = CupertinoIcons.Default.BellBadge,
+            icon = notificationIcon,
             title = "自动检查更新",
             subtitle = resolveAutoCheckUpdateSubtitle(autoCheckEnabled = autoCheckUpdateEnabled),
             checked = autoCheckUpdateEnabled,
@@ -678,7 +699,7 @@ fun AboutSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingClickableItem(
-            icon = CupertinoIcons.Default.Tag,
+            icon = infoIcon,
             title = "版本",
             value = versionValue,
             onClick = onVersionClick,
@@ -696,7 +717,7 @@ fun AboutSection(
         )
         SettingsDivider(startIndent = 66.dp)
         SettingSwitchItem(
-            icon = CupertinoIcons.Default.Sparkles,
+            icon = sparklesIcon,
             title = "趣味彩蛋",
             subtitle = "刷新、点赞、投币、搜索时显示趣味提示",
             checked = easterEggEnabled,

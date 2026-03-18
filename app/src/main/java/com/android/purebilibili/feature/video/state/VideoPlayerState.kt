@@ -38,6 +38,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackWakeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -337,6 +338,8 @@ fun rememberVideoPlayerState(
             //  [性能优化] 使用 PlayerSettingsCache 直接从内存读取，避免 I/O
             val hwDecodeEnabled = com.android.purebilibili.core.store.PlayerSettingsCache.isHwDecodeEnabled(context)
             val seekFastEnabled = com.android.purebilibili.core.store.PlayerSettingsCache.isSeekFastEnabled(context)
+            val miniPlayerMode = SettingsManager.getMiniPlayerModeSync(context)
+            val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
             val bufferPolicy = resolvePlayerBufferPolicy(
                 isOnWifi = NetworkUtils.isWifi(context)
             )
@@ -383,8 +386,12 @@ fun rememberVideoPlayerState(
                 )
                 .setAudioAttributes(audioAttributes, true)
                 .setHandleAudioBecomingNoisy(true)
-                // 🔋 [修复] 防止息屏时音频停止，保持网络连接和 CPU 唤醒
-                .setWakeMode(C.WAKE_MODE_NETWORK)
+                .setWakeMode(
+                    resolvePlaybackWakeMode(
+                        miniPlayerMode = miniPlayerMode,
+                        stopPlaybackOnExit = stopPlaybackOnExit
+                    )
+                )
                 .build()
                 .apply {
                     //  [修复] 确保音量正常，解决第二次播放静音问题

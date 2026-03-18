@@ -45,6 +45,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.common.copyOnLongPress
+import com.android.purebilibili.core.ui.rememberAppCommentIcon
+import com.android.purebilibili.core.ui.rememberAppPlayIcon
+import com.android.purebilibili.core.ui.rememberAppSettingsIcon
 import com.android.purebilibili.core.ui.performance.TrackJankStateFlag
 import com.android.purebilibili.core.ui.performance.TrackScrollJank
 import com.android.purebilibili.core.store.DanmakuSettings
@@ -1044,7 +1047,7 @@ private fun VideoContentTabBar(
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Icon(
-                        imageVector = CupertinoIcons.Default.Play, // 或 Tv
+                        imageVector = rememberAppPlayIcon(),
                         contentDescription = "恢复画面",
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(12.dp)
@@ -1086,7 +1089,7 @@ private fun VideoContentTabBar(
                     )
             ) {
                 Icon(
-                    imageVector = if (danmakuEnabled) CupertinoIcons.Filled.TextBubble else CupertinoIcons.Outlined.TextBubble,
+                    imageVector = rememberAppCommentIcon(),
                     contentDescription = if (danmakuEnabled) "关闭弹幕" else "开启弹幕",
                     tint = if (danmakuEnabled) danmakuActiveColor else danmakuInactiveColor,
                     modifier = Modifier.size(danmakuActionLayoutPolicy.toggleIconSizeDp.dp)
@@ -1154,7 +1157,7 @@ private fun VideoContentTabBar(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = CupertinoIcons.Default.Gearshape,
+                        imageVector = rememberAppSettingsIcon(),
                         contentDescription = "弹幕设置",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(danmakuActionLayoutPolicy.settingsIconSizeDp.dp)

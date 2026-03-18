@@ -25,6 +25,18 @@ data class HomeGlassResolvedColors(
     val highlightColor: Color
 )
 
+enum class HomeRefreshTipSurfaceStyle {
+    GLASS,
+    PLAIN
+}
+
+data class HomeRefreshTipAppearance(
+    val surfaceStyle: HomeRefreshTipSurfaceStyle,
+    val borderWidthDp: Float,
+    val tonalElevationDp: Float,
+    val shadowElevationDp: Float
+)
+
 internal fun resolveHomeGlassChromeStyle(
     glassEnabled: Boolean,
     blurEnabled: Boolean
@@ -78,6 +90,27 @@ internal fun resolveHomeGlassPillStyle(
             borderAlpha = 0.14f,
             highlightAlpha = if (emphasized) 0.12f else 0.08f,
             contentAlpha = 0.98f
+        )
+    }
+}
+
+internal fun resolveHomeRefreshTipAppearance(
+    liquidGlassEnabled: Boolean,
+    blurEnabled: Boolean
+): HomeRefreshTipAppearance {
+    return if (!liquidGlassEnabled && !blurEnabled) {
+        HomeRefreshTipAppearance(
+            surfaceStyle = HomeRefreshTipSurfaceStyle.PLAIN,
+            borderWidthDp = 0f,
+            tonalElevationDp = 1f,
+            shadowElevationDp = 1f
+        )
+    } else {
+        HomeRefreshTipAppearance(
+            surfaceStyle = HomeRefreshTipSurfaceStyle.GLASS,
+            borderWidthDp = 0.8f,
+            tonalElevationDp = 2f,
+            shadowElevationDp = 6f
         )
     }
 }

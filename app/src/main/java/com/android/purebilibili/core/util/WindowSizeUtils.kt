@@ -82,10 +82,12 @@ val LocalWindowSizeClass = compositionLocalOf {
  * 📏 计算当前窗口尺寸类型
  */
 @Composable
-fun calculateWindowSizeClass(): WindowSizeClass {
+fun calculateWindowSizeClass(
+    densityMultiplier: Float = 1f
+): WindowSizeClass {
     val configuration = LocalConfiguration.current
-    val widthDp = configuration.screenWidthDp.dp
-    val heightDp = configuration.screenHeightDp.dp
+    val widthDp = (configuration.screenWidthDp / densityMultiplier).dp
+    val heightDp = (configuration.screenHeightDp / densityMultiplier).dp
     
     val widthSizeClass = when {
         widthDp < 600.dp -> WindowWidthSizeClass.Compact

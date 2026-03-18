@@ -1,20 +1,40 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import com.android.purebilibili.feature.list.VideoProgressDisplayState
+import com.android.purebilibili.feature.list.resolveVideoDisplayProgressState
+
+internal fun resolveVideoCardHistoryProgressState(
+    viewAt: Long,
+    durationSec: Int,
+    progressSec: Int
+): VideoProgressDisplayState {
+    return resolveVideoDisplayProgressState(
+        serverProgressSec = progressSec,
+        durationSec = durationSec,
+        localPositionMs = 0L,
+        viewAt = viewAt
+    )
+}
+
 internal fun shouldShowVideoCardHistoryProgressBar(
     viewAt: Long,
     durationSec: Int,
     progressSec: Int
 ): Boolean {
-    if (viewAt <= 0L || durationSec <= 0) return false
-    return progressSec >= -1
+    return resolveVideoCardHistoryProgressState(
+        viewAt = viewAt,
+        durationSec = durationSec,
+        progressSec = progressSec
+    ).showProgressBar
 }
 
 internal fun resolveVideoCardHistoryProgressFraction(
     progressSec: Int,
     durationSec: Int
 ): Float {
-    if (durationSec <= 0) return 0f
-    if (progressSec == -1) return 1f
-    if (progressSec < 0) return 0f
-    return (progressSec.toFloat() / durationSec.toFloat()).coerceIn(0f, 1f)
+    return resolveVideoCardHistoryProgressState(
+        viewAt = 1L,
+        durationSec = durationSec,
+        progressSec = progressSec
+    ).progressFraction
 }

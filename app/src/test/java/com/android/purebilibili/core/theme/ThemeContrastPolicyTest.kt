@@ -48,6 +48,23 @@ class ThemeContrastPolicyTest {
         assertTrue(calculateContrastRatio(result.onSurfaceVariant, result.surfaceVariant) >= 3.0f)
         assertTrue(calculateContrastRatio(result.onPrimary, result.primary) >= 4.5f)
         assertTrue(calculateContrastRatio(result.onPrimaryContainer, result.primaryContainer) >= 4.5f)
+        assertTrue(calculateContrastRatio(result.onSecondaryContainer, result.secondaryContainer) >= 4.5f)
+    }
+
+    @Test
+    fun `dynamic light scheme falls back when secondary container text contrast is too low`() {
+        val scheme = lightColorScheme(
+            surface = Color.White,
+            onSurface = Color(0xFF1B1C1F),
+            background = Color(0xFFF8F7FB),
+            onBackground = Color(0xFF1B1C1F),
+            secondaryContainer = Color(0xFFFFD9DF),
+            onSecondaryContainer = Color(0xFFFF7285)
+        )
+
+        val result = enforceDynamicLightTextContrast(scheme)
+
+        assertTrue(calculateContrastRatio(result.onSecondaryContainer, result.secondaryContainer) >= 4.5f)
     }
 
     @Test

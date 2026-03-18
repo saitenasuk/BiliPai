@@ -200,9 +200,8 @@ class CastBridgeService : Service() {
     private fun refreshDevices() {
         val allDevices = upnpService?.registry?.devices?.toList().orEmpty()
         val renderers = allDevices.filter { device ->
-            val isMediaRenderer = device.type?.type?.contains("MediaRenderer", ignoreCase = true) == true
             val hasAVTransport = device.findService(org.fourthline.cling.model.types.UDAServiceId("AVTransport")) != null
-            isMediaRenderer || hasAVTransport
+            shouldIncludeClingDevice(hasAvTransport = hasAVTransport)
         }
 
         val nextMap = LinkedHashMap<String, Device<*, *, *>>()

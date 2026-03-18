@@ -1002,7 +1002,7 @@ private fun SpaceHeader(
             ) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(topPhotoUrl)
+                        .data(FormatUtils.buildSizedImageUrl(topPhotoUrl, width = 1080, height = 320))
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -1047,7 +1047,7 @@ private fun SpaceHeader(
 
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(FormatUtils.fixImageUrl(userInfo.face))
+                        .data(FormatUtils.buildSizedImageUrl(userInfo.face, width = 240, height = 240))
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -1349,7 +1349,7 @@ private fun SpaceVideoItem(video: SpaceVideoItem, onClick: () -> Unit) {
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(video.pic))
+                    .data(FormatUtils.buildSizedImageUrl(video.pic, width = 480, height = 300))
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
@@ -1465,7 +1465,7 @@ private fun SpaceVideoListItem(
 
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(video.pic))
+                    .data(FormatUtils.buildSizedImageUrl(video.pic, width = 560, height = 350))
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
@@ -2051,7 +2051,7 @@ private fun SeasonVideoCard(
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(archive.pic))
+                    .data(FormatUtils.buildSizedImageUrl(archive.pic, width = 480, height = 270))
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
@@ -2131,7 +2131,7 @@ private fun SeriesVideoCard(
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(archive.pic))
+                    .data(FormatUtils.buildSizedImageUrl(archive.pic, width = 480, height = 270))
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
@@ -2266,7 +2266,7 @@ private fun SpaceHomeVideoCard(
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(video.pic))
+                    .data(FormatUtils.buildSizedImageUrl(video.pic, width = 560, height = 315))
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
@@ -2362,7 +2362,7 @@ private fun SpaceHomeTopVideo(
             ) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(FormatUtils.fixImageUrl(topVideo.pic))
+                        .data(FormatUtils.buildSizedImageUrl(topVideo.pic, width = 560, height = 352))
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -2545,7 +2545,7 @@ private fun SpaceDynamicCard(
                 // 封面
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(FormatUtils.fixImageUrl(archive.cover))
+                        .data(FormatUtils.buildSizedImageUrl(archive.cover, width = 480, height = 300))
                         .crossfade(true)
                         .build(),
                     contentDescription = null,
@@ -2606,7 +2606,7 @@ private fun SpaceDynamicCard(
                     items(draw.items.take(9)) { item ->
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
-                                .data(FormatUtils.fixImageUrl(item.src))
+                                .data(FormatUtils.buildSizedImageUrl(item.src, width = 480, height = 480))
                                 .crossfade(true)
                                 .build(),
                             contentDescription = null,
@@ -2811,21 +2811,17 @@ private fun UploadsHeaderTab(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val backgroundColor = if (isSelected) 
-        MaterialTheme.colorScheme.primary 
-    else 
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-    
-    val textColor = if (isSelected) 
-        Color.White 
-    else 
-        MaterialTheme.colorScheme.onSurfaceVariant
+    val chipColors = resolveSpaceSelectionChipColors(
+        isSelected = isSelected,
+        colorScheme = MaterialTheme.colorScheme,
+        unselectedAlpha = 0.7f
+    )
     
     Surface(
         modifier = Modifier
             .clip(RoundedCornerShape(18.dp))
             .clickable { onClick() },
-        color = backgroundColor,
+        color = chipColors.backgroundColor,
         shape = RoundedCornerShape(18.dp)
     ) {
         Row(
@@ -2837,7 +2833,7 @@ private fun UploadsHeaderTab(
                 text = title,
                 fontSize = 13.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = textColor
+                color = chipColors.textColor
             )
             if (count > 0) {
                 Spacer(Modifier.width(5.dp))
@@ -2845,7 +2841,7 @@ private fun UploadsHeaderTab(
                     text = count.toString(),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isSelected) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary
+                    color = if (isSelected) chipColors.textColor.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -2878,13 +2874,14 @@ private fun SpaceSubTabChip(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+   val chipColors = resolveSpaceSelectionChipColors(
+        isSelected = isSelected,
+        colorScheme = MaterialTheme.colorScheme
+    )
    Box(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primary 
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f)
-            )
+            .background(chipColors.backgroundColor)
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
@@ -2893,7 +2890,7 @@ private fun SpaceSubTabChip(
             text = text,
             fontSize = 13.sp,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+            color = chipColors.textColor
         )
     } 
 }
@@ -2919,7 +2916,7 @@ private fun SpaceAudioCard(
         ) {
              AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(com.android.purebilibili.core.util.FormatUtils.fixImageUrl(audio.cover))
+                    .data(com.android.purebilibili.core.util.FormatUtils.buildSizedImageUrl(audio.cover, width = 256, height = 256))
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
@@ -2994,7 +2991,7 @@ private fun SpaceArticleCard(
                  article.image_urls.take(3).forEach { url ->
                      AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(com.android.purebilibili.core.util.FormatUtils.fixImageUrl(url))
+                            .data(com.android.purebilibili.core.util.FormatUtils.buildSizedImageUrl(url, width = 480, height = 320))
                             .crossfade(true)
                             .build(),
                         contentDescription = null,

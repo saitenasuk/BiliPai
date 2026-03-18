@@ -53,6 +53,8 @@ import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.SharedTransitionProvider
 import com.android.purebilibili.core.ui.wallpaper.SplashWallpaperLayout
 import com.android.purebilibili.core.ui.wallpaper.resolveSplashWallpaperLayout
+import com.android.purebilibili.core.util.BilibiliNavigationTarget
+import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import com.android.purebilibili.core.util.WindowWidthSizeClass
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.feature.plugin.EyeProtectionOverlay
@@ -78,6 +80,7 @@ import com.android.purebilibili.feature.video.ui.overlay.FullscreenPlayerOverlay
 import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
 import com.android.purebilibili.navigation.AppNavigation
 import dev.chrisbanes.haze.haze
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -181,6 +184,99 @@ internal fun resolveMainActivityVideoRoute(
 internal fun resolveMainActivityDynamicRoute(dynamicId: String): String {
     val encodedDynamicId = URLEncoder.encode(dynamicId, StandardCharsets.UTF_8.toString())
     return "dynamic_detail/$encodedDynamicId"
+}
+
+internal fun resolveIntentLinkFallbackRoute(rawInput: String): String? {
+    val fallbackUrl = resolveIntentLinkFallbackUrl(rawInput) ?: return null
+    return com.android.purebilibili.navigation.ScreenRoutes.Web.createRoute(fallbackUrl)
+}
+
+internal fun resolveIntentLinkFallbackUrl(rawInput: String): String? {
+    val directCandidate = normalizeIntentLinkWebCandidate(rawInput)
+    if (directCandidate != null) return directCandidate
+
+    return com.android.purebilibili.core.util.BilibiliUrlParser.extractUrls(rawInput)
+        .firstNotNullOfOrNull(::normalizeIntentLinkWebCandidate)
+}
+
+private suspend fun awaitNavControllerReady(
+    navController: androidx.navigation.NavHostController
+) {
+    if (navController.currentDestination != null) return
+    snapshotFlow { navController.currentDestination != null }
+        .filter { it }
+        .first()
+}
+
+private fun normalizeIntentLinkWebCandidate(rawInput: String): String? {
+    val trimmed = rawInput.trim()
+    if (trimmed.isBlank()) return null
+    val candidate = when {
+        trimmed.startsWith("//") -> "https:$trimmed"
+        "://" in trimmed -> trimmed
+        trimmed.startsWith("b23.tv/", ignoreCase = true) -> "https://$trimmed"
+        trimmed.startsWith("www.bilibili.com/", ignoreCase = true) -> "https://$trimmed"
+        trimmed.startsWith("m.bilibili.com/", ignoreCase = true) -> "https://$trimmed"
+        trimmed.startsWith("bilibili.com/", ignoreCase = true) -> "https://$trimmed"
+        else -> return null
+    }
+    val uri = runCatching { java.net.URI(candidate) }.getOrNull() ?: return null
+    val scheme = uri.scheme?.lowercase().orEmpty()
+    if (scheme !in setOf("http", "https")) return null
+    val host = uri.host?.lowercase().orEmpty()
+    if (!host.contains("b23.tv") && !host.contains("bilibili.com")) return null
+    return candidate
+}
+
+internal data class MainActivityLinkNavigation(
+    val pendingVideoId: String? = null,
+    val pendingNavigationRoute: String? = null
+)
+
+internal fun resolveMainActivityLinkNavigation(
+    target: BilibiliNavigationTarget
+): MainActivityLinkNavigation? {
+    return when (target) {
+        is BilibiliNavigationTarget.Video -> MainActivityLinkNavigation(
+            pendingVideoId = target.videoId
+        )
+
+        is BilibiliNavigationTarget.Dynamic -> MainActivityLinkNavigation(
+            pendingNavigationRoute = resolveMainActivityDynamicRoute(target.dynamicId)
+        )
+
+        is BilibiliNavigationTarget.Space -> MainActivityLinkNavigation(
+            pendingNavigationRoute = com.android.purebilibili.navigation.ScreenRoutes.Space.createRoute(target.mid)
+        )
+
+        is BilibiliNavigationTarget.Live -> MainActivityLinkNavigation(
+            pendingNavigationRoute = com.android.purebilibili.navigation.ScreenRoutes.Live.createRoute(
+                roomId = target.roomId,
+                title = "",
+                uname = ""
+            )
+        )
+
+        is BilibiliNavigationTarget.BangumiSeason -> MainActivityLinkNavigation(
+            pendingNavigationRoute = com.android.purebilibili.navigation.ScreenRoutes.BangumiDetail.createRoute(
+                seasonId = target.seasonId
+            )
+        )
+
+        is BilibiliNavigationTarget.BangumiEpisode -> MainActivityLinkNavigation(
+            pendingNavigationRoute = com.android.purebilibili.navigation.ScreenRoutes.BangumiDetail.createRoute(
+                seasonId = 0,
+                epId = target.epId
+            )
+        )
+
+        is BilibiliNavigationTarget.Music -> {
+            val auSid = target.musicId.removePrefix("au").removePrefix("AU").toLongOrNull() ?: return null
+            MainActivityLinkNavigation(
+                pendingNavigationRoute = com.android.purebilibili.navigation.ScreenRoutes.MusicDetail.createRoute(auSid)
+            )
+        }
+    }
 }
 
 internal fun shouldForceStopPlaybackOnUserLeaveHint(
@@ -715,6 +811,7 @@ class MainActivity : ComponentActivity() {
             //  [新增] 监听 pendingVideoId 并导航到视频详情页
             LaunchedEffect(pendingVideoId) {
                 pendingVideoId?.let { videoId ->
+                    awaitNavControllerReady(navController)
                     val currentEntry = navController.currentBackStackEntry
                     val currentRoute = currentEntry?.destination?.route
                     val currentBvid = currentEntry?.arguments?.getString("bvid")
@@ -740,6 +837,7 @@ class MainActivity : ComponentActivity() {
             // 🚀 [新增] 监听 pendingRoute 并导航到对应页面 (App Shortcuts)
             LaunchedEffect(pendingRoute) {
                 pendingRoute?.let { route ->
+                    awaitNavControllerReady(navController)
                     Logger.d(TAG, "🚀 导航到快捷入口: $route")
                     val targetRoute = resolveShortcutRoute(route)
                     targetRoute?.let { 
@@ -751,6 +849,7 @@ class MainActivity : ComponentActivity() {
 
             LaunchedEffect(pendingNavigationRoute) {
                 pendingNavigationRoute?.let { route ->
+                    awaitNavControllerReady(navController)
                     Logger.d(TAG, "🚀 导航到指定页面: $route")
                     navController.navigate(route) { launchSingleTop = true }
                     pendingNavigationRoute = null
@@ -774,6 +873,13 @@ class MainActivity : ComponentActivity() {
             
             //  3. [新增] 获取主题色索引
             val themeColorIndex by SettingsManager.getThemeColorIndex(context).collectAsState(initial = 0)
+            val appFontSizePreset by SettingsManager.getAppFontSizePreset(context).collectAsState(
+                initial = com.android.purebilibili.core.theme.AppFontSizePreset.DEFAULT
+            )
+            val appUiScalePreset by SettingsManager.getAppUiScalePreset(context).collectAsState(
+                initial = com.android.purebilibili.core.theme.AppUiScalePreset.STANDARD
+            )
+            val appDpiOverridePercent by SettingsManager.getAppDpiOverridePercent(context).collectAsState(initial = 0)
             
             // 4. 获取系统当前的深色状态
             val systemInDark = isSystemInDarkTheme()
@@ -805,9 +911,34 @@ class MainActivity : ComponentActivity() {
             //  全局 Haze 状态，用于实现毛玻璃效果
             // 强制启用 blur，避免部分设备（如 Android 12）默认降级为仅半透明遮罩
             val mainHazeState = rememberRecoverableHazeState(initialBlurEnabled = true)
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val systemDensity = androidx.compose.ui.platform.LocalDensity.current
+            val displayMetricsSnapshot = remember(
+                configuration.densityDpi,
+                configuration.smallestScreenWidthDp,
+                appFontSizePreset,
+                appUiScalePreset,
+                appDpiOverridePercent
+            ) {
+                com.android.purebilibili.core.theme.buildDisplayMetricsSnapshot(
+                    systemDensityDpi = configuration.densityDpi,
+                    smallestScreenWidthDp = configuration.smallestScreenWidthDp,
+                    uiScalePreset = appUiScalePreset,
+                    fontSizePreset = appFontSizePreset,
+                    dpiOverridePercent = appDpiOverridePercent.takeIf { it > 0 }
+                )
+            }
+            val effectiveDensity = remember(systemDensity, displayMetricsSnapshot.effectiveDensityMultiplier) {
+                androidx.compose.ui.unit.Density(
+                    density = systemDensity.density * displayMetricsSnapshot.effectiveDensityMultiplier,
+                    fontScale = systemDensity.fontScale
+                )
+            }
             
             //  📐 [平板适配] 计算窗口尺寸类
-            val windowSizeClass = com.android.purebilibili.core.util.calculateWindowSizeClass()
+            val windowSizeClass = com.android.purebilibili.core.util.calculateWindowSizeClass(
+                densityMultiplier = displayMetricsSnapshot.effectiveDensityMultiplier
+            )
 
             // 6. 传入参数
             PureBiliBiliTheme(
@@ -816,12 +947,15 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = effectiveDynamicColor,
                 amoledDarkTheme = useAmoledDarkTheme,
                 themeColorIndex = themeColorIndex, //  传入主题色索引
+                fontSizePreset = appFontSizePreset,
 
             ) {
                 com.android.purebilibili.core.ui.blur.ProvideUnifiedBlurIntensity {
                     //  📐 [平板适配] 提供全局 WindowSizeClass
                     androidx.compose.runtime.CompositionLocalProvider(
-                        com.android.purebilibili.core.util.LocalWindowSizeClass provides windowSizeClass
+                        androidx.compose.ui.platform.LocalDensity provides effectiveDensity,
+                        com.android.purebilibili.core.util.LocalWindowSizeClass provides windowSizeClass,
+                        com.android.purebilibili.core.theme.LocalDisplayMetricsSnapshot provides displayMetricsSnapshot
                     ) {
                     Box(
                         modifier = Modifier
@@ -1417,27 +1551,8 @@ class MainActivity : ComponentActivity() {
                     if (scheme == "bilipai") {
                         pendingRoute = host  // e.g., "search", "dynamic", "favorite", "history"
                         Logger.d(TAG, "🚀 App Shortcut detected: $host")
-                    }
-                    // b23.tv 短链接需要重定向
-                    else if (host.contains("b23.tv")) {
-                        resolveShortLinkAndNavigate(uri.toString())
                     } else {
-                        // bilibili.com 直接解析
-                        val result = when (scheme.lowercase()) {
-                            "http", "https" -> com.android.purebilibili.core.util.BilibiliUrlParser.parse(uri.toString())
-                            else -> com.android.purebilibili.core.util.BilibiliUrlParser.parseUri(uri)
-                        }
-                        if (result.isValid) {
-                            result.getVideoId()?.let { videoId ->
-                                Logger.d(TAG, "📺 从 Deep Link 提取到视频: $videoId")
-                                pendingVideoId = videoId
-                                return
-                            }
-                            result.getDynamicTargetId()?.let { dynamicId ->
-                                Logger.d(TAG, "📝 从 Deep Link 提取到动态: $dynamicId")
-                                pendingNavigationRoute = resolveMainActivityDynamicRoute(dynamicId)
-                            }
-                        }
+                        resolveIntentLinkAndNavigate(uri.toString())
                     }
                 }
             }
@@ -1447,10 +1562,8 @@ class MainActivity : ComponentActivity() {
                 if (text != null) {
                     Logger.d(TAG, "📤 收到分享文本: $text")
                     
-                    // 检查是否包含 b23.tv 短链接
                     val urls = com.android.purebilibili.core.util.BilibiliUrlParser.extractUrls(text)
                     val pluginInstallLink = urls.firstOrNull { resolvePluginInstallDeepLink(it) != null }
-                    val shortLink = urls.find { it.contains("b23.tv") }
 
                     if (pluginInstallLink != null) {
                         val pluginInstallRequest = resolvePluginInstallDeepLink(pluginInstallLink)
@@ -1461,53 +1574,56 @@ class MainActivity : ComponentActivity() {
                             return
                         }
                     }
-                    
-                    if (shortLink != null) {
-                        resolveShortLinkAndNavigate(shortLink)
-                    } else {
-                        // 直接解析
-                        val result = com.android.purebilibili.core.util.BilibiliUrlParser.parse(text)
-                        if (result.isValid) {
-                            result.getVideoId()?.let { videoId ->
-                                Logger.d(TAG, "📺 从分享文本提取到视频: $videoId")
-                                pendingVideoId = videoId
-                                return
-                            }
-                            result.getDynamicTargetId()?.let { dynamicId ->
-                                Logger.d(TAG, "📝 从分享文本提取到动态: $dynamicId")
-                                pendingNavigationRoute = resolveMainActivityDynamicRoute(dynamicId)
-                            }
-                        }
-                    }
+
+                    resolveIntentLinkAndNavigate(text)
                 }
             }
         }
     }
     
     /**
-     *  解析 b23.tv 短链接并导航
+     *  统一解析入口链接，必要时异步展开 b23.tv
      */
-    private fun resolveShortLinkAndNavigate(shortUrl: String) {
+    private fun resolveIntentLinkAndNavigate(rawInput: String) {
+        BilibiliNavigationTargetParser.parse(rawInput)?.let { target ->
+            applyIntentNavigationTarget(target)
+            return
+        }
+
+        resolveIntentLinkFallbackRoute(rawInput)?.let { route ->
+            Logger.d(TAG, "🌐 入口链接先回退到 WebView: $route")
+            pendingNavigationRoute = route
+        }
+
         lifecycleScope.launch {
-            val fullUrl = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.android.purebilibili.core.util.BilibiliUrlParser.resolveShortUrl(shortUrl)
-            }
-            if (fullUrl != null) {
-                val result = com.android.purebilibili.core.util.BilibiliUrlParser.parse(fullUrl)
-                if (result.isValid) {
-                    result.getVideoId()?.let { videoId ->
-                        Logger.d(TAG, "📺 从短链接解析到视频: $videoId")
-                        pendingVideoId = videoId
-                        return@launch
-                    }
-                    result.getDynamicTargetId()?.let { dynamicId ->
-                        Logger.d(TAG, "📝 从短链接解析到动态: $dynamicId")
-                        pendingNavigationRoute = resolveMainActivityDynamicRoute(dynamicId)
-                    }
-                }
+            val target = BilibiliNavigationTargetParser.resolve(rawInput)
+            if (target != null) {
+                applyIntentNavigationTarget(target)
             } else {
-                Logger.w(TAG, "⚠️ 无法解析短链接: $shortUrl")
+                resolveIntentLinkFallbackRoute(rawInput)?.let { route ->
+                    Logger.d(TAG, "🌐 入口链接回退到 WebView: $route")
+                    pendingNavigationRoute = route
+                    return@launch
+                }
+                Logger.w(TAG, "⚠️ 无法解析入口链接: $rawInput")
             }
+        }
+    }
+
+    private fun applyIntentNavigationTarget(target: BilibiliNavigationTarget) {
+        val navigation = resolveMainActivityLinkNavigation(target)
+        if (navigation == null) {
+            Logger.w(TAG, "⚠️ 暂不支持入口目标: $target")
+            return
+        }
+        navigation.pendingVideoId?.let { videoId ->
+            Logger.d(TAG, "📺 入口链接解析到视频: $videoId")
+            pendingVideoId = videoId
+            return
+        }
+        navigation.pendingNavigationRoute?.let { route ->
+            Logger.d(TAG, "🧭 入口链接解析到路由: $route")
+            pendingNavigationRoute = route
         }
     }
     

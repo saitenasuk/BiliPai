@@ -331,6 +331,9 @@ private fun PermissionItem(
 ) {
     val uiPreset = LocalUiPreset.current
     val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val effectiveIconTint = rememberAdaptiveSemanticIconTint(info.iconTint, uiPreset)
+    val grantedTint = rememberAdaptiveSemanticIconTint(iOSGreen, uiPreset)
+    val deniedTint = rememberAdaptiveSemanticIconTint(com.android.purebilibili.core.theme.iOSRed, uiPreset)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -343,13 +346,13 @@ private fun PermissionItem(
             modifier = Modifier
                 .size(visualSpec.iconContainerSizeDp.dp)
                 .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
-                .background(info.iconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 info.icon,
                 contentDescription = null,
-                tint = info.iconTint,
+                tint = effectiveIconTint,
                 modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
             )
         }
@@ -376,7 +379,7 @@ private fun PermissionItem(
             Icon(
                 CupertinoIcons.Default.CheckmarkCircle,
                 contentDescription = "已授权",
-                tint = iOSGreen,
+                tint = grantedTint,
                 modifier = Modifier.size(22.dp)
             )
         } else {
@@ -384,7 +387,7 @@ private fun PermissionItem(
             Icon(
                 CupertinoIcons.Default.XmarkCircle,
                 contentDescription = "未授权",
-                tint = com.android.purebilibili.core.theme.iOSRed,
+                tint = deniedTint,
                 modifier = Modifier.size(22.dp)
             )
         }

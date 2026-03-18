@@ -451,7 +451,7 @@ fun BottomBarSettingsContent(
                             }
                         }
                         
-                        Divider()
+                        IOSDivider()
                         
                         //  底栏标签样式（选择器）
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -526,7 +526,7 @@ fun BottomBarSettingsContent(
                             }
                         }
 
-                        Divider()
+                        IOSDivider()
 
                         //  顶部标签样式（选择器）
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -600,7 +600,7 @@ fun BottomBarSettingsContent(
                             }
                         }
 
-                        Divider()
+                        IOSDivider()
 
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -10,10 +10,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import com.android.purebilibili.core.util.BilibiliNavigationTarget
+import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronBackward
+import kotlinx.coroutines.launch
 
 /**
  * WebViewScreen - 应用内浏览器
@@ -38,6 +42,8 @@ fun WebViewScreen(
     onBangumiClick: ((seasonId: Long, epId: Long) -> Unit)? = null,
     onMusicClick: ((musicId: String) -> Unit)? = null
 ) {
+    val scope = rememberCoroutineScope()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -102,13 +108,55 @@ fun WebViewScreen(
                                     val uri = Uri.parse(urlString)
                                     val scheme = uri.scheme ?: ""
                                     val host = uri.host ?: ""
-                                    val path = uri.path ?: ""
                                     
-                                    android.util.Log.d("WebViewScreen", "🔍 Scheme: $scheme, Host: $host, Path: $path")
+                                    android.util.Log.d("WebViewScreen", "🔍 Scheme: $scheme, Host: $host")
+
+                                    fun dispatchTarget(target: BilibiliNavigationTarget): Boolean {
+                                        return when (target) {
+                                            is BilibiliNavigationTarget.Video -> {
+                                                onVideoClick?.invoke(target.videoId)
+                                                onVideoClick != null
+                                            }
+
+                                            is BilibiliNavigationTarget.Space -> {
+                                                onSpaceClick?.invoke(target.mid)
+                                                onSpaceClick != null
+                                            }
+
+                                            is BilibiliNavigationTarget.Live -> {
+                                                onLiveClick?.invoke(target.roomId)
+                                                onLiveClick != null
+                                            }
+
+                                            is BilibiliNavigationTarget.BangumiSeason -> {
+                                                onBangumiClick?.invoke(target.seasonId, 0)
+                                                onBangumiClick != null
+                                            }
+
+                                            is BilibiliNavigationTarget.BangumiEpisode -> {
+                                                onBangumiClick?.invoke(0, target.epId)
+                                                onBangumiClick != null
+                                            }
+
+                                            is BilibiliNavigationTarget.Music -> {
+                                                onMusicClick?.invoke(target.musicId)
+                                                onMusicClick != null
+                                            }
+
+                                            is BilibiliNavigationTarget.Dynamic -> false
+                                        }
+                                    }
+
+                                    BilibiliNavigationTargetParser.parse(urlString)?.let { target ->
+                                        if (dispatchTarget(target)) {
+                                            android.util.Log.d("WebViewScreen", "✅ Routed target: $target")
+                                            return true
+                                        }
+                                    }
                                     
                                     // ===== 0. 处理 bilibili:// Deep Link =====
                                     // 将自定义协议转换为 HTTPS URL 并在 WebView 中加载
-                                    if (scheme == "bilibili") {
+                                    if (scheme == "bilibili" || scheme == "bili") {
                                         val convertedUrl = convertDeepLinkToWebUrl(uri)
                                         if (convertedUrl != null) {
                                             android.util.Log.d("WebViewScreen", "🔄 Deep link -> $convertedUrl")
@@ -119,81 +167,17 @@ fun WebViewScreen(
                                         android.util.Log.w("WebViewScreen", "⚠️ Unknown deep link: $urlString")
                                         return true // 拦截，防止 ERR_UNKNOWN_URL_SCHEME
                                     }
-                                    
-                                    // 1. 视频链接: bilibili.com/video/BV... 或 av...
-                                    // 支持: www.bilibili.com, m.bilibili.com, bilibili.com, b23.tv
-                                    if (host.endsWith("bilibili.com") || host.contains("b23.tv")) {
-                                        // BV 格式
-                                        val bvMatch = Regex("(?:^|/)(BV[a-zA-Z0-9]{10})").find(path)
-                                            ?: Regex("(?:^|/)(BV[a-zA-Z0-9]{10})").find(urlString) // fallback to full URL
-                                        if (bvMatch != null) {
-                                            val bvid = bvMatch.groupValues[1]
-                                            android.util.Log.d("WebViewScreen", "✅ Found BV: $bvid")
-                                            onVideoClick?.invoke(bvid)
-                                            return true
-                                        }
-                                        
-                                        // AV 格式
-                                        val avMatch = Regex("/video/av(\\d+)").find(path)
-                                            ?: Regex("av(\\d+)").find(urlString)
-                                        if (avMatch != null) {
-                                            val aid = avMatch.groupValues[1].toLongOrNull() ?: return false
-                                            // [重要] 标准 B 站 AV 号通常小于 10 亿
-                                            // 超大 AV 号可能是音乐页面的内部 ID，不应转换
-                                            if (aid > 10_000_000_000L) {
-                                                android.util.Log.w("WebViewScreen", "⚠️ AV ID too large, skipping: $aid")
-                                                return false // 不拦截，让 WebView 继续加载
+
+                                    if (host.contains("b23.tv")) {
+                                        scope.launch {
+                                            val resolvedTarget = BilibiliNavigationTargetParser.resolve(urlString)
+                                            if (resolvedTarget != null && dispatchTarget(resolvedTarget)) {
+                                                android.util.Log.d("WebViewScreen", "✅ Routed resolved short link: $resolvedTarget")
+                                            } else {
+                                                webView?.post { webView.loadUrl(urlString) }
                                             }
-                                            val bvid = avToBv(aid)
-                                            android.util.Log.d("WebViewScreen", "✅ Found AV: $aid -> BV: $bvid")
-                                            onVideoClick?.invoke(bvid)
-                                            return true
                                         }
-                                    }
-                                    
-                                    // 2. UP主空间: space.bilibili.com/{mid}
-                                    if (host == "space.bilibili.com") {
-                                        val midMatch = Regex("^/(\\d+)").find(path)
-                                        if (midMatch != null) {
-                                            val mid = midMatch.groupValues[1].toLongOrNull() ?: return false
-                                            onSpaceClick?.invoke(mid)
-                                            return true
-                                        }
-                                    }
-                                    
-                                    // 3. 直播: live.bilibili.com/{roomId}
-                                    if (host == "live.bilibili.com") {
-                                        val roomMatch = Regex("^/(\\d+)").find(path)
-                                        if (roomMatch != null) {
-                                            val roomId = roomMatch.groupValues[1].toLongOrNull() ?: return false
-                                            onLiveClick?.invoke(roomId)
-                                            return true
-                                        }
-                                    }
-                                    
-                                    // 4. 番剧: bilibili.com/bangumi/play/ss{id} 或 ep{id}
-                                    if (host.contains("bilibili.com") && path.contains("/bangumi/play/")) {
-                                        val ssMatch = Regex("/bangumi/play/ss(\\d+)").find(path)
-                                        if (ssMatch != null) {
-                                            val seasonId = ssMatch.groupValues[1].toLongOrNull() ?: return false
-                                            onBangumiClick?.invoke(seasonId, 0)
-                                            return true
-                                        }
-                                        val epMatch = Regex("/bangumi/play/ep(\\d+)").find(path)
-                                        if (epMatch != null) {
-                                            val epId = epMatch.groupValues[1].toLongOrNull() ?: return false
-                                            onBangumiClick?.invoke(0, epId)
-                                            return true
-                                        }
-                                    }
-                                    
-                                    // 5. 音乐详情: music.bilibili.com/h5/music-detail?music_id=...
-                                    if (host == "music.bilibili.com" && path.contains("/music-detail")) {
-                                        val musicId = uri.getQueryParameter("music_id")
-                                        if (musicId != null) {
-                                            onMusicClick?.invoke(musicId)
-                                            return true
-                                        }
+                                        return true
                                     }
                                     
                                 } catch (e: Exception) {
@@ -217,31 +201,6 @@ fun WebViewScreen(
             )
         }
     }
-}
-
-/**
- * AV 号转 BV 号算法
- * 参考: https://www.zhihu.com/question/381784377
- * BV 格式: BV1__4_1_7__ (12 字符)
- * 固定位置: [0]='B', [1]='V', [2]='1', [5]='4', [7]='1', [9]='7'
- * 编码位置: s = [11, 10, 3, 8, 4, 6]
- */
-private fun avToBv(aid: Long): String {
-    val table = "fZodR9XQDSUm21yCkr6zBqiveYah8bt4xsWpHnJE7jL5VG3guMTKNPAwcF"
-    val xorVal = 177451812L
-    val addVal = 8728348608L
-    val s = intArrayOf(11, 10, 3, 8, 4, 6)
-    
-    val av = (aid xor xorVal) + addVal
-    // 初始化 BV 模板：BV1xx4x1x7xx
-    val bv = charArrayOf('B', 'V', '1', ' ', ' ', '4', ' ', '1', ' ', '7', ' ', ' ')
-    
-    for (i in s.indices) {
-        val index = ((av / Math.pow(58.0, i.toDouble()).toLong()) % 58).toInt()
-        bv[s[i]] = table[index]
-    }
-    
-    return String(bv)
 }
 
 /**
@@ -305,4 +264,3 @@ private fun convertDeepLinkToWebUrl(uri: android.net.Uri): String? {
         else -> null
     }
 }
-

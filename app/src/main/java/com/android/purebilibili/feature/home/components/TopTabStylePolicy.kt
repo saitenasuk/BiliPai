@@ -1,5 +1,10 @@
 package com.android.purebilibili.feature.home.components
 
+import androidx.compose.material3.ColorScheme
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.theme.UiPreset
 
 enum class TopTabMaterialMode {
@@ -34,7 +39,88 @@ data class TopTabVisualState(
     val materialMode: TopTabMaterialMode
 )
 
+data class Md3TopTabVisualSpec(
+    val rowHeight: Dp,
+    val selectedCapsuleHeight: Dp,
+    val selectedCapsuleCornerRadius: Dp,
+    val selectedCapsuleTonalElevation: Dp,
+    val selectedCapsuleShadowElevation: Dp,
+    val itemHorizontalPadding: Dp,
+    val iconSize: Dp,
+    val labelTextSize: TextUnit,
+    val labelLineHeight: TextUnit,
+    val iconLabelSpacing: Dp
+)
+
 fun resolveTopTabVisualTuning(): TopTabVisualTuning = TopTabVisualTuning()
+
+internal fun resolveMd3TopTabVisualSpec(isFloatingStyle: Boolean): Md3TopTabVisualSpec {
+    return if (isFloatingStyle) {
+        Md3TopTabVisualSpec(
+            rowHeight = 52.dp,
+            selectedCapsuleHeight = 3.dp,
+            selectedCapsuleCornerRadius = 2.dp,
+            selectedCapsuleTonalElevation = 0.dp,
+            selectedCapsuleShadowElevation = 0.dp,
+            itemHorizontalPadding = 16.dp,
+            iconSize = 18.dp,
+            labelTextSize = 14.sp,
+            labelLineHeight = 20.sp,
+            iconLabelSpacing = 0.dp
+        )
+    } else {
+        Md3TopTabVisualSpec(
+            rowHeight = 48.dp,
+            selectedCapsuleHeight = 3.dp,
+            selectedCapsuleCornerRadius = 2.dp,
+            selectedCapsuleTonalElevation = 0.dp,
+            selectedCapsuleShadowElevation = 0.dp,
+            itemHorizontalPadding = 16.dp,
+            iconSize = 18.dp,
+            labelTextSize = 14.sp,
+            labelLineHeight = 20.sp,
+            iconLabelSpacing = 0.dp
+        )
+    }
+}
+
+internal fun resolveMd3TopTabSelectedContainerColor(
+    colorScheme: ColorScheme
+): androidx.compose.ui.graphics.Color = colorScheme.primary
+
+internal fun resolveMd3TopTabSelectedIconColor(
+    colorScheme: ColorScheme
+): androidx.compose.ui.graphics.Color = colorScheme.primary
+
+internal fun resolveMd3TopTabSelectedLabelColor(
+    colorScheme: ColorScheme
+): androidx.compose.ui.graphics.Color = colorScheme.primary
+
+internal fun resolveMd3TopTabUnselectedIconColor(
+    colorScheme: ColorScheme
+): androidx.compose.ui.graphics.Color = colorScheme.onSurfaceVariant
+
+internal fun resolveMd3TopTabUnselectedLabelColor(
+    colorScheme: ColorScheme
+): androidx.compose.ui.graphics.Color = colorScheme.onSurfaceVariant
+
+internal fun resolveMd3TopTabIconTint(
+    selectionFraction: Float,
+    colorScheme: ColorScheme
+) = androidx.compose.ui.graphics.lerp(
+    resolveMd3TopTabUnselectedIconColor(colorScheme),
+    resolveMd3TopTabSelectedIconColor(colorScheme),
+    selectionFraction.coerceIn(0f, 1f)
+)
+
+internal fun resolveMd3TopTabLabelTint(
+    selectionFraction: Float,
+    colorScheme: ColorScheme
+) = androidx.compose.ui.graphics.lerp(
+    resolveMd3TopTabUnselectedLabelColor(colorScheme),
+    resolveMd3TopTabSelectedLabelColor(colorScheme),
+    selectionFraction.coerceIn(0f, 1f)
+)
 
 internal fun resolveTopTabIndicatorStyle(uiPreset: UiPreset): TopTabIndicatorStyle {
     return if (uiPreset == UiPreset.MD3) {
@@ -47,15 +133,21 @@ internal fun resolveTopTabIndicatorStyle(uiPreset: UiPreset): TopTabIndicatorSty
 fun resolveTopTabLabelTextSizeSp(labelMode: Int): Float {
     val tuning = resolveTopTabVisualTuning()
     return when (normalizeTopTabLabelMode(labelMode)) {
+        0 -> resolveMd3TopTabVisualSpec(isFloatingStyle = false).labelTextSize.value
         2 -> tuning.tabTextSizeSp + 0.2f
         else -> tuning.tabTextSizeSp
     }
 }
 
 fun resolveTopTabLabelLineHeightSp(labelMode: Int): Float {
-    val tuning = resolveTopTabVisualTuning()
-    val textSize = resolveTopTabLabelTextSizeSp(labelMode)
-    return maxOf(tuning.tabTextLineHeightSp, textSize)
+    return when (normalizeTopTabLabelMode(labelMode)) {
+        0 -> resolveMd3TopTabVisualSpec(isFloatingStyle = false).labelLineHeight.value
+        else -> {
+            val tuning = resolveTopTabVisualTuning()
+            val textSize = resolveTopTabLabelTextSizeSp(labelMode)
+            maxOf(tuning.tabTextLineHeightSp, textSize)
+        }
+    }
 }
 
 fun resolveTopTabContentMinHeightDp(): Float {

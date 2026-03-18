@@ -39,6 +39,8 @@ import coil.compose.AsyncImage
 fun LiveChatSection(
     danmakuFlow: SharedFlow<LiveDanmakuItem>,
     onSendDanmaku: (String) -> Unit,
+    headerTitle: String = "实时互动",
+    supportingText: String = "发送弹幕和主播互动",
     modifier: Modifier = Modifier
 ) {
     val messages = remember { mutableStateListOf<LiveDanmakuItem>() }
@@ -65,15 +67,49 @@ fun LiveChatSection(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background) // 适配深色模式
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = headerTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = supportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+            ) {
+                Text(
+                    text = "弹幕流",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+
         // 1. 聊天列表
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(messages) { item ->
@@ -257,9 +293,13 @@ private fun ChatInputBar(onSend: (String) -> Unit) {
     val focusManager = LocalFocusManager.current
     
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp, // 增加投影增加层次感
-        shadowElevation = 8.dp
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        tonalElevation = 2.dp,
+        shadowElevation = 0.dp,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+        )
     ) {
         Row(
             modifier = Modifier
@@ -285,7 +325,7 @@ private fun ChatInputBar(onSend: (String) -> Unit) {
                             .weight(1f)
                             .height(40.dp)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant) // 适配深色模式
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f))
                             .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {

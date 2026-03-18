@@ -92,6 +92,7 @@ fun PlaybackSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val warningTint = rememberAdaptiveSemanticIconTint(iOSOrange)
     val windowSizeClass = LocalWindowSizeClass.current
     // val state by viewModel.state.collectAsState() // Moved to parameter
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -241,7 +242,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSGreen
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSlidingSegmentedSetting(
                             title = "首选编码：${resolveSelectionLabel(codecOptions, videoCodecPreference, fallbackLabel = "AVC")}",
                             subtitle = codecDescription(videoCodecPreference),
@@ -254,7 +255,7 @@ fun PlaybackSettingsContent(
                                 }
                             }
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSlidingSegmentedSetting(
                             title = "次选编码：${resolveSelectionLabel(codecOptions, videoSecondCodecPreference, fallbackLabel = "HEVC")}",
                             subtitle = codecDescription(videoSecondCodecPreference),
@@ -297,7 +298,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
-                        Divider()
+                        IOSDivider()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -357,7 +358,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSOrange
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSlidingSegmentedSetting(
                             title = "后台播放模式：${if (stopPlaybackOnExit) "已覆盖" else miniPlayerMode.label}",
                             subtitle = if (stopPlaybackOnExit) {
@@ -385,7 +386,7 @@ fun PlaybackSettingsContent(
                         if (!stopPlaybackOnExit &&
                             miniPlayerMode == com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP
                             && !checkPipPermission()) {
-                            Divider()
+                            IOSDivider()
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -396,7 +397,7 @@ fun PlaybackSettingsContent(
                                 Icon(
                                     CupertinoIcons.Default.ExclamationmarkTriangle,
                                     contentDescription = null,
-                                    tint = iOSOrange,
+                                    tint = warningTint,
                                     modifier = Modifier.size(22.dp)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -404,7 +405,7 @@ fun PlaybackSettingsContent(
                                     Text(
                                         "画中画权限未开启",
                                         fontSize = 14.sp,
-                                        color = iOSOrange
+                                        color = warningTint
                                     )
                                     Text(
                                         "点击前往系统设置开启",
@@ -420,7 +421,7 @@ fun PlaybackSettingsContent(
                                 )
                             }
                         }
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.TextBubble,
                             title = "画中画不加载弹幕",
@@ -441,7 +442,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Headphones,
                             title = "听视频离开时自动进入画中画",
@@ -484,7 +485,7 @@ fun PlaybackSettingsContent(
                                 Icon(
                                     CupertinoIcons.Default.HandTap,
                                     contentDescription = null,
-                                    tint = iOSOrange,
+                                    tint = warningTint,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
@@ -627,7 +628,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ArrowTriangle2Circlepath,
                             title = "续播弹窗提示",
@@ -645,7 +646,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSTeal
                         )
-                        Divider()
+                        IOSDivider()
                         //  [新增] 自动播放下一个视频
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ForwardEnd,
@@ -660,7 +661,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ListBullet,
                             title = "列表/收藏夹连续播放",
@@ -674,7 +675,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSTeal
                         )
-                        Divider()
+                        IOSDivider()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -707,7 +708,7 @@ fun PlaybackSettingsContent(
                             )
                         }
                         if (subtitleFeatureEnabled) {
-                            Divider()
+                            IOSDivider()
                             IOSSlidingSegmentedSetting(
                                 title = "自动启用字幕：${
                                     when (subtitleAutoPreference) {
@@ -732,7 +733,7 @@ fun PlaybackSettingsContent(
                                     }
                                 }
                             )
-                            Divider()
+                            IOSDivider()
                         }
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Sparkles,
@@ -751,7 +752,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.HandThumbsup,
                             title = "双击点赞",
@@ -764,7 +765,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPink
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.HandDraw,  // 手势图标
                             title = "上滑隐藏播放器",
@@ -779,7 +780,7 @@ fun PlaybackSettingsContent(
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
 
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ArrowLeftArrowRight,
                             title = "竖屏上滑进入全屏",
@@ -798,7 +799,7 @@ fun PlaybackSettingsContent(
                             iconTint = iOSTeal
                         )
 
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.HandDraw,
                             title = "中部滑动切换全屏",
@@ -817,7 +818,7 @@ fun PlaybackSettingsContent(
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
 
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.SpeakerWave2,
                             title = "左右侧滑动调节亮度/音量",
@@ -835,7 +836,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSTeal
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.SunMax,
                             title = "调节系统亮度",
@@ -855,7 +856,7 @@ fun PlaybackSettingsContent(
                             iconTint = iOSOrange
                         )
 
-                        Divider()
+                        IOSDivider()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -912,7 +913,7 @@ fun PlaybackSettingsContent(
                         }
                         
                         // 🔄 [新增] 自动横竖屏切换
-                        Divider()
+                        IOSDivider()
                         val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
                             .getAutoRotateEnabled(context).collectAsState(initial = false)
                         val fullscreenGestureReverse by com.android.purebilibili.core.store.SettingsManager
@@ -970,7 +971,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSTeal
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ArrowLeftArrowRight,
                             title = "横屏适配",
@@ -984,7 +985,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSlidingSegmentedSetting(
                             title = "默认全屏方向：${fullscreenMode.label}",
                             subtitle = fullscreenModeSubtitle,
@@ -997,7 +998,7 @@ fun PlaybackSettingsContent(
                                 }
                             }
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSlidingSegmentedSetting(
                             title = "固定全屏比例：${fullscreenAspectRatio.label}",
                             subtitle = fullscreenAspectRatio.description,
@@ -1010,7 +1011,7 @@ fun PlaybackSettingsContent(
                                 }
                             }
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ArrowUpArrowDown,
                             title = "全屏手势反向",
@@ -1024,7 +1025,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Play,
                             title = "自动进入全屏",
@@ -1038,7 +1039,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSGreen
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ForwardEnd,
                             title = "自动退出全屏",
@@ -1052,7 +1053,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSOrange
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Lock,
                             title = "全屏显示锁定按钮",
@@ -1066,7 +1067,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSTeal
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Camera,
                             title = "全屏显示截图按钮",
@@ -1080,7 +1081,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Battery100,
                             title = "全屏显示电量",
@@ -1094,7 +1095,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSGreen
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Clock,
                             title = "全屏显示时间",
@@ -1108,7 +1109,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSTeal
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.HandThumbsup,
                             title = "全屏显示互动按钮",
@@ -1126,7 +1127,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPink
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChartBar,
                             title = "观看人数",
@@ -1144,7 +1145,7 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSlidingSegmentedSetting(
                             title = "底部进度条展示：${bottomProgressBehavior.label}",
                             subtitle = bottomProgressBehavior.description,
@@ -1214,7 +1215,7 @@ fun PlaybackSettingsContent(
                             iconTint = iOSTeal
                         )
 
-                        Divider()
+                        IOSDivider()
 
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Sparkles,
@@ -1234,7 +1235,7 @@ fun PlaybackSettingsContent(
                             iconTint = iOSOrange
                         )
 
-                        Divider()
+                        IOSDivider()
 
                         IOSSlidingSegmentedSetting(
                             title = "WiFi 默认画质：${getQualityLabel(wifiQuality)}",
@@ -1259,7 +1260,7 @@ fun PlaybackSettingsContent(
                             }
                         )
                         
-                        Divider()
+                        IOSDivider()
                         
                         // 📉 读取省流量模式，用于显示提示
                         val dataSaverModeForHint by com.android.purebilibili.core.store.SettingsManager
@@ -1350,7 +1351,7 @@ fun PlaybackSettingsContent(
                         )
                         
                         //  功能说明
-                        Divider()
+                        IOSDivider()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

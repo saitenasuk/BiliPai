@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -447,6 +448,8 @@ fun LivePlayerScreen(
         LiveChatSection(
             danmakuFlow = viewModel.danmakuFlow,
             onSendDanmaku = { text -> viewModel.sendDanmaku(text) },
+            headerTitle = "实时互动",
+            supportingText = "发送弹幕和主播互动",
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -464,17 +467,34 @@ fun LivePlayerScreen(
                 exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
                 modifier = Modifier.align(Alignment.BottomStart)
             ) {
-                LandscapeChatOverlay(
-                    danmakuFlow = viewModel.danmakuFlow,
+                LiveLandscapeChatPanel(
                     modifier = Modifier
-                        .fillMaxWidth(0.45f)
-                        .fillMaxHeight(0.4f)
-                )
+                        .padding(start = 20.dp, bottom = 20.dp)
+                        .fillMaxWidth(0.42f)
+                        .fillMaxHeight(0.44f)
+                ) {
+                    LandscapeChatOverlay(
+                        danmakuFlow = viewModel.danmakuFlow,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
     } else {
         // 手机竖屏 (非全屏)
-        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.surfaceContainerLow
+                        )
+                    )
+                )
+                .statusBarsPadding()
+        ) {
             // 1. 播放器区域 (16:9)
             Box(modifier = Modifier.fillMaxWidth().aspectRatio(16f/9f)) {
                 playerContent()
@@ -482,21 +502,29 @@ fun LivePlayerScreen(
             
             // 2. 主播信息条
             val successState = uiState as? LivePlayerState.Success
-            if (successState != null) {
-                AnchorInfoBar(
-                    anchorInfo = successState.anchorInfo,
-                    isFollowing = successState.isFollowing,
-                    online = successState.roomInfo.online,
-                    onFollowClick = { viewModel.toggleFollow() },
-                    onUserClick = onUserClick,
-                    onQualityClick = { showQualityMenu = true },
-                    currentQualityDesc = successState.qualityList.find { it.qn == successState.currentQuality }?.desc ?: "自动"
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .offset(y = (-10).dp)
+            ) {
+                LivePortraitInfoPanel(
+                    anchorInfoBar = {
+                        if (successState != null) {
+                            AnchorInfoBar(
+                                roomTitle = successState.roomInfo.title,
+                                anchorInfo = successState.anchorInfo,
+                                isFollowing = successState.isFollowing,
+                                online = successState.roomInfo.online,
+                                onFollowClick = { viewModel.toggleFollow() },
+                                onUserClick = onUserClick,
+                                onQualityClick = { showQualityMenu = true },
+                                currentQualityDesc = successState.qualityList.find { it.qn == successState.currentQuality }?.desc ?: "自动"
+                            )
+                        }
+                    },
+                    chatContent = { chatContent() }
                 )
-            }
-            
-            // 3. 聊天区域
-            Box(modifier = Modifier.weight(1f)) {
-                chatContent()
             }
         }
     }
@@ -522,6 +550,7 @@ fun LivePlayerScreen(
 // 辅助组件：主播信息条
 @Composable
 private fun AnchorInfoBar(
+    roomTitle: String,
     anchorInfo: com.android.purebilibili.feature.live.AnchorInfo,
     isFollowing: Boolean,
     online: Int,
@@ -553,11 +582,20 @@ private fun AnchorInfoBar(
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = anchorInfo.uname, 
-                    fontWeight = FontWeight.Bold, 
+                    text = roomTitle.ifBlank { anchorInfo.uname },
+                    fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
-                    maxLines = 1,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = anchorInfo.uname,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -611,6 +649,74 @@ private fun AnchorInfoBar(
                     fontWeight = FontWeight.Medium
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LivePortraitInfoPanel(
+    anchorInfoBar: @Composable () -> Unit,
+    chatContent: @Composable () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        shadowElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.surfaceContainerLow
+                        )
+                    )
+                )
+        ) {
+            Spacer(Modifier.height(8.dp))
+            anchorInfoBar()
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+            Box(modifier = Modifier.weight(1f)) {
+                chatContent()
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveLandscapeChatPanel(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = Color.Black.copy(alpha = 0.32f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            Color.White.copy(alpha = 0.08f)
+        ),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.04f),
+                            Color.Black.copy(alpha = 0.12f),
+                            Color.Black.copy(alpha = 0.24f)
+                        )
+                    )
+                )
+        ) {
+            content()
         }
     }
 }

@@ -34,6 +34,7 @@ import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
+import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.util.FormatUtils
 import kotlinx.coroutines.launch
 
@@ -131,6 +132,7 @@ fun PluginsContent(
     var testingPluginId by remember { mutableStateOf<String?>(null) }
     var testResult by remember { mutableStateOf<Triple<Int, Int, List<com.android.purebilibili.data.model.response.VideoItem>>?>(null) }
     var testingSampleVideos by remember { mutableStateOf<List<com.android.purebilibili.data.model.response.VideoItem>>(emptyList()) }
+    val importTint = rememberAdaptiveSemanticIconTint(iOSBlue)
 
     fun validateImportUrlOrError(raw: String): String? {
         val normalized = raw.trim()
@@ -274,13 +276,13 @@ fun PluginsContent(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(iOSBlue.copy(alpha = 0.12f)),
+                                .background(importTint.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = CupertinoIcons.Default.IcloudAndArrowDown,
                                 contentDescription = null,
-                                tint = iOSBlue,
+                                tint = importTint,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -300,7 +302,7 @@ fun PluginsContent(
                         Icon(
                             imageVector = CupertinoIcons.Default.Plus,
                             contentDescription = null,
-                            tint = iOSBlue,
+                            tint = importTint,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -638,6 +640,7 @@ private fun PluginItem(
     onExpandToggle: () -> Unit
 ) {
     val plugin = pluginInfo.plugin
+    val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint)
     
     Column {
         // 主行
@@ -653,13 +656,13 @@ private fun PluginItem(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(iconTint.copy(alpha = 0.12f)),
+                    .background(effectiveIconTint.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = plugin.icon ?: CupertinoIcons.Default.Puzzlepiece,
                     contentDescription = null,
-                    tint = iconTint,
+                    tint = effectiveIconTint,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -786,6 +789,7 @@ private fun JsonPluginItem(
     val plugin = loaded.plugin
     var showDeleteDialog by remember { mutableStateOf(false) }
     var isExpanded by remember { mutableStateOf(false) }
+    val jsonPluginTint = rememberAdaptiveSemanticIconTint(iOSPurple)
     
     Column {
         Row(
@@ -800,7 +804,7 @@ private fun JsonPluginItem(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(iOSPurple.copy(alpha = 0.12f)),
+                    .background(jsonPluginTint.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (!plugin.iconUrl.isNullOrBlank()) {
@@ -815,7 +819,7 @@ private fun JsonPluginItem(
                     Icon(
                         imageVector = CupertinoIcons.Default.Terminal,
                         contentDescription = null,
-                        tint = iOSPurple,
+                        tint = jsonPluginTint,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -996,6 +1000,7 @@ private fun TestResultDialog(
     onDismiss: () -> Unit
 ) {
     val blockedCount = originalCount - filteredCount
+    val dialogIconTint = rememberAdaptiveSemanticIconTint(iOSBlue)
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1003,7 +1008,7 @@ private fun TestResultDialog(
             Icon(
                 CupertinoIcons.Default.Lightbulb, 
                 contentDescription = null,
-                tint = iOSBlue
+                tint = dialogIconTint
             ) 
         },
         title = { Text("规则测试结果") },

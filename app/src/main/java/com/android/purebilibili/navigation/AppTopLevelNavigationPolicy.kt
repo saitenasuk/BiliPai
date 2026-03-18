@@ -1,9 +1,16 @@
 package com.android.purebilibili.navigation
 
+import com.android.purebilibili.feature.home.components.BottomNavItem
+
 internal enum class TopLevelNavigationAction {
     SKIP,
     POP_EXISTING,
     NAVIGATE_WITH_RESTORE
+}
+
+internal enum class BottomBarSelectionAction {
+    NAVIGATE,
+    HOME_RESELECT
 }
 
 internal fun resolveTopLevelNavigationAction(
@@ -20,4 +27,15 @@ internal fun resolveTopLevelNavigationAction(
     }
 
     return TopLevelNavigationAction.NAVIGATE_WITH_RESTORE
+}
+
+internal fun resolveBottomBarSelectionAction(
+    currentItem: BottomNavItem,
+    tappedItem: BottomNavItem
+): BottomBarSelectionAction {
+    return if (currentItem == BottomNavItem.HOME && tappedItem == BottomNavItem.HOME) {
+        BottomBarSelectionAction.HOME_RESELECT
+    } else {
+        BottomBarSelectionAction.NAVIGATE
+    }
 }

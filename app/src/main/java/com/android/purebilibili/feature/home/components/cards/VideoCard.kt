@@ -167,19 +167,15 @@ fun ElegantVideoCard(
             showInfoGlassBadges = showInfoGlassBadges
         )
     }
-    val showHistoryProgressBar = remember(video.view_at, video.duration, video.progress) {
-        shouldShowVideoCardHistoryProgressBar(
+    val historyProgressState = remember(video.view_at, video.duration, video.progress) {
+        resolveVideoCardHistoryProgressState(
             viewAt = video.view_at,
             durationSec = video.duration,
             progressSec = video.progress
         )
     }
-    val historyProgressFraction = remember(video.progress, video.duration) {
-        resolveVideoCardHistoryProgressFraction(
-            progressSec = video.progress,
-            durationSec = video.duration
-        )
-    }
+    val showHistoryProgressBar = historyProgressState.showProgressBar
+    val historyProgressFraction = historyProgressState.progressFraction
     
     //  [新增] 长按删除菜单状态
     var showDismissMenu by remember { mutableStateOf(false) }

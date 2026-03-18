@@ -7,7 +7,7 @@ internal enum class VideoFavoriteEntryPoint {
 }
 
 internal enum class VideoFavoriteAction {
-    OpenFolderSheet
+    ToggleFavorite
 }
 
 internal fun resolveVideoFavoriteAction(
@@ -16,6 +16,6 @@ internal fun resolveVideoFavoriteAction(
     return when (entryPoint) {
         VideoFavoriteEntryPoint.FullscreenOverlay,
         VideoFavoriteEntryPoint.DetailActionRow,
-        VideoFavoriteEntryPoint.BottomInputBar -> VideoFavoriteAction.OpenFolderSheet
+        VideoFavoriteEntryPoint.BottomInputBar -> VideoFavoriteAction.ToggleFavorite
     }
 }

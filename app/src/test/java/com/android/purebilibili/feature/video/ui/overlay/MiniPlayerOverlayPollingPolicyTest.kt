@@ -45,8 +45,8 @@ class MiniPlayerOverlayPollingPolicyTest {
 
     @Test
     fun pausedPlayback_usesLongerPollingInterval() {
-        assertEquals(300L, resolveMiniPlayerPollingIntervalMs(isPlaying = true))
-        assertEquals(600L, resolveMiniPlayerPollingIntervalMs(isPlaying = false))
+        assertEquals(500L, resolveMiniPlayerPollingIntervalMs(isPlaying = true))
+        assertEquals(1000L, resolveMiniPlayerPollingIntervalMs(isPlaying = false))
     }
 
     @Test

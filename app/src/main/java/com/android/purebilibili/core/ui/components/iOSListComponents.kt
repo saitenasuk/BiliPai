@@ -23,9 +23,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.LocalDynamicColorActive
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.iOSCornerRadius
+import com.android.purebilibili.core.theme.iOSBlue
+import com.android.purebilibili.core.theme.iOSGreen
+import com.android.purebilibili.core.theme.iOSOrange
+import com.android.purebilibili.core.theme.iOSPink
+import com.android.purebilibili.core.theme.iOSPurple
+import com.android.purebilibili.core.theme.iOSRed
+import com.android.purebilibili.core.theme.iOSSystemGray
+import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.core.theme.iOSYellow
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
 import io.github.alexzhirkevich.cupertino.CupertinoSwitchDefaults
@@ -52,6 +62,14 @@ internal data class AdaptiveListComponentVisualSpec(
     val dividerStartIndentDp: Int
 )
 
+internal data class AdaptiveSwitchVisualSpec(
+    val checkedThumbColor: Color,
+    val checkedTrackColor: Color,
+    val uncheckedThumbColor: Color,
+    val uncheckedTrackColor: Color,
+    val uncheckedBorderColor: Color
+)
+
 internal fun resolveAdaptiveListComponentVisualSpec(
     uiPreset: UiPreset
 ): AdaptiveListComponentVisualSpec {
@@ -67,7 +85,7 @@ internal fun resolveAdaptiveListComponentVisualSpec(
             gridCornerRadiusDp = 24,
             searchBarCornerRadiusDp = 28,
             searchBarHeightDp = 48,
-            dividerThicknessDp = 1f,
+            dividerThicknessDp = 0f,
             dividerStartIndentDp = 16
         )
     } else {
@@ -88,6 +106,66 @@ internal fun resolveAdaptiveListComponentVisualSpec(
     }
 }
 
+internal fun resolveAdaptiveSemanticIconTint(
+    iconTint: Color,
+    uiPreset: UiPreset,
+    colorScheme: ColorScheme,
+    useSemanticAccentRoles: Boolean = true
+): Color {
+    if (uiPreset != UiPreset.MD3 || iconTint == Color.Unspecified) {
+        return iconTint
+    }
+    val unifiedAccent = colorScheme.primary
+    return when (iconTint) {
+        iOSGreen -> unifiedAccent
+        iOSBlue, iOSTeal -> if (useSemanticAccentRoles) colorScheme.secondary else unifiedAccent
+        iOSPurple, iOSPink, iOSOrange, iOSYellow -> if (useSemanticAccentRoles) colorScheme.tertiary else unifiedAccent
+        iOSRed -> colorScheme.error
+        iOSSystemGray -> colorScheme.onSurfaceVariant
+        else -> iconTint
+    }
+}
+
+internal fun resolveAdaptiveSwitchVisualSpec(
+    uiPreset: UiPreset,
+    colorScheme: ColorScheme
+): AdaptiveSwitchVisualSpec {
+    return if (uiPreset == UiPreset.MD3) {
+        AdaptiveSwitchVisualSpec(
+            checkedThumbColor = colorScheme.onPrimary,
+            checkedTrackColor = colorScheme.primary,
+            uncheckedThumbColor = colorScheme.surface,
+            uncheckedTrackColor = colorScheme.surfaceVariant,
+            uncheckedBorderColor = colorScheme.outline.copy(alpha = 0.55f)
+        )
+    } else {
+        AdaptiveSwitchVisualSpec(
+            checkedThumbColor = Color.White,
+            checkedTrackColor = colorScheme.primary,
+            uncheckedThumbColor = Color.White,
+            uncheckedTrackColor = Color(0xFFE9E9EA),
+            uncheckedBorderColor = Color.Transparent
+        )
+    }
+}
+
+@Composable
+internal fun rememberAdaptiveSemanticIconTint(
+    iconTint: Color,
+    uiPreset: UiPreset = LocalUiPreset.current,
+    dynamicColorActive: Boolean = LocalDynamicColorActive.current
+): Color {
+    val colorScheme = MaterialTheme.colorScheme
+    return remember(iconTint, uiPreset, dynamicColorActive, colorScheme) {
+        resolveAdaptiveSemanticIconTint(
+            iconTint = iconTint,
+            uiPreset = uiPreset,
+            colorScheme = colorScheme,
+            useSemanticAccentRoles = dynamicColorActive
+        )
+    }
+}
+
 @Composable
 fun AppAdaptiveSwitch(
     checked: Boolean,
@@ -96,24 +174,38 @@ fun AppAdaptiveSwitch(
     enabled: Boolean = true
 ) {
     val uiPreset = LocalUiPreset.current
+    val colorScheme = MaterialTheme.colorScheme
+    val switchSpec = remember(uiPreset, colorScheme) {
+        resolveAdaptiveSwitchVisualSpec(
+            uiPreset = uiPreset,
+            colorScheme = colorScheme
+        )
+    }
     if (uiPreset == UiPreset.MD3) {
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             enabled = enabled,
-            modifier = modifier
+            modifier = modifier,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = switchSpec.checkedThumbColor,
+                checkedTrackColor = switchSpec.checkedTrackColor,
+                checkedBorderColor = switchSpec.checkedTrackColor,
+                uncheckedThumbColor = switchSpec.uncheckedThumbColor,
+                uncheckedTrackColor = switchSpec.uncheckedTrackColor,
+                uncheckedBorderColor = switchSpec.uncheckedBorderColor
+            )
         )
     } else {
-        val primaryColor = MaterialTheme.colorScheme.primary
         CupertinoSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             enabled = enabled,
             modifier = modifier,
             colors = CupertinoSwitchDefaults.colors(
-                thumbColor = Color.White,
-                checkedTrackColor = primaryColor,
-                uncheckedTrackColor = Color(0xFFE9E9EA)
+                thumbColor = switchSpec.checkedThumbColor,
+                checkedTrackColor = switchSpec.checkedTrackColor,
+                uncheckedTrackColor = switchSpec.uncheckedTrackColor
             )
         )
     }
@@ -179,6 +271,7 @@ fun IOSSwitchItem(
 ) {
     val uiPreset = LocalUiPreset.current
     val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
     
@@ -195,13 +288,13 @@ fun IOSSwitchItem(
                 modifier = Modifier
                     .size(visualSpec.iconContainerSizeDp.dp)
                     .clip(RoundedCornerShape(iconCornerRadius))
-                    .background(iconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                    .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     icon,
                     contentDescription = null,
-                    tint = iconTint,
+                    tint = effectiveIconTint,
                     modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
                 )
             }
@@ -241,6 +334,7 @@ fun IOSClickableItem(
 ) {
     val uiPreset = LocalUiPreset.current
     val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
     
@@ -254,26 +348,26 @@ fun IOSClickableItem(
     ) {
         if (!centered) {
             if (icon != null || iconPainter != null) {
-                if (iconTint != Color.Unspecified) {
+                if (effectiveIconTint != Color.Unspecified) {
                     Box(
                         modifier = Modifier
                             .size(visualSpec.iconContainerSizeDp.dp)
                             .clip(RoundedCornerShape(iconCornerRadius))
-                            .background(iconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                            .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (icon != null) {
                             Icon(
                                 icon,
                                 contentDescription = null,
-                                tint = iconTint,
+                                tint = effectiveIconTint,
                                 modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
                             )
                         } else if (iconPainter != null) {
                             Icon(
                                 painter = iconPainter,
                                 contentDescription = null,
-                                tint = iconTint,
+                                tint = effectiveIconTint,
                                 modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
                             )
                         }
@@ -367,11 +461,16 @@ fun IOSClickableItem(
 }
 
 @Composable
-fun IOSDivider(startIndent: androidx.compose.ui.unit.Dp = 66.dp) {
+fun IOSDivider(
+    modifier: Modifier = Modifier,
+    startIndent: androidx.compose.ui.unit.Dp = 66.dp
+) {
     val uiPreset = LocalUiPreset.current
     val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    if (visualSpec.dividerThicknessDp <= 0f) return
+
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(start = if (uiPreset == UiPreset.MD3) visualSpec.dividerStartIndentDp.dp else startIndent)
             .height(visualSpec.dividerThicknessDp.dp)
@@ -392,6 +491,7 @@ fun IOSGridItem(
 ) {
     val uiPreset = LocalUiPreset.current
     val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val itemCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.gridCornerRadiusDp.dp else iOSCornerRadius.Medium * cornerRadiusScale
 
@@ -409,13 +509,13 @@ fun IOSGridItem(
             modifier = Modifier
                 .size(48.dp)
                 .clip(RoundedCornerShape(iOSCornerRadius.Small * cornerRadiusScale))
-                .background(iconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = iconTint,
+                tint = effectiveIconTint,
                 modifier = Modifier.size(26.dp)
             )
         }

@@ -30,28 +30,39 @@ fun DeviceListDialog(
     
     // 手动 SSDP 发现结果
     var ssdpDevices by remember { mutableStateOf<List<SsdpDiscovery.SsdpDevice>>(emptyList()) }
+    var ssdpProfiles by remember { mutableStateOf<Map<String, SsdpCastClient.SsdpDeviceProfile>>(emptyMap()) }
     var isSearching by remember { mutableStateOf(false) }
+    val visibleSsdpDevices = remember(devices, ssdpDevices, ssdpProfiles) {
+        resolveVisibleSsdpDevices(
+            clingDevices = devices,
+            ssdpDevices = ssdpDevices,
+            profiles = ssdpProfiles
+        )
+    }
+
+    suspend fun refreshSsdpDevices() {
+        isSearching = true
+        val discovered = SsdpDiscovery.discover(context, 5000)
+        val profiles = discovered.associateNotNullBy(
+            keySelector = { it.location },
+            valueSelector = { device -> SsdpCastClient.fetchDeviceProfile(device) }
+        )
+        ssdpDevices = discovered
+        ssdpProfiles = profiles
+        isSearching = false
+    }
     
     // 启动时同时进行 Cling 和手动 SSDP 搜索
     LaunchedEffect(Unit) {
         if (isConnected) {
             DlnaManager.refresh()
         }
-        // 同时进行手动 SSDP 发现
-        isSearching = true
-        scope.launch {
-            ssdpDevices = SsdpDiscovery.discover(context, 5000)
-            isSearching = false
-        }
+        scope.launch { refreshSsdpDevices() }
     }
     
     fun doRefresh() {
         DlnaManager.refresh()
-        scope.launch {
-            isSearching = true
-            ssdpDevices = SsdpDiscovery.discover(context, 5000)
-            isSearching = false
-        }
+        scope.launch { refreshSsdpDevices() }
     }
 
     AlertDialog(
@@ -67,7 +78,7 @@ fun DeviceListDialog(
             }
         },
         text = {
-            val hasDevices = devices.isNotEmpty() || ssdpDevices.isNotEmpty()
+            val hasDevices = devices.isNotEmpty() || visibleSsdpDevices.isNotEmpty()
             
             if (!hasDevices && !isSearching) {
                 Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
@@ -101,26 +112,17 @@ fun DeviceListDialog(
                                 .fillMaxWidth()
                         )
                     }
-                    // 手动 SSDP 发现的设备（排除已被 Cling 发现的）
-                    val clingLocations = devices.mapNotNull { 
-                        it.location
-                    }.toSet()
-                    
-                    val uniqueSsdpDevices = ssdpDevices.filter { ssdp ->
-                        ssdp.location !in clingLocations
-                    }
-                    
-                    items(uniqueSsdpDevices) { ssdpDevice ->
+                    items(visibleSsdpDevices) { ssdpDevice ->
                         ListItem(
                             headlineContent = { 
-                                Text(ssdpDevice.server.ifEmpty { "SSDP Device" })
+                                Text(ssdpDevice.title)
                             },
                             supportingContent = { 
-                                Text(ssdpDevice.st.substringAfterLast(":").ifEmpty { ssdpDevice.location })
+                                Text(ssdpDevice.subtitle)
                             },
                             leadingContent = { Icon(Icons.Rounded.Tv, null, tint = MaterialTheme.colorScheme.secondary) },
                             modifier = Modifier
-                                .clickable { onSsdpDeviceSelected(ssdpDevice) }
+                                .clickable { onSsdpDeviceSelected(ssdpDevice.device) }
                                 .fillMaxWidth()
                         )
                     }
@@ -149,4 +151,16 @@ fun DeviceListDialog(
             }
         }
     )
+}
+
+private inline fun <T, K, V> Iterable<T>.associateNotNullBy(
+    keySelector: (T) -> K,
+    valueSelector: (T) -> V?
+): Map<K, V> {
+    val result = LinkedHashMap<K, V>()
+    for (item in this) {
+        val value = valueSelector(item) ?: continue
+        result[keySelector(item)] = value
+    }
+    return result
 }

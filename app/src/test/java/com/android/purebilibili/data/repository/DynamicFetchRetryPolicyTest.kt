@@ -4,23 +4,35 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.HttpException
+import retrofit2.Response
 
 class DynamicFetchRetryPolicyTest {
 
     @Test
-    fun `api error codes for risk control should be retryable`() {
-        assertTrue(isRetryableDynamicApiError(code = -412, message = ""))
-        assertTrue(isRetryableDynamicApiError(code = -352, message = ""))
-        assertTrue(isRetryableDynamicApiError(code = -509, message = ""))
-        assertTrue(isRetryableDynamicApiError(code = 22015, message = ""))
-        assertFalse(isRetryableDynamicApiError(code = -101, message = ""))
+    fun `rate limit and risk control api errors should not retry immediately`() {
+        assertFalse(isRetryableDynamicApiError(code = -412, message = ""))
+        assertFalse(isRetryableDynamicApiError(code = -352, message = ""))
+        assertFalse(isRetryableDynamicApiError(code = -509, message = ""))
+        assertFalse(isRetryableDynamicApiError(code = 22015, message = ""))
+        assertFalse(isRetryableDynamicApiError(code = 34004, message = ""))
     }
 
     @Test
-    fun `api error message containing precondition should be retryable`() {
-        assertTrue(isRetryableDynamicApiError(code = -999, message = "HTTP 412 Precondition Failed"))
-        assertTrue(isRetryableDynamicApiError(code = -999, message = "触发风控"))
+    fun `api error message containing precondition or risk should not retry immediately`() {
+        assertFalse(isRetryableDynamicApiError(code = -999, message = "HTTP 412 Precondition Failed"))
+        assertFalse(isRetryableDynamicApiError(code = -999, message = "触发风控"))
         assertFalse(isRetryableDynamicApiError(code = -999, message = "参数错误"))
+    }
+
+    @Test
+    fun `http rate limit exceptions should not be retried but server failures still can`() {
+        val rateLimit = HttpException(Response.error<Any>(429, "".toResponseBody()))
+        val serverError = HttpException(Response.error<Any>(503, "".toResponseBody()))
+
+        assertFalse(isRetryableDynamicException(rateLimit))
+        assertTrue(isRetryableDynamicException(serverError))
     }
 
     @Test

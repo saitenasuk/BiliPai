@@ -92,6 +92,7 @@ fun AnimationSettingsContent(
 ) {
     val context = LocalContext.current
     val windowSizeClass = LocalWindowSizeClass.current
+    val warningTint = rememberAdaptiveSemanticIconTint(iOSOrange)
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
             widthSizeClass = windowSizeClass.widthSizeClass
@@ -150,7 +151,7 @@ fun AnimationSettingsContent(
                             onCheckedChange = { viewModel.toggleCardAnimation(it) },
                             iconTint = iOSPink
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ArrowLeftArrowRight,
                             title = "过渡动画",
@@ -159,7 +160,7 @@ fun AnimationSettingsContent(
                             onCheckedChange = { viewModel.toggleCardTransition(it) },
                             iconTint = iOSTeal
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = Icons.AutoMirrored.Outlined.ArrowBack,
                             title = predictiveBackToggleState.title,
@@ -173,7 +174,7 @@ fun AnimationSettingsContent(
                             enabled = predictiveBackToggleState.enabled,
                             iconTint = if (predictiveBackToggleState.enabled) iOSBlue else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Divider()
+                        IOSDivider()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -265,7 +266,7 @@ fun AnimationSettingsContent(
                                     }
                                 }
                             }
-                            Divider()
+                            IOSDivider()
                         }
 
                         // 磨砂效果 (始终显示)
@@ -277,7 +278,7 @@ fun AnimationSettingsContent(
                             onCheckedChange = { viewModel.toggleHeaderBlur(it) },
                             iconTint = iOSBlue
                         )
-                        Divider()
+                        IOSDivider()
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Sparkles,
                             title = "底栏磨砂",
@@ -289,7 +290,7 @@ fun AnimationSettingsContent(
                         
                         // 模糊强度（仅在任意模糊开启时显示）
                         if (state.headerBlurEnabled || state.bottomBarBlurEnabled) {
-                            Divider()
+                            IOSDivider()
                             BlurIntensitySelector(
                                 selectedIntensity = state.blurIntensity,
                                 onIntensityChange = { viewModel.setBlurIntensity(it) }
@@ -339,7 +340,7 @@ fun AnimationSettingsContent(
                             Icon(
                                 CupertinoIcons.Default.Lightbulb,
                                 contentDescription = null,
-                                tint = iOSOrange,
+                                tint = warningTint,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(12.dp))

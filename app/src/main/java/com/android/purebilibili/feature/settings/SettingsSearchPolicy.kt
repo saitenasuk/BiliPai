@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.util.PinyinUtils
+
 enum class SettingsSearchTarget {
     APPEARANCE,
     PLAYBACK,
@@ -46,7 +48,22 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = "外观设置",
         subtitle = "主题、图标、模糊效果",
         section = "常规",
-        aliases = listOf("外观", "主题", "图标", "动画", "模糊", "皮肤")
+        aliases = listOf(
+            "外观",
+            "主题",
+            "图标",
+            "动画",
+            "模糊",
+            "皮肤",
+            "玻璃",
+            "液态玻璃",
+            "毛玻璃",
+            "md3",
+            "material",
+            "android",
+            "安卓",
+            "原生"
+        )
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.PLAYBACK,
@@ -235,11 +252,20 @@ private fun scoreSettingsSearchMatch(entry: SettingsSearchEntry, query: String):
     if (aliases.any { it.startsWith(query) }) return 140
     if (title.contains(query)) return 120
     if (aliases.any { it.contains(query) }) return 100
+    if (matchesSettingsSearchPinyin(entry.title, query)) return 90
+    if (entry.aliases.any { matchesSettingsSearchPinyin(it, query) }) return 80
     if (subtitle.contains(query)) return 70
     if (section.contains(query)) return 50
     return null
 }
 
 private fun normalizeSettingsSearchText(value: String): String {
-    return value.trim().lowercase()
+    return value.trim().lowercase().replace(" ", "")
+}
+
+private fun matchesSettingsSearchPinyin(value: String, query: String): Boolean {
+    return PinyinUtils.matches(
+        text = value.replace(" ", ""),
+        query = query
+    )
 }

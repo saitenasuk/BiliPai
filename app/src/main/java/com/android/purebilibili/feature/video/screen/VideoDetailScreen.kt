@@ -137,6 +137,12 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
+import com.android.purebilibili.core.ui.rememberAppCollectionIcon
+import com.android.purebilibili.core.ui.rememberAppDownloadIcon
+import com.android.purebilibili.core.ui.rememberAppMusicIcon
+import com.android.purebilibili.core.ui.rememberAppPhotoIcon
+import com.android.purebilibili.core.ui.rememberAppPlayIcon
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.PlaybackService
 import com.android.purebilibili.feature.video.player.PlaylistItem
@@ -618,7 +624,7 @@ fun VideoDetailScreen(
     LaunchedEffect(isInPipMode) { isPipMode = isInPipMode }
     val openFavoriteFolders: (VideoFavoriteEntryPoint) -> Unit = { entryPoint ->
         when (resolveVideoFavoriteAction(entryPoint)) {
-            VideoFavoriteAction.OpenFolderSheet -> viewModel.showFavoriteFolderDialog()
+            VideoFavoriteAction.ToggleFavorite -> viewModel.toggleFavorite()
         }
     }
     
@@ -2872,7 +2878,7 @@ fun VideoDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.ArrowDown, // 假设已有此图标或使用 Icons.Rounded.Download
+                            imageVector = rememberAppDownloadIcon(),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -2903,7 +2909,7 @@ fun VideoDetailScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = CupertinoIcons.Default.SquareStack3dUp,
+                                imageVector = rememberAppCollectionIcon(),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -2955,7 +2961,7 @@ fun VideoDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.MusicNote,
+                            imageVector = rememberAppMusicIcon(),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -3006,7 +3012,7 @@ fun VideoDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = CupertinoIcons.Default.Photo,
+                            imageVector = rememberAppPhotoIcon(),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -3324,7 +3330,7 @@ private fun WatchLaterQueueCollapsedBar(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
-                imageVector = CupertinoIcons.Outlined.ChevronUp,
+                imageVector = rememberAppChevronUpIcon(),
                 contentDescription = "展开稍后再看队列",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -3548,7 +3554,7 @@ private fun WatchLaterQueueSheetContent(
                     }
                     if (selected) {
                         Icon(
-                            imageVector = CupertinoIcons.Outlined.Play,
+                            imageVector = rememberAppPlayIcon(),
                             contentDescription = "当前播放",
                             tint = MaterialTheme.colorScheme.primary
                         )

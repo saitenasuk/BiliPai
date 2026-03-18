@@ -24,6 +24,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.animation.staggeredEntrance
+import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
@@ -240,6 +241,7 @@ private fun TipItem(
     title: String,
     content: String
 ) {
+    val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -249,7 +251,7 @@ private fun TipItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = iconTint,
+            tint = effectiveIconTint,
             modifier = Modifier
                 .size(20.dp)
                 .padding(top = 2.dp)

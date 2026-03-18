@@ -79,3 +79,30 @@ internal fun resolveTopTabPagerPosition(
     }
     return currentPage + offsetFraction
 }
+
+internal fun resolveMd3TopTabViewportPosition(
+    visibleIndices: List<Int>,
+    absolutePagerPosition: Float
+): Float {
+    if (visibleIndices.isEmpty()) return 0f
+    if (visibleIndices.size == 1) return 0f
+
+    val firstIndex = visibleIndices.first().toFloat()
+    val lastIndex = visibleIndices.last().toFloat()
+    if (absolutePagerPosition <= firstIndex) return 0f
+    if (absolutePagerPosition >= lastIndex) return visibleIndices.lastIndex.toFloat()
+
+    visibleIndices.zipWithNext().forEachIndexed { slotIndex, (start, end) ->
+        val startFloat = start.toFloat()
+        val endFloat = end.toFloat()
+        if (absolutePagerPosition in startFloat..endFloat) {
+            val span = (endFloat - startFloat).coerceAtLeast(0.0001f)
+            val fraction = (absolutePagerPosition - startFloat) / span
+            return slotIndex + fraction
+        }
+    }
+
+    return visibleIndices.indexOfLast { it.toFloat() <= absolutePagerPosition }
+        .coerceAtLeast(0)
+        .toFloat()
+}

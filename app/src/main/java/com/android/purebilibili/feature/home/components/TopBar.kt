@@ -9,8 +9,8 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.foundation.rememberScrollState
@@ -34,9 +34,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -175,7 +172,7 @@ internal fun shouldShowTopTabText(mode: Int): Boolean {
     return normalized == 0 || normalized == 2
 }
 
-internal fun resolveMd3TopTabLabelMode(@Suppress("UNUSED_PARAMETER") requestedLabelMode: Int): Int = 0
+internal fun resolveMd3TopTabLabelMode(@Suppress("UNUSED_PARAMETER") requestedLabelMode: Int): Int = 2
 
 internal fun resolveTopTabCategoryIcon(
     category: String,
@@ -188,7 +185,7 @@ internal fun resolveTopTabCategoryIcon(
             "热门" -> Icons.AutoMirrored.Outlined.TrendingUp
             "直播" -> Icons.Outlined.LiveTv
             "追番" -> Icons.Outlined.Tv
-            "游戏" -> Icons.Outlined.PlayCircleOutline
+            "游戏" -> Icons.Outlined.SportsEsports
             "知识" -> Icons.Outlined.Lightbulb
             "科技" -> Icons.Outlined.SmartToy
             else -> Icons.AutoMirrored.Outlined.MenuOpen
@@ -216,11 +213,11 @@ internal fun resolveTopTabPartitionIcon(uiPreset: UiPreset): ImageVector {
 }
 
 internal enum class Md3TopTabRowVariant {
-    SECONDARY_FIXED
+    UNDERLINE_FIXED
 }
 
 internal fun resolveMd3TopTabRowVariant(): Md3TopTabRowVariant =
-    Md3TopTabRowVariant.SECONDARY_FIXED
+    Md3TopTabRowVariant.UNDERLINE_FIXED
 
 internal fun resolveMd3TopTabActionButtonCorner(isFloatingStyle: Boolean) =
     if (isFloatingStyle) 18.dp else 16.dp
@@ -432,6 +429,7 @@ fun CategoryTabRow(
             onCategorySelected = onCategorySelected,
             onPartitionClick = onPartitionClick,
             onLiveClick = onLiveClick,
+            pagerState = pagerState,
             labelMode = labelMode,
             isFloatingStyle = isFloatingStyle
         )
@@ -754,20 +752,32 @@ private fun Md3CategoryTabRow(
     onCategorySelected: (Int) -> Unit,
     onPartitionClick: () -> Unit,
     onLiveClick: () -> Unit,
+    pagerState: androidx.compose.foundation.pager.PagerState?,
     labelMode: Int,
     isFloatingStyle: Boolean
 ) {
     val uiPreset = LocalUiPreset.current
     val scrollChannel = com.android.purebilibili.feature.home.LocalHomeScrollChannel.current
-    val tabRowHeight = if (isFloatingStyle) 62.dp else 48.dp
+    val visualSpec = remember(isFloatingStyle) { resolveMd3TopTabVisualSpec(isFloatingStyle) }
+    val tabRowHeight = visualSpec.rowHeight
     val actionButtonSize = if (isFloatingStyle) 50.dp else 44.dp
     val actionButtonCorner = resolveMd3TopTabActionButtonCorner(isFloatingStyle)
     val actionIconSize = if (isFloatingStyle) 22.dp else 20.dp
     val normalizedLabelMode = resolveMd3TopTabLabelMode(labelMode)
-    val visibleIndices = remember(categories, selectedIndex) {
+    val viewportAnchorIndex by remember(pagerState, selectedIndex) {
+        derivedStateOf {
+            resolveTopTabViewportAnchorIndex(
+                selectedIndex = selectedIndex,
+                pagerCurrentPage = pagerState?.currentPage,
+                pagerTargetPage = pagerState?.targetPage,
+                pagerIsScrolling = pagerState?.isScrollInProgress == true
+            )
+        }
+    }
+    val visibleIndices = remember(categories, viewportAnchorIndex) {
         resolveMd3VisibleTabIndices(
             totalCount = categories.size,
-            selectedIndex = selectedIndex
+            selectedIndex = viewportAnchorIndex
         )
     }
     val selectedVisibleIndex = remember(visibleIndices, selectedIndex) {
@@ -775,6 +785,25 @@ private fun Md3CategoryTabRow(
             visibleIndices = visibleIndices,
             selectedIndex = selectedIndex
         )
+    }
+    val currentPagerPosition by remember(pagerState, selectedIndex) {
+        derivedStateOf {
+            resolveTopTabPagerPosition(
+                selectedIndex = selectedIndex,
+                pagerCurrentPage = pagerState?.currentPage,
+                pagerTargetPage = pagerState?.targetPage,
+                pagerCurrentPageOffsetFraction = pagerState?.currentPageOffsetFraction,
+                pagerIsScrolling = pagerState?.isScrollInProgress == true
+            )
+        }
+    }
+    val currentVisiblePosition by remember(visibleIndices, currentPagerPosition) {
+        derivedStateOf {
+            resolveMd3TopTabViewportPosition(
+                visibleIndices = visibleIndices,
+                absolutePagerPosition = currentPagerPosition
+            )
+        }
     }
 
     Row(
@@ -784,84 +813,118 @@ private fun Md3CategoryTabRow(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SecondaryTabRow(
-            selectedTabIndex = selectedVisibleIndex,
+        BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight(),
-            divider = {},
-            indicator = {
-                if (visibleIndices.isNotEmpty()) {
-                    TabRowDefaults.SecondaryIndicator(
-                        modifier = Modifier
-                            .tabIndicatorOffset(selectedVisibleIndex)
-                            .padding(horizontal = 10.dp),
-                        height = 3.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            },
-            containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onSurface
+                .fillMaxHeight()
         ) {
-            visibleIndices.forEachIndexed { visibleIndex, originalIndex ->
-                val category = categories[originalIndex]
-                val showIcon = shouldShowTopTabIcon(normalizedLabelMode)
-                val showText = shouldShowTopTabText(normalizedLabelMode)
-                val icon = resolveTopTabCategoryIcon(category, uiPreset)
-                val onTabClick = {
-                    if (shouldRouteTopTabToLivePage(category)) {
-                        onLiveClick()
-                    } else {
-                        onCategorySelected(originalIndex)
-                    }
-                }
+            val slotCount = visibleIndices.size.coerceAtLeast(1)
+            val slotWidth = maxWidth / slotCount
+            val indicatorWidth = (slotWidth * 0.48f).coerceAtLeast(28.dp)
+            val animatedIndicatorOffset by animateDpAsState(
+                targetValue = slotWidth * currentVisiblePosition + ((slotWidth - indicatorWidth) / 2f),
+                label = "md3TopTabIndicatorOffset"
+            )
 
-                Tab(
-                    selected = selectedVisibleIndex == visibleIndex,
-                    onClick = {},
-                    selectedContentColor = MaterialTheme.colorScheme.primary,
-                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    text = if (showText) {
-                        {
-                            Text(
-                                text = category,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                fontSize = resolveTopTabLabelTextSizeSp(normalizedLabelMode).sp,
-                                lineHeight = resolveTopTabLabelLineHeightSp(normalizedLabelMode).sp,
-                                fontWeight = if (selectedVisibleIndex == visibleIndex) {
-                                    FontWeight.SemiBold
-                                } else {
-                                    FontWeight.Medium
-                                }
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                    icon = if (showIcon) {
-                        {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                modifier = Modifier.size(if (showText) 18.dp else 20.dp)
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                    modifier = Modifier.combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = LocalIndication.current,
-                        onClick = onTabClick,
-                        onDoubleClick = {
-                            if (selectedVisibleIndex == visibleIndex) {
-                                scrollChannel?.trySend(Unit)
+            Box(modifier = Modifier.fillMaxSize()) {
+                val selectedContainerColor = resolveMd3TopTabSelectedContainerColor(
+                    colorScheme = MaterialTheme.colorScheme
+                )
+                Surface(
+                    modifier = Modifier
+                        .offset(x = animatedIndicatorOffset)
+                        .width(indicatorWidth)
+                        .height(visualSpec.selectedCapsuleHeight)
+                        .padding(bottom = 2.dp)
+                        .align(Alignment.BottomStart),
+                    shape = RoundedCornerShape(visualSpec.selectedCapsuleCornerRadius),
+                    color = selectedContainerColor,
+                    tonalElevation = visualSpec.selectedCapsuleTonalElevation,
+                    shadowElevation = visualSpec.selectedCapsuleShadowElevation
+                ) {}
+
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    visibleIndices.forEachIndexed { visibleIndex, originalIndex ->
+                        val category = categories[originalIndex]
+                        val showIcon = shouldShowTopTabIcon(normalizedLabelMode)
+                        val showText = shouldShowTopTabText(normalizedLabelMode)
+                        val icon = resolveTopTabCategoryIcon(category, uiPreset)
+                        val selectionFraction =
+                            (1f - abs(currentVisiblePosition - visibleIndex.toFloat())).coerceIn(0f, 1f)
+                        val onTabClick = {
+                            if (shouldRouteTopTabToLivePage(category)) {
+                                onLiveClick()
+                            } else {
+                                onCategorySelected(originalIndex)
                             }
                         }
-                    )
-                )
+
+                        val iconColor = resolveMd3TopTabIconTint(
+                            selectionFraction = selectionFraction,
+                            colorScheme = MaterialTheme.colorScheme
+                        )
+                        val labelColor = resolveMd3TopTabLabelTint(
+                            selectionFraction = selectionFraction,
+                            colorScheme = MaterialTheme.colorScheme
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .width(slotWidth)
+                                .fillMaxHeight()
+                                .padding(vertical = 2.dp)
+                                .combinedClickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = LocalIndication.current,
+                                    onClick = onTabClick,
+                                    onDoubleClick = {
+                                        if (selectedVisibleIndex == visibleIndex) {
+                                            scrollChannel?.trySend(Unit)
+                                        }
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        start = visualSpec.itemHorizontalPadding,
+                                        end = visualSpec.itemHorizontalPadding,
+                                        bottom = 8.dp
+                                    ),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                if (showIcon) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = iconColor,
+                                        modifier = Modifier.size(visualSpec.iconSize)
+                                    )
+                                }
+                                if (showIcon && showText) {
+                                    Spacer(modifier = Modifier.height(visualSpec.iconLabelSpacing))
+                                }
+                                if (showText) {
+                                    Text(
+                                        text = category,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        fontSize = visualSpec.labelTextSize,
+                                        lineHeight = visualSpec.labelLineHeight,
+                                        fontWeight = if (selectionFraction > 0.6f) FontWeight.SemiBold else FontWeight.Medium,
+                                        color = labelColor
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

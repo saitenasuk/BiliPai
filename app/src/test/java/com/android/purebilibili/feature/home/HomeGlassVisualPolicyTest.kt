@@ -63,4 +63,28 @@ class HomeGlassVisualPolicyTest {
         assertTrue(emphasized.highlightAlpha > normal.highlightAlpha)
         assertEquals(0.20f, emphasized.highlightAlpha)
     }
+
+    @Test
+    fun refreshTipUsesPlainMaterialStyleWhenGlassAndBlurAreDisabled() {
+        val appearance = resolveHomeRefreshTipAppearance(
+            liquidGlassEnabled = false,
+            blurEnabled = false
+        )
+
+        assertEquals(HomeRefreshTipSurfaceStyle.PLAIN, appearance.surfaceStyle)
+        assertEquals(0f, appearance.borderWidthDp)
+        assertEquals(1f, appearance.shadowElevationDp)
+    }
+
+    @Test
+    fun refreshTipKeepsGlassStyleWhenAnyBackdropEffectIsActive() {
+        val appearance = resolveHomeRefreshTipAppearance(
+            liquidGlassEnabled = false,
+            blurEnabled = true
+        )
+
+        assertEquals(HomeRefreshTipSurfaceStyle.GLASS, appearance.surfaceStyle)
+        assertEquals(0.8f, appearance.borderWidthDp)
+        assertEquals(6f, appearance.shadowElevationDp)
+    }
 }

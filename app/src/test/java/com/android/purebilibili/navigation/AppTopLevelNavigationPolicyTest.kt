@@ -1,5 +1,6 @@
 package com.android.purebilibili.navigation
 
+import com.android.purebilibili.feature.home.components.BottomNavItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -36,5 +37,33 @@ class AppTopLevelNavigationPolicyTest {
         )
 
         assertEquals(TopLevelNavigationAction.NAVIGATE_WITH_RESTORE, action)
+    }
+
+    @Test
+    fun selectedHomeBottomBarTap_requestsScrollToTop_insteadOfNavigate() {
+        val action = resolveBottomBarSelectionAction(
+            currentItem = BottomNavItem.HOME,
+            tappedItem = BottomNavItem.HOME
+        )
+
+        assertEquals(BottomBarSelectionAction.HOME_RESELECT, action)
+    }
+
+    @Test
+    fun nonHomeOrNonReselectBottomBarTap_keepsNavigateAction() {
+        assertEquals(
+            BottomBarSelectionAction.NAVIGATE,
+            resolveBottomBarSelectionAction(
+                currentItem = BottomNavItem.HISTORY,
+                tappedItem = BottomNavItem.HOME
+            )
+        )
+        assertEquals(
+            BottomBarSelectionAction.NAVIGATE,
+            resolveBottomBarSelectionAction(
+                currentItem = BottomNavItem.HOME,
+                tappedItem = BottomNavItem.DYNAMIC
+            )
+        )
     }
 }
