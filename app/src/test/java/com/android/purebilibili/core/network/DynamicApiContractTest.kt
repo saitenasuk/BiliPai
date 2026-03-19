@@ -6,6 +6,7 @@ import kotlin.test.assertTrue
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Query
+import retrofit2.http.QueryMap
 
 class DynamicApiContractTest {
 
@@ -55,5 +56,15 @@ class DynamicApiContractTest {
         val firstParamAnnotations = method.parameterAnnotations[0].toList()
         val idQuery = firstParamAnnotations.filterIsInstance<Query>().firstOrNull()
         assertEquals("id", idQuery?.value)
+    }
+
+    @Test
+    fun getUserDynamicFeed_usesDynamicFeedAllEndpointAndQueryMap() {
+        val method = DynamicApi::class.java.methods.first { it.name == "getUserDynamicFeed" }
+        val get = method.getAnnotation(GET::class.java)
+        assertEquals("x/polymer/web-dynamic/v1/feed/all", get?.value)
+
+        val firstParamAnnotations = method.parameterAnnotations[0].toList()
+        assertTrue(firstParamAnnotations.any { it is QueryMap })
     }
 }

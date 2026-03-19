@@ -397,24 +397,29 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         _selectedUserId.value = uid
         
         if (uid != null) {
+            val localMatchCount = _uiState.value.items.count { item ->
+                item.modules.module_author?.mid == uid
+            }
             val shouldReload = shouldReloadSelectedUserDynamics(
                 previousUid = previousUid,
                 nextUid = uid,
                 currentItems = _uiState.value.userItems,
-                userError = _uiState.value.userError
+                userError = _uiState.value.userError,
+                localMatchCount = localMatchCount
             )
-            if (!shouldReload) return
-
-            // 切换用户时立即清空旧数据，并废弃旧请求
-            userDynamicsJob?.cancel()
-            activeUserDynamicsRequestToken += 1L
-            val requestToken = activeUserDynamicsRequestToken
             _uiState.value = _uiState.value.copy(
                 userItems = emptyList(),
                 hasUserMore = true,
-                userIsLoading = true,
+                userIsLoading = false,
                 userError = null
             )
+            if (!shouldReload) return
+
+            // 切换用户时废弃旧请求，仅在本地没有匹配时才补远端数据
+            userDynamicsJob?.cancel()
+            activeUserDynamicsRequestToken += 1L
+            val requestToken = activeUserDynamicsRequestToken
+            _uiState.value = _uiState.value.copy(userIsLoading = true)
             userDynamicsJob = viewModelScope.launch {
                 delay(USER_SELECTION_DEBOUNCE_MS)
                 DynamicRepository.resetUserPagination(uid)

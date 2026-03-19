@@ -40,7 +40,12 @@ import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Folder as MaterialFolder
 import androidx.compose.material.icons.outlined.Photo as MaterialPhoto
 import androidx.compose.runtime.Composable
@@ -61,8 +66,13 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowClockwise
 import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowCounterclockwise
 import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowDownCircle
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronBackward
+import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronUp
 import io.github.alexzhirkevich.cupertino.icons.outlined.Ellipsis
 import io.github.alexzhirkevich.cupertino.icons.outlined.Gearshape
+import io.github.alexzhirkevich.cupertino.icons.outlined.ChartBar
+import io.github.alexzhirkevich.cupertino.icons.outlined.BellBadge
+import io.github.alexzhirkevich.cupertino.icons.outlined.InfoCircle
+import io.github.alexzhirkevich.cupertino.icons.outlined.Sparkles
 import io.github.alexzhirkevich.cupertino.icons.filled.ExclamationmarkTriangle
 import io.github.alexzhirkevich.cupertino.icons.outlined.Folder as CupertinoFolder
 import io.github.alexzhirkevich.cupertino.icons.outlined.Photo as CupertinoPhoto
@@ -437,6 +447,9 @@ fun rememberAppChevronForwardIcon(): ImageVector = resolveAppChevronForwardIcon(
 fun rememberAppChevronDownIcon(): ImageVector = resolveAppChevronDownIcon(LocalUiPreset.current)
 
 @Composable
+fun rememberAppChevronUpIcon(): ImageVector = resolveAppChevronUpIcon(LocalUiPreset.current)
+
+@Composable
 fun rememberAppProfileAddIcon(): ImageVector = resolveAppProfileAddIcon(LocalUiPreset.current)
 
 @Composable
@@ -471,6 +484,18 @@ fun rememberAppVisibilityOnIcon(): ImageVector = resolveAppVisibilityOnIcon(Loca
 
 @Composable
 fun rememberAppVisibilityOffIcon(): ImageVector = resolveAppVisibilityOffIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppAnalyticsIcon(): ImageVector = resolveAppAnalyticsIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppInfoIcon(): ImageVector = resolveAppInfoIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppNotificationIcon(): ImageVector = resolveAppNotificationIcon(LocalUiPreset.current)
+
+@Composable
+fun rememberAppSparklesIcon(): ImageVector = resolveAppSparklesIcon(LocalUiPreset.current)
 
 fun resolveAppBackIcon(uiPreset: UiPreset): ImageVector =
     if (uiPreset == UiPreset.MD3) Icons.AutoMirrored.Filled.ArrowBack else CupertinoIcons.Outlined.ChevronBackward
@@ -556,6 +581,9 @@ fun resolveAppChevronForwardIcon(uiPreset: UiPreset): ImageVector =
 fun resolveAppChevronDownIcon(uiPreset: UiPreset): ImageVector =
     if (uiPreset == UiPreset.MD3) Icons.Outlined.KeyboardArrowDown else CupertinoIcons.Outlined.ChevronDown
 
+fun resolveAppChevronUpIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.KeyboardArrowUp else CupertinoIcons.Outlined.ChevronUp
+
 fun resolveAppProfileAddIcon(uiPreset: UiPreset): ImageVector =
     if (uiPreset == UiPreset.MD3) Icons.Outlined.PersonAddAlt1 else CupertinoIcons.Outlined.PersonCropCircleBadgePlus
 
@@ -591,3 +619,15 @@ fun resolveAppVisibilityOnIcon(uiPreset: UiPreset): ImageVector =
 
 fun resolveAppVisibilityOffIcon(uiPreset: UiPreset): ImageVector =
     if (uiPreset == UiPreset.MD3) Icons.Outlined.VisibilityOff else CupertinoIcons.Outlined.EyeSlash
+
+fun resolveAppAnalyticsIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.BarChart else CupertinoIcons.Outlined.ChartBar
+
+fun resolveAppInfoIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.Info else CupertinoIcons.Outlined.InfoCircle
+
+fun resolveAppNotificationIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.NotificationsNone else CupertinoIcons.Outlined.BellBadge
+
+fun resolveAppSparklesIcon(uiPreset: UiPreset): ImageVector =
+    if (uiPreset == UiPreset.MD3) Icons.Outlined.AutoAwesome else CupertinoIcons.Outlined.Sparkles

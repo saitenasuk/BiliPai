@@ -11,14 +11,14 @@ class DanmakuPlaybackSyncPolicyTest {
     fun `drift sync interval should be aggressive for high speed`() {
         assertEquals(900L, resolveDanmakuDriftSyncIntervalMs(2.0f))
         assertEquals(1200L, resolveDanmakuDriftSyncIntervalMs(1.5f))
-        assertEquals(1600L, resolveDanmakuDriftSyncIntervalMs(1.1f))
+        assertEquals(2000L, resolveDanmakuDriftSyncIntervalMs(1.1f))
     }
 
     @Test
     fun `drift sync interval should keep moderate frequency around normal speed`() {
-        assertEquals(2200L, resolveDanmakuDriftSyncIntervalMs(1.0f))
-        assertEquals(2200L, resolveDanmakuDriftSyncIntervalMs(1.01f))
-        assertEquals(2200L, resolveDanmakuDriftSyncIntervalMs(0.99f))
+        assertEquals(3200L, resolveDanmakuDriftSyncIntervalMs(1.0f))
+        assertEquals(3200L, resolveDanmakuDriftSyncIntervalMs(1.01f))
+        assertEquals(3200L, resolveDanmakuDriftSyncIntervalMs(0.99f))
     }
 
     @Test

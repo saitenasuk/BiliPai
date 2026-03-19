@@ -1,6 +1,9 @@
 package com.android.purebilibili.core.util
 
 object FormatUtils {
+    private const val DEFAULT_IMAGE_WIDTH = 640
+    private const val DEFAULT_IMAGE_HEIGHT = 400
+
     /**
      * 将数字格式化为 B站风格 (例如: 1.2万)
      */
@@ -44,9 +47,23 @@ object FormatUtils {
      * 2. 自动添加缩放后缀节省流量
      */
     fun fixImageUrl(url: String?): String {
+        return buildSizedImageUrl(url, width = DEFAULT_IMAGE_WIDTH, height = DEFAULT_IMAGE_HEIGHT)
+    }
+
+    fun buildSizedImageUrl(
+        url: String?,
+        width: Int,
+        height: Int,
+        format: String = "webp"
+    ): String {
+        val normalized = normalizeImageUrl(url)
+        if (normalized.isEmpty() || width <= 0 || height <= 0) return normalized
+        return "$normalized@${width}w_${height}h.$format"
+    }
+
+    private fun normalizeImageUrl(url: String?): String {
         if (url.isNullOrEmpty()) return ""
 
-        // Process protocol
         val withProtocol = if (url.startsWith("//")) {
             "https:$url"
         } else if (url.startsWith("http://")) {
@@ -55,14 +72,7 @@ object FormatUtils {
             url
         }
 
-        // Add resize suffix if not present and no other processing parameters
-        // [Optimization] Avoid string allocation if already correct
-        return if (withProtocol.contains("@")) {
-            withProtocol
-        } else {
-            // Append webp suffix for bandwidth saving
-            "$withProtocol@640w_400h.webp"
-        }
+        return withProtocol.substringBefore("@")
     }
 
     /**

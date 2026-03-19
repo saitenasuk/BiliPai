@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.android.purebilibili.R
+import com.android.purebilibili.core.theme.LocalDynamicColorActive
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.iOSBlue
@@ -90,11 +91,12 @@ private val PreviewMd3SettingsEntryThemePalette = SettingsEntryThemePalette(
 )
 
 internal fun resolveMd3SettingsEntryThemePalette(
-    colorScheme: ColorScheme
+    colorScheme: ColorScheme,
+    useSemanticAccentRoles: Boolean = true
 ): SettingsEntryThemePalette = SettingsEntryThemePalette(
     primary = colorScheme.primary,
-    secondary = colorScheme.secondary,
-    tertiary = colorScheme.tertiary,
+    secondary = if (useSemanticAccentRoles) colorScheme.secondary else colorScheme.primary,
+    tertiary = if (useSemanticAccentRoles) colorScheme.tertiary else colorScheme.primary,
     error = colorScheme.error
 )
 
@@ -111,13 +113,14 @@ private fun SettingsEntryThemePalette.resolve(
 internal fun rememberSettingsEntryTint(
     role: SettingsEntryTintRole,
     iosTint: Color,
-    uiPreset: UiPreset = LocalUiPreset.current
+    uiPreset: UiPreset = LocalUiPreset.current,
+    dynamicColorActive: Boolean = LocalDynamicColorActive.current
 ): Color {
     val colorScheme = MaterialTheme.colorScheme
-    val md3Palette = remember(colorScheme) {
-        resolveMd3SettingsEntryThemePalette(colorScheme)
+    val md3Palette = remember(colorScheme, dynamicColorActive) {
+        resolveMd3SettingsEntryThemePalette(colorScheme, useSemanticAccentRoles = dynamicColorActive)
     }
-    return remember(role, iosTint, uiPreset, md3Palette) {
+    return remember(role, iosTint, uiPreset, dynamicColorActive, md3Palette) {
         if (uiPreset == UiPreset.MD3) {
             md3Palette.resolve(role)
         } else {
@@ -146,26 +149,26 @@ private fun resolveMd3SettingsEntryTintRole(
     SettingsSearchTarget.OPEN_LINKS,
     SettingsSearchTarget.PERMISSION -> SettingsEntryTintRole.SECONDARY
 
-    SettingsSearchTarget.BLOCKED_LIST,
-    SettingsSearchTarget.CLEAR_CACHE -> SettingsEntryTintRole.ERROR
-
     SettingsSearchTarget.CHECK_UPDATE,
     SettingsSearchTarget.DONATE,
     SettingsSearchTarget.TELEGRAM,
     SettingsSearchTarget.TWITTER,
-    SettingsSearchTarget.DISCLAIMER -> SettingsEntryTintRole.PRIMARY
+    SettingsSearchTarget.DISCLAIMER,
+    SettingsSearchTarget.BLOCKED_LIST,
+    SettingsSearchTarget.CLEAR_CACHE -> SettingsEntryTintRole.PRIMARY
 }
 
 @Composable
 internal fun rememberSettingsEntryVisual(
     target: SettingsSearchTarget,
-    uiPreset: UiPreset = LocalUiPreset.current
+    uiPreset: UiPreset = LocalUiPreset.current,
+    dynamicColorActive: Boolean = LocalDynamicColorActive.current
 ): SettingsEntryVisual {
     val colorScheme = MaterialTheme.colorScheme
-    val md3Palette = remember(colorScheme) {
-        resolveMd3SettingsEntryThemePalette(colorScheme)
+    val md3Palette = remember(colorScheme, dynamicColorActive) {
+        resolveMd3SettingsEntryThemePalette(colorScheme, useSemanticAccentRoles = dynamicColorActive)
     }
-    return remember(target, uiPreset, md3Palette) {
+    return remember(target, uiPreset, dynamicColorActive, md3Palette) {
         resolveSettingsEntryVisual(target, uiPreset, md3Palette)
     }
 }
@@ -288,7 +291,7 @@ internal fun resolveSettingsEntryVisual(
         )
         SettingsSearchTarget.BLOCKED_LIST -> SettingsEntryVisual(
             icon = CupertinoIcons.Default.XmarkCircle,
-            iconTint = iOSRed
+            iconTint = iOSBlue
         )
         SettingsSearchTarget.SETTINGS_SHARE -> SettingsEntryVisual(
             icon = CupertinoIcons.Default.ListBullet,
@@ -304,7 +307,7 @@ internal fun resolveSettingsEntryVisual(
         )
         SettingsSearchTarget.CLEAR_CACHE -> SettingsEntryVisual(
             icon = CupertinoIcons.Default.Trash,
-            iconTint = iOSPink
+            iconTint = iOSBlue
         )
         SettingsSearchTarget.PLUGINS -> SettingsEntryVisual(
             icon = CupertinoIcons.Default.PuzzlepieceExtension,

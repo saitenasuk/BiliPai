@@ -135,11 +135,13 @@ fun AppearanceSettingsContent(
 ) {
     // Animation Trigger
     var isVisible by remember { mutableStateOf(false) }
+    val displayModeTint = rememberAdaptiveSemanticIconTint(iOSBlue)
     LaunchedEffect(Unit) {
         isVisible = true
     }
 
     val configuration = LocalConfiguration.current
+    val displayMetricsSnapshot = LocalDisplayMetricsSnapshot.current
     val isTablet = configuration.screenWidthDp >= 600 // Material Design 3 中型屏幕断点
     val windowSizeClass = LocalWindowSizeClass.current
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
@@ -198,7 +200,7 @@ fun AppearanceSettingsContent(
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
-                        Divider()
+                        IOSDivider()
                         Spacer(modifier = Modifier.height(8.dp))
 
                         IOSSlidingSegmentedSetting(
@@ -212,7 +214,7 @@ fun AppearanceSettingsContent(
                         )
                         
                         Spacer(modifier = Modifier.height(16.dp))
-                        Divider()
+                        IOSDivider()
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // 动态取色开关
@@ -412,6 +414,89 @@ fun AppearanceSettingsContent(
                 }
             }
         }
+
+        item {
+            Box(modifier = Modifier.staggeredEntrance(2, isVisible, motionTier = effectiveMotionTier)) {
+                IOSSectionTitle("显示与排版")
+            }
+        }
+        item {
+            Box(modifier = Modifier.staggeredEntrance(3, isVisible, motionTier = effectiveMotionTier)) {
+                IOSGroup {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        IOSSlidingSegmentedSetting(
+                            title = "字体大小：${state.appFontSizePreset.label}",
+                            subtitle = "仅调整应用内文字比例",
+                            options = resolveAppFontSizeSegmentOptions(),
+                            selectedValue = state.appFontSizePreset,
+                            onSelectionChange = { preset ->
+                                viewModel.setAppFontSizePreset(preset)
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        IOSDivider()
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        IOSSlidingSegmentedSetting(
+                            title = "界面缩放：${state.appUiScalePreset.label}",
+                            subtitle = "调整列表、卡片与控件的整体密度",
+                            options = resolveAppUiScaleSegmentOptions(),
+                            selectedValue = state.appUiScalePreset,
+                            onSelectionChange = { preset ->
+                                viewModel.setAppUiScalePreset(preset)
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        IOSDivider()
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.PaintbrushPointed,
+                            title = "应用内 DPI 覆盖",
+                            subtitle = resolveDpiOverrideSubtitle(
+                                systemDensityDpi = displayMetricsSnapshot.systemDensityDpi,
+                                systemSmallestWidthDp = displayMetricsSnapshot.systemSmallestWidthDp,
+                                currentOverridePercent = state.appDpiOverridePercent
+                            ),
+                            checked = state.appDpiOverridePercent > 0,
+                            onCheckedChange = { enabled ->
+                                viewModel.setAppDpiOverridePercent(
+                                    if (enabled) DEFAULT_APP_DPI_OVERRIDE_PERCENT else 0
+                                )
+                            },
+                            iconTint = iOSTeal
+                        )
+
+                        AnimatedVisibility(
+                            visible = state.appDpiOverridePercent > 0,
+                            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                        ) {
+                            Column(modifier = Modifier.padding(top = 16.dp)) {
+                                IOSSlidingSegmentedSetting(
+                                    title = "应用 DPI：${resolveDisplayedAppDpiPercent(state.appDpiOverridePercent)}%",
+                                    subtitle = "按当前设备 DPI 进行应用内覆盖，不修改系统设置",
+                                    options = resolveAppDpiOverrideSegmentOptions(),
+                                    selectedValue = resolveDisplayedAppDpiPercent(state.appDpiOverridePercent),
+                                    onSelectionChange = { percent ->
+                                        viewModel.setAppDpiOverridePercent(percent)
+                                    }
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = resolveDisplayMetricsSummary(displayMetricsSnapshot),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
         //  启动画面
         item { 
@@ -441,7 +526,7 @@ fun AppearanceSettingsContent(
                         iconTint = com.android.purebilibili.core.theme.iOSBlue
                     )
 
-                    Divider()
+                    IOSDivider()
                     IOSSwitchItem(
                         icon = CupertinoIcons.Default.Shuffle,
                         title = "随机展示开屏壁纸",
@@ -515,7 +600,7 @@ fun AppearanceSettingsContent(
                         }
                     }
 
-                    Divider()
+                    IOSDivider()
                     IOSSwitchItem(
                         icon = CupertinoIcons.Default.WandAndStars,
                         title = "开屏图标动画",
@@ -532,7 +617,7 @@ fun AppearanceSettingsContent(
                         exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
                     ) {
                         Column {
-                            Divider()
+                            IOSDivider()
                             
                             var showWallpaperPicker by remember { mutableStateOf(false) }
                             
@@ -647,7 +732,7 @@ fun AppearanceSettingsContent(
                         onClick = onNavigateToIconSettings,
                         iconTint = iOSPurple
                     )
-                    Divider()
+                    IOSDivider()
                     // 动画设置
                     IOSClickableItem(
                         icon = CupertinoIcons.Default.WandAndStars,
@@ -657,7 +742,7 @@ fun AppearanceSettingsContent(
                         iconTint = iOSPink
                     )
 
-                    Divider()
+                    IOSDivider()
                     // 触感反馈
                     IOSSwitchItem(
                         icon = CupertinoIcons.Default.HandTap,
@@ -732,7 +817,7 @@ fun AppearanceSettingsContent(
                                 Icon(
                                     CupertinoIcons.Default.SquareOnSquare,
                                     contentDescription = null,
-                                    tint = iOSBlue,
+                                    tint = displayModeTint,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
@@ -811,7 +896,7 @@ fun AppearanceSettingsContent(
                             }
                         }
                         
-                        Divider(modifier = Modifier.padding(start = 16.dp))
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.ChevronUp,
                             title = "顶部栏自动收缩",
@@ -821,7 +906,7 @@ fun AppearanceSettingsContent(
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
 
-                        Divider(modifier = Modifier.padding(start = 16.dp))
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.SquareOnSquare,
                             title = "统计信息贴封面（紧凑）",
@@ -839,7 +924,7 @@ fun AppearanceSettingsContent(
                             iconTint = iOSTeal
                         )
 
-                        Divider(modifier = Modifier.padding(start = 16.dp))
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.PlayCircle,
                             title = "封面玻璃样式",
@@ -857,7 +942,7 @@ fun AppearanceSettingsContent(
                             iconTint = com.android.purebilibili.core.theme.iOSOrange
                         )
 
-                        Divider(modifier = Modifier.padding(start = 16.dp))
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
                         IOSSwitchItem(
                             icon = CupertinoIcons.Default.Tag,
                             title = "信息区玻璃样式",
@@ -882,7 +967,7 @@ fun AppearanceSettingsContent(
                             exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
                         ) {
                             Column {
-                                Divider(modifier = Modifier.padding(start = 16.dp))
+                                IOSDivider(modifier = Modifier.padding(start = 16.dp))
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -1042,5 +1127,56 @@ fun ColorPreviewItem(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+private const val DEFAULT_APP_DPI_OVERRIDE_PERCENT = 100
+
+private fun resolveAppFontSizeSegmentOptions(): List<PlaybackSegmentOption<AppFontSizePreset>> {
+    return AppFontSizePreset.entries.map { preset ->
+        PlaybackSegmentOption(value = preset, label = preset.label)
+    }
+}
+
+private fun resolveAppUiScaleSegmentOptions(): List<PlaybackSegmentOption<AppUiScalePreset>> {
+    return AppUiScalePreset.entries.map { preset ->
+        PlaybackSegmentOption(value = preset, label = preset.label)
+    }
+}
+
+private fun resolveAppDpiOverrideSegmentOptions(): List<PlaybackSegmentOption<Int>> {
+    return listOf(90, 95, 100, 105, 110).map { percent ->
+        PlaybackSegmentOption(value = percent, label = "$percent%")
+    }
+}
+
+private fun resolveDpiOverrideSubtitle(
+    systemDensityDpi: Int,
+    systemSmallestWidthDp: Int,
+    currentOverridePercent: Int
+): String {
+    val modeLabel = if (currentOverridePercent > 0) {
+        "当前 ${currentOverridePercent}%"
+    } else {
+        "当前跟随系统"
+    }
+    return "系统 ${systemDensityDpi}dpi / 最小宽度 ${systemSmallestWidthDp}dp，$modeLabel"
+}
+
+private fun resolveDisplayMetricsSummary(
+    snapshot: DisplayMetricsSnapshot
+): String {
+    val dpiSuffix = snapshot.dpiOverridePercent?.let { "，覆盖 ${it}%" } ?: ""
+    val narrowSuffix = if (snapshot.isNarrowWidth) "，已进入小屏紧凑适配" else ""
+    return "应用生效后约 ${snapshot.effectiveDensityDpi}dpi / ${snapshot.effectiveSmallestWidthDp}dp$dpiSuffix$narrowSuffix"
+}
+
+internal fun resolveDisplayedAppDpiPercent(
+    currentOverridePercent: Int
+): Int {
+    return if (currentOverridePercent > 0) {
+        currentOverridePercent
+    } else {
+        DEFAULT_APP_DPI_OVERRIDE_PERCENT
     }
 }

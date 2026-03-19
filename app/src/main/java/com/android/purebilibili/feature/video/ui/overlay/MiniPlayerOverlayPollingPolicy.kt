@@ -13,5 +13,5 @@ internal fun shouldPollMiniPlayerProgress(
 internal fun resolveMiniPlayerPollingIntervalMs(
     isPlaying: Boolean
 ): Long {
-    return if (isPlaying) 300L else 600L
+    return if (isPlaying) 500L else 1000L
 }

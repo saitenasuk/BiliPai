@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -17,9 +18,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.SpeakerWave2
@@ -43,15 +47,21 @@ private fun PlayerIconBtn(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    IconButton(
+    Surface(
         onClick = onClick,
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.24f),
         modifier = modifier
+            .size(38.dp)
+            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.White
-        )
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White
+            )
+        }
     }
 }
 
@@ -198,11 +208,15 @@ fun LivePlayerControls(
             modifier = Modifier.align(Alignment.Center)
         ) {
             Surface(
-                color = Color.Transparent,
-                shape = RoundedCornerShape(8.dp)
+                color = Color.Black.copy(alpha = 0.42f),
+                shape = RoundedCornerShape(18.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    Color.White.copy(alpha = 0.08f)
+                )
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (gestureIcon != null) {
@@ -224,9 +238,17 @@ fun LivePlayerControls(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(0.7f), Color.Transparent)))
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.78f),
+                                Color.Black.copy(alpha = 0.36f),
+                                Color.Transparent
+                            )
+                        )
+                    )
                     .statusBarsPadding()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 PlayerIconBtn(
@@ -234,7 +256,14 @@ fun LivePlayerControls(
                     onClick = onBack
                 )
                 Spacer(Modifier.width(16.dp))
-                Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
+                Text(
+                    text = title,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
         
@@ -248,9 +277,17 @@ fun LivePlayerControls(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.7f))))
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.34f),
+                                Color.Black.copy(alpha = 0.78f)
+                            )
+                        )
+                    )
                     .navigationBarsPadding()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 播放/暂停
@@ -323,7 +360,7 @@ fun LivePlayerControls(
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                text = if (isChatVisible) "与大家互动" else "与大家互动",
+                                text = "互动区",
                                 color = if (isChatVisible) Color.White else Color.White.copy(alpha = 0.5f),
                                 style = MaterialTheme.typography.labelMedium
                             )

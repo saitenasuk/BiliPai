@@ -65,6 +65,7 @@ import androidx.compose.ui.draw.alpha
 import com.android.purebilibili.core.ui.blur.shouldAllowDirectHazeLiquidGlassFallback
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.adaptive.MotionTier
@@ -185,6 +186,25 @@ internal fun resolveBottomBarFloatingHeightDp(
         0 -> if (isTablet) 72f else 66f
         2 -> if (isTablet) 54f else 52f
         else -> if (isTablet) 64f else 58f
+    }
+}
+
+internal fun normalizeBottomBarLabelMode(requestedLabelMode: Int): Int = when (requestedLabelMode) {
+    0, 1, 2 -> requestedLabelMode
+    else -> 0
+}
+
+internal fun shouldShowBottomBarIcon(labelMode: Int): Boolean {
+    return when (normalizeBottomBarLabelMode(labelMode)) {
+        2 -> false
+        else -> true
+    }
+}
+
+internal fun shouldShowBottomBarText(labelMode: Int): Boolean {
+    return when (normalizeBottomBarLabelMode(labelMode)) {
+        1 -> false
+        else -> true
     }
 }
 
@@ -346,7 +366,13 @@ fun FrostedBottomBar(
             modifier = modifier,
             visibleItems = visibleItems,
             onToggleSidebar = onToggleSidebar,
-            isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet
+            isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet,
+            labelMode = labelMode,
+            blurEnabled = hazeState != null,
+            hazeState = hazeState,
+            motionTier = motionTier,
+            isTransitionRunning = isTransitionRunning,
+            forceLowBlurBudget = forceLowBlurBudget
         )
         return
     }
@@ -823,16 +849,46 @@ private fun MaterialBottomBar(
     modifier: Modifier = Modifier,
     visibleItems: List<BottomNavItem>,
     onToggleSidebar: (() -> Unit)?,
-    isTablet: Boolean
+    isTablet: Boolean,
+    labelMode: Int,
+    blurEnabled: Boolean,
+    hazeState: HazeState?,
+    motionTier: MotionTier,
+    isTransitionRunning: Boolean,
+    forceLowBlurBudget: Boolean
 ) {
+    val normalizedLabelMode = normalizeBottomBarLabelMode(labelMode)
+    val showIcon = shouldShowBottomBarIcon(normalizedLabelMode)
+    val showText = shouldShowBottomBarText(normalizedLabelMode)
+    val blurIntensity = currentUnifiedBlurIntensity()
+    val containerColor = resolveBottomBarSurfaceColor(
+        surfaceColor = MaterialTheme.colorScheme.surface,
+        blurEnabled = blurEnabled,
+        blurIntensity = blurIntensity
+    )
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        tonalElevation = 3.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (blurEnabled && hazeState != null) {
+                    Modifier.unifiedBlur(
+                        hazeState = hazeState,
+                        surfaceType = BlurSurfaceType.BOTTOM_BAR,
+                        motionTier = motionTier,
+                        isScrolling = false,
+                        isTransitionRunning = isTransitionRunning,
+                        forceLowBudget = forceLowBlurBudget
+                    )
+                } else {
+                    Modifier
+                }
+            ),
+        tonalElevation = if (blurEnabled) 0.dp else 3.dp,
         shadowElevation = 0.dp,
-        color = MaterialTheme.colorScheme.surface
+        color = containerColor
     ) {
         NavigationBar(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = Color.Transparent,
             tonalElevation = 0.dp,
             modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
         ) {
@@ -841,13 +897,21 @@ private fun MaterialBottomBar(
                     selected = currentItem == item,
                     onClick = { onItemClick(item) },
                     icon = {
-                        Icon(
-                            imageVector = resolveMaterialBottomBarIcon(item = item, selected = currentItem == item),
-                            contentDescription = item.label
-                        )
+                        if (showIcon) {
+                            Icon(
+                                imageVector = resolveMaterialBottomBarIcon(item = item, selected = currentItem == item),
+                                contentDescription = item.label
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.size(0.dp))
+                        }
                     },
-                    label = { Text(item.label) },
-                    alwaysShowLabel = true,
+                    label = if (showText) {
+                        { Text(item.label) }
+                    } else {
+                        null
+                    },
+                    alwaysShowLabel = showText,
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
                         selectedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -863,13 +927,21 @@ private fun MaterialBottomBar(
                     selected = false,
                     onClick = onToggleSidebar,
                     icon = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.MenuOpen,
-                            contentDescription = "侧边栏"
-                        )
+                        if (showIcon) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.MenuOpen,
+                                contentDescription = "侧边栏"
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.size(0.dp))
+                        }
                     },
-                    label = { Text("侧边栏") },
-                    alwaysShowLabel = true,
+                    label = if (showText) {
+                        { Text("侧边栏") }
+                    } else {
+                        null
+                    },
+                    alwaysShowLabel = showText,
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
                         selectedTextColor = MaterialTheme.colorScheme.onSurface,

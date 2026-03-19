@@ -8,8 +8,13 @@ import org.junit.Test
 class VideoCardHistoryProgressPolicyTest {
 
     @Test
-    fun `history card should show progress bar when view_at and duration are valid`() {
-        assertTrue(shouldShowVideoCardHistoryProgressBar(viewAt = 1700000000L, durationSec = 120, progressSec = 0))
+    fun `history card should show progress bar when resolved progress is non zero`() {
+        assertTrue(shouldShowVideoCardHistoryProgressBar(viewAt = 1700000000L, durationSec = 120, progressSec = 30))
+    }
+
+    @Test
+    fun `history card should hide progress bar for zero progress`() {
+        assertFalse(shouldShowVideoCardHistoryProgressBar(viewAt = 1700000000L, durationSec = 120, progressSec = 0))
     }
 
     @Test

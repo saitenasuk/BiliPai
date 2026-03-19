@@ -7,18 +7,23 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.FolderCopy
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PersonAddAlt1
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -40,6 +45,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.Bookmark
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronBackward
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronDown
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronForward
+import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronUp
 import io.github.alexzhirkevich.cupertino.icons.outlined.Clock
 import io.github.alexzhirkevich.cupertino.icons.outlined.Envelope
 import io.github.alexzhirkevich.cupertino.icons.outlined.Eye
@@ -51,9 +57,13 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.MagnifyingGlass
 import io.github.alexzhirkevich.cupertino.icons.outlined.Message
 import io.github.alexzhirkevich.cupertino.icons.outlined.PersonCropCircleBadgePlus
 import io.github.alexzhirkevich.cupertino.icons.outlined.Play
+import io.github.alexzhirkevich.cupertino.icons.outlined.BellBadge
+import io.github.alexzhirkevich.cupertino.icons.outlined.ChartBar
+import io.github.alexzhirkevich.cupertino.icons.outlined.InfoCircle
 import io.github.alexzhirkevich.cupertino.icons.outlined.RectangleStack
 import io.github.alexzhirkevich.cupertino.icons.outlined.RectanglePortraitAndArrowForward
 import io.github.alexzhirkevich.cupertino.icons.outlined.ArrowTurnUpRight
+import io.github.alexzhirkevich.cupertino.icons.outlined.Sparkles
 import io.github.alexzhirkevich.cupertino.icons.outlined.XmarkCircle
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -67,6 +77,7 @@ class AppIconsPresetPolicyTest {
         assertEquals(Icons.Filled.Clear, resolveAppClearIcon(UiPreset.MD3))
         assertEquals(Icons.AutoMirrored.Outlined.KeyboardArrowRight, resolveAppChevronForwardIcon(UiPreset.MD3))
         assertEquals(Icons.Outlined.KeyboardArrowDown, resolveAppChevronDownIcon(UiPreset.MD3))
+        assertEquals(Icons.Outlined.KeyboardArrowUp, resolveAppChevronUpIcon(UiPreset.MD3))
     }
 
     @Test
@@ -88,6 +99,10 @@ class AppIconsPresetPolicyTest {
         assertEquals(Icons.Outlined.Wifi, resolveAppWifiIcon(UiPreset.MD3))
         assertEquals(Icons.Outlined.PersonAddAlt1, resolveAppProfileAddIcon(UiPreset.MD3))
         assertEquals(Icons.Outlined.Lock, resolveAppLockIcon(UiPreset.MD3))
+        assertEquals(Icons.Outlined.BarChart, resolveAppAnalyticsIcon(UiPreset.MD3))
+        assertEquals(Icons.Outlined.Info, resolveAppInfoIcon(UiPreset.MD3))
+        assertEquals(Icons.Outlined.NotificationsNone, resolveAppNotificationIcon(UiPreset.MD3))
+        assertEquals(Icons.Outlined.AutoAwesome, resolveAppSparklesIcon(UiPreset.MD3))
     }
 
     @Test
@@ -117,6 +132,7 @@ class AppIconsPresetPolicyTest {
         assertEquals(CupertinoIcons.Outlined.Lock, resolveAppLockIcon(UiPreset.IOS))
         assertEquals(CupertinoIcons.Outlined.ChevronForward, resolveAppChevronForwardIcon(UiPreset.IOS))
         assertEquals(CupertinoIcons.Outlined.ChevronDown, resolveAppChevronDownIcon(UiPreset.IOS))
+        assertEquals(CupertinoIcons.Outlined.ChevronUp, resolveAppChevronUpIcon(UiPreset.IOS))
         assertEquals(CupertinoIcons.Outlined.House, resolveAppHomeIcon(UiPreset.IOS))
         assertEquals(CupertinoIcons.Outlined.RectangleStack, resolveAppDynamicIcon(UiPreset.IOS))
         assertEquals(CupertinoIcons.Outlined.Play, resolveAppPlayIcon(UiPreset.IOS))
@@ -126,5 +142,9 @@ class AppIconsPresetPolicyTest {
         assertEquals(CupertinoIcons.Outlined.ArrowTurnUpRight, resolveAppShareIcon(UiPreset.IOS))
         assertEquals(CupertinoIcons.Outlined.Eye, resolveAppVisibilityOnIcon(UiPreset.IOS))
         assertEquals(CupertinoIcons.Outlined.EyeSlash, resolveAppVisibilityOffIcon(UiPreset.IOS))
+        assertEquals(CupertinoIcons.Outlined.ChartBar, resolveAppAnalyticsIcon(UiPreset.IOS))
+        assertEquals(CupertinoIcons.Outlined.InfoCircle, resolveAppInfoIcon(UiPreset.IOS))
+        assertEquals(CupertinoIcons.Outlined.BellBadge, resolveAppNotificationIcon(UiPreset.IOS))
+        assertEquals(CupertinoIcons.Outlined.Sparkles, resolveAppSparklesIcon(UiPreset.IOS))
     }
 }

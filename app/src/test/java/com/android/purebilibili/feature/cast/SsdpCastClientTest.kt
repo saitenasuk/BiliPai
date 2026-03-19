@@ -72,4 +72,36 @@ class SsdpCastClientTest {
         assertTrue(body.contains("&amp;"))
         assertTrue(body.contains("&lt;tag attr=&quot;1&quot;&gt;value&lt;/tag&gt;"))
     }
+
+    @Test
+    fun `parseDeviceProfile extracts friendly name and avtransport endpoint`() {
+        val descriptionXml = """
+            <?xml version="1.0"?>
+            <root xmlns="urn:schemas-upnp-org:device-1-0">
+              <device>
+                <friendlyName>Living Room TV</friendlyName>
+                <modelName>Xiaomi TV</modelName>
+                <serviceList>
+                  <service>
+                    <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>
+                    <controlURL>/MediaRenderer/AVTransport/Control</controlURL>
+                  </service>
+                </serviceList>
+              </device>
+            </root>
+        """.trimIndent()
+
+        val profile = SsdpCastClient.parseDeviceProfile(
+            descriptionXml = descriptionXml,
+            descriptionLocation = "http://192.168.31.8:8899/rootDesc.xml"
+        )
+
+        assertNotNull(profile)
+        assertEquals("Living Room TV", profile?.friendlyName)
+        assertEquals("Xiaomi TV", profile?.modelName)
+        assertEquals(
+            "http://192.168.31.8:8899/MediaRenderer/AVTransport/Control",
+            profile?.avTransportEndpoint?.controlUrl
+        )
+    }
 }

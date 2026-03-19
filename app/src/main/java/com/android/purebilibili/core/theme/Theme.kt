@@ -124,6 +124,7 @@ fun PureBiliBiliTheme(
     dynamicColor: Boolean = false,
     amoledDarkTheme: Boolean = false,
     themeColorIndex: Int = 0, //  默认 0 = iOS 蓝色
+    fontSizePreset: AppFontSizePreset = AppFontSizePreset.DEFAULT,
     content: @Composable () -> Unit
 ) {
     //  🚀 [修复] 强制监听配置变化 (如更换壁纸触发的资源刷新)
@@ -134,6 +135,7 @@ fun PureBiliBiliTheme(
     val customPrimaryColor = ThemeColors.getOrElse(themeColorIndex) { iOSSystemBlue }
     
     val renderingProfile = resolveUiRenderingProfile(uiPreset)
+    val isDynamicColorActive = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val shapes = if (renderingProfile.useMaterialChrome) {
         Shapes()
     } else {
@@ -142,7 +144,7 @@ fun PureBiliBiliTheme(
     
     val colorScheme = when {
         // 如果开启了动态取色 且 系统版本 >= Android 12 (S)
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        isDynamicColorActive -> {
             val context = LocalContext.current
             if (darkTheme) {
                 dynamicDarkColorScheme(context)
@@ -159,11 +161,12 @@ fun PureBiliBiliTheme(
             }
         }
         else -> {
-            if (renderingProfile.useMaterialChrome) {
+            val lightScheme = if (renderingProfile.useMaterialChrome) {
                 createMd3LightColorScheme(customPrimaryColor)
             } else {
                 createLightColorScheme(customPrimaryColor)
             }
+            enforceDynamicLightTextContrast(lightScheme)
         }
     }
 
@@ -181,11 +184,12 @@ fun PureBiliBiliTheme(
 
     CompositionLocalProvider(
         LocalUiPreset provides uiPreset,
+        LocalDynamicColorActive provides isDynamicColorActive,
         LocalCornerRadiusScale provides if (renderingProfile.useMaterialChrome) 0.9f else 1f
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = BiliTypography,
+            typography = BiliTypography.scaled(fontSizePreset.multiplier),
             shapes = shapes,
             content = content
         )

@@ -21,7 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSPurple
+import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -37,6 +39,7 @@ fun BlurIntensitySelector(
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    val titleTint = rememberAdaptiveSemanticIconTint(iOSBlue)
     
     // 获取当前选中项的显示文本
     val currentTitle = when (selectedIntensity) {
@@ -58,7 +61,7 @@ fun BlurIntensitySelector(
             Icon(
                 CupertinoIcons.Default.WandAndStars,
                 contentDescription = null,
-                tint = iOSBlue,
+                tint = titleTint,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(16.dp))
@@ -106,7 +109,7 @@ fun BlurIntensitySelector(
                 //  玻璃拟态风格 - 移到中间
                 BlurIntensityOption(
                     icon = CupertinoIcons.Default.SquareStack3dUp,
-                    iconTint = com.android.purebilibili.core.theme.iOSSystemGray,
+                    iconTint = iOSSystemGray,
                     title = "玻璃拟态",
                     description = "强烈模糊，完全遮盖背景",
                     isSelected = selectedIntensity == BlurIntensity.APPLE_DOCK,
@@ -142,6 +145,7 @@ fun BlurIntensityOption(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -164,7 +168,7 @@ fun BlurIntensityOption(
             Spacer(modifier = Modifier.width(8.dp))
         }
         
-        Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = effectiveIconTint, modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)

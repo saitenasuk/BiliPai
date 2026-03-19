@@ -1851,7 +1851,12 @@ fun AppNavigation(
                             ) {
                                 FrostedBottomBar(
                                     currentItem = currentBottomNavItem,
-                                    onItemClick = { item -> navigateTo(item.route) },
+                                    onItemClick = { item ->
+                                        when (resolveBottomBarSelectionAction(currentBottomNavItem, item)) {
+                                            BottomBarSelectionAction.NAVIGATE -> navigateTo(item.route)
+                                            BottomBarSelectionAction.HOME_RESELECT -> homeScrollChannel.trySend(Unit)
+                                        }
+                                    },
                                     onHomeDoubleTap = { homeScrollChannel.trySend(Unit) },
                                     onDynamicDoubleTap = { dynamicScrollChannel.trySend(Unit) },
                                     hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
@@ -1875,7 +1880,12 @@ fun AppNavigation(
                             // 贴底式底栏
                             FrostedBottomBar(
                                 currentItem = currentBottomNavItem,
-                                onItemClick = { item -> navigateTo(item.route) },
+                                onItemClick = { item ->
+                                    when (resolveBottomBarSelectionAction(currentBottomNavItem, item)) {
+                                        BottomBarSelectionAction.NAVIGATE -> navigateTo(item.route)
+                                        BottomBarSelectionAction.HOME_RESELECT -> homeScrollChannel.trySend(Unit)
+                                    }
+                                },
                                 onHomeDoubleTap = { homeScrollChannel.trySend(Unit) },
                                 onDynamicDoubleTap = { dynamicScrollChannel.trySend(Unit) },
                                 hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,

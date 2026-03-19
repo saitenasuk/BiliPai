@@ -81,11 +81,11 @@ class iOSHomeHeaderVisualPolicyTest {
     @Test
     fun `home header trims top chrome heights for better content density`() {
         assertEquals(48.dp, resolveHomeTopSearchBarHeight())
-        assertEquals(48.dp, resolveHomeTopSearchBarHeight(UiPreset.MD3))
+        assertEquals(56.dp, resolveHomeTopSearchBarHeight(UiPreset.MD3))
         assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = true))
-        assertEquals(54.dp, resolveHomeTopTabRowHeight(isTabFloating = true, uiPreset = UiPreset.MD3))
+        assertEquals(52.dp, resolveHomeTopTabRowHeight(isTabFloating = true, uiPreset = UiPreset.MD3))
         assertEquals(46.dp, resolveHomeTopTabRowHeight(isTabFloating = false))
-        assertEquals(44.dp, resolveHomeTopTabRowHeight(isTabFloating = false, uiPreset = UiPreset.MD3))
+        assertEquals(48.dp, resolveHomeTopTabRowHeight(isTabFloating = false, uiPreset = UiPreset.MD3))
     }
 
     @Test
@@ -106,12 +106,12 @@ class iOSHomeHeaderVisualPolicyTest {
     @Test
     fun `home header trims horizontal spacing without cramping controls`() {
         assertEquals(14.dp, resolveHomeTopSearchRowHorizontalPadding())
-        assertEquals(16.dp, resolveHomeTopSearchRowHorizontalPadding(UiPreset.MD3))
+        assertEquals(20.dp, resolveHomeTopSearchRowHorizontalPadding(UiPreset.MD3))
         assertEquals(34.dp, resolveHomeTopSearchPillHeight())
         assertEquals(14.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true))
         assertEquals(12.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true, uiPreset = UiPreset.MD3))
         assertEquals(6.dp, resolveHomeTopSearchToTabsSpacing())
-        assertEquals(8.dp, resolveHomeTopSearchToTabsSpacing(UiPreset.MD3))
+        assertEquals(10.dp, resolveHomeTopSearchToTabsSpacing(UiPreset.MD3))
     }
 
     @Test
@@ -138,11 +138,11 @@ class iOSHomeHeaderVisualPolicyTest {
             )
         )
         assertEquals(
-            146.dp,
+            158.dp,
             resolveHomeTopReservedListPadding(
                 statusBarHeight = 44.dp,
-                searchBarHeight = 48.dp,
-                tabRowHeight = 46.dp,
+                searchBarHeight = 56.dp,
+                tabRowHeight = 48.dp,
                 uiPreset = UiPreset.MD3
             )
         )
@@ -166,9 +166,9 @@ class iOSHomeHeaderVisualPolicyTest {
         assertTrue(searchShape is RoundedCornerShape)
         assertTrue(edgeShape is RoundedCornerShape)
         assertNotEquals(CircleShape, edgeShape as Shape)
-        assertEquals(38.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
-        assertEquals(14.dp, resolveHomeTopSearchContentHorizontalPadding(UiPreset.MD3))
-        assertEquals(10.dp, resolveHomeTopSearchIconTextGap(UiPreset.MD3))
+        assertEquals(44.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
+        assertEquals(16.dp, resolveHomeTopSearchContentHorizontalPadding(UiPreset.MD3))
+        assertEquals(12.dp, resolveHomeTopSearchIconTextGap(UiPreset.MD3))
     }
 
     @Test
@@ -512,9 +512,9 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `top blur surface type matches bottom bar budget in blur mode`() {
+    fun `top blur surface type uses header budget in blur mode`() {
         assertEquals(
-            BlurSurfaceType.BOTTOM_BAR,
+            BlurSurfaceType.HEADER,
             resolveHomeTopBlurSurfaceType(HomeTopChromeRenderMode.BLUR)
         )
     }

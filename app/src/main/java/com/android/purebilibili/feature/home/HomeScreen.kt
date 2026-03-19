@@ -1245,6 +1245,12 @@ fun HomeScreen(
             glassEnabled = isLiquidGlassEnabled,
             blurEnabled = isHeaderBlurEnabled || isBottomBarBlurEnabled
         )
+        val refreshTipAppearance = remember(isLiquidGlassEnabled, isHeaderBlurEnabled, isBottomBarBlurEnabled) {
+            resolveHomeRefreshTipAppearance(
+                liquidGlassEnabled = isLiquidGlassEnabled,
+                blurEnabled = isHeaderBlurEnabled || isBottomBarBlurEnabled
+            )
+        }
         val overlayPillColors = rememberHomeGlassPillColors(
             glassEnabled = isLiquidGlassEnabled,
             blurEnabled = isHeaderBlurEnabled || isBottomBarBlurEnabled,
@@ -1334,10 +1340,21 @@ fun HomeScreen(
             ) {
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = overlayChromeColors.containerColor,
-                    border = BorderStroke(0.8.dp, overlayChromeColors.borderColor),
-                    tonalElevation = 2.dp,
-                    shadowElevation = 6.dp
+                    color = if (refreshTipAppearance.surfaceStyle == HomeRefreshTipSurfaceStyle.PLAIN) {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    } else {
+                        overlayChromeColors.containerColor
+                    },
+                    border = if (refreshTipAppearance.borderWidthDp > 0f) {
+                        BorderStroke(
+                            refreshTipAppearance.borderWidthDp.dp,
+                            overlayChromeColors.borderColor
+                        )
+                    } else {
+                        null
+                    },
+                    tonalElevation = refreshTipAppearance.tonalElevationDp.dp,
+                    shadowElevation = refreshTipAppearance.shadowElevationDp.dp
                 ) {
                     Text(
                         text = refreshDeltaTipText.orEmpty(),

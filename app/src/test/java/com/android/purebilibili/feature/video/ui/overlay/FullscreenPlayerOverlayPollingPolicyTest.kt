@@ -28,9 +28,17 @@ class FullscreenPlayerOverlayPollingPolicyTest {
     @Test
     fun pausedPlayback_hiddenControls_usesLongerInterval() {
         assertEquals(
-            500L,
+            800L,
             resolveFullscreenPlayerPollingIntervalMs(
                 isPlaying = false,
+                showControls = false,
+                isSeekingGesture = false
+            )
+        )
+        assertEquals(
+            400L,
+            resolveFullscreenPlayerPollingIntervalMs(
+                isPlaying = true,
                 showControls = false,
                 isSeekingGesture = false
             )

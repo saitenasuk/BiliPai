@@ -104,11 +104,49 @@ class SettingsEntryVisualPolicyTest {
             ).iconTint
         )
         assertEquals(
-            md3Palette.error,
+            md3Palette.primary,
             resolveSettingsEntryVisual(
                 SettingsSearchTarget.CLEAR_CACHE,
                 UiPreset.MD3,
                 md3Palette
+            ).iconTint
+        )
+    }
+
+    @Test
+    fun `md3 preset without dynamic color should collapse non error entry tints to primary`() {
+        val staticPalette = resolveMd3SettingsEntryThemePalette(
+            colorScheme = androidx.compose.material3.lightColorScheme(
+                primary = Color(0xFFAA3366),
+                secondary = Color(0xFF335577),
+                tertiary = Color(0xFF556677),
+                error = Color(0xFFCC1122)
+            ),
+            useSemanticAccentRoles = false
+        )
+
+        assertEquals(
+            staticPalette.primary,
+            resolveSettingsEntryVisual(
+                SettingsSearchTarget.APPEARANCE,
+                UiPreset.MD3,
+                staticPalette
+            ).iconTint
+        )
+        assertEquals(
+            staticPalette.primary,
+            resolveSettingsEntryVisual(
+                SettingsSearchTarget.PERMISSION,
+                UiPreset.MD3,
+                staticPalette
+            ).iconTint
+        )
+        assertEquals(
+            staticPalette.primary,
+            resolveSettingsEntryVisual(
+                SettingsSearchTarget.CLEAR_CACHE,
+                UiPreset.MD3,
+                staticPalette
             ).iconTint
         )
     }

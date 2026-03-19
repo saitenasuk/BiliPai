@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.android.purebilibili.core.theme.UiPreset
 import io.github.alexzhirkevich.cupertino.icons.outlined.Cpu
@@ -21,7 +21,7 @@ class TopTabCategoryIconPolicyTest {
 
     @Test
     fun topTabCategoryIconPolicy_usesSemanticMd3Icons() {
-        assertSameVectorAsset(Icons.Outlined.PlayCircleOutline, resolveTopTabCategoryIcon("游戏", UiPreset.MD3))
+        assertSameVectorAsset(Icons.Outlined.SportsEsports, resolveTopTabCategoryIcon("游戏", UiPreset.MD3))
         assertSameVectorAsset(Icons.Outlined.SmartToy, resolveTopTabCategoryIcon("科技", UiPreset.MD3))
     }
 

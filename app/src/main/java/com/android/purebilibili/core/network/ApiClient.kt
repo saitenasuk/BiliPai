@@ -819,11 +819,9 @@ interface DynamicApi {
     ): DynamicFeedResponse
     
     //  [新增] 获取指定用户的动态列表
-    @GET("x/polymer/web-dynamic/v1/feed/space")
+    @GET("x/polymer/web-dynamic/v1/feed/all")
     suspend fun getUserDynamicFeed(
-        @Query("host_mid") hostMid: Long,           // UP主 mid
-        @Query("offset") offset: String = "",
-        @Query("features") features: String = DYNAMIC_FEED_FEATURES
+        @QueryMap params: Map<String, String>
     ): DynamicFeedResponse
 
     //  [新增] 获取单条动态详情（桌面端详情接口）

@@ -132,8 +132,11 @@ fun DynamicScreen(
     //  [修改] 过滤动态 - 选中用户时使用 userItems
     val filteredItems = remember(state.items, state.userItems, selectedTab, selectedUserId) {
         val baseItems = if (selectedUserId != null) {
-            // 使用专门加载的用户动态
-            state.userItems
+            resolveSelectedUserVisibleItems(
+                timelineItems = state.items,
+                remoteUserItems = state.userItems,
+                selectedUid = selectedUserId
+            )
         } else {
             state.items
         }
@@ -164,7 +167,15 @@ fun DynamicScreen(
     }
     
     //  [修改] 判断是否加载更多（区分全部动态和用户动态）
-    val currentHasMore = if (selectedUserId != null) state.hasUserMore else state.hasMore
+    val currentHasMore = if (selectedUserId != null) {
+        state.hasUserMore && (
+            state.userItems.isNotEmpty() ||
+                state.userIsLoading ||
+                !state.userError.isNullOrBlank()
+            )
+    } else {
+        state.hasMore
+    }
     val activeLoading = remember(state, selectedUserId) {
         resolveDynamicActiveLoadingState(
             currentState = state,

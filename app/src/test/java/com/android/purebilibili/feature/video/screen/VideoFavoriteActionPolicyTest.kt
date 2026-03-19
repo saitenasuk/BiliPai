@@ -6,25 +6,25 @@ import kotlin.test.assertEquals
 class VideoFavoriteActionPolicyTest {
 
     @Test
-    fun `fullscreen overlay favorite tap should open folder sheet`() {
+    fun `fullscreen overlay favorite tap should toggle immediately`() {
         assertEquals(
-            VideoFavoriteAction.OpenFolderSheet,
+            VideoFavoriteAction.ToggleFavorite,
             resolveVideoFavoriteAction(VideoFavoriteEntryPoint.FullscreenOverlay)
         )
     }
 
     @Test
-    fun `detail action row favorite tap should open folder sheet`() {
+    fun `detail action row favorite tap should toggle immediately`() {
         assertEquals(
-            VideoFavoriteAction.OpenFolderSheet,
+            VideoFavoriteAction.ToggleFavorite,
             resolveVideoFavoriteAction(VideoFavoriteEntryPoint.DetailActionRow)
         )
     }
 
     @Test
-    fun `bottom input bar favorite tap should open folder sheet`() {
+    fun `bottom input bar favorite tap should toggle immediately`() {
         assertEquals(
-            VideoFavoriteAction.OpenFolderSheet,
+            VideoFavoriteAction.ToggleFavorite,
             resolveVideoFavoriteAction(VideoFavoriteEntryPoint.BottomInputBar)
         )
     }

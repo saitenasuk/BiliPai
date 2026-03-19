@@ -177,4 +177,28 @@ class HomeInteractionMotionBudgetPolicyTest {
             )
         )
     }
+
+    @Test
+    fun md3TopTabViewportPosition_matchesPagerProgressWithinVisibleSlots() {
+        assertEquals(
+            1.35f,
+            resolveMd3TopTabViewportPosition(
+                visibleIndices = listOf(0, 1, 2, 3),
+                absolutePagerPosition = 1.35f
+            ),
+            0.001f
+        )
+    }
+
+    @Test
+    fun md3TopTabViewportPosition_interpolatesAcrossPinnedTailSlot() {
+        assertEquals(
+            2.6f,
+            resolveMd3TopTabViewportPosition(
+                visibleIndices = listOf(0, 1, 2, 4),
+                absolutePagerPosition = 3.2f
+            ),
+            0.001f
+        )
+    }
 }

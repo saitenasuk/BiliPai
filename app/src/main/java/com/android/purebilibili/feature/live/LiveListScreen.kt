@@ -20,8 +20,6 @@ import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
-import io.github.alexzhirkevich.cupertino.CupertinoSegmentedControl
-import io.github.alexzhirkevich.cupertino.CupertinoSegmentedControlTab
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -319,30 +317,16 @@ fun LiveListScreen(
                         .background(MaterialTheme.colorScheme.surface)
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    CupertinoSegmentedControl(
+                    LiveListSegmentedTabs(
                         selectedTabIndex = state.currentTab,
+                        titles = listOf(
+                            "推荐",
+                            "分区",
+                            if (state.livingCount > 0) "关注 (${state.livingCount})" else "关注"
+                        ),
+                        onTabSelected = viewModel::setTab,
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        CupertinoSegmentedControlTab(
-                            isSelected = state.currentTab == 0,
-                            onClick = { viewModel.setTab(0) }
-                        ) {
-                            Text("推荐", fontSize = 14.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                        }
-                        CupertinoSegmentedControlTab(
-                            isSelected = state.currentTab == 1,
-                            onClick = { viewModel.setTab(1) }
-                        ) {
-                            Text("分区", fontSize = 14.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                        }
-                        CupertinoSegmentedControlTab(
-                            isSelected = state.currentTab == 2,
-                            onClick = { viewModel.setTab(2) }
-                        ) {
-                            val title = if (state.livingCount > 0) "关注 (${state.livingCount})" else "关注"
-                            Text(title, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-                        }
-                    }
+                    )
                 }
             }
         },
@@ -411,6 +395,63 @@ fun LiveListScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveListSegmentedTabs(
+    selectedTabIndex: Int,
+    titles: List<String>,
+    onTabSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = resolveLiveListTabColors(
+        primary = MaterialTheme.colorScheme.primary,
+        onPrimary = MaterialTheme.colorScheme.onPrimary,
+        surfaceVariant = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f),
+        onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(colors.unselectedContainerColor)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        titles.forEachIndexed { index, title ->
+            val isSelected = selectedTabIndex == index
+            Surface(
+                onClick = { onTabSelected(index) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(14.dp),
+                color = if (isSelected) {
+                    colors.selectedContainerColor
+                } else {
+                    Color.Transparent
+                },
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = title,
+                        fontSize = 14.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (isSelected) {
+                            colors.selectedContentColor
+                        } else {
+                            colors.unselectedContentColor
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }

@@ -29,6 +29,12 @@ object SsdpCastClient {
         val serviceType: String
     )
 
+    data class SsdpDeviceProfile(
+        val friendlyName: String,
+        val modelName: String?,
+        val avTransportEndpoint: AvTransportEndpoint?
+    )
+
     suspend fun cast(
         device: SsdpDiscovery.SsdpDevice,
         mediaUrl: String,
@@ -36,7 +42,7 @@ object SsdpCastClient {
         creator: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val endpoint = fetchAvTransportEndpoint(device.location)
+            val endpoint = fetchDeviceProfile(device.location)?.avTransportEndpoint
                 ?: error("设备不支持 AVTransport 控制")
             val metadata = buildDidlMetadata(mediaUrl, title, creator)
 
@@ -54,7 +60,13 @@ object SsdpCastClient {
         }
     }
 
-    private fun fetchAvTransportEndpoint(descriptionLocation: String): AvTransportEndpoint? {
+    suspend fun fetchDeviceProfile(
+        device: SsdpDiscovery.SsdpDevice
+    ): SsdpDeviceProfile? = withContext(Dispatchers.IO) {
+        fetchDeviceProfile(device.location)
+    }
+
+    private fun fetchDeviceProfile(descriptionLocation: String): SsdpDeviceProfile? {
         val request = Request.Builder()
             .url(descriptionLocation)
             .get()
@@ -65,14 +77,22 @@ object SsdpCastClient {
                 return null
             }
             val descriptionXml = response.body?.string().orEmpty()
-            return parseAvTransportEndpoint(descriptionXml, descriptionLocation)
+            return parseDeviceProfile(descriptionXml, descriptionLocation)
         }
     }
 
     internal fun parseAvTransportEndpoint(
         descriptionXml: String,
         descriptionLocation: String
-    ): AvTransportEndpoint? {
+    ): AvTransportEndpoint? = parseDeviceProfile(
+        descriptionXml = descriptionXml,
+        descriptionLocation = descriptionLocation
+    )?.avTransportEndpoint
+
+    internal fun parseDeviceProfile(
+        descriptionXml: String,
+        descriptionLocation: String
+    ): SsdpDeviceProfile? {
         if (descriptionXml.isBlank()) return null
         return runCatching {
             val factory = DocumentBuilderFactory.newInstance().apply {
@@ -83,8 +103,11 @@ object SsdpCastClient {
             }
             val builder = factory.newDocumentBuilder()
             val document = builder.parse(descriptionXml.byteInputStream())
-            val services = document.getElementsByTagNameNS("*", "service")
+            val device = document.getElementsByTagNameNS("*", "device")
+                .item(0) as? Element ?: return null
 
+            val services = device.getElementsByTagNameNS("*", "service")
+            var endpoint: AvTransportEndpoint? = null
             for (i in 0 until services.length) {
                 val service = services.item(i) as? Element ?: continue
                 val serviceType = service.getFirstChildContent("serviceType")
@@ -93,13 +116,18 @@ object SsdpCastClient {
                 val controlUrlRaw = service.getFirstChildContent("controlURL")
                 if (controlUrlRaw.isBlank()) continue
 
-                val resolvedControlUrl = URI(descriptionLocation).resolve(controlUrlRaw.trim()).toString()
-                return AvTransportEndpoint(
-                    controlUrl = resolvedControlUrl,
+                endpoint = AvTransportEndpoint(
+                    controlUrl = URI(descriptionLocation).resolve(controlUrlRaw.trim()).toString(),
                     serviceType = serviceType
                 )
+                break
             }
-            null
+
+            SsdpDeviceProfile(
+                friendlyName = device.getFirstChildContent("friendlyName"),
+                modelName = device.getFirstChildContent("modelName").ifBlank { null },
+                avTransportEndpoint = endpoint
+            )
         }.getOrElse { error ->
             Logger.e(TAG, "📺 [SSDP] Parse description failed: ${error.message}")
             null

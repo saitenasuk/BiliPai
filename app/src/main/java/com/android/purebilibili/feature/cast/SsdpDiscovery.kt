@@ -25,16 +25,6 @@ object SsdpDiscovery {
     private const val SSDP_ADDRESS = "239.255.255.250"
     private const val SSDP_PORT = 1900
     
-    // M-SEARCH 请求 - 搜索所有设备
-    private val M_SEARCH_ALL = """
-        M-SEARCH * HTTP/1.1
-        HOST: 239.255.255.250:1900
-        MAN: "ssdp:discover"
-        MX: 3
-        ST: ssdp:all
-        
-    """.trimIndent().replace("\n", "\r\n")
-    
     // M-SEARCH 请求 - 仅搜索 MediaRenderer
     private val M_SEARCH_RENDERER = """
         M-SEARCH * HTTP/1.1
@@ -142,7 +132,6 @@ object SsdpDiscovery {
     }
 
     internal fun resolveSsdpSearchPayloads(): List<String> = listOf(
-        M_SEARCH_ALL,
         M_SEARCH_RENDERER,
         M_SEARCH_AV_TRANSPORT
     )

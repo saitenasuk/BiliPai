@@ -12,5 +12,5 @@ internal fun resolveFullscreenPlayerPollingIntervalMs(
     isSeekingGesture: Boolean
 ): Long {
     if (showControls || isSeekingGesture) return 100L
-    return if (isPlaying) 250L else 500L
+    return if (isPlaying) 400L else 800L
 }

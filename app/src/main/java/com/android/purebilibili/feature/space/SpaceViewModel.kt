@@ -9,6 +9,8 @@ import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.data.repository.ActionRepository
 import com.android.purebilibili.data.repository.FavoriteRepository
 import com.android.purebilibili.data.repository.shouldContinueDynamicFetchAfterFilter
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,6 +108,10 @@ class SpaceViewModel(
     //  缓存 WBI keys 避免重复请求
     private var cachedImgKey: String = ""
     private var cachedSubKey: String = ""
+    private var activeSpaceLoadGeneration: Long = 0
+    private var activeSpaceLoadJob: Job? = null
+    private var activeSpaceSupplementalJob: Job? = null
+    private val collectionPreviewLimit = 3
     
     fun loadSpaceInfo(mid: Long) {
         if (mid <= 0) return
@@ -117,15 +123,24 @@ class SpaceViewModel(
 
         currentMid = mid
         currentPage = 1
-        
-        viewModelScope.launch {
+        activeSpaceLoadGeneration += 1
+        val requestGeneration = activeSpaceLoadGeneration
+        activeSpaceLoadJob?.cancel()
+        activeSpaceSupplementalJob?.cancel()
+
+        activeSpaceLoadJob = viewModelScope.launch {
             _uiState.value = SpaceUiState.Loading
             
             try {
                 //  首先获取 WBI keys（只获取一次）
                 val keys = fetchWbiKeys()
                 if (keys == null) {
-                    _uiState.value = SpaceUiState.Error("获取签名失败，请重试")
+                    if (shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) {
+                        _uiState.value = SpaceUiState.Error("获取签名失败，请重试")
+                    }
+                    return@launch
+                }
+                if (!shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) {
                     return@launch
                 }
                 cachedImgKey = keys.first
@@ -144,6 +159,9 @@ class SpaceViewModel(
                 val relationStat = relationDeferred.await()
                 val upStat = upStatDeferred.await()
                 val videosResult = videosDeferred.await()
+                if (!shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) {
+                    return@launch
+                }
                 
                 if (userInfoRaw != null) {
                     val resolvedTopPhoto = resolveSpaceTopPhoto(
@@ -162,37 +180,7 @@ class SpaceViewModel(
                     
                     val categories = extractCategories(videos)
                     com.android.purebilibili.core.util.Logger.d("SpaceVM", " Categories extracted: ${categories.size} - ${categories.map { it.name }}")
-                    
-                    //  加载合集和系列
-                    val seasonsSeriesResult = fetchSeasonsSeriesList(mid)
-                    val seasons = seasonsSeriesResult?.items_lists?.seasons_list ?: emptyList()
-                    val series = seasonsSeriesResult?.items_lists?.series_list ?: emptyList()
-                    com.android.purebilibili.core.util.Logger.d("SpaceVM", " Seasons: ${seasons.size}, Series: ${series.size}")
 
-                    val createdFavoriteFoldersDeferred = async { fetchCreatedFavoriteFolders(mid) }
-                    val collectedFavoriteFoldersDeferred = async { fetchCollectedFavoriteFolders(mid) }
-                    
-                    //  预加载每个合集的前几个视频
-                    val seasonArchives = mutableMapOf<Long, List<SeasonArchiveItem>>()
-                    seasons.take(5).forEach { season ->
-                        val archives = fetchSeasonArchives(mid, season.meta.season_id)
-                        if (archives != null) {
-                            seasonArchives[season.meta.season_id] = archives
-                        }
-                    }
-                    
-                    //  预加载每个系列的前几个视频
-                    val seriesArchives = mutableMapOf<Long, List<SeriesArchiveItem>>()
-                    series.take(5).forEach { seriesItem ->
-                        val archives = fetchSeriesArchives(mid, seriesItem.meta.series_id)
-                        if (archives != null) {
-                            seriesArchives[seriesItem.meta.series_id] = archives
-                        }
-                    }
-
-                    val createdFavoriteFolders = createdFavoriteFoldersDeferred.await()
-                    val collectedFavoriteFolders = collectedFavoriteFoldersDeferred.await()
-                    
                     _uiState.value = SpaceUiState.Success(
                         userInfo = userInfo,
                         relationStat = relationStat,
@@ -201,40 +189,83 @@ class SpaceViewModel(
                         totalVideos = videosResult?.page?.count ?: 0,
                         hasMoreVideos = videos.size >= pageSize,
                         categories = categories,
-                        seasons = seasons,
-                        series = series,
-                        seasonArchives = seasonArchives,
-                        seriesArchives = seriesArchives,
-                        createdFavoriteFolders = createdFavoriteFolders,
-                        collectedFavoriteFolders = collectedFavoriteFolders,
                         headerState = buildHeaderState(
                             userInfo = userInfo,
                             relationStat = relationStat,
                             upStat = upStat,
                             topVideo = null,
                             notice = "",
-                            createdFavorites = createdFavoriteFolders,
-                            collectedFavorites = collectedFavoriteFolders
+                            createdFavorites = emptyList(),
+                            collectedFavorites = emptyList()
                         ),
                         tabShellState = buildInitialTabShellState(
                             selectedTab = tabIndexToMainTab(_selectedMainTab.value)
                         )
                             .withUpdatedTab(SpaceMainTab.CONTRIBUTION) { it.copy(hasLoaded = true) }
-                            .withUpdatedTab(SpaceMainTab.COLLECTIONS) {
-                                it.copy(
-                                    hasLoaded = seasons.isNotEmpty() ||
-                                        series.isNotEmpty() ||
-                                        createdFavoriteFolders.isNotEmpty() ||
-                                        collectedFavoriteFolders.isNotEmpty()
-                                )
-                            }
                     )
+                    loadSpaceSupplemental(mid = mid, requestGeneration = requestGeneration)
                 } else {
-                    _uiState.value = SpaceUiState.Error("获取用户信息失败")
+                    if (shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) {
+                        _uiState.value = SpaceUiState.Error("获取用户信息失败")
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("SpaceVM", "Error loading space: ${e.message}", e)
-                _uiState.value = SpaceUiState.Error(e.message ?: "加载失败")
+                if (shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) {
+                    _uiState.value = SpaceUiState.Error(e.message ?: "加载失败")
+                }
+            }
+        }
+    }
+
+    private fun loadSpaceSupplemental(mid: Long, requestGeneration: Long) {
+        activeSpaceSupplementalJob?.cancel()
+        activeSpaceSupplementalJob = viewModelScope.launch {
+            try {
+                val seasonsSeriesDeferred = async { fetchSeasonsSeriesList(mid) }
+                val createdFavoriteFoldersDeferred = async { fetchCreatedFavoriteFolders(mid) }
+                val collectedFavoriteFoldersDeferred = async { fetchCollectedFavoriteFolders(mid) }
+
+                val seasonsSeriesResult = seasonsSeriesDeferred.await()
+                val seasons = seasonsSeriesResult?.items_lists?.seasons_list ?: emptyList()
+                val series = seasonsSeriesResult?.items_lists?.series_list ?: emptyList()
+                val createdFavoriteFolders = createdFavoriteFoldersDeferred.await()
+                val collectedFavoriteFolders = collectedFavoriteFoldersDeferred.await()
+
+                com.android.purebilibili.core.util.Logger.d("SpaceVM", " Seasons: ${seasons.size}, Series: ${series.size}")
+
+                val seasonArchiveDeferreds = seasons.take(collectionPreviewLimit).associate { season ->
+                    season.meta.season_id to async { fetchSeasonArchives(mid, season.meta.season_id).orEmpty() }
+                }
+                val seriesArchiveDeferreds = series.take(collectionPreviewLimit).associate { seriesItem ->
+                    seriesItem.meta.series_id to async { fetchSeriesArchives(mid, seriesItem.meta.series_id).orEmpty() }
+                }
+
+                val seasonArchives = seasonArchiveDeferreds.mapValues { (_, deferred) -> deferred.await() }
+                    .filterValues { it.isNotEmpty() }
+                val seriesArchives = seriesArchiveDeferreds.mapValues { (_, deferred) -> deferred.await() }
+                    .filterValues { it.isNotEmpty() }
+
+                if (!shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) {
+                    return@launch
+                }
+
+                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
+                _uiState.value = applySpaceSupplementalData(
+                    state = currentState,
+                    seasons = seasons,
+                    series = series,
+                    createdFavoriteFolders = createdFavoriteFolders,
+                    collectedFavoriteFolders = collectedFavoriteFolders,
+                    seasonArchives = seasonArchives,
+                    seriesArchives = seriesArchives
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e("SpaceVM", "loadSpaceSupplemental error: ${e.message}", e)
             }
         }
     }

@@ -178,7 +178,9 @@ internal fun resolveHomeTopTabYOffsetDp(isTabFloating: Boolean): Float {
     return if (isTabFloating) (-4f) else 0f
 }
 
-internal fun resolveHomeTopSearchBarHeight(uiPreset: UiPreset = UiPreset.IOS): Dp = 48.dp
+internal fun resolveHomeTopSearchBarHeight(uiPreset: UiPreset = UiPreset.IOS): Dp {
+    return if (uiPreset == UiPreset.MD3) 56.dp else 48.dp
+}
 
 internal data class HomeHeaderScrollLayout(
     val searchBarHeightPx: Float,
@@ -221,33 +223,33 @@ internal fun resolveHomeTopTabRowHeight(
     uiPreset: UiPreset = UiPreset.IOS
 ): Dp {
     if (uiPreset == UiPreset.MD3) {
-        return if (isTabFloating) 54.dp else 44.dp
+        return if (isTabFloating) 52.dp else 48.dp
     }
     return if (isTabFloating) 56.dp else 46.dp
 }
 
 internal fun resolveHomeTopSearchRowHorizontalPadding(uiPreset: UiPreset = UiPreset.IOS): Dp {
-    return if (uiPreset == UiPreset.MD3) 16.dp else 14.dp
+    return if (uiPreset == UiPreset.MD3) 20.dp else 14.dp
 }
 
 internal fun resolveHomeTopSearchPillHeight(uiPreset: UiPreset = UiPreset.IOS): Dp {
-    return if (uiPreset == UiPreset.MD3) 38.dp else 34.dp
+    return if (uiPreset == UiPreset.MD3) 44.dp else 34.dp
 }
 
 internal fun resolveHomeTopSearchContentHorizontalPadding(uiPreset: UiPreset = UiPreset.IOS): Dp {
-    return if (uiPreset == UiPreset.MD3) 14.dp else 12.dp
+    return if (uiPreset == UiPreset.MD3) 16.dp else 12.dp
 }
 
 internal fun resolveHomeTopSearchIconTextGap(uiPreset: UiPreset = UiPreset.IOS): Dp {
-    return if (uiPreset == UiPreset.MD3) 10.dp else 8.dp
+    return if (uiPreset == UiPreset.MD3) 12.dp else 8.dp
 }
 
 internal fun resolveHomeTopSearchContainerShape(uiPreset: UiPreset = UiPreset.IOS): Shape {
-    return if (uiPreset == UiPreset.MD3) RoundedCornerShape(20.dp) else RoundedCornerShape(18.dp)
+    return if (uiPreset == UiPreset.MD3) RoundedCornerShape(22.dp) else RoundedCornerShape(18.dp)
 }
 
 internal fun resolveHomeTopEdgeButtonShape(uiPreset: UiPreset = UiPreset.IOS): Shape {
-    return if (uiPreset == UiPreset.MD3) RoundedCornerShape(16.dp) else CircleShape
+    return if (uiPreset == UiPreset.MD3) RoundedCornerShape(18.dp) else CircleShape
 }
 
 internal fun resolveHomeTopAvatarOuterSize(): Dp = 40.dp
@@ -295,7 +297,7 @@ internal fun resolveHomeTopTabHorizontalPadding(
 }
 
 internal fun resolveHomeTopSearchToTabsSpacing(uiPreset: UiPreset = UiPreset.IOS): Dp {
-    return if (uiPreset == UiPreset.MD3) 8.dp else 6.dp
+    return if (uiPreset == UiPreset.MD3) 10.dp else 6.dp
 }
 
 internal fun resolveHomeTopReservedListPadding(
@@ -335,7 +337,7 @@ internal fun resolveHomeTopBlurSurfaceType(
     renderMode: HomeTopChromeRenderMode
 ): BlurSurfaceType {
     return when (renderMode) {
-        HomeTopChromeRenderMode.BLUR -> BlurSurfaceType.BOTTOM_BAR
+        HomeTopChromeRenderMode.BLUR -> BlurSurfaceType.HEADER
         else -> BlurSurfaceType.HEADER
     }
 }
@@ -1310,7 +1312,7 @@ fun iOSHomeHeader(
                                             } else {
                                                 if (isTablet) 16.sp else 15.sp
                                             },
-                                            fontWeight = if (uiPreset == UiPreset.MD3) FontWeight.Medium else FontWeight.Normal,
+                                            fontWeight = if (uiPreset == UiPreset.MD3) FontWeight.Normal else FontWeight.Normal,
                                             color = if (uiPreset == UiPreset.MD3) {
                                                 MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f)
                                             } else if (isLightMode) {

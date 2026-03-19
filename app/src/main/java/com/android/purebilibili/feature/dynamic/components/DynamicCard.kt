@@ -20,19 +20,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.core.ui.rememberAppMoreIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
@@ -442,6 +442,9 @@ fun RichTextContent(
     desc: DynamicDesc,
     onUserClick: (Long) -> Unit
 ) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val scope = rememberCoroutineScope()
     // 收集所有表情节点以创建 InlineContent
     // 支持两种类型格式: RICH_TEXT_NODE_TYPE_EMOJI 和 EMOJI
     val emojiNodes = remember(desc.rich_text_nodes) {
@@ -449,63 +452,14 @@ fun RichTextContent(
             .filter { it.type.endsWith("EMOJI") && it.emoji != null }
             .associateBy({ it.text }, { it.emoji!!.icon_url })
     }
-    
-    // 如果 rich_text_nodes 为空，回退到正则方式
-    val useRichTextNodes = desc.rich_text_nodes.isNotEmpty()
-    
-    val annotatedText = buildAnnotatedString {
-        if (useRichTextNodes) {
-            // 使用 rich_text_nodes 解析
-            desc.rich_text_nodes.forEach { node ->
-                // 支持两种类型格式：
-                // - 完整格式: RICH_TEXT_NODE_TYPE_EMOJI
-                // - 简短格式: EMOJI
-                val nodeType = node.type.removePrefix("RICH_TEXT_NODE_TYPE_")
-                when (nodeType) {
-                    "EMOJI" -> {
-                        // 表情节点：插入内联内容占位符
-                        if (node.emoji != null && node.emoji.icon_url.isNotEmpty()) {
-                            appendInlineContent(id = node.text, alternateText = node.text)
-                        } else {
-                            append(node.text)
-                        }
-                    }
-                    "AT" -> {
-                        // @提及：主题色高亮
-                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)) {
-                            append(node.text)
-                        }
-                    }
-                    "TOPIC" -> {
-                        // 话题标签：主题色高亮
-                        withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)) {
-                            append(node.text)
-                        }
-                    }
-                    else -> {
-                        // TEXT 或其他类型：普通文本
-                        append(node.text)
-                    }
-                }
-            }
-        } else {
-            // 回退：使用正则匹配 @ 提及
-            val rawText = desc.text
-            var lastEnd = 0
-            val atPattern = Regex("@[^@\\s]+")
-            atPattern.findAll(rawText).forEach { match ->
-                if (match.range.first > lastEnd) {
-                    append(rawText.substring(lastEnd, match.range.first))
-                }
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)) {
-                    append(match.value)
-                }
-                lastEnd = match.range.last + 1
-            }
-            if (lastEnd < rawText.length) {
-                append(rawText.substring(lastEnd))
-            }
-        }
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val annotatedText = remember(desc, primaryColor, textColor) {
+        buildDynamicRichTextAnnotatedString(
+            desc = desc,
+            primaryColor = primaryColor,
+            textColor = textColor
+        )
     }
     
     // 创建表情的 InlineContent 映射
@@ -532,18 +486,53 @@ fun RichTextContent(
         richNodeText.ifBlank { desc.text }.trim()
     }
     var showCopySelectionDialog by remember(copyText) { mutableStateOf(false) }
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     
     Text(
         text = annotatedText,
         inlineContent = inlineContent,
         fontSize = 15.sp,
         lineHeight = 22.sp,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.pointerInput(copyText) {
+        color = textColor,
+        onTextLayout = { textLayoutResult = it },
+        modifier = Modifier.pointerInput(copyText, annotatedText) {
             detectTapGestures(
                 onLongPress = {
                     if (copyText.isNotEmpty()) {
                         showCopySelectionDialog = true
+                    }
+                },
+                onTap = { offset ->
+                    val layoutResult = textLayoutResult ?: return@detectTapGestures
+                    val position = layoutResult.getOffsetForPosition(offset)
+                    val annotation = annotatedText.getStringAnnotations(
+                        tag = DYNAMIC_RICH_TEXT_URL_TAG,
+                        start = maxOf(0, position - 1),
+                        end = minOf(annotatedText.length, position + 1)
+                    ).firstOrNull() ?: return@detectTapGestures
+
+                    scope.launch {
+                        when (resolveDynamicRichTextOpenMode(annotation.item)) {
+                            DynamicRichTextOpenMode.IN_APP -> {
+                                val inAppIntent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(annotation.item)
+                                ).setPackage(context.packageName)
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                val launchedInApp = runCatching {
+                                    context.startActivity(inAppIntent)
+                                }.isSuccess
+                                if (!launchedInApp) {
+                                    openDynamicRichTextLinkExternally(context, annotation.item, uriHandler)
+                                }
+                            }
+
+                            DynamicRichTextOpenMode.EXTERNAL -> {
+                                openDynamicRichTextLinkExternally(context, annotation.item, uriHandler)
+                            }
+
+                            null -> Unit
+                        }
                     }
                 }
             )
@@ -555,6 +544,37 @@ fun RichTextContent(
             title = "选择动态内容",
             onDismiss = { showCopySelectionDialog = false }
         )
+    }
+}
+
+private fun openDynamicRichTextLinkExternally(
+    context: android.content.Context,
+    url: String,
+    uriHandler: androidx.compose.ui.platform.UriHandler
+) {
+    val externalIntent = android.content.Intent(
+        android.content.Intent.ACTION_VIEW,
+        android.net.Uri.parse(url)
+    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    val packageManager = context.packageManager
+    val externalPackage = packageManager.queryIntentActivities(
+        externalIntent,
+        android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+    ).firstOrNull { it.activityInfo?.packageName != context.packageName }
+        ?.activityInfo
+        ?.packageName
+
+    val launchedExternally = if (!externalPackage.isNullOrBlank()) {
+        runCatching {
+            context.startActivity(externalIntent.setPackage(externalPackage))
+        }.isSuccess
+    } else {
+        false
+    }
+
+    if (!launchedExternally) {
+        runCatching { uriHandler.openUri(url) }
     }
 }
 

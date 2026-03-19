@@ -68,6 +68,7 @@ import com.android.purebilibili.core.util.rememberAdaptiveGridColumns
 import com.android.purebilibili.core.util.rememberResponsiveSpacing
 import com.android.purebilibili.core.util.rememberResponsiveValue
 import com.android.purebilibili.core.util.PinyinUtils
+import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.space.SeasonSeriesDetailViewModel
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
@@ -130,6 +131,7 @@ fun CommonListScreen(
     // 平板端(Expanded)使用较大的最小宽度以避免卡片过小
     val context = LocalContext.current
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(initial = com.android.purebilibili.core.store.HomeSettings())
+    val uiPreset = LocalUiPreset.current
     val windowSizeClass = LocalWindowSizeClass.current
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
@@ -359,7 +361,18 @@ fun CommonListScreen(
     val headerHeightDp = with(LocalDensity.current) { headerHeightPx.toDp() }
     
     // [Feature] Header Blur Optimization
-    val isHeaderBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
+    val isHeaderBlurEnabled = remember(homeSettings, uiPreset) {
+        resolveCommonListHeaderBlurEnabled(
+            homeSettings = homeSettings,
+            uiPreset = uiPreset
+        )
+    }
+    val videoCardAppearance = remember(homeSettings, uiPreset) {
+        resolveCommonListVideoCardAppearance(
+            homeSettings = homeSettings,
+            uiPreset = uiPreset
+        )
+    }
     val blurIntensity = currentUnifiedBlurIntensity()
     val backgroundAlpha = BlurStyles.getBackgroundAlpha(blurIntensity)
     
@@ -492,6 +505,7 @@ fun CommonListScreen(
                                 cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                                 cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                                 cardMotionTier = cardMotionTier,
+                                videoCardAppearance = videoCardAppearance,
                                 onVideoClick = { bvid, cid, coverUrl ->
                                     playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl)
                                 },
@@ -523,6 +537,7 @@ fun CommonListScreen(
                             cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                             cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                             cardMotionTier = cardMotionTier,
+                            videoCardAppearance = videoCardAppearance,
                             onVideoClick = { bvid, cid, coverUrl ->
                                 playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl)
                             },
@@ -547,6 +562,7 @@ fun CommonListScreen(
                         cardAnimationEnabled = homeSettings.cardAnimationEnabled,
                         cardTransitionEnabled = homeSettings.cardTransitionEnabled,
                         cardMotionTier = cardMotionTier,
+                        videoCardAppearance = videoCardAppearance,
                         onVideoClick = { bvid, cid, coverUrl ->
                             if (favoriteViewModel != null) {
                                 playFavoriteVideo(state.items, bvid, cid, coverUrl)
@@ -843,7 +859,7 @@ fun CommonListScreen(
 
 // 提取通用列表内容组件
 @Composable
-fun CommonListContent(
+private fun CommonListContent(
     items: List<com.android.purebilibili.data.model.response.VideoItem>,
     isLoading: Boolean,
     error: String?,
@@ -854,6 +870,7 @@ fun CommonListContent(
     cardAnimationEnabled: Boolean,
     cardTransitionEnabled: Boolean,
     cardMotionTier: MotionTier,
+    videoCardAppearance: CommonListVideoCardAppearance,
     onVideoClick: (String, Long, String) -> Unit,
     onCollectionClick: ((Long, Long, String) -> Unit)? = null,
     onLoadMore: () -> Unit,
@@ -966,6 +983,10 @@ fun CommonListContent(
                                     animationEnabled = cardAnimationEnabled,
                                     motionTier = cardMotionTier,
                                     transitionEnabled = cardTransitionEnabled,
+                                    glassEnabled = videoCardAppearance.glassEnabled,
+                                    blurEnabled = videoCardAppearance.blurEnabled,
+                                    showCoverGlassBadges = videoCardAppearance.showCoverGlassBadges,
+                                    showInfoGlassBadges = videoCardAppearance.showInfoGlassBadges,
                                     onClick = { _, _ ->
                                         if (historyBatchMode) {
                                             onHistoryToggleSelect?.invoke(historyKey)

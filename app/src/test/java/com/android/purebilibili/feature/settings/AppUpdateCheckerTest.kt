@@ -40,6 +40,13 @@ class AppUpdateCheckerTest {
     }
 
     @Test
+    fun `rc release should sort between beta and stable of same version`() {
+        assertTrue(AppUpdateChecker.isRemoteNewer("7.0.0 Beta5", "7.0.0 RC"))
+        assertTrue(AppUpdateChecker.isRemoteNewer("7.0.0 RC", "7.0.0"))
+        assertFalse(AppUpdateChecker.isRemoteNewer("7.0.0 RC", "7.0.0 Beta5"))
+    }
+
+    @Test
     fun `selectLatestReleaseCandidate should allow prerelease when current version is beta`() {
         val release = AppUpdateChecker.selectLatestReleaseCandidate(
             rawReleaseJson = """
@@ -107,14 +114,14 @@ class AppUpdateCheckerTest {
             rawBuildGradle = """
             android {
                 defaultConfig {
-                    versionCode = 114
-                    versionName = "7.0.0 Beta2"
+                    versionCode = 118
+                    versionName = "7.0.0 RC"
                 }
             }
             """.trimIndent()
         )
 
-        assertEquals("7.0.0 Beta2", candidate?.tagName)
+        assertEquals("7.0.0 RC", candidate?.tagName)
         assertEquals("https://github.com/jay3-yy/BiliPai", candidate?.releaseUrl)
         assertTrue(candidate?.releaseNotes?.contains("未创建 GitHub Release") == true)
         assertTrue(candidate?.isPrerelease == true)
