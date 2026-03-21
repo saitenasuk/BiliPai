@@ -40,6 +40,9 @@ import com.android.purebilibili.core.ui.common.copyOnLongPress
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
 import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.ui.components.resolveAdaptiveListComponentVisualSpec
+import com.android.purebilibili.core.store.MAX_HOME_REFRESH_COUNT
+import com.android.purebilibili.core.store.MIN_HOME_REFRESH_COUNT
+import kotlin.math.roundToInt
 
 // ═══════════════════════════════════════════════════
 //  UI 组件 (Stateless Components)
@@ -315,7 +318,9 @@ fun FeedApiSection(
     feedApiType: com.android.purebilibili.core.store.SettingsManager.FeedApiType,
     onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
-    onIncrementalTimelineRefreshChange: (Boolean) -> Unit
+    onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    homeRefreshCount: Int,
+    onHomeRefreshCountChange: (Int) -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
     val feedTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSOrange, uiPreset)
@@ -364,6 +369,13 @@ fun FeedApiSection(
             subtitle = "下拉刷新时不重置列表，仅在顶部插入新内容",
             checked = incrementalTimelineRefreshEnabled,
             onCheckedChange = onIncrementalTimelineRefreshChange,
+            iconTint = incrementalRefreshTint
+        )
+        SettingsDivider(startIndent = 66.dp)
+        FeedRefreshCountItem(
+            icon = refreshIcon,
+            count = homeRefreshCount,
+            onCountChange = onHomeRefreshCountChange,
             iconTint = incrementalRefreshTint
         )
     }
@@ -427,6 +439,70 @@ private fun FeedSwitchItem(
             )
         }
     }
+}
+
+@Composable
+private fun FeedRefreshCountItem(
+    icon: ImageVector,
+    count: Int,
+    onCountChange: (Int) -> Unit,
+    iconTint: Color
+) {
+    val sliderRange = resolveHomeRefreshSliderRange()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = iconTint
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "首页刷新数量",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = resolveHomeRefreshCountSummary(count),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Slider(
+            value = count.toFloat(),
+            onValueChange = { value -> onCountChange(value.roundToInt()) },
+            valueRange = sliderRange,
+            steps = resolveHomeRefreshSliderSteps()
+        )
+    }
+}
+
+internal fun resolveHomeRefreshCountSummary(count: Int): String {
+    return "单次最多请求 $count 条推荐内容，实际显示可能更少"
+}
+
+internal fun resolveHomeRefreshSliderRange(): ClosedFloatingPointRange<Float> {
+    return MIN_HOME_REFRESH_COUNT.toFloat()..MAX_HOME_REFRESH_COUNT.toFloat()
+}
+
+internal fun resolveHomeRefreshSliderSteps(): Int {
+    return (MAX_HOME_REFRESH_COUNT - MIN_HOME_REFRESH_COUNT - 1).coerceAtLeast(0)
 }
 
 @Composable

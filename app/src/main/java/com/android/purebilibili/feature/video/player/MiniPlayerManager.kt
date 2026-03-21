@@ -52,6 +52,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.VideoActivity
+import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackWakeMode
 import com.android.purebilibili.feature.video.state.isPlaybackActiveForLifecycle
 import com.android.purebilibili.feature.video.usecase.VideoLoadResult
@@ -135,6 +136,31 @@ internal fun shouldDisableVideoTrackOnEnterBackground(
     return shouldPauseBuffering || shouldContinueBackgroundAudio
 }
 
+internal fun shouldClearVideoSurfaceOnEnterBackground(
+    shouldDisableVideoTrack: Boolean,
+    shouldContinueBackgroundAudio: Boolean
+): Boolean {
+    return shouldDisableVideoTrack && shouldContinueBackgroundAudio
+}
+
+internal fun shouldTrimDanmakuCachesOnEnterBackground(
+    shouldDisableVideoTrack: Boolean
+): Boolean {
+    return shouldDisableVideoTrack
+}
+
+internal fun resolveTrackSelectionParametersForBackground(
+    currentTrackSelectionParameters: androidx.media3.common.TrackSelectionParameters,
+    shouldDisableVideoTrack: Boolean
+): androidx.media3.common.TrackSelectionParameters {
+    if (!shouldDisableVideoTrack) return currentTrackSelectionParameters
+    return currentTrackSelectionParameters
+        .buildUpon()
+        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+        .setMaxVideoSize(0, 0)
+        .build()
+}
+
 internal fun shouldPauseBackgroundBuffering(
     isPlaying: Boolean,
     playWhenReady: Boolean,
@@ -159,6 +185,21 @@ internal fun shouldRefreshNotificationOnPlaybackStateChange(
     title: String
 ): Boolean {
     return isActive && title.isNotBlank()
+}
+
+internal fun shouldKeepPlaybackNotificationVisible(
+    isActive: Boolean,
+    title: String,
+    isPlaying: Boolean
+): Boolean {
+    return isActive && title.isNotBlank() && isPlaying
+}
+
+internal fun shouldClearStalePlaybackNotificationOnAppResume(
+    isActive: Boolean,
+    playerIsPlaying: Boolean
+): Boolean {
+    return !isActive || !playerIsPlaying
 }
 
 internal fun resolveEffectiveNotificationCoverUrl(
@@ -506,10 +547,20 @@ class MiniPlayerManager private constructor(private val context: Context) :
             if (savedTrackParams == null) {
                 savedTrackParams = currentPlayer.trackSelectionParameters
             }
-            currentPlayer.trackSelectionParameters = currentPlayer.trackSelectionParameters
-                .buildUpon()
-                .setMaxVideoSize(0, 0)
-                .build()
+            currentPlayer.trackSelectionParameters = resolveTrackSelectionParametersForBackground(
+                currentTrackSelectionParameters = currentPlayer.trackSelectionParameters,
+                shouldDisableVideoTrack = true
+            )
+        }
+        if (shouldClearVideoSurfaceOnEnterBackground(
+                shouldDisableVideoTrack = shouldDisableVideoTrack,
+                shouldContinueBackgroundAudio = shouldKeepBackgroundAudio
+            )
+        ) {
+            currentPlayer.clearVideoSurface()
+        }
+        if (shouldTrimDanmakuCachesOnEnterBackground(shouldDisableVideoTrack)) {
+            DanmakuManager.trimCachesForBackgroundIfPresent()
         }
         if (shouldPauseBuffering) {
             currentPlayer.pause()
@@ -936,6 +987,18 @@ class MiniPlayerManager private constructor(private val context: Context) :
             playerIsPlaying = currentPlayer.isPlaying,
             cachedIsPlaying = isPlaying
         )
+    }
+
+    fun clearPlaybackNotificationIfIdleOnResume() {
+        if (!shouldClearStalePlaybackNotificationOnAppResume(
+                isActive = isActive,
+                playerIsPlaying = player?.isPlaying == true
+            )
+        ) {
+            return
+        }
+        playbackServiceRequested = false
+        clearPlaybackNotificationArtifacts()
     }
     
     /**
@@ -1822,6 +1885,16 @@ class MiniPlayerManager private constructor(private val context: Context) :
             cachedIsPlaying = isPlaying
         )
         isPlaying = notificationIsPlaying
+        if (!shouldKeepPlaybackNotificationVisible(
+                isActive = isActive,
+                title = title,
+                isPlaying = notificationIsPlaying
+            )
+        ) {
+            playbackServiceRequested = false
+            clearPlaybackNotificationArtifacts()
+            return
+        }
         val effectiveArtworkBitmap = resolveEffectiveNotificationArtwork(
             incomingArtwork = bitmap,
             cachedArtwork = cachedArtworkBitmap

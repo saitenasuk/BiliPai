@@ -107,6 +107,8 @@ fun TabletSettingsLayout(
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    homeRefreshCount: Int,
+    onHomeRefreshCountChange: (Int) -> Unit,
     
     modifier: Modifier = Modifier
 ) {
@@ -426,7 +428,9 @@ fun TabletSettingsLayout(
                                         feedApiType = feedApiType,
                                         onFeedApiTypeChange = onFeedApiTypeChange,
                                         incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
-                                        onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange
+                                        onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange,
+                                        homeRefreshCount = homeRefreshCount,
+                                        onHomeRefreshCountChange = onHomeRefreshCountChange
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))
                                     DataStorageSection(

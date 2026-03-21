@@ -54,31 +54,68 @@ data class Md3TopTabVisualSpec(
 
 fun resolveTopTabVisualTuning(): TopTabVisualTuning = TopTabVisualTuning()
 
+fun resolveTopTabVisualTuning(uiPreset: UiPreset): TopTabVisualTuning {
+    return when (uiPreset) {
+        UiPreset.IOS -> TopTabVisualTuning(
+            nonFloatingIndicatorHeightDp = 44f,
+            nonFloatingIndicatorCornerDp = 22f,
+            nonFloatingIndicatorWidthRatio = 1.34f,
+            nonFloatingIndicatorMinWidthDp = 90f,
+            nonFloatingIndicatorHorizontalInsetDp = 0f,
+            floatingIndicatorWidthMultiplier = 1.34f,
+            floatingIndicatorMinWidthDp = 96f,
+            floatingIndicatorMaxWidthDp = 126f,
+            floatingIndicatorMaxWidthToItemRatio = 1.34f,
+            floatingIndicatorHeightDp = 46f,
+            tabTextSizeSp = 11.6f,
+            tabTextLineHeightSp = 12f,
+            tabContentMinHeightDp = 34f
+        )
+        UiPreset.MD3 -> resolveTopTabVisualTuning()
+    }
+}
+
+internal fun resolveTopTabContentScale(
+    selectionFraction: Float,
+    showIcon: Boolean,
+    showText: Boolean,
+    uiPreset: UiPreset
+): Float {
+    if (showIcon && showText) return 1f
+
+    val clampedFraction = selectionFraction.coerceIn(0f, 1f)
+    val maxScale = when (uiPreset) {
+        UiPreset.IOS -> 1.03f
+        UiPreset.MD3 -> 1.04f
+    }
+    return 1f + ((maxScale - 1f) * clampedFraction)
+}
+
 internal fun resolveMd3TopTabVisualSpec(isFloatingStyle: Boolean): Md3TopTabVisualSpec {
     return if (isFloatingStyle) {
         Md3TopTabVisualSpec(
-            rowHeight = 52.dp,
-            selectedCapsuleHeight = 3.dp,
-            selectedCapsuleCornerRadius = 2.dp,
+            rowHeight = 48.dp,
+            selectedCapsuleHeight = 2.dp,
+            selectedCapsuleCornerRadius = 1.dp,
             selectedCapsuleTonalElevation = 0.dp,
             selectedCapsuleShadowElevation = 0.dp,
-            itemHorizontalPadding = 16.dp,
+            itemHorizontalPadding = 14.dp,
             iconSize = 18.dp,
-            labelTextSize = 14.sp,
-            labelLineHeight = 20.sp,
+            labelTextSize = 13.sp,
+            labelLineHeight = 18.sp,
             iconLabelSpacing = 0.dp
         )
     } else {
         Md3TopTabVisualSpec(
-            rowHeight = 48.dp,
-            selectedCapsuleHeight = 3.dp,
-            selectedCapsuleCornerRadius = 2.dp,
+            rowHeight = 44.dp,
+            selectedCapsuleHeight = 2.dp,
+            selectedCapsuleCornerRadius = 1.dp,
             selectedCapsuleTonalElevation = 0.dp,
             selectedCapsuleShadowElevation = 0.dp,
-            itemHorizontalPadding = 16.dp,
-            iconSize = 18.dp,
-            labelTextSize = 14.sp,
-            labelLineHeight = 20.sp,
+            itemHorizontalPadding = 12.dp,
+            iconSize = 16.dp,
+            labelTextSize = 13.sp,
+            labelLineHeight = 18.sp,
             iconLabelSpacing = 0.dp
         )
     }

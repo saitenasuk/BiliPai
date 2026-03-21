@@ -139,4 +139,44 @@ class HomeRefreshPolicyTest {
             )
         )
     }
+
+    @Test
+    fun shouldShowRecommendOldContentDivider_requiresRevealForCurrentRefresh() {
+        assertFalse(
+            shouldShowRecommendOldContentDivider(
+                currentCategory = HomeCategory.RECOMMEND,
+                refreshNewItemsKey = 12L,
+                revealedRefreshKey = 0L,
+                anchorBvid = "BV1",
+                oldContentStartIndex = 3
+            )
+        )
+        assertFalse(
+            shouldShowRecommendOldContentDivider(
+                currentCategory = HomeCategory.RECOMMEND,
+                refreshNewItemsKey = 12L,
+                revealedRefreshKey = 11L,
+                anchorBvid = "BV1",
+                oldContentStartIndex = 3
+            )
+        )
+        assertTrue(
+            shouldShowRecommendOldContentDivider(
+                currentCategory = HomeCategory.RECOMMEND,
+                refreshNewItemsKey = 12L,
+                revealedRefreshKey = 12L,
+                anchorBvid = "BV1",
+                oldContentStartIndex = 3
+            )
+        )
+        assertFalse(
+            shouldShowRecommendOldContentDivider(
+                currentCategory = HomeCategory.POPULAR,
+                refreshNewItemsKey = 12L,
+                revealedRefreshKey = 12L,
+                anchorBvid = "BV1",
+                oldContentStartIndex = 3
+            )
+        )
+    }
 }

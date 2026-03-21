@@ -320,22 +320,30 @@ object VideoRepository {
             } else {
                 com.android.purebilibili.core.store.SettingsManager.FeedApiType.WEB
             }
+            val refreshCount = if (context != null) {
+                SettingsManager.getHomeRefreshCountSync(context)
+            } else {
+                com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT
+            }
             
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", " getHomeVideos: feedApiType=$feedApiType, idx=$idx")
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoRepo",
+                " getHomeVideos: feedApiType=$feedApiType, idx=$idx, refreshCount=$refreshCount"
+            )
             
             when (feedApiType) {
                 com.android.purebilibili.core.store.SettingsManager.FeedApiType.MOBILE -> {
                     // 尝试使用移动端 API
-                    val mobileResult = fetchMobileFeed(idx)
+                    val mobileResult = fetchMobileFeed(idx = idx, refreshCount = refreshCount)
                     if (mobileResult.isSuccess && mobileResult.getOrNull()?.isNotEmpty() == true) {
                         return mobileResult
                     } else {
                         // 移动端 API 失败，回退到 Web API
                         com.android.purebilibili.core.util.Logger.d("VideoRepo", " Mobile API failed, fallback to Web API")
-                        return fetchWebFeed(idx)
+                        return fetchWebFeed(idx = idx, refreshCount = refreshCount)
                     }
                 }
-                else -> return fetchWebFeed(idx)
+                else -> return fetchWebFeed(idx = idx, refreshCount = refreshCount)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -344,7 +352,7 @@ object VideoRepository {
     }
     
     //  Web 端推荐流 (WBI 签名)
-    private suspend fun fetchWebFeed(idx: Int): Result<List<VideoItem>> {
+    private suspend fun fetchWebFeed(idx: Int, refreshCount: Int): Result<List<VideoItem>> {
         try {
             val cachedKeys = WbiKeyManager.getWbiKeys().getOrNull()
             val navWbiImg = if (cachedKeys == null) api.getNavInfo().data?.wbi_img else null
@@ -355,7 +363,7 @@ object VideoRepository {
             val (imgKey, subKey) = resolvedKeys
 
             val params = mapOf(
-                "ps" to "30", "fresh_type" to "3", "fresh_idx" to idx.toString(),
+                "ps" to refreshCount.toString(), "fresh_type" to "3", "fresh_idx" to idx.toString(),
                 "feed_version" to System.currentTimeMillis().toString(), "y_num" to idx.toString()
             )
             val signedParams = WbiUtils.sign(params, imgKey, subKey)
@@ -381,7 +389,7 @@ object VideoRepository {
     }
     
     //  移动端推荐流 (appkey + sign 签名)
-    private suspend fun fetchMobileFeed(idx: Int): Result<List<VideoItem>> {
+    private suspend fun fetchMobileFeed(idx: Int, refreshCount: Int): Result<List<VideoItem>> {
         try {
             val accessToken = TokenManager.accessTokenCache
             if (accessToken.isNullOrEmpty()) {
@@ -395,7 +403,7 @@ object VideoRepository {
                 "column" to "4",  // 4列布局
                 "flush" to "5",   // 刷新间隔
                 "autoplay_card" to "11",
-                "ps" to "30",     //  [适配] 增加单次获取数量，适配平板大屏 (默认10太少)
+                "ps" to refreshCount.toString(),
                 "access_key" to accessToken,
                 "appkey" to AppSignUtils.TV_APP_KEY,
                 "ts" to AppSignUtils.getTimestamp().toString(),

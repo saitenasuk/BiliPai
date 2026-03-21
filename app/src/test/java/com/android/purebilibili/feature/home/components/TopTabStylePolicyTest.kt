@@ -112,12 +112,39 @@ class TopTabStylePolicyTest {
     }
 
     @Test
-    fun `balanced visual tuning shrinks top indicator footprint`() {
-        val tuning = resolveTopTabVisualTuning()
+    fun `ios top tab tuning uses bottom bar sized indicator footprint`() {
+        val tuning = resolveTopTabVisualTuning(UiPreset.IOS)
 
-        assertTrue(tuning.nonFloatingIndicatorHeightDp < 34f)
-        assertTrue(tuning.nonFloatingIndicatorWidthRatio < 0.78f)
-        assertTrue(tuning.floatingIndicatorHeightDp < 52f)
+        assertEquals(44f, tuning.nonFloatingIndicatorHeightDp, 0.001f)
+        assertEquals(22f, tuning.nonFloatingIndicatorCornerDp, 0.001f)
+        assertEquals(1.34f, tuning.nonFloatingIndicatorWidthRatio, 0.001f)
+        assertEquals(90f, tuning.nonFloatingIndicatorMinWidthDp, 0.001f)
+        assertEquals(0f, tuning.nonFloatingIndicatorHorizontalInsetDp, 0.001f)
+        assertEquals(46f, tuning.floatingIndicatorHeightDp, 0.001f)
+    }
+
+    @Test
+    fun `ios top tab keeps icon plus text scale stable inside large capsule`() {
+        assertEquals(
+            1f,
+            resolveTopTabContentScale(
+                selectionFraction = 1f,
+                showIcon = true,
+                showText = true,
+                uiPreset = UiPreset.IOS
+            ),
+            0.001f
+        )
+        assertEquals(
+            1.03f,
+            resolveTopTabContentScale(
+                selectionFraction = 1f,
+                showIcon = true,
+                showText = false,
+                uiPreset = UiPreset.IOS
+            ),
+            0.001f
+        )
     }
 
     @Test
@@ -125,8 +152,8 @@ class TopTabStylePolicyTest {
         val textSize = resolveTopTabLabelTextSizeSp(labelMode = 0)
         val lineHeight = resolveTopTabLabelLineHeightSp(labelMode = 0)
 
-        assertEquals(14f, textSize, 0.001f)
-        assertEquals(20f, lineHeight, 0.001f)
+        assertEquals(13f, textSize, 0.001f)
+        assertEquals(18f, lineHeight, 0.001f)
         assertTrue(lineHeight >= textSize)
     }
 
@@ -134,14 +161,14 @@ class TopTabStylePolicyTest {
     fun `md3 top tabs should use compact text first underline sizing`() {
         val spec = resolveMd3TopTabVisualSpec(isFloatingStyle = false)
 
-        assertEquals(48.dp, spec.rowHeight)
-        assertEquals(3.dp, spec.selectedCapsuleHeight)
-        assertEquals(2.dp, spec.selectedCapsuleCornerRadius)
-        assertEquals(18.dp, spec.iconSize)
-        assertEquals(14.sp, spec.labelTextSize)
-        assertEquals(20.sp, spec.labelLineHeight)
+        assertEquals(44.dp, spec.rowHeight)
+        assertEquals(2.dp, spec.selectedCapsuleHeight)
+        assertEquals(1.dp, spec.selectedCapsuleCornerRadius)
+        assertEquals(16.dp, spec.iconSize)
+        assertEquals(13.sp, spec.labelTextSize)
+        assertEquals(18.sp, spec.labelLineHeight)
         assertEquals(0.dp, spec.iconLabelSpacing)
-        assertEquals(16.dp, spec.itemHorizontalPadding)
+        assertEquals(12.dp, spec.itemHorizontalPadding)
         assertEquals(0.dp, spec.selectedCapsuleShadowElevation)
         assertEquals(0.dp, spec.selectedCapsuleTonalElevation)
     }
@@ -182,7 +209,11 @@ class TopTabStylePolicyTest {
             "UNDERLINE_FIXED",
             resolveMd3TopTabRowVariant().name
         )
-        assertEquals(18.dp, resolveMd3TopTabActionButtonCorner(isFloatingStyle = true))
-        assertEquals(16.dp, resolveMd3TopTabActionButtonCorner(isFloatingStyle = false))
+        assertEquals(16.dp, resolveMd3TopTabActionButtonCorner(isFloatingStyle = true))
+        assertEquals(12.dp, resolveMd3TopTabActionButtonCorner(isFloatingStyle = false))
+        assertEquals(44.dp, resolveMd3TopTabActionButtonSize(isFloatingStyle = true))
+        assertEquals(36.dp, resolveMd3TopTabActionButtonSize(isFloatingStyle = false))
+        assertEquals(20.dp, resolveMd3TopTabActionIconSize(isFloatingStyle = true))
+        assertEquals(18.dp, resolveMd3TopTabActionIconSize(isFloatingStyle = false))
     }
 }

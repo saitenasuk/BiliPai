@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-16 · Synced to v7.0.0 Beta4 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-20 · Synced to v7.0.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.0.0%20Beta4-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.0.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -405,12 +405,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.0.0 Beta4 · 2026-03-16)
+### Latest (v7.0.0 · 2026-03-20)
 
-- 🫧 **Home header blur and unified chrome were further fixed**: blur seams between the search box and tabs were removed, the unified top panel now blurs correctly in normal blur mode, the rest of the top area keeps its backdrop blur, and feed cards no longer get covered by the taller unified header.
-- 🧭 **Home pager and header collapse are now synchronized per page**: switching to pages like Following no longer leaves a blank area at the top, because the header now settles based on the destination page's own scroll position.
-- 🎬 **Video detail layout, gestures, and sending state were repaired**: controls now scale with shrinking portrait video, swipe-up speed lock works again during long-press acceleration, and comment sending no longer gets stuck spinning after the first successful post.
-- 🎨 **Theme and MD3 details were corrected**: followed-state visuals now use semantic theme colors, and the oversized blank area in the MD3 clear-cache dialog has been fixed.
+- 🎨 **A full visual pass landed for the official 7.0.0 release**: `iOS / MD3` presets, home chrome, liquid-glass modes and strength, adaptive accents, Material You fixes, and in-app font/scale/DPI controls are now part of one consolidated release.
+- 🔎 **Navigation and inbound routing are now unified**: `b23.tv / bilibili.com / bilibili://`, in-app WebView links, search deep links, and top-level entries such as history, favorites, watch later, and space all share the same target-resolution path.
+- 🎬 **Playback and background behavior are substantially more stable**: quality switching, audio mode, offline/background playback, notification/system media controls, richer debug info, and multiple detail-page interaction issues were cleaned up across the release cycle.
+- 🧪 **The release favors stability over experiments**: key policy tests were expanded across home/search/display/theme/player/update flows, and the experimental “video interface realtime blur” entry was removed.
 
 ---
 

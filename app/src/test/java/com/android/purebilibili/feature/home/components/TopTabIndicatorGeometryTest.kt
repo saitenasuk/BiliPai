@@ -42,6 +42,18 @@ class TopTabIndicatorGeometryTest {
     }
 
     @Test
+    fun `ios top indicator fills the full slot when using bottom bar ratio`() {
+        val width = resolveTopTabIndicatorWidthPx(
+            itemWidthPx = 72f,
+            widthRatio = 1.34f,
+            minWidthPx = 90f,
+            horizontalInsetPx = 0f
+        )
+
+        assertEquals(72f, width, 0.01f)
+    }
+
+    @Test
     fun `floating top indicator width is capped on narrow tabs`() {
         val width = resolveLiquidIndicatorWidthPx(
             itemWidthPx = 72f,

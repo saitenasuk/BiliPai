@@ -1,9 +1,11 @@
 package com.android.purebilibili.feature.home.components
 
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.store.LiquidGlassMode
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class BottomBarSurfaceColorPolicyTest {
 
@@ -38,5 +40,18 @@ class BottomBarSurfaceColorPolicyTest {
         )
 
         assertEquals(Color(0xFF121212), color)
+    }
+
+    @Test
+    fun `frosted bottom bar shell keeps blur visibility when glass effect is enabled`() {
+        val color = resolveBottomBarContainerColor(
+            surfaceColor = Color.White,
+            blurEnabled = true,
+            blurIntensity = BlurIntensity.THIN,
+            liquidGlassMode = LiquidGlassMode.FROSTED,
+            isGlassEffectEnabled = true
+        )
+
+        assertTrue(color.alpha >= 0.36f)
     }
 }

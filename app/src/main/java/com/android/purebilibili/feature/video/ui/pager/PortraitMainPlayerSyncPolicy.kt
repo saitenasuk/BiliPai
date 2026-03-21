@@ -1,5 +1,10 @@
 package com.android.purebilibili.feature.video.ui.pager
 
+internal data class PortraitExitRestoreTarget(
+    val bvid: String,
+    val cid: Long
+)
+
 internal fun shouldReloadMainPlayerAfterPortraitExit(
     snapshotBvid: String?,
     snapshotCid: Long,
@@ -35,6 +40,42 @@ internal fun shouldExitPortraitForExternalNavigation(isPortraitFullscreen: Boole
 
 internal fun shouldExitPortraitForUserSpaceNavigation(isPortraitFullscreen: Boolean): Boolean {
     return isPortraitFullscreen
+}
+
+internal fun shouldDeferPortraitRestoreUntilForegroundResume(
+    isPortraitFullscreen: Boolean,
+    isExternalNavigation: Boolean
+): Boolean {
+    return isPortraitFullscreen && isExternalNavigation
+}
+
+internal fun shouldApplyDeferredPortraitRestoreOnResume(
+    hasDeferredRestore: Boolean,
+    isPortraitFullscreen: Boolean
+): Boolean {
+    return hasDeferredRestore && !isPortraitFullscreen
+}
+
+internal fun resolvePortraitExitRestoreTarget(
+    pendingMainReloadBvidAfterPortrait: String?,
+    portraitPendingSelectionBvid: String?,
+    portraitSyncSnapshotBvid: String?,
+    portraitSyncSnapshotCid: Long,
+    currentBvidCid: Long
+): PortraitExitRestoreTarget? {
+    val targetBvid = pendingMainReloadBvidAfterPortrait
+        ?: portraitPendingSelectionBvid
+        ?: portraitSyncSnapshotBvid
+        ?: return null
+    val targetCid = if (targetBvid == portraitSyncSnapshotBvid) {
+        portraitSyncSnapshotCid
+    } else {
+        currentBvidCid
+    }
+    return PortraitExitRestoreTarget(
+        bvid = targetBvid,
+        cid = targetCid
+    )
 }
 
 internal fun shouldResyncPortraitPagerOnUserSpaceReturn(

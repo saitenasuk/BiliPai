@@ -54,6 +54,8 @@ import com.android.purebilibili.feature.settings.GITHUB_URL
 import com.android.purebilibili.core.store.SettingsManager //  引入 SettingsManager
 import com.android.purebilibili.core.store.HomeTopTabSettings
 import com.android.purebilibili.core.store.AppNavigationSettings
+import com.android.purebilibili.core.store.resolveEffectiveHomeSettings
+import com.android.purebilibili.core.store.resolveEffectiveLiquidGlassEnabled
 import com.android.purebilibili.core.store.resolveHomeHeaderBlurEnabled
 //  从 components 包导入拆分后的组件
 import com.android.purebilibili.feature.home.components.BottomNavItem
@@ -367,7 +369,6 @@ fun HomeScreen(
     
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var refreshDeltaTipText by remember { mutableStateOf<String?>(null) }
-    var dividerRevealRefreshKey by rememberSaveable { mutableLongStateOf(0L) }
     
     //  [彩蛋] 下拉刷新成功后显示趣味提示（仅在开关开启时）
     LaunchedEffect(state.refreshKey, homeSettings.easterEggEnabled) {
@@ -406,8 +407,6 @@ fun HomeScreen(
             }
         }
         refreshDeltaTipText = if (count > 0) "新增 $count 条内容" else "暂无新内容"
-        // 分割线需等待用户发生下滑后再展示
-        if (count > 0) dividerRevealRefreshKey = 0L
         delay(2200)
         refreshDeltaTipText = null
         viewModel.markRefreshNewItemsHandled(refreshKey)
@@ -423,7 +422,7 @@ fun HomeScreen(
         if (state.currentCategory != HomeCategory.RECOMMEND) return@LaunchedEffect
         if ((state.refreshNewItemsCount ?: 0) <= 0) return@LaunchedEffect
         val targetKey = state.refreshNewItemsKey
-        if (targetKey <= 0L || dividerRevealRefreshKey == targetKey) return@LaunchedEffect
+        if (targetKey <= 0L || state.recommendOldContentRevealKey == targetKey) return@LaunchedEffect
 
         val anchorBvid = state.recommendOldContentAnchorBvid ?: return@LaunchedEffect
         val recommendVideos = state.categoryStates[HomeCategory.RECOMMEND]?.videos ?: return@LaunchedEffect
@@ -437,7 +436,7 @@ fun HomeScreen(
             val reachedByIndex = recommendState.firstVisibleItemIndex >= anchorIndex
             reachedByVisible || reachedByIndex
         }.first { it }
-        dividerRevealRefreshKey = targetKey
+        viewModel.markRecommendOldContentDividerRevealed(targetKey)
     }
     
     //  [彩蛋] 关闭确认对话框
@@ -484,6 +483,12 @@ fun HomeScreen(
     }
 
     // 解构设置值（避免每次访问都触发重组）
+    val effectiveHomeSettings = remember(homeSettings, uiPreset) {
+        resolveEffectiveHomeSettings(
+            homeSettings = homeSettings,
+            uiPreset = uiPreset
+        )
+    }
     val displayMode = homeSettings.displayMode
     val isBottomBarFloating = homeSettings.isBottomBarFloating
     val bottomBarLabelMode = homeSettings.bottomBarLabelMode
@@ -498,7 +503,12 @@ fun HomeScreen(
     val baseCardAnimationEnabled = homeSettings.cardAnimationEnabled      //  卡片进场动画开关
     val baseCardTransitionEnabled = homeSettings.cardTransitionEnabled &&
         !predictiveStableBackRouteMotionEnabled // 预测返回稳定路由模式下禁用首页共享元素，避免叠层滞留
-    val baseIsLiquidGlassEnabled = homeSettings.isLiquidGlassEnabled      //  流体玻璃特效开关
+    val baseIsLiquidGlassEnabled = remember(homeSettings.isLiquidGlassEnabled, uiPreset) {
+        resolveEffectiveLiquidGlassEnabled(
+            requestedEnabled = homeSettings.isLiquidGlassEnabled,
+            uiPreset = uiPreset
+        )
+    }
     val baseIsDataSaverActive = remember(context) {
         com.android.purebilibili.core.store.SettingsManager.isDataSaverActive(context)
     }
@@ -511,6 +521,7 @@ fun HomeScreen(
         baseIsDataSaverActive
     ) {
         resolveHomePerformanceConfig(
+            uiPreset = uiPreset,
             headerBlurEnabled = baseIsHeaderBlurEnabled,
             bottomBarBlurEnabled = baseIsBottomBarBlurEnabled,
             liquidGlassEnabled = baseIsLiquidGlassEnabled,
@@ -1175,19 +1186,27 @@ fun HomeScreen(
                                      compactStatsOnCover = homeSettings.compactVideoStatsOnCover,
                                      showCoverGlassBadges = homeSettings.showHomeCoverGlassBadges,
                                      showInfoGlassBadges = homeSettings.showHomeInfoGlassBadges,
-                                     oldContentAnchorBvid = if (category == HomeCategory.RECOMMEND &&
-                                         dividerRevealRefreshKey == state.refreshNewItemsKey
+                                     oldContentAnchorBvid = if (shouldShowRecommendOldContentDivider(
+                                             currentCategory = category,
+                                             refreshNewItemsKey = state.refreshNewItemsKey,
+                                             revealedRefreshKey = state.recommendOldContentRevealKey,
+                                             anchorBvid = state.recommendOldContentAnchorBvid,
+                                             oldContentStartIndex = state.recommendOldContentStartIndex
+                                         )
                                      ) {
                                          state.recommendOldContentAnchorBvid
                                      } else {
                                          null
                                      },
-                                     oldContentStartIndex = if (category == HomeCategory.RECOMMEND) {
-                                         if (dividerRevealRefreshKey == state.refreshNewItemsKey) {
-                                             state.recommendOldContentStartIndex
-                                         } else {
-                                             null
-                                         }
+                                     oldContentStartIndex = if (shouldShowRecommendOldContentDivider(
+                                             currentCategory = category,
+                                             refreshNewItemsKey = state.refreshNewItemsKey,
+                                             revealedRefreshKey = state.recommendOldContentRevealKey,
+                                             anchorBvid = state.recommendOldContentAnchorBvid,
+                                             oldContentStartIndex = state.recommendOldContentStartIndex
+                                         )
+                                     ) {
+                                         state.recommendOldContentStartIndex
                                      } else {
                                          null
                                      },
@@ -1306,7 +1325,7 @@ fun HomeScreen(
             pullProgress = 0f, // [Fix] Outer header doesn't track inner pull state
             pagerState = pagerState,
             backdrop = homeBackdrop,
-            homeSettings = homeSettings,
+            homeSettings = effectiveHomeSettings,
             topTabsVisible = resolveHomeTopTabsVisible(
                 isDelayedForCardSettle = delayTopTabsUntilCardSettled,
                 isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav,

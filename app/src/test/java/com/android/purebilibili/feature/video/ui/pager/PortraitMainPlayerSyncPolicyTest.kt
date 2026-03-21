@@ -114,6 +114,98 @@ class PortraitMainPlayerSyncPolicyTest {
     }
 
     @Test
+    fun externalNavigationFromPortrait_shouldDeferInlineRestoreUntilResume() {
+        assertTrue(
+            shouldDeferPortraitRestoreUntilForegroundResume(
+                isPortraitFullscreen = true,
+                isExternalNavigation = true
+            )
+        )
+        assertFalse(
+            shouldDeferPortraitRestoreUntilForegroundResume(
+                isPortraitFullscreen = false,
+                isExternalNavigation = true
+            )
+        )
+        assertFalse(
+            shouldDeferPortraitRestoreUntilForegroundResume(
+                isPortraitFullscreen = true,
+                isExternalNavigation = false
+            )
+        )
+    }
+
+    @Test
+    fun deferredPortraitRestore_shouldApplyOnlyAfterReturningToInlineHost() {
+        assertTrue(
+            shouldApplyDeferredPortraitRestoreOnResume(
+                hasDeferredRestore = true,
+                isPortraitFullscreen = false
+            )
+        )
+        assertFalse(
+            shouldApplyDeferredPortraitRestoreOnResume(
+                hasDeferredRestore = true,
+                isPortraitFullscreen = true
+            )
+        )
+        assertFalse(
+            shouldApplyDeferredPortraitRestoreOnResume(
+                hasDeferredRestore = false,
+                isPortraitFullscreen = false
+            )
+        )
+    }
+
+    @Test
+    fun portraitExitRestoreTarget_prefersPendingReloadAndKeepsSnapshotCidForSameVideo() {
+        assertEquals(
+            PortraitExitRestoreTarget(
+                bvid = "BV_TARGET",
+                cid = 202L
+            ),
+            resolvePortraitExitRestoreTarget(
+                pendingMainReloadBvidAfterPortrait = "BV_TARGET",
+                portraitPendingSelectionBvid = "BV_OTHER",
+                portraitSyncSnapshotBvid = "BV_TARGET",
+                portraitSyncSnapshotCid = 202L,
+                currentBvidCid = 303L
+            )
+        )
+    }
+
+    @Test
+    fun portraitExitRestoreTarget_fallsBackToSelectionAndUsesCurrentCidForNewVideo() {
+        assertEquals(
+            PortraitExitRestoreTarget(
+                bvid = "BV_OTHER",
+                cid = 303L
+            ),
+            resolvePortraitExitRestoreTarget(
+                pendingMainReloadBvidAfterPortrait = null,
+                portraitPendingSelectionBvid = "BV_OTHER",
+                portraitSyncSnapshotBvid = "BV_TARGET",
+                portraitSyncSnapshotCid = 202L,
+                currentBvidCid = 303L
+            )
+        )
+    }
+
+    @Test
+    fun portraitExitRestoreTarget_returnsNullWhenNoPortraitSnapshotExists() {
+        assertEquals(
+            null,
+            resolvePortraitExitRestoreTarget(
+                pendingMainReloadBvidAfterPortrait = null,
+                portraitPendingSelectionBvid = null,
+                portraitSyncSnapshotBvid = null,
+                portraitSyncSnapshotCid = 202L,
+                currentBvidCid = 303L
+            )
+        )
+    }
+
+    @Test
     fun userSpaceReturn_shouldResync_whenCurrentPlayingBvidDiffers() {
         assertTrue(
             shouldResyncPortraitPagerOnUserSpaceReturn(

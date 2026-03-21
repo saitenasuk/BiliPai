@@ -102,6 +102,8 @@ fun SettingsScreen(
         .collectAsState(initial = true)
     val incrementalTimelineRefreshEnabled by SettingsManager.getIncrementalTimelineRefresh(context)
         .collectAsState(initial = false)
+    val homeRefreshCount by SettingsManager.getHomeRefreshCount(context)
+        .collectAsState(initial = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT)
     
     // Local UI State
     var showCacheDialog by remember { mutableStateOf(false) }
@@ -686,6 +688,12 @@ fun SettingsScreen(
                         scope.launch {
                             SettingsManager.setIncrementalTimelineRefresh(context, enabled)
                         }
+                    },
+                    homeRefreshCount = homeRefreshCount,
+                    onHomeRefreshCountChange = { count ->
+                        scope.launch {
+                            SettingsManager.setHomeRefreshCount(context, count)
+                        }
                     }
                 )
             } else {
@@ -745,6 +753,12 @@ fun SettingsScreen(
                     onIncrementalTimelineRefreshChange = { enabled ->
                         scope.launch {
                             SettingsManager.setIncrementalTimelineRefresh(context, enabled)
+                        }
+                    },
+                    homeRefreshCount = homeRefreshCount,
+                    onHomeRefreshCountChange = { count ->
+                        scope.launch {
+                            SettingsManager.setHomeRefreshCount(context, count)
                         }
                     },
                     onDonateClick = { showDonateDialog = true },
@@ -860,7 +874,9 @@ private fun MobileSettingsLayout(
     feedApiType: SettingsManager.FeedApiType,
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
-    onIncrementalTimelineRefreshChange: (Boolean) -> Unit
+    onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    homeRefreshCount: Int,
+    onHomeRefreshCountChange: (Int) -> Unit
 ) {
     var isVisible by remember { mutableStateOf(false) }
     val windowSizeClass = LocalWindowSizeClass.current
@@ -997,7 +1013,9 @@ private fun MobileSettingsLayout(
                                         feedApiType = feedApiType,
                                         onFeedApiTypeChange = onFeedApiTypeChange,
                                         incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
-                                        onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange
+                                        onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange,
+                                        homeRefreshCount = homeRefreshCount,
+                                        onHomeRefreshCountChange = onHomeRefreshCountChange
                                     )
                                 }
                                 MobileSettingsRootSection.ABOUT -> {

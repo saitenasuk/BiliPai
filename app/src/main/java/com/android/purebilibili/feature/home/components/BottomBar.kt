@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer  //  晃动动画
 import androidx.compose.ui.input.pointer.pointerInput
@@ -90,21 +91,19 @@ import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationSta
 import com.android.purebilibili.core.ui.animation.horizontalDragGesture
 import dev.chrisbanes.haze.hazeEffect // [New]
 import dev.chrisbanes.haze.HazeStyle   // [New]
-import com.android.purebilibili.core.ui.effect.liquidGlassBackground // [New]
 // [LayerBackdrop] AndroidLiquidGlass library for real background refraction
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.blur
 import androidx.compose.foundation.shape.RoundedCornerShape as RoundedCornerShapeAlias
 import androidx.compose.ui.Modifier.Companion.then
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.effect.liquidGlass
-import com.android.purebilibili.core.ui.effect.simpMusicLiquidGlass // [New]
 import com.android.purebilibili.core.store.LiquidGlassStyle // [New] Top-level enum
+import com.android.purebilibili.core.store.LiquidGlassMode
 import androidx.compose.foundation.isSystemInDarkTheme // [New] Theme detection for adaptive readability
+import kotlin.math.sign
 
 /**
  * 底部导航项枚举 -  使用 iOS SF Symbols 风格图标
@@ -224,6 +223,140 @@ internal data class BottomBarIndicatorPolicy(
     val clampToBounds: Boolean,
     val edgeInsetDp: Float
 )
+
+internal data class BottomBarIndicatorVisualPolicy(
+    val isInMotion: Boolean,
+    val shouldRefract: Boolean,
+    val useNeutralTint: Boolean
+)
+
+internal data class BottomBarRefractionLayerPolicy(
+    val captureTintedContentLayer: Boolean,
+    val useCombinedBackdrop: Boolean
+)
+
+internal data class BottomBarRefractionMotionProfile(
+    val progress: Float,
+    val exportPanelOffsetFraction: Float,
+    val indicatorPanelOffsetFraction: Float,
+    val visiblePanelOffsetFraction: Float,
+    val visibleSelectionEmphasis: Float,
+    val exportSelectionEmphasis: Float,
+    val exportCaptureWidthScale: Float,
+    val forceChromaticAberration: Boolean,
+    val indicatorLensAmountScale: Float,
+    val indicatorLensHeightScale: Float
+)
+
+internal fun resolveBottomBarIndicatorVisualPolicy(
+    position: Float,
+    isDragging: Boolean,
+    velocity: Float,
+    useNeutralIndicatorTint: Boolean
+): BottomBarIndicatorVisualPolicy {
+    val isFractional = abs(position - position.roundToInt().toFloat()) > 0.001f
+    val isInMotion = isDragging || isFractional || abs(velocity) > 45f
+    return BottomBarIndicatorVisualPolicy(
+        isInMotion = isInMotion,
+        shouldRefract = isInMotion,
+        useNeutralTint = isInMotion && useNeutralIndicatorTint
+    )
+}
+
+internal fun resolveBottomBarRefractionLayerPolicy(
+    isFloating: Boolean,
+    isLiquidGlassEnabled: Boolean,
+    indicatorVisualPolicy: BottomBarIndicatorVisualPolicy
+): BottomBarRefractionLayerPolicy {
+    val captureTintedContentLayer =
+        isFloating && isLiquidGlassEnabled && indicatorVisualPolicy.shouldRefract
+    return BottomBarRefractionLayerPolicy(
+        captureTintedContentLayer = captureTintedContentLayer,
+        useCombinedBackdrop = false
+    )
+}
+
+internal fun resolveBottomBarRefractionMotionProfile(
+    position: Float,
+    velocity: Float,
+    isDragging: Boolean
+): BottomBarRefractionMotionProfile {
+    val signedFractionalOffset = position - position.roundToInt().toFloat()
+    val fractionalProgress = (abs(signedFractionalOffset) * 2f).coerceIn(0f, 1f)
+    val speedProgress = (abs(velocity) / 1400f).coerceIn(0f, 1f)
+    val baseProgress = fractionalProgress.coerceAtLeast(speedProgress)
+    val rawProgress = when {
+        isDragging -> baseProgress.coerceAtLeast(0.18f)
+        baseProgress > 0.03f -> baseProgress
+        else -> 0f
+    }
+    if (rawProgress <= 0f) {
+        return BottomBarRefractionMotionProfile(
+            progress = 0f,
+            exportPanelOffsetFraction = 0f,
+            indicatorPanelOffsetFraction = 0f,
+            visiblePanelOffsetFraction = 0f,
+            visibleSelectionEmphasis = 1f,
+            exportSelectionEmphasis = 1f,
+            exportCaptureWidthScale = 1f,
+            forceChromaticAberration = false,
+            indicatorLensAmountScale = 1f,
+            indicatorLensHeightScale = 1f
+        )
+    }
+
+    val progress = (rawProgress * rawProgress * (3f - 2f * rawProgress)).coerceIn(0f, 1f)
+    val direction = when {
+        abs(velocity) > 24f -> sign(velocity)
+        abs(signedFractionalOffset) > 0.001f -> sign(signedFractionalOffset)
+        else -> 0f
+    }
+
+    return BottomBarRefractionMotionProfile(
+        progress = progress,
+        exportPanelOffsetFraction = 0f,
+        indicatorPanelOffsetFraction = 0f,
+        visiblePanelOffsetFraction = 0f,
+        visibleSelectionEmphasis = lerp(1f, 0.38f, progress),
+        exportSelectionEmphasis = 1f,
+        exportCaptureWidthScale = 1f,
+        forceChromaticAberration = progress > 0.05f,
+        indicatorLensAmountScale = lerp(1f, 0.26f, progress),
+        indicatorLensHeightScale = lerp(1f, 0.18f, progress)
+    )
+}
+
+internal fun resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme: Boolean): Color {
+    return if (isDarkTheme) {
+        Color(0xFFF6F8FB)
+    } else {
+        Color(0xFFFDFEFF)
+    }
+}
+
+internal fun resolveBottomBarChromeMaterialMode(
+    showGlassEffect: Boolean,
+    hasBlur: Boolean
+): TopTabMaterialMode {
+    return when {
+        showGlassEffect -> TopTabMaterialMode.LIQUID_GLASS
+        hasBlur -> TopTabMaterialMode.BLUR
+        else -> TopTabMaterialMode.PLAIN
+    }
+}
+
+internal fun resolveBottomBarIndicatorTintAlpha(
+    shouldRefract: Boolean,
+    liquidGlassMode: LiquidGlassMode,
+    configuredAlpha: Float
+): Float {
+    if (shouldRefract) return configuredAlpha
+    return when (liquidGlassMode) {
+        LiquidGlassMode.FROSTED -> configuredAlpha.coerceAtLeast(0.32f)
+        LiquidGlassMode.BALANCED -> configuredAlpha.coerceAtLeast(0.22f)
+        LiquidGlassMode.CLEAR -> configuredAlpha.coerceAtLeast(0.24f)
+    }
+}
 
 internal fun resolveBottomBarIndicatorPolicy(itemCount: Int): BottomBarIndicatorPolicy {
     val topTuning = resolveTopTabVisualTuning()
@@ -380,10 +513,6 @@ fun FrostedBottomBar(
     val isDarkTheme = MaterialTheme.colorScheme.background.red < 0.5f // Simple darkness check
     val haptic = rememberHapticFeedback()
     
-    // [New] Adaptive Luminance for SimpMusic Style
-    // 0.0 = Black/Dark, 1.0 = White/Bright
-    var contentLuminance by remember { mutableFloatStateOf(0f) }
-    
     // 🔒 [防抖]
     var lastClickTime by remember { mutableStateOf(0L) }
     val debounceClick: (BottomNavItem, () -> Unit) -> Unit = remember {
@@ -404,19 +533,6 @@ fun FrostedBottomBar(
     val blurIntensity = com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity()
     val isActivelyScrolling = kotlin.math.abs(scrollOffset) >= 6f
     
-    // [Fix] Background Color for Legibility
-    // 液态玻璃保持轻底色，常规路径交给颜色策略统一处理。
-    val barColor = if (homeSettings.isLiquidGlassEnabled) {
-        // Low alpha keeps the refraction layer visible.
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.1f) 
-    } else {
-        resolveBottomBarSurfaceColor(
-            surfaceColor = MaterialTheme.colorScheme.surface,
-            blurEnabled = hazeState != null,
-            blurIntensity = blurIntensity
-        )
-    }
-
     // 📐 高度计算
     val floatingHeight = resolveBottomBarFloatingHeightDp(
         labelMode = labelMode,
@@ -568,6 +684,53 @@ fun FrostedBottomBar(
     // [Fix] 确保指示器互斥显示的最终逻辑
     // 当底栏停靠时，强制禁用液态玻璃（Liquid Glass），仅使用标准磨砂（Frosted Glass）
     val showGlassEffect = homeSettings.isLiquidGlassEnabled && isFloating
+    val liquidGlassTuning = remember(
+        homeSettings.liquidGlassMode,
+        homeSettings.liquidGlassStrength,
+        homeSettings.liquidGlassStyle
+    ) {
+        resolveLiquidGlassTuning(
+            mode = homeSettings.liquidGlassMode,
+            strength = homeSettings.liquidGlassStrength
+        )
+    }
+    val contentLuminance = remember(showGlassEffect, liquidGlassTuning.mode, isDarkTheme) {
+        if (showGlassEffect && liquidGlassTuning.mode == LiquidGlassMode.FROSTED) {
+            if (isDarkTheme) 0.18f else 0.82f
+        } else {
+            0f
+        }
+    }
+    val isGlassSupported = remember { shouldAllowHomeChromeLiquidGlass(android.os.Build.VERSION.SDK_INT) }
+    val allowHazeLiquidGlassFallback = remember {
+        shouldAllowDirectHazeLiquidGlassFallback(android.os.Build.VERSION.SDK_INT)
+    }
+    val bottomChromeMaterialMode = resolveBottomBarChromeMaterialMode(
+        showGlassEffect = showGlassEffect,
+        hasBlur = hazeState != null
+    )
+    val barColor = resolveBottomBarContainerColor(
+        surfaceColor = MaterialTheme.colorScheme.surface,
+        blurEnabled = hazeState != null,
+        blurIntensity = blurIntensity,
+        liquidGlassMode = liquidGlassTuning.mode,
+        isGlassEffectEnabled = showGlassEffect
+    )
+    val bottomChromeRenderMode = remember(
+        bottomChromeMaterialMode,
+        isGlassSupported,
+        backdrop,
+        hazeState,
+        allowHazeLiquidGlassFallback
+    ) {
+        resolveHomeTopChromeRenderMode(
+            materialMode = bottomChromeMaterialMode,
+            isGlassSupported = isGlassSupported,
+            hasBackdrop = backdrop != null,
+            hasHazeState = hazeState != null,
+            allowHazeLiquidGlassFallback = allowHazeLiquidGlassFallback
+        )
+    }
     // [Refraction] 图标+文字模式下，提高镜片高度并轻微下移，让标签文字稳定进入折射区域
     val bottomIndicatorHeight = resolveBottomIndicatorHeightDp(
         labelMode = labelMode,
@@ -610,113 +773,30 @@ fun FrostedBottomBar(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .run {
-                        val isSupported = shouldAllowHomeChromeLiquidGlass(android.os.Build.VERSION.SDK_INT)
-                        val allowDirectHazeLiquidGlassFallback =
-                            shouldAllowDirectHazeLiquidGlassFallback(android.os.Build.VERSION.SDK_INT)
-                        val scrollState = com.android.purebilibili.feature.home.LocalHomeScrollOffset.current
-                        
-                        if (showGlassEffect && isSupported && backdrop != null) {
-                            // [LayerBackdrop Mode] Real background refraction using captured layer
-                            val scrollValue = scrollState.floatValue
-                            val isDark = isSystemInDarkTheme()
-
-                            when (homeSettings.liquidGlassStyle) {
-                                LiquidGlassStyle.SIMP_MUSIC -> {
-                                    // [Style: SimpMusic] Adaptive Lens with Vibrancy & Blur
-                                    this.simpMusicLiquidGlass(
-                                        backdrop = backdrop,
-                                        shape = barShape,
-                                        onLuminanceChanged = { contentLuminance = it }
-                                    )
-                                }
-                                LiquidGlassStyle.IOS26 -> {
-                                    // [Style: iOS26] Keep lens stable; no vertical-scroll driven refraction.
-                                    this.drawBackdrop(
-                                        backdrop = backdrop,
-                                        shape = { barShape },
-                                        effects = {
-                                            lens(
-                                                refractionHeight = 148f,
-                                                refractionAmount = 44f,
-                                                depthEffect = isFloating,
-                                                chromaticAberration = false
-                                            )
-                                        },
-                                        onDrawSurface = {
-                                            val baseAlpha = if (isDark) 0.46f else 0.63f
-                                            drawRect(barColor.copy(alpha = baseAlpha))
-                                            drawRect(Color.White.copy(alpha = if (isDark) 0.06f else 0.10f))
-                                        }
-                                    )
-                                }
-                                LiquidGlassStyle.CLASSIC -> {
-                                    // [Style: Classic] BiliPai's Wavy Ripple
-                                    val dynamicRefractionAmount = 65f + (scrollValue * 0.05f).coerceIn(0f, 40f)
-                                    this.drawBackdrop(
-                                        backdrop = backdrop,
-                                        shape = { barShape },
-                                        effects = {
-                                            lens(
-                                                refractionHeight = 200f,
-                                                refractionAmount = dynamicRefractionAmount,
-                                                depthEffect = isFloating,
-                                                chromaticAberration = true
-                                            )
-                                        },
-                                        onDrawSurface = {
-                                            val baseAlpha = if (isDark) 0.50f else 0.75f
-                                            val scrollImpact = (scrollValue * 0.0005f).coerceIn(0f, 0.1f)
-                                            val overlayAlpha = baseAlpha + scrollImpact
-                                            drawRect(barColor.copy(alpha = overlayAlpha))
-                                        }
-                                    )
-                                }
-                            }
-                        } else if (
-                            showGlassEffect &&
-                            isSupported &&
-                            allowDirectHazeLiquidGlassFallback &&
-                            hazeState != null
-                        ) {
-                            // [Haze Fallback] Use Haze blur when no backdrop available
-                            this
-                                .hazeEffect(
-                                     state = hazeState,
-                                     style = HazeStyle(
-                                         tint = null,
-                                         blurRadius = 0.1.dp, // Minimal radius for clear glass look
-                                         noiseFactor = 0f
-                                     )
-                                 )
-                                .liquidGlassBackground(
-                                    refractIntensity = 0.6f,
-                                    scrollOffsetProvider = {
-                                        if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) 0f
-                                        else scrollState.floatValue
-                                    },
-                                    backgroundColor = barColor.copy(alpha = 0.1f)
-                                )
-                        } else {
-                            // Standard Fallback: Solid Background + Blur
-                            this
-                                .background(barColor)
-                                .then(
-                                    if (hazeState != null) {
-                                        Modifier.unifiedBlur(
-                                            hazeState = hazeState,
-                                            surfaceType = BlurSurfaceType.BOTTOM_BAR,
-                                            motionTier = motionTier,
-                                            isScrolling = isActivelyScrolling,
-                                            isTransitionRunning = isTransitionRunning,
-                                            forceLowBudget = forceLowBlurBudget
-                                        )
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                        }
-                    }
+                    .appChromeLiquidSurface(
+                        renderMode = bottomChromeRenderMode,
+                        shape = barShape,
+                        surfaceColor = barColor,
+                        hazeState = hazeState,
+                        backdrop = backdrop,
+                        liquidStyle = homeSettings.liquidGlassStyle,
+                        liquidGlassTuning = liquidGlassTuning,
+                        motionTier = motionTier,
+                        isScrolling = isActivelyScrolling,
+                        isTransitionRunning = isTransitionRunning,
+                        forceLowBlurBudget = forceLowBlurBudget,
+                        style = AppChromeLiquidSurfaceStyle(
+                            blurSurfaceType = BlurSurfaceType.BOTTOM_BAR,
+                            depthEffect = isFloating,
+                            refractionAmountScrollMultiplier = 0.02f,
+                            refractionAmountScrollCap = 14f,
+                            surfaceAlphaScrollMultiplier = 0.00015f,
+                            surfaceAlphaScrollCap = 0.04f,
+                            darkThemeWhiteOverlayMultiplier = 0.86f,
+                            useTuningSurfaceAlpha = true,
+                            hazeBackgroundAlphaMultiplier = 0.4f
+                        )
+                    )
             )
 
             Surface(
@@ -744,33 +824,58 @@ fun FrostedBottomBar(
                             // liquidGlass removed: Refraction now handled by LiquidIndicator using LayerBackdrop
                     ) {
                         // 关键修复：
-                        // 1) 先把底栏图标层捕获到 local backdrop
-                        // 2) 指示器使用全局 backdrop 并绘制在图标层下方，避免文字/图标发虚
-                        val iconBackdrop = rememberLayerBackdrop()
+                        // 1) 移动态时导出一层隐藏的 tint 内容给 capsule 折射
+                        // 2) capsule 使用页面 backdrop + tint 内容的 combined backdrop
+                        val tintedContentBackdrop = rememberLayerBackdrop()
                         val isDark = isSystemInDarkTheme()
-                        val movingIndicatorColor = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) {
-                            resolveIos26BottomIndicatorGrayColor(isDarkTheme = isDark)
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        }
                         val indicatorPosition = dampedDragState.value
-                        val indicatorFractional =
-                            abs(indicatorPosition - indicatorPosition.roundToInt().toFloat()) > 0.001f
-                        val indicatorInMotion =
-                            dampedDragState.isDragging || indicatorFractional || abs(dampedDragState.velocity) > 45f
-                        val indicatorBackdrop = if (indicatorInMotion) iconBackdrop else null
+                        val indicatorVisualPolicy = resolveBottomBarIndicatorVisualPolicy(
+                            position = indicatorPosition,
+                            isDragging = dampedDragState.isDragging,
+                            velocity = dampedDragState.velocity,
+                            useNeutralIndicatorTint = liquidGlassTuning.useNeutralIndicatorTint
+                        )
+                        val refractionMotionProfile = resolveBottomBarRefractionMotionProfile(
+                            position = indicatorPosition,
+                            velocity = dampedDragState.velocity,
+                            isDragging = dampedDragState.isDragging
+                        )
+                        val indicatorPanelOffsetPx = with(density) { 4.dp.toPx() } *
+                            refractionMotionProfile.indicatorPanelOffsetFraction
                         val indicatorPolicy = remember(itemCount) {
                             resolveBottomBarIndicatorPolicy(itemCount = itemCount)
                         }
-
+                        val indicatorColor = when {
+                            indicatorVisualPolicy.shouldRefract ->
+                                resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = isDark)
+                            indicatorVisualPolicy.useNeutralTint ->
+                                resolveIos26BottomIndicatorGrayColor(isDarkTheme = isDark)
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                        val indicatorTintAlpha = resolveBottomBarIndicatorTintAlpha(
+                            shouldRefract = indicatorVisualPolicy.shouldRefract,
+                            liquidGlassMode = liquidGlassTuning.mode,
+                            configuredAlpha = liquidGlassTuning.indicatorTintAlpha
+                        )
+                        val refractionLayerPolicy = resolveBottomBarRefractionLayerPolicy(
+                            isFloating = isFloating,
+                            isLiquidGlassEnabled = showGlassEffect,
+                            indicatorVisualPolicy = indicatorVisualPolicy
+                        )
+                        val indicatorBackdrop: Backdrop? = when {
+                            !indicatorVisualPolicy.shouldRefract -> null
+                            refractionLayerPolicy.captureTintedContentLayer -> tintedContentBackdrop
+                            else -> backdrop
+                        }
                         LiquidIndicator(
                             position = indicatorPosition,
                             itemWidth = itemWidth,
                             itemCount = itemCount,
                             // Keep refraction active during in-flight horizontal motion (drag + settle).
-                            isDragging = indicatorInMotion,
+                            isDragging = indicatorVisualPolicy.isInMotion,
                             velocity = dampedDragState.velocity,
                             startPadding = rowPadding,
+                            viewportShiftPx = indicatorPanelOffsetPx,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .offset(y = bottomIndicatorYOffset)
@@ -783,26 +888,55 @@ fun FrostedBottomBar(
                             maxWidthToItemRatio = indicatorPolicy.maxWidthToItemRatio,
                             indicatorHeight = bottomIndicatorHeight,
                             isLiquidGlassEnabled = showGlassEffect,
-                            lensIntensityBoost = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) 1.35f else 1.85f,
-                            edgeWarpBoost = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) 1.38f else 1.92f,
-                            chromaticBoost = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) 1.08f else 1.75f,
+                            lensIntensityBoost = liquidGlassTuning.indicatorLensBoost,
+                            edgeWarpBoost = liquidGlassTuning.indicatorEdgeWarpBoost,
+                            chromaticBoost = liquidGlassTuning.indicatorChromaticBoost,
                             liquidGlassStyle = homeSettings.liquidGlassStyle, // [New] Pass style
+                            liquidGlassTuning = liquidGlassTuning,
                             // Dynamic refraction: moving -> refract icons/text/cover, static -> keep pure color.
                             backdrop = indicatorBackdrop,
-                            color = movingIndicatorColor.copy(
-                                alpha = if (homeSettings.liquidGlassStyle == LiquidGlassStyle.IOS26) {
-                                    if (isDark) 0.30f else 0.38f
-                                } else {
-                                    0.14f
-                                }
-                            )
+                            lensAmountScale = refractionMotionProfile.indicatorLensAmountScale,
+                            lensHeightScale = refractionMotionProfile.indicatorLensHeightScale,
+                            forceChromaticAberration = refractionLayerPolicy.useCombinedBackdrop &&
+                                refractionMotionProfile.forceChromaticAberration,
+                            color = indicatorColor.copy(alpha = indicatorTintAlpha)
                         )
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .layerBackdrop(iconBackdrop)
-                        ) {
+                        if (refractionLayerPolicy.captureTintedContentLayer) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clearAndSetSemantics {}
+                                    .alpha(0f)
+                                    .layerBackdrop(tintedContentBackdrop)
+                            ) {
+                                BottomBarContent(
+                                    visibleItems = visibleItems,
+                                    selectedIndex = selectedIndex,
+                                    itemColorIndices = itemColorIndices,
+                                    onItemClick = onItemClick,
+                                    onToggleSidebar = onToggleSidebar,
+                                    isTablet = isTablet,
+                                    labelMode = labelMode,
+                                    hazeState = hazeState,
+                                    haptic = haptic,
+                                    debounceClick = debounceClick,
+                                    onHomeDoubleTap = onHomeDoubleTap,
+                                    onDynamicDoubleTap = onDynamicDoubleTap,
+                                    itemWidth = itemWidth,
+                                    rowPadding = rowPadding,
+                                    contentVerticalOffset = contentVerticalOffset,
+                                    isInteractive = false,
+                                    currentPosition = indicatorPosition,
+                                    contentLuminance = contentLuminance,
+                                    liquidGlassStyle = homeSettings.liquidGlassStyle,
+                                    liquidGlassTuning = liquidGlassTuning,
+                                    selectionEmphasis = refractionMotionProfile.exportSelectionEmphasis
+                                )
+                            }
+                        }
+
+                        Box(modifier = Modifier.fillMaxSize()) {
                             BottomBarContent(
                                 visibleItems = visibleItems,
                                 selectedIndex = selectedIndex,
@@ -827,7 +961,9 @@ fun FrostedBottomBar(
                                 ),
                                 // [New] Param for adaptive text color
                                 contentLuminance = contentLuminance,
-                                liquidGlassStyle = homeSettings.liquidGlassStyle
+                                liquidGlassStyle = homeSettings.liquidGlassStyle,
+                                liquidGlassTuning = liquidGlassTuning,
+                                selectionEmphasis = refractionMotionProfile.visibleSelectionEmphasis
                             )
                         }
                     }
@@ -983,6 +1119,28 @@ internal fun resolveBottomBarSurfaceColor(
     return surfaceColor.copy(alpha = alpha)
 }
 
+internal fun resolveBottomBarContainerColor(
+    surfaceColor: Color,
+    blurEnabled: Boolean,
+    blurIntensity: com.android.purebilibili.core.ui.blur.BlurIntensity,
+    liquidGlassMode: LiquidGlassMode,
+    isGlassEffectEnabled: Boolean
+): Color {
+    val base = resolveBottomBarSurfaceColor(
+        surfaceColor = surfaceColor,
+        blurEnabled = blurEnabled,
+        blurIntensity = blurIntensity
+    )
+    if (!isGlassEffectEnabled) return base
+
+    val minAlpha = when (liquidGlassMode) {
+        LiquidGlassMode.FROSTED -> 0.36f
+        LiquidGlassMode.BALANCED -> 0.22f
+        LiquidGlassMode.CLEAR -> 0.18f
+    }
+    return base.copy(alpha = base.alpha.coerceAtLeast(minAlpha))
+}
+
 internal fun shouldUseHomeCombinedClickable(
     item: BottomNavItem,
     isSelected: Boolean
@@ -1067,7 +1225,9 @@ private fun BottomBarContent(
     currentPosition: Float, // [新增] 当前指示器位置，用于动态插值
     dragModifier: Modifier = Modifier,
     contentLuminance: Float = 0f, // [New]
-    liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC // [New]
+    liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC, // [New]
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(liquidGlassStyle),
+    selectionEmphasis: Float = 1f
 ) {
     val scope = rememberCoroutineScope()
     Row(
@@ -1116,7 +1276,9 @@ private fun BottomBarContent(
                 onDynamicDoubleTap = onDynamicDoubleTap,
                 isTablet = isTablet,
                 contentLuminance = contentLuminance, // [New]
-                liquidGlassStyle = liquidGlassStyle // [New]
+                liquidGlassStyle = liquidGlassStyle, // [New]
+                liquidGlassTuning = liquidGlassTuning,
+                selectionEmphasis = selectionEmphasis
             )
         }
 
@@ -1193,7 +1355,9 @@ private fun BottomBarItem(
     onDynamicDoubleTap: () -> Unit,
     isTablet: Boolean,
     contentLuminance: Float = 0f, // [New]
-    liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC // [New]
+    liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC, // [New]
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(liquidGlassStyle),
+    selectionEmphasis: Float = 1f
 ) {
     val scope = rememberCoroutineScope()
     var isPending by remember { mutableStateOf(false) }
@@ -1211,7 +1375,7 @@ private fun BottomBarItem(
     val unselectedColor = if (isLightMode) {
         // [Force] Light Mode: Always use Black for maximum readability
         androidx.compose.ui.graphics.Color.Black
-    } else if (liquidGlassStyle == LiquidGlassStyle.SIMP_MUSIC) {
+    } else if (liquidGlassTuning.mode == com.android.purebilibili.core.store.LiquidGlassMode.FROSTED) {
         // Luminance > 0.6 (Bright background) -> Black text
         // Luminance < 0.6 (Dark background) -> White text
         if (contentLuminance > 0.6f) androidx.compose.ui.graphics.Color.Black.copy(alpha=0.8f) 
@@ -1232,13 +1396,14 @@ private fun BottomBarItem(
     } else {
         primaryColor
     }
+    val emphasizedSelectionFraction = (selectionFraction * selectionEmphasis).coerceIn(0f, 1f)
 
     // [修改] 颜色插值：根据 selectionFraction 在 unselected 和 selected 之间混合
     // 还要考虑 isPending (点击态)
     val targetIconColor = androidx.compose.ui.graphics.lerp(
         unselectedColor, 
         selectedAccent, 
-        if (isPending) 1f else selectionFraction
+        if (isPending) 1f else emphasizedSelectionFraction
     )
     
     // 仍然使用 animateColorAsState 但目标值现在是动态插值的
@@ -1256,14 +1421,16 @@ private fun BottomBarItem(
     // 使用 sin(x * PI) 曲线：sin(0)=0, sin(0.5PI)=1, sin(PI)=0
     // 基础大小 1.0f，最大放大 1.4f (增强版)
     val scaleMultiplier = 0.4f
-    val bumpScale = 1.0f + (scaleMultiplier * kotlin.math.sin(selectionFraction * Math.PI)).toFloat()
+    val bumpScale = 1.0f + (
+        scaleMultiplier * kotlin.math.sin(emphasizedSelectionFraction * Math.PI)
+    ).toFloat()
     
     // 直接使用计算出的 bumpScale 作为 scale，因为 selectionFraction 本身已经是平滑动画的值 (由 dampedDragState 驱动)
     // 这样可以保证图标缩放绝对跟随手指/指示器位置，没有任何滞后
     val scale = bumpScale
     
     // [修改] Y轴位移插值
-    val targetBounceY = androidx.compose.ui.util.lerp(0f, 0f, selectionFraction)
+    val targetBounceY = androidx.compose.ui.util.lerp(0f, 0f, emphasizedSelectionFraction)
     val bounceY by animateFloatAsState(
         targetValue = targetBounceY,
         animationSpec = spring(dampingRatio = 0.4f, stiffness = 400f),

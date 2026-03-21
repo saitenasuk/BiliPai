@@ -141,6 +141,8 @@ data class HomeUiState(
     val recommendOldContentAnchorBvid: String? = null,
     //  [新增] 推荐流中“旧内容起始”索引（用于插入分割线）
     val recommendOldContentStartIndex: Int? = null,
+    //  [新增] 推荐流旧内容分割线已解锁的刷新键
+    val recommendOldContentRevealKey: Long = 0L,
     //  [新增] 正在消散动画中的视频 BVIDs（动画完成后移除）
     val dissolvingVideos: Set<String> = emptySet(),
     //  [新增] 今日看什么推荐单
