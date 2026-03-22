@@ -28,4 +28,5 @@
 - 测试代码：`app/src/test/java/com/android/purebilibili`
 - 版本配置：`app/build.gradle.kts`
 - 发布日志：`CHANGELOG.md`
-- AI 入口：`AI.txt` / `llm.txt` / `llms.txt`
+- AI 入口：`llms.txt`
+- 兼容别名：`AI.txt` / `llm.txt`
