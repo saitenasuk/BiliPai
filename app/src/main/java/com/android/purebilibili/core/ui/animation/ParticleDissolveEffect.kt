@@ -60,6 +60,17 @@ internal fun shouldWrapWithDissolveAnimation(isDissolving: Boolean): Boolean {
     return isDissolving
 }
 
+internal fun shouldJiggleOnDissolve(
+    enabled: Boolean,
+    isAnyCardDissolving: Boolean,
+    dissolvingCardId: String?,
+    cardId: String,
+    isCurrentCardDissolving: Boolean
+): Boolean {
+    if (!enabled || isCurrentCardDissolving) return false
+    return isAnyCardDissolving && dissolvingCardId != cardId
+}
+
 private data class DissolveAnimationParams(
     val durationSec: Float,
     val particleStep: Int,
@@ -90,14 +101,21 @@ private fun DissolveAnimationPreset.params(): DissolveAnimationParams {
 @Composable
 fun Modifier.jiggleOnDissolve(
     cardId: String,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    isCurrentCardDissolving: Boolean = false
 ): Modifier {
     // 🚀 [性能优化] 提前检查是否需要抖动，避免不必要的状态读取和动画创建
     if (!enabled) return this
     
     val isDissolving by DissolveAnimationManager.isAnyCardDissolving
     val dissolvingId by DissolveAnimationManager.dissolvingCardId
-    val shouldJiggle = isDissolving && dissolvingId != cardId
+    val shouldJiggle = shouldJiggleOnDissolve(
+        enabled = enabled,
+        isAnyCardDissolving = isDissolving,
+        dissolvingCardId = dissolvingId,
+        cardId = cardId,
+        isCurrentCardDissolving = isCurrentCardDissolving
+    )
     
     // 🚀 [关键优化] 不抖动时直接返回，不创建任何动画对象
     if (!shouldJiggle) return this

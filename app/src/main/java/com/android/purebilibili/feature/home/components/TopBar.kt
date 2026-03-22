@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,6 +66,7 @@ import coil.request.ImageRequest
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.feature.home.HomeCategory
 import com.android.purebilibili.feature.home.resolveHomeTopCategories
@@ -92,7 +94,11 @@ internal fun resolveFloatingIndicatorStartPaddingPx(
     leftBiasPx: Float
 ): Float = (baseInsetPx - leftBiasPx).coerceAtLeast(0f)
 
-internal fun resolveTopTabRowHorizontalPaddingDp(isFloatingStyle: Boolean): Float {
+internal fun resolveTopTabRowHorizontalPaddingDp(
+    isFloatingStyle: Boolean,
+    edgeToEdge: Boolean = false
+): Float {
+    if (edgeToEdge) return 0f
     return if (isFloatingStyle) 0f else 4f
 }
 
@@ -228,6 +234,17 @@ internal fun resolveMd3TopTabActionButtonSize(isFloatingStyle: Boolean) =
 
 internal fun resolveMd3TopTabActionIconSize(isFloatingStyle: Boolean) =
     if (isFloatingStyle) 20.dp else 18.dp
+
+internal fun resolveMd3TopTabActionContentBottomPadding(): Dp = 4.dp
+
+internal fun performHomeTopBarTap(
+    haptic: (HapticType) -> Unit,
+    onClick: () -> Unit,
+    hapticType: HapticType = HapticType.LIGHT
+) {
+    haptic(hapticType)
+    onClick()
+}
 
 /**
  * Q弹点击效果
@@ -396,6 +413,7 @@ fun CategoryTabRow(
     liquidGlassTuning: LiquidGlassTuning? = null,
     backdrop: LayerBackdrop? = null,
     isFloatingStyle: Boolean = false,
+    edgeToEdge: Boolean = false,
     interactionBudget: HomeInteractionMotionBudget = HomeInteractionMotionBudget.FULL,
     isViewportSyncEnabled: Boolean = true
 ) {
@@ -451,7 +469,10 @@ fun CategoryTabRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(tabRowHeight)
-            .padding(horizontal = resolveTopTabRowHorizontalPaddingDp(isFloatingStyle).dp),
+            .padding(horizontal = resolveTopTabRowHorizontalPaddingDp(
+                isFloatingStyle = isFloatingStyle,
+                edgeToEdge = edgeToEdge
+            ).dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // [Refactor] 使用 BoxWithConstraints 动态计算宽度
@@ -734,13 +755,14 @@ fun CategoryTabRow(
                                     unselectedColor = unselectedColor,
                                     labelMode = labelMode,
                                     onClick = {
-                                        // [修复] 直播由分类语义驱动，而不是固定索引，支持自定义排序
-                                        if (shouldRouteTopTabToLivePage(category)) {
-                                            onLiveClick()
-                                        } else {
-                                            onCategorySelected(index)
-                                        }
-                                        haptic(com.android.purebilibili.core.util.HapticType.LIGHT)
+                                        performHomeTopBarTap(haptic = haptic, onClick = {
+                                            // [修复] 直播由分类语义驱动，而不是固定索引，支持自定义排序
+                                            if (shouldRouteTopTabToLivePage(category)) {
+                                                onLiveClick()
+                                            } else {
+                                                onCategorySelected(index)
+                                            }
+                                        })
                                     },
                                     onDoubleTap = {
                                         if (selectedIndex == index) {
@@ -765,7 +787,9 @@ fun CategoryTabRow(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
-                ) { onPartitionClick() },
+                ) {
+                    performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
+                },
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -792,12 +816,14 @@ private fun Md3CategoryTabRow(
     isFloatingStyle: Boolean
 ) {
     val uiPreset = LocalUiPreset.current
+    val haptic = com.android.purebilibili.core.util.rememberHapticFeedback()
     val scrollChannel = com.android.purebilibili.feature.home.LocalHomeScrollChannel.current
     val visualSpec = remember(isFloatingStyle) { resolveMd3TopTabVisualSpec(isFloatingStyle) }
     val tabRowHeight = visualSpec.rowHeight
     val actionButtonSize = resolveMd3TopTabActionButtonSize(isFloatingStyle)
     val actionButtonCorner = resolveMd3TopTabActionButtonCorner(isFloatingStyle)
     val actionIconSize = resolveMd3TopTabActionIconSize(isFloatingStyle)
+    val actionContentBottomPadding = resolveMd3TopTabActionContentBottomPadding()
     val normalizedLabelMode = resolveMd3TopTabLabelMode(labelMode)
     val viewportAnchorIndex by remember(pagerState, selectedIndex) {
         derivedStateOf {
@@ -890,11 +916,13 @@ private fun Md3CategoryTabRow(
                         val selectionFraction =
                             (1f - abs(currentVisiblePosition - visibleIndex.toFloat())).coerceIn(0f, 1f)
                         val onTabClick = {
-                            if (shouldRouteTopTabToLivePage(category)) {
-                                onLiveClick()
-                            } else {
-                                onCategorySelected(originalIndex)
-                            }
+                            performHomeTopBarTap(haptic = haptic, onClick = {
+                                if (shouldRouteTopTabToLivePage(category)) {
+                                    onLiveClick()
+                                } else {
+                                    onCategorySelected(originalIndex)
+                                }
+                            })
                         }
 
                         val iconColor = resolveMd3TopTabIconTint(
@@ -967,12 +995,16 @@ private fun Md3CategoryTabRow(
 
         Box(
             modifier = Modifier
-                .size(actionButtonSize)
+                .width(actionButtonSize)
+                .fillMaxHeight()
+                .padding(bottom = actionContentBottomPadding)
                 .clip(RoundedCornerShape(actionButtonCorner))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = LocalIndication.current
-                ) { onPartitionClick() },
+                ) {
+                    performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
+                },
             contentAlignment = Alignment.Center
         ) {
             Icon(

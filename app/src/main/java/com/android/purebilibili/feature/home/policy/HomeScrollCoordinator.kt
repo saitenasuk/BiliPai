@@ -16,12 +16,11 @@ internal data class HomeScrollUpdate(
 internal fun shouldExpandHomeHeaderForSettledPage(
     currentHeaderOffsetPx: Float,
     firstVisibleItemIndex: Int,
-    firstVisibleItemScrollOffset: Int,
-    nearTopScrollOffsetPx: Int = 50
+    firstVisibleItemScrollOffset: Int
 ): Boolean {
     if (currentHeaderOffsetPx >= 0f) return false
     if (firstVisibleItemIndex != 0) return false
-    return firstVisibleItemScrollOffset <= nearTopScrollOffsetPx
+    return firstVisibleItemScrollOffset == 0
 }
 
 internal fun resolveHomeHeaderOffsetForSettledPage(
@@ -30,15 +29,18 @@ internal fun resolveHomeHeaderOffsetForSettledPage(
     maxHeaderCollapsePx: Float
 ): Float {
     if (maxHeaderCollapsePx <= 0f) return 0f
-    if (firstVisibleItemIndex > 0) return -maxHeaderCollapsePx
-    val collapsedOffsetPx = firstVisibleItemScrollOffset.toFloat().coerceIn(0f, maxHeaderCollapsePx)
-    return if (collapsedOffsetPx == 0f) 0f else -collapsedOffsetPx
+    return if (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0) {
+        0f
+    } else {
+        -maxHeaderCollapsePx
+    }
 }
 
 internal fun reduceHomePreScroll(
     currentHeaderOffsetPx: Float,
     deltaY: Float,
     minHeaderOffsetPx: Float,
+    canRevealHeader: Boolean,
     isHeaderCollapseEnabled: Boolean,
     isBottomBarAutoHideEnabled: Boolean,
     useSideNavigation: Boolean,
@@ -46,10 +48,10 @@ internal fun reduceHomePreScroll(
     currentGlobalScrollOffset: Float,
     bottomBarVisibilityThresholdPx: Float = 10f
 ): HomeScrollUpdate {
-    val nextHeaderOffset = if (isHeaderCollapseEnabled) {
-        (currentHeaderOffsetPx + deltaY).coerceIn(minHeaderOffsetPx, 0f)
-    } else {
-        0f
+    val nextHeaderOffset = when {
+        !isHeaderCollapseEnabled -> 0f
+        deltaY > 0f && !canRevealHeader -> minHeaderOffsetPx
+        else -> (currentHeaderOffsetPx + deltaY).coerceIn(minHeaderOffsetPx, 0f)
     }
 
     val nextBottomBarIntent = when {

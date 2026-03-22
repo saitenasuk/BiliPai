@@ -65,6 +65,18 @@ internal fun shouldShowPortraitPauseIcon(
     return true
 }
 
+internal fun shouldHandlePortraitSeekGesture(scale: Float): Boolean {
+    return scale <= 1.01f
+}
+
+internal fun shouldHandlePortraitTapGesture(scale: Float): Boolean {
+    return scale <= 1.01f
+}
+
+internal fun shouldHandlePortraitLongPressGesture(scale: Float): Boolean {
+    return scale <= 1.01f
+}
+
 internal fun resolvePortraitInitialProgressPosition(
     isFirstPage: Boolean,
     initialStartPositionMs: Long

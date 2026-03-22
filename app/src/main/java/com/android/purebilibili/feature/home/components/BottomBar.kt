@@ -993,6 +993,7 @@ private fun MaterialBottomBar(
     isTransitionRunning: Boolean,
     forceLowBlurBudget: Boolean
 ) {
+    val haptic = rememberHapticFeedback()
     val normalizedLabelMode = normalizeBottomBarLabelMode(labelMode)
     val showIcon = shouldShowBottomBarIcon(normalizedLabelMode)
     val showText = shouldShowBottomBarText(normalizedLabelMode)
@@ -1031,7 +1032,12 @@ private fun MaterialBottomBar(
             visibleItems.forEach { item ->
                 NavigationBarItem(
                     selected = currentItem == item,
-                    onClick = { onItemClick(item) },
+                    onClick = {
+                        performMaterialBottomBarTap(
+                            haptic = haptic,
+                            onClick = { onItemClick(item) }
+                        )
+                    },
                     icon = {
                         if (showIcon) {
                             Icon(
@@ -1061,7 +1067,12 @@ private fun MaterialBottomBar(
             if (isTablet && onToggleSidebar != null) {
                 NavigationBarItem(
                     selected = false,
-                    onClick = onToggleSidebar,
+                    onClick = {
+                        performMaterialBottomBarTap(
+                            haptic = haptic,
+                            onClick = onToggleSidebar
+                        )
+                    },
                     icon = {
                         if (showIcon) {
                             Icon(
@@ -1162,6 +1173,28 @@ internal fun resolveBottomBarPrimaryTapAction(
     } else {
         BottomBarPrimaryTapAction.Navigate
     }
+}
+
+internal fun performBottomBarPrimaryTap(
+    item: BottomNavItem,
+    isSelected: Boolean,
+    haptic: (HapticType) -> Unit,
+    onNavigate: () -> Unit,
+    onHomeReselect: () -> Unit
+) {
+    haptic(HapticType.LIGHT)
+    when (resolveBottomBarPrimaryTapAction(item, isSelected)) {
+        BottomBarPrimaryTapAction.Navigate -> onNavigate()
+        BottomBarPrimaryTapAction.HomeReselect -> onHomeReselect()
+    }
+}
+
+internal fun performMaterialBottomBarTap(
+    haptic: (HapticType) -> Unit,
+    onClick: () -> Unit
+) {
+    haptic(HapticType.LIGHT)
+    onClick()
 }
 
 internal fun shouldUseBottomReselectCombinedClickable(
@@ -1464,9 +1497,13 @@ private fun BottomBarItem(
                         indication = null,
                         onClick = {
                             debounceClick(item) {
-                                // 1. 立即响应点击 (Immediate Navigation)
-                                onClick()
-                                haptic(HapticType.LIGHT)
+                                performBottomBarPrimaryTap(
+                                    item = item,
+                                    isSelected = isSelected,
+                                    haptic = haptic,
+                                    onNavigate = onClick,
+                                    onHomeReselect = onHomeDoubleTap
+                                )
                                 
                                 // 2. 视觉反馈 (Visual Feedback)
                                 isPending = true
@@ -1493,12 +1530,13 @@ private fun BottomBarItem(
                         indication = null
                     ) { 
                         debounceClick(item) {
-                            // 1. 立即响应点击 (Immediate Navigation)
-                            when (resolveBottomBarPrimaryTapAction(item, isSelected)) {
-                                BottomBarPrimaryTapAction.Navigate -> onClick()
-                                BottomBarPrimaryTapAction.HomeReselect -> onHomeDoubleTap()
-                            }
-                            haptic(HapticType.LIGHT)
+                            performBottomBarPrimaryTap(
+                                item = item,
+                                isSelected = isSelected,
+                                haptic = haptic,
+                                onNavigate = onClick,
+                                onHomeReselect = onHomeDoubleTap
+                            )
                             
                             // 2. 视觉反馈 (Visual Feedback)
                             isPending = true

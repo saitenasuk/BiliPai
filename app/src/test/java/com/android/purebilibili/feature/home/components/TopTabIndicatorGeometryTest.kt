@@ -121,4 +121,16 @@ class TopTabIndicatorGeometryTest {
     fun `top tab row horizontal padding keeps legacy spacing for non floating style`() {
         assertEquals(4f, resolveTopTabRowHorizontalPaddingDp(isFloatingStyle = false), 0.01f)
     }
+
+    @Test
+    fun `top tab row horizontal padding is zero in edge to edge mode`() {
+        assertEquals(
+            0f,
+            resolveTopTabRowHorizontalPaddingDp(
+                isFloatingStyle = false,
+                edgeToEdge = true
+            ),
+            0.01f
+        )
+    }
 }

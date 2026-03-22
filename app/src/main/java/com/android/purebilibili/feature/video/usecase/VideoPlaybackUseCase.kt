@@ -103,6 +103,24 @@ internal fun playPlayerFromUserAction(player: Player) {
     player.play()
 }
 
+internal fun shouldResumePlaybackAfterUserSeek(
+    playWhenReadyBeforeSeek: Boolean,
+    playbackStateBeforeSeek: Int
+): Boolean {
+    return playWhenReadyBeforeSeek || playbackStateBeforeSeek == Player.STATE_ENDED
+}
+
+internal fun seekPlayerFromUserAction(player: Player, positionMs: Long) {
+    val shouldResume = shouldResumePlaybackAfterUserSeek(
+        playWhenReadyBeforeSeek = player.playWhenReady,
+        playbackStateBeforeSeek = player.playbackState
+    )
+    player.seekTo(positionMs)
+    if (shouldResume) {
+        playPlayerFromUserAction(player)
+    }
+}
+
 internal fun togglePlayerPlaybackFromUserAction(player: Player) {
     if (player.isPlaying) {
         player.pause()

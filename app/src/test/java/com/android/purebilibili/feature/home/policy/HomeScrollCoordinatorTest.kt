@@ -12,6 +12,7 @@ class HomeScrollCoordinatorTest {
             currentHeaderOffsetPx = -40f,
             deltaY = -80f,
             minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
             isHeaderCollapseEnabled = true,
             isBottomBarAutoHideEnabled = false,
             useSideNavigation = false,
@@ -30,6 +31,7 @@ class HomeScrollCoordinatorTest {
             currentHeaderOffsetPx = -64f,
             deltaY = -12f,
             minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
             isHeaderCollapseEnabled = false,
             isBottomBarAutoHideEnabled = false,
             useSideNavigation = false,
@@ -46,6 +48,7 @@ class HomeScrollCoordinatorTest {
             currentHeaderOffsetPx = 0f,
             deltaY = -48f,
             minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
             isHeaderCollapseEnabled = true,
             isBottomBarAutoHideEnabled = false,
             useSideNavigation = false,
@@ -62,6 +65,7 @@ class HomeScrollCoordinatorTest {
             currentHeaderOffsetPx = 0f,
             deltaY = -4f,
             minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
             isHeaderCollapseEnabled = true,
             isBottomBarAutoHideEnabled = true,
             useSideNavigation = false,
@@ -79,6 +83,7 @@ class HomeScrollCoordinatorTest {
             currentHeaderOffsetPx = 0f,
             deltaY = -24f,
             minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
             isHeaderCollapseEnabled = true,
             isBottomBarAutoHideEnabled = true,
             useSideNavigation = false,
@@ -95,6 +100,7 @@ class HomeScrollCoordinatorTest {
             currentHeaderOffsetPx = 0f,
             deltaY = -8f,
             minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
             isHeaderCollapseEnabled = true,
             isBottomBarAutoHideEnabled = false,
             useSideNavigation = false,
@@ -139,6 +145,40 @@ class HomeScrollCoordinatorTest {
     }
 
     @Test
+    fun upwardScrollAwayFromTop_keepsHeaderCollapsed() {
+        val result = reduceHomePreScroll(
+            currentHeaderOffsetPx = -120f,
+            deltaY = 36f,
+            minHeaderOffsetPx = -120f,
+            canRevealHeader = false,
+            isHeaderCollapseEnabled = true,
+            isBottomBarAutoHideEnabled = false,
+            useSideNavigation = false,
+            liquidGlassEnabled = false,
+            currentGlobalScrollOffset = 40f
+        )
+
+        assertEquals(-120f, result.headerOffsetPx)
+    }
+
+    @Test
+    fun upwardScrollAtTop_allowsHeaderToExpand() {
+        val result = reduceHomePreScroll(
+            currentHeaderOffsetPx = -120f,
+            deltaY = 36f,
+            minHeaderOffsetPx = -120f,
+            canRevealHeader = true,
+            isHeaderCollapseEnabled = true,
+            isBottomBarAutoHideEnabled = false,
+            useSideNavigation = false,
+            liquidGlassEnabled = false,
+            currentGlobalScrollOffset = 40f
+        )
+
+        assertEquals(-84f, result.headerOffsetPx)
+    }
+
+    @Test
     fun settledTopPage_resolvesExpandedHeaderOffset() {
         val result = resolveHomeHeaderOffsetForSettledPage(
             firstVisibleItemIndex = 0,
@@ -150,14 +190,14 @@ class HomeScrollCoordinatorTest {
     }
 
     @Test
-    fun settledFirstItemScroll_resolvesPartialHeaderOffset() {
+    fun settledFirstItemScroll_keepsHeaderCollapsedUntilExactTop() {
         val result = resolveHomeHeaderOffsetForSettledPage(
             firstVisibleItemIndex = 0,
             firstVisibleItemScrollOffset = 36,
             maxHeaderCollapsePx = 120f
         )
 
-        assertEquals(-36f, result)
+        assertEquals(-120f, result)
     }
 
     @Test

@@ -58,6 +58,36 @@ class PortraitPagerSwitchPolicyTest {
     }
 
     @Test
+    fun shouldHandlePortraitSeekGesture_disablesSeekWhenZoomed() {
+        assertFalse(
+            shouldHandlePortraitSeekGesture(scale = 1.02f)
+        )
+        assertTrue(
+            shouldHandlePortraitSeekGesture(scale = 1f)
+        )
+    }
+
+    @Test
+    fun shouldHandlePortraitTapGesture_disablesTapWhenZoomed() {
+        assertFalse(
+            shouldHandlePortraitTapGesture(scale = 1.1f)
+        )
+        assertTrue(
+            shouldHandlePortraitTapGesture(scale = 1f)
+        )
+    }
+
+    @Test
+    fun shouldHandlePortraitLongPressGesture_disablesLongPressWhenZoomed() {
+        assertFalse(
+            shouldHandlePortraitLongPressGesture(scale = 1.08f)
+        )
+        assertTrue(
+            shouldHandlePortraitLongPressGesture(scale = 1f)
+        )
+    }
+
+    @Test
     fun shouldApplyLoadResult_acceptsOnlyLatestGenerationForSameVideo() {
         assertTrue(
             shouldApplyLoadResult(

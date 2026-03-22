@@ -30,6 +30,8 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.feature.dynamic.DynamicVideoCardLayoutMode
+import com.android.purebilibili.feature.dynamic.resolveDynamicVideoCardLayoutMode
 
 /**
  *  大尺寸视频卡片
@@ -77,136 +79,293 @@ fun VideoCardLarge(
         }
     }
     
-    Column(modifier = modifier) {
-        // 视频封面 - 16:9
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            if (coverUrl.isNotEmpty()) {
-                AsyncImage(
-                    model = coil.request.ImageRequest.Builder(context)
-                        .data(coverUrl)
-                        .addHeader("Referer", "https://www.bilibili.com/")
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+    BoxWithConstraints(modifier = modifier) {
+        when (resolveDynamicVideoCardLayoutMode(containerWidthDp = maxWidth.value.toInt())) {
+            DynamicVideoCardLayoutMode.VERTICAL -> {
+                VideoCardLargeVerticalContent(
+                    archive = archive,
+                    coverUrl = coverUrl,
+                    isCollection = isCollection,
+                    collectionTitle = collectionTitle,
+                    context = context
                 )
             }
-            
-            // 底部渐变遮罩
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.7f)
-                            )
+            DynamicVideoCardLayoutMode.HORIZONTAL -> {
+                VideoCardLargeHorizontalContent(
+                    archive = archive,
+                    coverUrl = coverUrl,
+                    isCollection = isCollection,
+                    collectionTitle = collectionTitle,
+                    context = context
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoCardLargeVerticalContent(
+    archive: ArchiveMajor,
+    coverUrl: String,
+    isCollection: Boolean,
+    collectionTitle: String,
+    context: android.content.Context
+) {
+    Column {
+        VideoCardLargeCover(
+            archive = archive,
+            coverUrl = coverUrl,
+            context = context,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f),
+            durationTextSize = 12.sp,
+            isCollection = isCollection
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+        VideoCardLargeInfo(
+            archive = archive,
+            isCollection = isCollection,
+            collectionTitle = collectionTitle,
+            titleMaxLines = 2
+        )
+    }
+}
+
+@Composable
+private fun VideoCardLargeHorizontalContent(
+    archive: ArchiveMajor,
+    coverUrl: String,
+    isCollection: Boolean,
+    collectionTitle: String,
+    context: android.content.Context
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(156.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        VideoCardLargeCover(
+            archive = archive,
+            coverUrl = coverUrl,
+            context = context,
+            modifier = Modifier
+                .width(248.dp)
+                .fillMaxHeight(),
+            durationTextSize = 11.sp,
+            isCollection = false
+        )
+
+        Spacer(modifier = Modifier.width(14.dp))
+
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .weight(1f),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (isCollection) {
+                    Box(
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "合集",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+
+                if (isCollection && collectionTitle.isNotEmpty()) {
+                    Text(
+                        text = collectionTitle,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-            )
-            
-            //  [新增] 合集/剧集标识 - 左上角
-            if (isCollection) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text("合集", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "更新：${archive.title}",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 19.sp
+                    )
+                } else {
+                    Text(
+                        text = archive.title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
-            
-            // 时长标签 - 右下角
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(8.dp)
-                    .background(Color.Black.copy(0.6f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
-                Text(archive.duration_text, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
-            }
-            
+
+            VideoCardLargeStats(archive = archive)
         }
-        
-        Spacer(modifier = Modifier.height(10.dp))
-        
-        //  [新增] 合集显示逻辑：优先显示 "合集标题"，副标题显示 "更新至：xxx"
-        //  如果是普通视频，则直接显示标题
-        
-        if (isCollection && collectionTitle.isNotEmpty()) {
-             // 合集样式：两行
-             Text(
-                collectionTitle, // 合集标题
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                "更新：${archive.title}", // 具体视频标题作为更新信息
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        } else {
-             // 普通视频样式
-             Text(
-                archive.title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 20.sp,
-                color = MaterialTheme.colorScheme.onSurface
+    }
+}
+
+@Composable
+private fun VideoCardLargeCover(
+    archive: ArchiveMajor,
+    coverUrl: String,
+    context: android.content.Context,
+    modifier: Modifier,
+    durationTextSize: androidx.compose.ui.unit.TextUnit,
+    isCollection: Boolean
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        if (coverUrl.isNotEmpty()) {
+            AsyncImage(
+                model = coil.request.ImageRequest.Builder(context)
+                    .data(coverUrl)
+                    .addHeader("Referer", "https://www.bilibili.com/")
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.7f)
+                        )
+                    )
+                )
+        )
+
+        if (isCollection) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "合集",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(8.dp)
+                .background(Color.Black.copy(0.6f), RoundedCornerShape(6.dp))
+                .padding(horizontal = 8.dp, vertical = 3.dp)
         ) {
-            Icon(
-                CupertinoIcons.Default.Play,
-                contentDescription = null,
-                modifier = Modifier.size(13.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(4.dp))
             Text(
-                archive.stat.play,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Icon(
-                CupertinoIcons.Default.Message,
-                contentDescription = null,
-                modifier = Modifier.size(12.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                archive.stat.danmaku,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = archive.duration_text,
+                fontSize = durationTextSize,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
             )
         }
+    }
+}
+
+@Composable
+private fun VideoCardLargeInfo(
+    archive: ArchiveMajor,
+    isCollection: Boolean,
+    collectionTitle: String,
+    titleMaxLines: Int
+) {
+    if (isCollection && collectionTitle.isNotEmpty()) {
+        Text(
+            text = collectionTitle,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = "更新：${archive.title}",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    } else {
+        Text(
+            text = archive.title,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = titleMaxLines,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 20.sp,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+
+    Spacer(modifier = Modifier.height(6.dp))
+    VideoCardLargeStats(archive = archive)
+}
+
+@Composable
+private fun VideoCardLargeStats(
+    archive: ArchiveMajor
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            CupertinoIcons.Default.Play,
+            contentDescription = null,
+            modifier = Modifier.size(13.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            archive.stat.play,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Icon(
+            CupertinoIcons.Default.Message,
+            contentDescription = null,
+            modifier = Modifier.size(12.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            archive.stat.danmaku,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

@@ -215,5 +215,6 @@ class TopTabStylePolicyTest {
         assertEquals(36.dp, resolveMd3TopTabActionButtonSize(isFloatingStyle = false))
         assertEquals(20.dp, resolveMd3TopTabActionIconSize(isFloatingStyle = true))
         assertEquals(18.dp, resolveMd3TopTabActionIconSize(isFloatingStyle = false))
+        assertEquals(4.dp, resolveMd3TopTabActionContentBottomPadding())
     }
 }

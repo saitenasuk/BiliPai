@@ -125,18 +125,70 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `header scroll keeps search row visible while collapsing top tabs`() {
+    fun `header scroll hides search row while keeping top tabs pinned`() {
         val layout = resolveHomeHeaderScrollLayout(
             headerOffsetPx = -96f,
             searchBarHeightPx = 48f,
+            searchCollapseDistancePx = 54f,
             tabRowHeightPx = 56f,
             isHeaderCollapseEnabled = true
         )
 
-        assertEquals(48f, layout.searchBarHeightPx, 0.0001f)
-        assertEquals(1f, layout.searchAlpha, 0.0001f)
-        assertEquals(0f, layout.tabRowHeightPx, 0.0001f)
-        assertEquals(0f, layout.tabAlpha, 0.0001f)
+        assertEquals(0f, layout.searchBarHeightPx, 0.0001f)
+        assertEquals(0f, layout.searchAlpha, 0.0001f)
+        assertEquals(56f, layout.tabRowHeightPx, 0.0001f)
+        assertEquals(1f, layout.tabAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `header scroll partially collapses search row while keeping top tabs fully visible`() {
+        val layout = resolveHomeHeaderScrollLayout(
+            headerOffsetPx = -24f,
+            searchBarHeightPx = 48f,
+            searchCollapseDistancePx = 54f,
+            tabRowHeightPx = 56f,
+            isHeaderCollapseEnabled = true
+        )
+
+        assertEquals(24f, layout.searchBarHeightPx, 0.0001f)
+        assertEquals(0.5f, layout.searchAlpha, 0.0001f)
+        assertEquals(56f, layout.tabRowHeightPx, 0.0001f)
+        assertEquals(1f, layout.tabAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `tiny reverse scroll keeps collapsed search row hidden until reveal threshold is crossed`() {
+        val layout = resolveHomeHeaderScrollLayout(
+            headerOffsetPx = -44f,
+            searchBarHeightPx = 48f,
+            searchCollapseDistancePx = 54f,
+            tabRowHeightPx = 56f,
+            isHeaderCollapseEnabled = true,
+            searchRevealDeadZonePx = 8f
+        )
+
+        assertEquals(0f, layout.searchBarHeightPx, 0.0001f)
+        assertEquals(0f, layout.searchAlpha, 0.0001f)
+        assertEquals(56f, layout.tabRowHeightPx, 0.0001f)
+        assertEquals(1f, layout.tabAlpha, 0.0001f)
+    }
+
+    @Test
+    fun `home header collapse distance includes search spacing before pinned tabs`() {
+        assertEquals(
+            54.dp,
+            resolveHomeTopSearchCollapseDistance(
+                searchBarHeight = 48.dp,
+                uiPreset = UiPreset.IOS
+            )
+        )
+        assertEquals(
+            63.dp,
+            resolveHomeTopSearchCollapseDistance(
+                searchBarHeight = 52.dp,
+                uiPreset = UiPreset.MD3
+            )
+        )
     }
 
     @Test
@@ -158,13 +210,47 @@ class iOSHomeHeaderVisualPolicyTest {
         assertFalse(shouldShowUnifiedHomeTopPanelDivider(UiPreset.IOS))
         assertTrue(shouldShowUnifiedHomeTopPanelDivider(UiPreset.MD3))
         assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding())
-        assertEquals(8.dp, resolveHomeTopUnifiedPanelHorizontalPadding(UiPreset.MD3))
+        assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding(UiPreset.MD3))
         assertEquals(8.dp, resolveHomeTopUnifiedPanelInnerPadding())
         assertEquals(10.dp, resolveHomeTopUnifiedPanelInnerPadding(UiPreset.MD3))
         assertEquals(28.dp, resolveHomeTopUnifiedPanelCornerRadius())
-        assertEquals(12.dp, resolveHomeTopUnifiedPanelCornerRadius(UiPreset.MD3))
+        assertEquals(0.dp, resolveHomeTopUnifiedPanelCornerRadius(UiPreset.MD3))
         assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding())
-        assertEquals(4.dp, resolveHomeTopEmbeddedTabHorizontalPadding(UiPreset.MD3))
+        assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding(UiPreset.MD3))
+    }
+
+    @Test
+    fun `collapsed ios header integrates with status bar instead of floating as a card`() {
+        assertTrue(
+            shouldUseIntegratedCollapsedHomeTopBar(
+                searchRevealFraction = 0f,
+                uiPreset = UiPreset.IOS
+            )
+        )
+        assertFalse(
+            shouldUseIntegratedCollapsedHomeTopBar(
+                searchRevealFraction = 0.35f,
+                uiPreset = UiPreset.IOS
+            )
+        )
+        assertFalse(
+            shouldUseIntegratedCollapsedHomeTopBar(
+                searchRevealFraction = 0f,
+                uiPreset = UiPreset.MD3
+            )
+        )
+    }
+
+    @Test
+    fun `integrated collapsed ios header removes floating panel corner radius and shrinks padding`() {
+        assertEquals(
+            0.dp,
+            resolveHomeTopUnifiedPanelCornerRadius(collapsedIntoStatusBar = true)
+        )
+        assertEquals(
+            2.dp,
+            resolveHomeTopUnifiedPanelInnerPadding(collapsedIntoStatusBar = true)
+        )
     }
 
     @Test

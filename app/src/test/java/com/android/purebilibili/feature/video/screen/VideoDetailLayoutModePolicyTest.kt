@@ -164,9 +164,9 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
-    fun phoneOrientationPolicy_autoRotateEnabled_usesSensorToAllowAutoExitFullscreen() {
+    fun phoneOrientationPolicy_autoRotateEnabled_defaultsToPortraitUntilSensorRequestsLandscape() {
         assertEquals(
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR,
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
@@ -176,7 +176,7 @@ class VideoDetailLayoutModePolicyTest {
             )
         )
         assertEquals(
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR,
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,
@@ -229,7 +229,7 @@ class VideoDetailLayoutModePolicyTest {
     @Test
     fun phoneOrientationPolicy_autoRotateHorizontalMode_withoutManualRequest_usesSensor() {
         assertEquals(
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR,
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.HORIZONTAL,
@@ -237,6 +237,38 @@ class VideoDetailLayoutModePolicyTest {
                 isOrientationDrivenFullscreen = true,
                 isFullscreenMode = false,
                 manualFullscreenRequested = false
+            )
+        )
+    }
+
+    @Test
+    fun autoRotateSensorPolicy_requiresStrongerTiltToEnterLandscapeButKeepsLandscapeStable() {
+        assertEquals(
+            null,
+            resolvePhoneAutoRotateRequestedOrientation(
+                orientationDegrees = 52,
+                isCurrentlyLandscape = false
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolvePhoneAutoRotateRequestedOrientation(
+                orientationDegrees = 90,
+                isCurrentlyLandscape = false
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolvePhoneAutoRotateRequestedOrientation(
+                orientationDegrees = 48,
+                isCurrentlyLandscape = true
+            )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolvePhoneAutoRotateRequestedOrientation(
+                orientationDegrees = 8,
+                isCurrentlyLandscape = true
             )
         )
     }

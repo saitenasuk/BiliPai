@@ -78,6 +78,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
 import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.cast.DeviceListDialog
 import com.android.purebilibili.feature.cast.DlnaManager
 import com.android.purebilibili.feature.cast.LocalProxyServer
@@ -735,7 +736,7 @@ fun VideoPlayerOverlay(
                     onPlayPauseClick = {
                         togglePlayPause()
                     },
-                    onSeek = { position -> onSeekTo?.invoke(position) ?: player.seekTo(position) },
+                    onSeek = { position -> onSeekTo?.invoke(position) ?: seekPlayerFromUserAction(player, position) },
                     onSeekStart = onSeekStart,  //  拖动进度条开始时清除弹幕
                     onScrubbingChanged = { scrubbing ->
                         isProgressScrubbing = scrubbing
@@ -1153,7 +1154,7 @@ fun VideoPlayerOverlay(
             ChapterListPanel(
                 viewPoints = viewPoints,
                 currentPositionMs = displayedProgressState.current,
-                onSeek = { position -> onSeekTo?.invoke(position) ?: player.seekTo(position) },
+                onSeek = { position -> onSeekTo?.invoke(position) ?: seekPlayerFromUserAction(player, position) },
                 onDismiss = { showChapterList = false }
             )
         }

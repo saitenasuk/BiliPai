@@ -8,7 +8,23 @@ class DynamicLayoutPolicyTest {
 
     @Test
     fun `dynamic feed narrows large-screen content width slightly`() {
-        assertEquals(760.dp, resolveDynamicFeedMaxWidth())
+        assertEquals(700.dp, resolveDynamicFeedMaxWidth())
+    }
+
+    @Test
+    fun `dynamic video card switches to horizontal layout on wide content`() {
+        assertEquals(
+            DynamicVideoCardLayoutMode.HORIZONTAL,
+            resolveDynamicVideoCardLayoutMode(containerWidthDp = 620)
+        )
+    }
+
+    @Test
+    fun `dynamic video card keeps vertical layout on compact content`() {
+        assertEquals(
+            DynamicVideoCardLayoutMode.VERTICAL,
+            resolveDynamicVideoCardLayoutMode(containerWidthDp = 540)
+        )
     }
 
     @Test

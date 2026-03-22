@@ -1050,7 +1050,10 @@ private fun CommonListContent(
                             onDissolveComplete = { onHistoryDissolveComplete?.invoke(historyKey) },
                             cardId = historyKey,
                             preset = DissolveAnimationPreset.TELEGRAM_FAST,
-                            modifier = Modifier.jiggleOnDissolve(historyKey)
+                            modifier = Modifier.jiggleOnDissolve(
+                                cardId = historyKey,
+                                isCurrentCardDissolving = isDissolving
+                            )
                         ) {
                             cardContent()
                         }

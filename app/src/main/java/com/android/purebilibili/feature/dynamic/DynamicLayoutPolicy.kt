@@ -3,7 +3,20 @@ package com.android.purebilibili.feature.dynamic
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-internal fun resolveDynamicFeedMaxWidth(): Dp = 760.dp
+internal enum class DynamicVideoCardLayoutMode {
+    VERTICAL,
+    HORIZONTAL
+}
+
+internal fun resolveDynamicFeedMaxWidth(): Dp = 700.dp
+
+internal fun resolveDynamicVideoCardLayoutMode(containerWidthDp: Int): DynamicVideoCardLayoutMode {
+    return if (containerWidthDp >= 620) {
+        DynamicVideoCardLayoutMode.HORIZONTAL
+    } else {
+        DynamicVideoCardLayoutMode.VERTICAL
+    }
+}
 
 internal fun resolveDynamicHorizontalUserListHorizontalPadding(): Dp = 10.dp
 

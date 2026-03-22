@@ -125,6 +125,7 @@ import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTextAt
 import com.android.purebilibili.feature.video.subtitle.shouldRenderPrimarySubtitle
 import com.android.purebilibili.feature.video.subtitle.shouldRenderSecondarySubtitle
 import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
+import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import dev.chrisbanes.haze.HazeState
@@ -3375,7 +3376,7 @@ fun VideoPlayerSection(
                 onSeekStart = { danmakuManager.clear() },
                 //  [加固] 显式同步弹幕到新进度，避免某些设备 seek 回调时机差导致短暂不同步
                 onSeekTo = { position ->
-                    playerState.player.seekTo(position)
+                    seekPlayerFromUserAction(playerState.player, position)
                     danmakuManager.seekTo(position)
                 },
                 previewSeekPositionMs = seekTargetTime,

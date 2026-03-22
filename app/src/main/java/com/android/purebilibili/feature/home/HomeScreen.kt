@@ -71,6 +71,7 @@ import com.android.purebilibili.feature.home.components.shouldSnapHomeTopTabSele
 import com.android.purebilibili.feature.home.components.resolveTopTabStyle
 import com.android.purebilibili.feature.home.components.resolveHomeTopChromeMaterialMode
 import com.android.purebilibili.feature.home.components.resolveHomeTopSearchBarHeight
+import com.android.purebilibili.feature.home.components.resolveHomeTopSearchCollapseDistance
 import com.android.purebilibili.feature.home.components.resolveHomeTopReservedListPadding
 import com.android.purebilibili.feature.home.components.resolveHomeTopTabRowHeight
 import com.android.purebilibili.feature.home.policy.BottomBarVisibilityIntent
@@ -873,6 +874,10 @@ fun HomeScreen(
         isTabFloating = topTabStyle.floating,
         uiPreset = uiPreset
     )
+    val searchCollapseDistanceDp = resolveHomeTopSearchCollapseDistance(
+        searchBarHeight = searchBarHeightDp,
+        uiPreset = uiPreset
+    )
     val listTopPadding = resolveHomeTopReservedListPadding(
         statusBarHeight = statusBarHeight,
         searchBarHeight = searchBarHeightDp,
@@ -881,9 +886,9 @@ fun HomeScreen(
     )
     
     // Pixels
-    val tabRowHeightPx = with(density) { tabRowHeightDp.toPx() }
+    val searchCollapseDistancePx = with(density) { searchCollapseDistanceDp.toPx() }
 
-    LaunchedEffect(pagerState, topCategories, tabRowHeightPx) {
+    LaunchedEffect(pagerState, topCategories, searchCollapseDistancePx) {
         snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { (page, scrolling) ->
@@ -893,7 +898,7 @@ fun HomeScreen(
                 val settledHeaderOffsetPx = resolveHomeHeaderOffsetForSettledPage(
                     firstVisibleItemIndex = settledGridState.firstVisibleItemIndex,
                     firstVisibleItemScrollOffset = settledGridState.firstVisibleItemScrollOffset,
-                    maxHeaderCollapsePx = tabRowHeightPx
+                    maxHeaderCollapsePx = searchCollapseDistancePx
                 )
                 if (kotlin.math.abs(headerOffsetHeightPx - settledHeaderOffsetPx) > 0.5f) {
                     headerOffsetHeightPx = settledHeaderOffsetPx
@@ -911,14 +916,29 @@ fun HomeScreen(
     
     // [Feature] Global Scroll Offset for Liquid Glass
     val globalScrollOffset = LocalHomeScrollOffset.current
+    val activeGridState = gridStates[state.currentCategory]
+    val canRevealHeader by remember(activeGridState) {
+        derivedStateOf {
+            activeGridState != null &&
+                activeGridState.firstVisibleItemIndex == 0 &&
+                activeGridState.firstVisibleItemScrollOffset == 0
+        }
+    }
 
-    val nestedScrollConnection = remember(isHeaderCollapseEnabled, isBottomBarAutoHideEnabled, useSideNavigation, isLiquidGlassEnabled) {
+    val nestedScrollConnection = remember(
+        isHeaderCollapseEnabled,
+        isBottomBarAutoHideEnabled,
+        useSideNavigation,
+        isLiquidGlassEnabled,
+        canRevealHeader
+    ) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 val scrollUpdate = reduceHomePreScroll(
                     currentHeaderOffsetPx = headerOffsetHeightPx,
                     deltaY = available.y,
-                    minHeaderOffsetPx = -tabRowHeightPx,
+                    minHeaderOffsetPx = -searchCollapseDistancePx,
+                    canRevealHeader = canRevealHeader,
                     isHeaderCollapseEnabled = isHeaderCollapseEnabled,
                     isBottomBarAutoHideEnabled = isBottomBarAutoHideEnabled,
                     useSideNavigation = useSideNavigation,
@@ -1241,7 +1261,6 @@ fun HomeScreen(
 
         //  [Restored] Header 始终显示，不再随 Loading/Error 状态隐藏
         //  这保证了 Tab 指示器状态的连续性，防止消失或重置
-        val activeGridState = gridStates[state.currentCategory]
         val isFeedScrollInProgress by remember(activeGridState) {
             derivedStateOf { activeGridState?.isScrollInProgress == true }
         }

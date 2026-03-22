@@ -182,11 +182,31 @@ internal data class HomeHeaderScrollLayout(
     val tabAlpha: Float
 )
 
+internal fun resolveHomeTopSearchRevealDeadZone(uiPreset: UiPreset = UiPreset.IOS): Dp {
+    return if (uiPreset == UiPreset.MD3) 10.dp else 8.dp
+}
+
+internal fun resolveHomeTopVisibleSearchHeightPx(
+    rawSearchHeightPx: Float,
+    fullSearchHeightPx: Float,
+    revealDeadZonePx: Float
+): Float {
+    if (fullSearchHeightPx <= 0f) return 0f
+    val clampedRawHeight = rawSearchHeightPx.coerceIn(0f, fullSearchHeightPx)
+    val clampedDeadZone = revealDeadZonePx.coerceIn(0f, fullSearchHeightPx - 0.5f)
+    if (clampedDeadZone <= 0f) return clampedRawHeight
+    if (clampedRawHeight <= clampedDeadZone) return 0f
+    val normalizedFraction = (clampedRawHeight - clampedDeadZone) / (fullSearchHeightPx - clampedDeadZone)
+    return (normalizedFraction * fullSearchHeightPx).coerceIn(0f, fullSearchHeightPx)
+}
+
 internal fun resolveHomeHeaderScrollLayout(
     headerOffsetPx: Float,
     searchBarHeightPx: Float,
+    searchCollapseDistancePx: Float,
     tabRowHeightPx: Float,
-    isHeaderCollapseEnabled: Boolean
+    isHeaderCollapseEnabled: Boolean,
+    searchRevealDeadZonePx: Float = 0f
 ): HomeHeaderScrollLayout {
     if (!isHeaderCollapseEnabled) {
         return HomeHeaderScrollLayout(
@@ -196,18 +216,23 @@ internal fun resolveHomeHeaderScrollLayout(
             tabAlpha = 1f
         )
     }
-    val clampedOffsetPx = headerOffsetPx.coerceIn(-tabRowHeightPx, 0f)
-    val currentTabHeightPx = (tabRowHeightPx + clampedOffsetPx).coerceAtLeast(0f)
-    val tabAlpha = if (tabRowHeightPx > 0f) {
-        (currentTabHeightPx / tabRowHeightPx).coerceIn(0f, 1f)
+    val effectiveCollapseDistancePx = searchCollapseDistancePx.coerceAtLeast(searchBarHeightPx)
+    val clampedOffsetPx = headerOffsetPx.coerceIn(-effectiveCollapseDistancePx, 0f)
+    val currentSearchHeightPx = resolveHomeTopVisibleSearchHeightPx(
+        rawSearchHeightPx = searchBarHeightPx + clampedOffsetPx,
+        fullSearchHeightPx = searchBarHeightPx,
+        revealDeadZonePx = searchRevealDeadZonePx
+    )
+    val searchAlpha = if (searchBarHeightPx > 0f) {
+        (currentSearchHeightPx / searchBarHeightPx).coerceIn(0f, 1f)
     } else {
-        1f
+        0f
     }
     return HomeHeaderScrollLayout(
-        searchBarHeightPx = searchBarHeightPx,
-        searchAlpha = 1f,
-        tabRowHeightPx = currentTabHeightPx,
-        tabAlpha = tabAlpha
+        searchBarHeightPx = currentSearchHeightPx,
+        searchAlpha = searchAlpha,
+        tabRowHeightPx = tabRowHeightPx,
+        tabAlpha = 1f
     )
 }
 
@@ -262,19 +287,27 @@ internal fun shouldUseUnifiedHomeTopPanel(uiPreset: UiPreset = UiPreset.IOS): Bo
 }
 
 internal fun resolveHomeTopUnifiedPanelHorizontalPadding(uiPreset: UiPreset = UiPreset.IOS): Dp {
-    return if (uiPreset == UiPreset.MD3) 8.dp else 0.dp
+    return 0.dp
 }
 
-internal fun resolveHomeTopUnifiedPanelInnerPadding(uiPreset: UiPreset = UiPreset.IOS): Dp {
+internal fun resolveHomeTopUnifiedPanelInnerPadding(
+    uiPreset: UiPreset = UiPreset.IOS,
+    collapsedIntoStatusBar: Boolean = false
+): Dp {
+    if (collapsedIntoStatusBar) return 2.dp
     return if (uiPreset == UiPreset.MD3) 10.dp else 8.dp
 }
 
-internal fun resolveHomeTopUnifiedPanelCornerRadius(uiPreset: UiPreset = UiPreset.IOS): Dp {
-    return if (uiPreset == UiPreset.MD3) 12.dp else 28.dp
+internal fun resolveHomeTopUnifiedPanelCornerRadius(
+    uiPreset: UiPreset = UiPreset.IOS,
+    collapsedIntoStatusBar: Boolean = false
+): Dp {
+    if (collapsedIntoStatusBar) return 0.dp
+    return if (uiPreset == UiPreset.MD3) 0.dp else 28.dp
 }
 
 internal fun resolveHomeTopEmbeddedTabHorizontalPadding(uiPreset: UiPreset = UiPreset.IOS): Dp {
-    return if (uiPreset == UiPreset.MD3) 4.dp else 0.dp
+    return 0.dp
 }
 
 internal fun resolveHomeTopTabHorizontalPadding(
@@ -291,6 +324,30 @@ internal fun resolveHomeTopTabHorizontalPadding(
 
 internal fun resolveHomeTopSearchToTabsSpacing(uiPreset: UiPreset = UiPreset.IOS): Dp {
     return if (uiPreset == UiPreset.MD3) 6.dp else 6.dp
+}
+
+internal fun resolveHomeTopSearchCollapseExtraSpacing(uiPreset: UiPreset = UiPreset.IOS): Dp {
+    return if (shouldUseUnifiedHomeTopPanel(uiPreset) && shouldShowUnifiedHomeTopPanelDivider(uiPreset)) {
+        5.dp
+    } else {
+        0.dp
+    }
+}
+
+internal fun resolveHomeTopSearchCollapseDistance(
+    searchBarHeight: Dp,
+    uiPreset: UiPreset = UiPreset.IOS
+): Dp {
+    return searchBarHeight +
+        resolveHomeTopSearchToTabsSpacing(uiPreset) +
+        resolveHomeTopSearchCollapseExtraSpacing(uiPreset)
+}
+
+internal fun shouldUseIntegratedCollapsedHomeTopBar(
+    searchRevealFraction: Float,
+    uiPreset: UiPreset = UiPreset.IOS
+): Boolean {
+    return uiPreset == UiPreset.IOS && searchRevealFraction <= 0.02f
 }
 
 internal fun resolveHomeTopContinuousSlabOverlap(uiPreset: UiPreset = UiPreset.IOS): Dp {
@@ -370,7 +427,10 @@ internal fun resolveHomeTopContinuousSlabSurfaceColor(
     uiPreset: UiPreset = UiPreset.IOS,
     renderMode: HomeTopChromeRenderMode
 ): Color {
-    if (renderMode != HomeTopChromeRenderMode.BLUR) return Color.Transparent
+    if (renderMode == HomeTopChromeRenderMode.PLAIN) return Color.Transparent
+    if (renderMode != HomeTopChromeRenderMode.BLUR) {
+        return baseColor.copy(alpha = maxOf(baseColor.alpha, blurAlpha))
+    }
     return if (uiPreset == UiPreset.MD3) {
         baseColor.copy(alpha = maxOf(baseColor.alpha, blurAlpha))
     } else {
@@ -964,25 +1024,63 @@ fun iOSHomeHeader(
     
     val searchBarHeightDp = resolveHomeTopSearchBarHeight(uiPreset)
     val tabRowHeightDp = resolveHomeTopTabRowHeight(isTabFloating = isTabFloating, uiPreset = uiPreset)
+    val searchCollapseDistanceDp = resolveHomeTopSearchCollapseDistance(
+        searchBarHeight = searchBarHeightDp,
+        uiPreset = uiPreset
+    )
+    val searchRevealDeadZoneDp = resolveHomeTopSearchRevealDeadZone(uiPreset)
     val searchBarHeightPx = with(density) { searchBarHeightDp.toPx() }
+    val searchCollapseDistancePx = with(density) { searchCollapseDistanceDp.toPx() }
+    val searchRevealDeadZonePx = with(density) { searchRevealDeadZoneDp.toPx() }
     val tabRowHeightPx = with(density) { tabRowHeightDp.toPx() }
 
-    val scrollLayout = remember(headerOffset, searchBarHeightPx, tabRowHeightPx, isHeaderCollapseEnabled) {
+    val scrollLayout = remember(
+        headerOffset,
+        searchBarHeightPx,
+        searchCollapseDistancePx,
+        searchRevealDeadZonePx,
+        tabRowHeightPx,
+        isHeaderCollapseEnabled
+    ) {
         resolveHomeHeaderScrollLayout(
             headerOffsetPx = headerOffset,
             searchBarHeightPx = searchBarHeightPx,
+            searchCollapseDistancePx = searchCollapseDistancePx,
             tabRowHeightPx = tabRowHeightPx,
-            isHeaderCollapseEnabled = isHeaderCollapseEnabled
+            isHeaderCollapseEnabled = isHeaderCollapseEnabled,
+            searchRevealDeadZonePx = searchRevealDeadZonePx
         )
     }
     val currentSearchHeight = with(density) { scrollLayout.searchBarHeightPx.toDp() }
     val searchAlpha = scrollLayout.searchAlpha
     val currentTabHeight = with(density) { scrollLayout.tabRowHeightPx.toDp() }
     val tabAlpha = scrollLayout.tabAlpha
-    val unifiedPanelShape = RoundedCornerShape(resolveHomeTopUnifiedPanelCornerRadius(uiPreset))
+    val searchRevealFraction = if (searchBarHeightPx > 0f) {
+        (scrollLayout.searchBarHeightPx / searchBarHeightPx).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val integratedCollapsedTopBar = shouldUseIntegratedCollapsedHomeTopBar(
+        searchRevealFraction = searchRevealFraction,
+        uiPreset = uiPreset
+    )
+    val unifiedPanelCornerRadius = resolveHomeTopUnifiedPanelCornerRadius(
+        uiPreset = uiPreset,
+        collapsedIntoStatusBar = integratedCollapsedTopBar
+    )
+    val unifiedPanelShape = if (unifiedPanelCornerRadius == 0.dp) {
+        androidx.compose.ui.graphics.RectangleShape
+    } else {
+        RoundedCornerShape(unifiedPanelCornerRadius)
+    }
     val unifiedPanelHorizontalPadding = resolveHomeTopUnifiedPanelHorizontalPadding(uiPreset)
-    val unifiedPanelInnerPadding = resolveHomeTopUnifiedPanelInnerPadding(uiPreset)
+    val unifiedPanelInnerPadding = resolveHomeTopUnifiedPanelInnerPadding(
+        uiPreset = uiPreset,
+        collapsedIntoStatusBar = integratedCollapsedTopBar
+    )
     val searchToTabsSpacing = resolveHomeTopSearchToTabsSpacing(uiPreset)
+    val currentSearchToTabsSpacing = searchToTabsSpacing * searchRevealFraction
+    val currentUnifiedDividerBottomSpacing = 4.dp * searchRevealFraction
 
     val tabHorizontalPadding by animateDpAsState(
         targetValue = resolveHomeTopTabHorizontalPadding(isTabFloating = isTabFloating, uiPreset = uiPreset),
@@ -1015,13 +1113,27 @@ fun iOSHomeHeader(
         animationSpec = tween(durationMillis = 180),
         label = "tabContentAlpha"
     )
-    val continuousSlabHeight = resolveHomeTopContinuousSlabHeight(
-        statusBarHeight = statusBarHeight,
-        searchBarHeight = currentSearchHeight,
-        tabRowHeight = currentTabHeight,
-        renderMode = continuousSlabRenderMode,
-        uiPreset = uiPreset
-    )
+    val effectiveContinuousSlabRenderMode = if (integratedCollapsedTopBar) {
+        topPanelChromeRenderMode
+    } else {
+        continuousSlabRenderMode
+    }
+    val continuousSlabHeight = if (integratedCollapsedTopBar) {
+        statusBarHeight + currentTabHeight
+    } else {
+        resolveHomeTopContinuousSlabHeight(
+            statusBarHeight = statusBarHeight,
+            searchBarHeight = currentSearchHeight,
+            tabRowHeight = currentTabHeight,
+            renderMode = effectiveContinuousSlabRenderMode,
+            uiPreset = uiPreset
+        )
+    }
+    val effectiveTopPanelChromeRenderMode = if (integratedCollapsedTopBar) {
+        HomeTopChromeRenderMode.PLAIN
+    } else {
+        topPanelChromeRenderMode
+    }
     val isTopTabViewportSyncEnabled = resolveHomeTopTabViewportSyncEnabled(
         currentTabHeightDp = currentTabHeight.value,
         tabAlpha = tabAlpha,
@@ -1034,19 +1146,19 @@ fun iOSHomeHeader(
             .fillMaxWidth()
             .zIndex(10f)
     ) {
-        if (continuousSlabRenderMode != HomeTopChromeRenderMode.PLAIN) {
+        if (effectiveContinuousSlabRenderMode != HomeTopChromeRenderMode.PLAIN) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(continuousSlabHeight)
                     .homeTopChromeSurface(
-                        renderMode = continuousSlabRenderMode,
+                        renderMode = effectiveContinuousSlabRenderMode,
                         shape = androidx.compose.ui.graphics.RectangleShape,
                         surfaceColor = resolveHomeTopContinuousSlabSurfaceColor(
                             baseColor = headerChromeColors.containerColor,
                             blurAlpha = backgroundAlpha,
                             uiPreset = uiPreset,
-                            renderMode = continuousSlabRenderMode
+                            renderMode = effectiveContinuousSlabRenderMode
                         ),
                         hazeState = hazeState,
                         backdrop = backdrop,
@@ -1090,7 +1202,7 @@ fun iOSHomeHeader(
                                 .padding(horizontal = unifiedPanelHorizontalPadding)
                                 .clip(unifiedPanelShape)
                                 .homeTopChromeSurface(
-                                    renderMode = topPanelChromeRenderMode,
+                                    renderMode = effectiveTopPanelChromeRenderMode,
                                     shape = unifiedPanelShape,
                                     surfaceColor = headerChromeColors.containerColor,
                                     hazeState = hazeState,
@@ -1102,23 +1214,29 @@ fun iOSHomeHeader(
                                     isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
                                     forceLowBlurBudget = forceLowBlurBudget,
                                     preferFlatGlass = resolveHomeTopWideChromePreferFlatGlass(
-                                        topPanelChromeRenderMode
+                                        effectiveTopPanelChromeRenderMode
                                     )
                                 )
-                                .border(0.8.dp, headerChromeColors.borderColor, unifiedPanelShape)
+                                .then(
+                                    if (integratedCollapsedTopBar) {
+                                        Modifier
+                                    } else {
+                                        Modifier.border(0.8.dp, headerChromeColors.borderColor, unifiedPanelShape)
+                                    }
+                                )
                         } else {
                             Modifier
                         }
                     )
             ) {
-                if (useUnifiedTopPanel) {
+                if (useUnifiedTopPanel && !integratedCollapsedTopBar) {
                     Box(
                         modifier = Modifier
                             .matchParentSize()
                             .background(
                                 resolveHomeTopUnifiedPanelReadabilityColor(
                                     isLightMode = isLightMode,
-                                    renderMode = topPanelChromeRenderMode
+                                    renderMode = effectiveTopPanelChromeRenderMode
                                 )
                             )
                     )
@@ -1128,7 +1246,10 @@ fun iOSHomeHeader(
                         .fillMaxWidth()
                         .then(
                             if (useUnifiedTopPanel) {
-                                Modifier.padding(all = unifiedPanelInnerPadding)
+                                Modifier.padding(
+                                    horizontal = if (integratedCollapsedTopBar) 0.dp else unifiedPanelInnerPadding,
+                                    vertical = unifiedPanelInnerPadding
+                                )
                             } else {
                                 Modifier
                             }
@@ -1159,7 +1280,9 @@ fun iOSHomeHeader(
                                     .size(resolveHomeTopAvatarOuterSize())
                                     .then(
                                         if (uiPreset == UiPreset.MD3) {
-                                            Modifier.clickable { onAvatarClick() }
+                                            Modifier.clickable {
+                                                performHomeTopBarTap(haptic = haptic, onClick = onAvatarClick)
+                                            }
                                         } else {
                                             Modifier.iOSTapEffect { onAvatarClick() }
                                         }
@@ -1366,7 +1489,9 @@ fun iOSHomeHeader(
                                     )
                                     .then(
                                         if (uiPreset == UiPreset.MD3) {
-                                            Modifier.clickable { onSettingsClick() }
+                                            Modifier.clickable {
+                                                performHomeTopBarTap(haptic = haptic, onClick = onSettingsClick)
+                                            }
                                         } else {
                                             Modifier.iOSTapEffect {
                                                 haptic(HapticType.LIGHT)
@@ -1394,18 +1519,20 @@ fun iOSHomeHeader(
                         useUnifiedTopPanel &&
                         shouldShowUnifiedHomeTopPanelDivider(uiPreset) &&
                         currentTabHeight > 0.dp &&
-                        tabAlpha * tabContentAlpha > 0f
+                        tabAlpha * tabContentAlpha > 0f &&
+                        searchRevealFraction > 0f
                     ) {
-                        Spacer(modifier = Modifier.height(searchToTabsSpacing))
+                        Spacer(modifier = Modifier.height(currentSearchToTabsSpacing))
                         HorizontalDivider(
                             thickness = 1.dp,
                             color = headerChromeColors.borderColor.copy(
-                                alpha = resolveHomeTopUnifiedPanelDividerAlpha(topChromeRenderMode)
+                                alpha = resolveHomeTopUnifiedPanelDividerAlpha(topChromeRenderMode) *
+                                    searchRevealFraction
                             )
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(currentUnifiedDividerBottomSpacing))
                     } else {
-                        Spacer(modifier = Modifier.height(searchToTabsSpacing))
+                        Spacer(modifier = Modifier.height(currentSearchToTabsSpacing))
                     }
 
                     HomeTopTabChrome(
@@ -1422,7 +1549,13 @@ fun iOSHomeHeader(
                         tabVerticalOffset = if (useUnifiedTopPanel) 0.dp else tabVerticalOffset,
                         isTabFloating = if (useUnifiedTopPanel) false else isTabFloating,
                         effectiveTabShadowElevation = if (useUnifiedTopPanel) 0.dp else effectiveTabShadowElevation,
-                        tabShape = if (useUnifiedTopPanel) RoundedCornerShape(18.dp) else tabShape,
+                        tabShape = if (useUnifiedTopPanel && uiPreset == UiPreset.MD3) {
+                            androidx.compose.ui.graphics.RectangleShape
+                        } else if (useUnifiedTopPanel) {
+                            RoundedCornerShape(18.dp)
+                        } else {
+                            tabShape
+                        },
                         tabChromeRenderMode = if (useUnifiedTopPanel) {
                             HomeTopChromeRenderMode.PLAIN
                         } else {
@@ -1484,6 +1617,7 @@ fun iOSHomeHeader(
                             liquidGlassTuning = liquidGlassTuning,
                             backdrop = backdrop,
                             isFloatingStyle = if (useUnifiedTopPanel) false else isTabFloating,
+                            edgeToEdge = integratedCollapsedTopBar,
                             interactionBudget = interactionBudget,
                             isViewportSyncEnabled = isTopTabViewportSyncEnabled
                         )

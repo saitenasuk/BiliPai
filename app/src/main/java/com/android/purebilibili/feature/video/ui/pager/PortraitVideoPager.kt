@@ -3,6 +3,10 @@ package com.android.purebilibili.feature.video.ui.pager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +26,9 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -58,9 +65,11 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -269,6 +278,7 @@ fun PortraitVideoPager(
     val pagerState = rememberPagerState(initialPage = initialPageIndex) {
         pageItems.size
     }
+    var currentPageScale by remember { mutableFloatStateOf(1f) }
 
     // [重构] 优先复用主播放器；仅在未传入 sharedPlayer 时才创建页内播放器
     val exoPlayer = sharedPlayer ?: remember(context) {
@@ -741,6 +751,7 @@ fun PortraitVideoPager(
 
     VerticalPager(
         state = pagerState,
+        userScrollEnabled = shouldHandlePortraitTapGesture(scale = currentPageScale),
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
@@ -780,6 +791,11 @@ fun PortraitVideoPager(
                     isFirstPage = page == 0,
                     initialStartPositionMs = entryStartPositionMs
                 ),
+                onCurrentPageScaleChange = { scale ->
+                    if (page == pagerState.currentPage) {
+                        currentPageScale = scale
+                    }
+                },
                 onRequestVideoChange = { targetBvid ->
                     val targetIndex = pageItems.indexOfFirst { candidate ->
                         when (candidate) {
@@ -826,6 +842,7 @@ private fun VideoPageItem(
     recommendationVideos: List<RelatedVideo>,
     hasRenderedFirstFrame: Boolean,
     initialProgressPositionMs: Long,
+    onCurrentPageScaleChange: (Float) -> Unit,
     onRequestVideoChange: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -972,6 +989,25 @@ private fun VideoPageItem(
     var longPressOriginPlaybackParameters by remember { mutableStateOf(PlaybackParameters.DEFAULT) }
     var effectiveLongPressSpeed by remember { mutableFloatStateOf(longPressSpeed) }
     var showLongPressSpeedFeedback by remember { mutableStateOf(false) }
+    var scale by remember(bvid) { mutableFloatStateOf(1f) }
+    var panX by remember(bvid) { mutableFloatStateOf(0f) }
+    var panY by remember(bvid) { mutableFloatStateOf(0f) }
+
+    fun resetViewportTransform() {
+        scale = 1f
+        panX = 0f
+        panY = 0f
+    }
+
+    LaunchedEffect(isCurrentPage) {
+        if (!isCurrentPage) {
+            resetViewportTransform()
+        }
+    }
+
+    LaunchedEffect(isCurrentPage, scale, onCurrentPageScaleChange) {
+        onCurrentPageScaleChange(if (isCurrentPage) scale else 1f)
+    }
 
     LaunchedEffect(
         playerViewRef,
@@ -1029,15 +1065,80 @@ private fun VideoPageItem(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .pointerInput(isCurrentPage, bvid) {
+                if (!isCurrentPage) return@pointerInput
+
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var observedMultiTouch = false
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressedCount = event.changes.count { it.pressed }
+                        if (pressedCount == 0) {
+                            break
+                        }
+                        if (pressedCount < 2) {
+                            if (observedMultiTouch) {
+                                break
+                            }
+                            continue
+                        }
+                        observedMultiTouch = true
+
+                        if (isLongPressing) {
+                            exoPlayer.playbackParameters = longPressOriginPlaybackParameters
+                            isLongPressing = false
+                            showLongPressSpeedFeedback = false
+                        }
+
+                        val pan = event.calculatePan()
+                        val zoom = event.calculateZoom()
+
+                        if (zoom != 1f || pan != Offset.Zero) {
+                            val updatedScale = (scale * zoom).coerceIn(1f, 5f)
+                            scale = updatedScale
+
+                            if (updatedScale > 1f) {
+                                val maxPanX = (size.width * updatedScale - size.width) / 2f
+                                val maxPanY = (size.height * updatedScale - size.height) / 2f
+                                panX = (panX + pan.x * updatedScale).coerceIn(-maxPanX, maxPanX)
+                                panY = (panY + pan.y * updatedScale).coerceIn(-maxPanY, maxPanY)
+                                isOverlayVisible = false
+                            } else {
+                                panX = 0f
+                                panY = 0f
+                            }
+
+                            event.changes.forEach { change ->
+                                if (change.position != change.previousPosition) {
+                                    change.consume()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             .pointerInput(longPressSpeed, currentAudioQuality, isCurrentPage) {
                 detectTapGestures(
-                    onTap = { isOverlayVisible = !isOverlayVisible },
+                    onTap = {
+                        if (!shouldHandlePortraitTapGesture(scale = scale)) {
+                            return@detectTapGestures
+                        }
+                        isOverlayVisible = !isOverlayVisible
+                    },
                     onDoubleTap = {
+                        if (!shouldHandlePortraitTapGesture(scale = scale)) {
+                            return@detectTapGestures
+                        }
                         if (isCurrentPage) {
                             if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                         }
                     },
                     onLongPress = {
+                        if (!shouldHandlePortraitLongPressGesture(scale = scale)) {
+                            return@detectTapGestures
+                        }
                         if (!isCurrentPage) return@detectTapGestures
                         longPressOriginPlaybackParameters = exoPlayer.playbackParameters
                         val longPressPlaybackParameters = resolveLongPressPlaybackParameters(
@@ -1060,10 +1161,14 @@ private fun VideoPageItem(
                 )
             }
             // 进度调整手势
-            .pointerInput(progressState.duration) {
+            .pointerInput(progressState.duration, scale, isCurrentPage) {
                 detectHorizontalDragGestures(
                     onDragStart = { 
-                        if (isCurrentPage && progressState.duration > 0) {
+                        if (
+                            isCurrentPage &&
+                            progressState.duration > 0 &&
+                            shouldHandlePortraitSeekGesture(scale = scale)
+                        ) {
                             isSeekGesture = true
                             seekStartPosition = exoPlayer.currentPosition.toFloat()
                             seekTargetPosition = seekStartPosition
@@ -1095,7 +1200,17 @@ private fun VideoPageItem(
                 currentVideoAspect = currentVideoAspect,
                 modifier = Modifier.fillMaxSize()
             ) {
-                    key(currentPlayingBvid, bvid) {
+                key(currentPlayingBvid, bvid) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                translationX = panX
+                                translationY = panY
+                            }
+                    ) {
                         AndroidView(
                             factory = { ctx ->
                                 PlayerView(ctx).apply {
@@ -1150,6 +1265,7 @@ private fun VideoPageItem(
                             )
                         }
                     }
+                }
             }
         }
 
@@ -1318,6 +1434,37 @@ private fun VideoPageItem(
                             blurRadius = 4f
                         )
                     )
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = isCurrentPage && scale > 1.05f,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 104.dp),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Button(
+                onClick = {
+                    resetViewportTransform()
+                    isOverlayVisible = true
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Black.copy(alpha = 0.6f),
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "还原画面"
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "还原画面",
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

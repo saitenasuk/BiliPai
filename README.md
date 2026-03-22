@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-03-20 · 文档已同步至 v7.0.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-03-21 · 文档已同步至 v7.0.2（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.0.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.0.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -560,12 +560,14 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.0.0 · 2026-03-20)
+### 最近更新 (v7.0.2 · 2026-03-21)
 
-- 🎨 **双预设与视觉体系完成一轮正式收口**：`iOS / MD3` 双预设、首页顶部/底栏/标签壳层、液态玻璃模式与强度、自适应强调色、Material You 校正，以及应用内字体/缩放/DPI 调节现已整合到同一版正式体验中。
-- 🔎 **导航、入口链接和搜索链路统一**：`b23.tv / bilibili.com / bilibili://`、应用内 WebView、搜索关键字深链、历史/收藏/稍后再看/空间等入口都已接入统一目标解析与路由分发。
-- 🎬 **播放与后台能力明显收敛**：视频画质选择、听视频模式、离线/后台播放、通知栏与系统媒体控制、播放器调试信息、详情页布局与评论交互都做了系统性修复和统一。
-- 🧪 **稳定性优先**：补强了首页、搜索、显示策略、主题色、版本比较、画质链路与后台播放等关键路径测试，并移除了实验性的“视频界面实时模糊”入口。
+- 🧵 **楼中楼评论链路统一**：竖屏分页评论抽屉和视频详情页现在共用同一套评论宿主，楼中楼详情不再分叉到另一套旧弹层实现。
+- 📺 **评论详情更少遮挡视频**：打开楼中楼评论详情时会优先在当前评论抽屉内切换内容，视频上方保留区域更稳定。
+- ⏱️ **进度条拖动更一致**：拖动进度条和章节跳转现在统一走同一条 seek 处理路径，播放状态与进度显示更稳定。
+- 🗑️ **历史记录删除动画更自然**：删除历史记录时，只保留邻近卡片的抖动反馈，被删除的卡片不再额外抖动。
+- 📦 **APK 只保留 64 位**：发布包现在仅打包 `arm64-v8a`，不再包含 `armeabi-v7a`。
+- 🏷️ **产物名更简洁**：APK 输出文件名去掉了 `universal` 后缀。
 
 ### 历史版本
 
