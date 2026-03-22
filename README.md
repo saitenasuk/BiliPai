@@ -37,7 +37,7 @@
 | 类别 | 入口 |
 | --- | --- |
 | 开始使用 | [下载 Releases](https://github.com/jay3-yy/BiliPai/releases) · [更新日志](CHANGELOG.md) |
-| 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI.txt](AI.txt) · [llm.txt](llm.txt) · [llms.txt](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
+| 文档导航 | [Wiki 首页](docs/wiki/README.md) · [AI / LLM 入口](llms.txt) · [AI 导航指南](docs/wiki/AI.md) |
 | 开发参考 | [JSON 插件开发](docs/PLUGIN_DEVELOPMENT.md) · [原生插件开发](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
 > [!IMPORTANT]
@@ -512,7 +512,8 @@ app/src/main/java/com/android/purebilibili
 
 ## 📚 Wiki
 
-- AI / LLM 入口：[`AI.txt`](AI.txt) · [`llm.txt`](llm.txt) · [`llms.txt`](llms.txt)
+- AI / LLM 入口：[`llms.txt`](llms.txt)
+- 兼容别名：`AI.txt` / `llm.txt`
 - AI 导航指南：[`docs/wiki/AI.md`](docs/wiki/AI.md)
 - Wiki 首页：[`docs/wiki/README.md`](docs/wiki/README.md)
 - 功能矩阵：[`docs/wiki/FEATURE_MATRIX.md`](docs/wiki/FEATURE_MATRIX.md)

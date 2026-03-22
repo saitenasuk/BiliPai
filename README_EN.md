@@ -32,7 +32,7 @@
 | Category | Entry |
 | --- | --- |
 | Get Started | [Download Releases](https://github.com/jay3-yy/BiliPai/releases) · [Changelog](CHANGELOG.md) |
-| Docs | [Wiki Home](docs/wiki/README.md) · [AI.txt](AI.txt) · [llm.txt](llm.txt) · [llms.txt](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
+| Docs | [Wiki Home](docs/wiki/README.md) · [AI / LLM Entry](llms.txt) · [AI Navigation Guide](docs/wiki/AI.md) |
 | Developer Reference | [JSON Plugin Guide](docs/PLUGIN_DEVELOPMENT.md) · [Native Plugin Guide](docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
 > [!CAUTION]
@@ -363,7 +363,8 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 ## 📚 Wiki
 
-- AI / LLM Entry: [`AI.txt`](AI.txt) · [`llm.txt`](llm.txt) · [`llms.txt`](llms.txt)
+- AI / LLM Entry: [`llms.txt`](llms.txt)
+- Compatibility aliases: `AI.txt` / `llm.txt`
 - AI Navigation Guide: [`docs/wiki/AI.md`](docs/wiki/AI.md)
 - Wiki Home: [`docs/wiki/README.md`](docs/wiki/README.md)
 - Feature Matrix: [`docs/wiki/FEATURE_MATRIX.md`](docs/wiki/FEATURE_MATRIX.md)
