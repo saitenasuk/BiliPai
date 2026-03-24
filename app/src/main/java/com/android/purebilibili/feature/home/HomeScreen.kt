@@ -42,6 +42,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.luminance  //  状态栏亮度计算
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -268,6 +269,9 @@ fun HomeScreen(
             customOrderIds = topTabSettings.orderIds,
             visibleIds = topTabSettings.visibleIds
         )
+    }
+    val localizedTopCategoryLabels = topCategories.map { category ->
+        stringResource(resolveHomeCategoryLabelRes(category))
     }
     val initialPage = resolveHomeTopTabIndex(state.currentCategory, topCategories)
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topCategories.size }
@@ -1353,7 +1357,8 @@ fun HomeScreen(
             },
             onSettingsClick = onSettingsClick,
             onSearchClick = onSearchClick,
-            topCategories = topCategories.map { it.label },
+            topCategories = localizedTopCategoryLabels,
+            topCategoryKeys = topCategories.map { it.name },
             categoryIndex = displayedTabIndex,
             onCategorySelected = { index ->
                 viewModel.updateDisplayedTabIndex(index)

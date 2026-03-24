@@ -6,6 +6,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -53,6 +54,7 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextPlace
 import androidx.compose.ui.layout.ContentScale
 import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.core.ui.common.copyOnLongPress
+import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import androidx.compose.foundation.text.selection.SelectionContainer
 import java.text.SimpleDateFormat
 import java.util.*
@@ -541,6 +543,7 @@ fun ReplyItemView(
     val showInlineSubReplyToggle = remember(item.replies) {
         shouldShowInlineSubReplyToggle(item.replies.orEmpty().size)
     }
+    val copyToClipboard = rememberClipboardCopyHandler()
 
     Column(
         modifier = Modifier
@@ -793,7 +796,15 @@ fun ReplyItemView(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("$COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX${subReply.rpid}")
-                                    .clickable { onSubClick(item) }
+                                    .combinedClickable(
+                                        onClick = { onSubClick(item) },
+                                        onLongClick = {
+                                            copyToClipboard(
+                                                subReply.content.message,
+                                                "回复内容"
+                                            )
+                                        }
+                                    )
                             ) {
                                 ReplyMessageText(
                                     text = subReply.content.message,

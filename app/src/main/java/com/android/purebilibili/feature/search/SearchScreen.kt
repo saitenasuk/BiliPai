@@ -58,13 +58,16 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.R
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.ui.LoadingAnimation
+import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppChevronDownIcon
 import com.android.purebilibili.core.ui.rememberAppClearIcon
@@ -300,7 +303,9 @@ fun SearchScreen(
             )
         }
     }
-    val searchHazeEnabled = shouldEnableSearchHazeSource(searchMotionBudget)
+    val searchHazeEnabled = shouldEnableSearchHazeSource(
+        isSearching = state.isSearching
+    )
     val effectiveCardTransitionEnabled =
         cardTransitionEnabled && searchMotionBudget == SearchMotionBudget.FULL
     val showHotSectionHeader by remember(state.hotList, hotSearchEnabled) {
@@ -342,6 +347,11 @@ fun SearchScreen(
             onInitialKeywordConsumed(normalizedKeyword)
         }
     }
+
+    val resultBottomPadding = resolveBottomSafeAreaPadding(
+        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        extraBottomPadding = 16.dp
+    )
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -406,7 +416,7 @@ fun SearchScreen(
                                     state = resultGridState,
                                     contentPadding = PaddingValues(
                                         top = contentTopPadding + 8.dp,
-                                        bottom = 16.dp,
+                                        bottom = resultBottomPadding,
                                         start = searchLayoutPolicy.resultHorizontalPaddingDp.dp,
                                         end = searchLayoutPolicy.resultHorizontalPaddingDp.dp
                                     ),
@@ -527,7 +537,7 @@ fun SearchScreen(
                             com.android.purebilibili.data.model.response.SearchType.UP -> {
                                 //  UP主搜索结果
                                 LazyColumn(
-                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                     state = resultListState,
                                     modifier = Modifier
@@ -615,7 +625,7 @@ fun SearchScreen(
                             com.android.purebilibili.data.model.response.SearchType.MEDIA_FT -> {
                                 //  番剧/影视搜索结果
                                 LazyColumn(
-                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                     state = resultListState,
                                     modifier = Modifier
@@ -680,7 +690,7 @@ fun SearchScreen(
                             com.android.purebilibili.data.model.response.SearchType.LIVE -> {
                                 //  直播搜索结果
                                 LazyColumn(
-                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                                    contentPadding = PaddingValues(top = contentTopPadding + 8.dp, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                     state = resultListState,
                                     modifier = Modifier
@@ -843,7 +853,7 @@ fun SearchScreen(
                                     .fillMaxHeight(),
                                 contentPadding = PaddingValues(
                                     top = contentTopPadding + 16.dp,
-                                    bottom = 16.dp,
+                                    bottom = resultBottomPadding,
                                     start = searchLayoutPolicy.splitOuterPaddingDp.dp,
                                     end = searchLayoutPolicy.splitInnerGapDp.dp
                                 ),
@@ -868,7 +878,7 @@ fun SearchScreen(
                                     .fillMaxHeight(),
                                 contentPadding = PaddingValues(
                                     top = contentTopPadding + 16.dp,
-                                    bottom = 16.dp,
+                                    bottom = resultBottomPadding,
                                     start = searchLayoutPolicy.splitInnerGapDp.dp,
                                     end = searchLayoutPolicy.splitOuterPaddingDp.dp
                                 )
@@ -900,7 +910,7 @@ fun SearchScreen(
                             state = historyListState,
                             contentPadding = PaddingValues(
                                 top = contentTopPadding + 16.dp,
-                                bottom = 16.dp,
+                                bottom = resultBottomPadding,
                                 start = searchLayoutPolicy.resultHorizontalPaddingDp.dp,
                                 end = searchLayoutPolicy.resultHorizontalPaddingDp.dp
                             )
@@ -957,7 +967,12 @@ fun SearchScreen(
                     .align(Alignment.TopCenter)
                     .then(
                         if (searchHazeEnabled) {
-                            Modifier.unifiedBlur(hazeState = hazeState)
+                            Modifier.unifiedBlur(
+                                hazeState = hazeState,
+                                surfaceType = com.android.purebilibili.core.ui.blur.BlurSurfaceType.HEADER,
+                                isScrolling = isSearchResultsScrolling,
+                                forceLowBudget = searchMotionBudget == SearchMotionBudget.REDUCED
+                            )
                         } else {
                             Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
                         }
@@ -1060,6 +1075,8 @@ fun SearchTopBar(
         animationSpec = if (reducedMotionBudget) snap() else tween(durationMillis = 200),
         label = "iconColor"
     )
+    val backLabel = stringResource(R.string.common_back)
+    val searchLabel = stringResource(R.string.common_search)
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -1080,7 +1097,7 @@ fun SearchTopBar(
                 IconButton(onClick = onBack) {
                     Icon(
                         backIcon,
-                        contentDescription = "Back",
+                        contentDescription = backLabel,
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -1175,7 +1192,7 @@ fun SearchTopBar(
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                         modifier = Modifier.height(40.dp)
                     ) {
-                        Text("搜索", fontSize = 15.sp)
+                        Text(searchLabel, fontSize = 15.sp)
                     }
                 } else {
                     TextButton(
@@ -1183,7 +1200,7 @@ fun SearchTopBar(
                         enabled = query.isNotEmpty()
                     ) {
                         Text(
-                            "搜索",
+                            searchLabel,
                             color = if (query.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
                             fontSize = 16.sp
                         )
@@ -1204,6 +1221,7 @@ fun HistoryChip(
     val uiPreset = LocalUiPreset.current
     val historyIcon = rememberAppHistoryIcon()
     val clearIcon = rememberAppClearIcon()
+    val deleteLabel = stringResource(R.string.common_delete)
     val chromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
     Surface(
         onClick = onClick,
@@ -1240,7 +1258,7 @@ fun HistoryChip(
             ) {
                 Icon(
                     clearIcon,
-                    contentDescription = "删除",
+                    contentDescription = deleteLabel,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
                     modifier = Modifier.size(14.dp)
                 )
@@ -1258,6 +1276,7 @@ fun HistoryItem(
 ) {
     val historyIcon = rememberAppHistoryIcon()
     val clearIcon = rememberAppClearIcon()
+    val deleteLabel = stringResource(R.string.common_delete)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1269,7 +1288,7 @@ fun HistoryItem(
         Spacer(modifier = Modifier.width(12.dp))
         Text(text = history.keyword, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.weight(1f))
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-            Icon(clearIcon, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f), modifier = Modifier.size(16.dp))
+            Icon(clearIcon, contentDescription = deleteLabel, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f), modifier = Modifier.size(16.dp))
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, thickness = 0.5.dp)
@@ -1497,6 +1516,8 @@ fun SearchHistorySection(
     onDelete: (SearchHistory) -> Unit
 ) {
     if (historyList.isNotEmpty()) {
+        val historyTitle = stringResource(R.string.search_history_title)
+        val clearLabel = stringResource(R.string.common_clear)
         Column {
             Spacer(modifier = Modifier.height(24.dp))
             Row(
@@ -1505,12 +1526,12 @@ fun SearchHistorySection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "历史记录",
+                    historyTitle,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 TextButton(onClick = onClear) {
-                    Text("清空", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text(clearLabel, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))

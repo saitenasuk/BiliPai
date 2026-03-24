@@ -102,8 +102,12 @@ internal fun resolveTopTabRowHorizontalPaddingDp(
     return if (isFloatingStyle) 0f else 4f
 }
 
-internal fun resolveTopTabVisibleSlots(categoryCount: Int): Int {
-    return categoryCount.coerceIn(4, 5)
+internal fun resolveTopTabVisibleSlots(
+    categoryCount: Int,
+    longestLabelLength: Int = 0
+): Int {
+    if (categoryCount <= 4) return 4
+    return if (longestLabelLength >= 8) 4 else 5
 }
 
 internal fun resolveMd3TopTabVisibleSlots(): Int = 4
@@ -146,17 +150,21 @@ internal fun resolveTopTabMinItemWidthDp(isFloatingStyle: Boolean): Float {
     return if (isFloatingStyle) 72f else 64f
 }
 
-internal fun shouldRouteTopTabToLivePage(categoryLabel: String): Boolean {
-    return categoryLabel == HomeCategory.LIVE.label
+internal fun shouldRouteTopTabToLivePage(categoryKey: String): Boolean {
+    return categoryKey.equals(HomeCategory.LIVE.name, ignoreCase = true)
 }
 
 internal fun resolveTopTabItemWidthDp(
     containerWidthDp: Float,
     categoryCount: Int,
-    isFloatingStyle: Boolean
+    isFloatingStyle: Boolean,
+    longestLabelLength: Int = 0
 ): Float {
     if (containerWidthDp <= 0f) return resolveTopTabMinItemWidthDp(isFloatingStyle)
-    val slots = resolveTopTabVisibleSlots(categoryCount).coerceAtLeast(1)
+    val slots = resolveTopTabVisibleSlots(
+        categoryCount = categoryCount,
+        longestLabelLength = longestLabelLength
+    ).coerceAtLeast(1)
     val baseWidth = containerWidthDp / slots
     return baseWidth.coerceAtLeast(resolveTopTabMinItemWidthDp(isFloatingStyle))
 }
@@ -182,30 +190,30 @@ internal fun resolveMd3TopTabLabelMode(requestedLabelMode: Int): Int =
     normalizeTopTabLabelMode(requestedLabelMode)
 
 internal fun resolveTopTabCategoryIcon(
-    category: String,
+    categoryKey: String,
     uiPreset: UiPreset = UiPreset.IOS
 ): ImageVector {
     return when (uiPreset) {
-        UiPreset.MD3 -> when (category) {
-            "推荐" -> Icons.Outlined.Home
-            "关注" -> Icons.Outlined.Person
-            "热门" -> Icons.AutoMirrored.Outlined.TrendingUp
-            "直播" -> Icons.Outlined.LiveTv
-            "追番" -> Icons.Outlined.Tv
-            "游戏" -> Icons.Outlined.SportsEsports
-            "知识" -> Icons.Outlined.Lightbulb
-            "科技" -> Icons.Outlined.SmartToy
+        UiPreset.MD3 -> when (categoryKey.uppercase()) {
+            HomeCategory.RECOMMEND.name -> Icons.Outlined.Home
+            HomeCategory.FOLLOW.name -> Icons.Outlined.Person
+            HomeCategory.POPULAR.name -> Icons.AutoMirrored.Outlined.TrendingUp
+            HomeCategory.LIVE.name -> Icons.Outlined.LiveTv
+            HomeCategory.ANIME.name -> Icons.Outlined.Tv
+            HomeCategory.GAME.name -> Icons.Outlined.SportsEsports
+            HomeCategory.KNOWLEDGE.name -> Icons.Outlined.Lightbulb
+            HomeCategory.TECH.name -> Icons.Outlined.SmartToy
             else -> Icons.AutoMirrored.Outlined.MenuOpen
         }
-        UiPreset.IOS -> when (category) {
-            "推荐" -> CupertinoIcons.Default.House
-            "关注" -> CupertinoIcons.Default.PersonCropCircleBadgePlus
-            "热门" -> CupertinoIcons.Default.ChartBar
-            "直播" -> CupertinoIcons.Default.Video
-            "追番" -> CupertinoIcons.Default.Tv
-            "游戏" -> CupertinoIcons.Default.PlayCircle
-            "知识" -> CupertinoIcons.Default.Lightbulb
-            "科技" -> CupertinoIcons.Default.Cpu
+        UiPreset.IOS -> when (categoryKey.uppercase()) {
+            HomeCategory.RECOMMEND.name -> CupertinoIcons.Default.House
+            HomeCategory.FOLLOW.name -> CupertinoIcons.Default.PersonCropCircleBadgePlus
+            HomeCategory.POPULAR.name -> CupertinoIcons.Default.ChartBar
+            HomeCategory.LIVE.name -> CupertinoIcons.Default.Video
+            HomeCategory.ANIME.name -> CupertinoIcons.Default.Tv
+            HomeCategory.GAME.name -> CupertinoIcons.Default.PlayCircle
+            HomeCategory.KNOWLEDGE.name -> CupertinoIcons.Default.Lightbulb
+            HomeCategory.TECH.name -> CupertinoIcons.Default.Cpu
             else -> CupertinoIcons.Default.ListBullet
         }
     }
@@ -402,6 +410,7 @@ internal fun resolveTopTabUnselectedColor(isLightMode: Boolean): Color {
 @Composable
 fun CategoryTabRow(
     categories: List<String> = resolveHomeTopCategories().map { it.label },
+    categoryKeys: List<String> = resolveHomeTopCategories().map { it.name },
     selectedIndex: Int = 0,
     onCategorySelected: (Int) -> Unit = {},
     onPartitionClick: () -> Unit = {},
@@ -454,6 +463,7 @@ fun CategoryTabRow(
     if (resolveTopTabIndicatorStyle(uiPreset) == TopTabIndicatorStyle.MATERIAL) {
         Md3CategoryTabRow(
             categories = categories,
+            categoryKeys = categoryKeys,
             selectedIndex = selectedIndex,
             onCategorySelected = onCategorySelected,
             onPartitionClick = onPartitionClick,
@@ -484,7 +494,8 @@ fun CategoryTabRow(
             val tabWidth = resolveTopTabItemWidthDp(
                 containerWidthDp = maxWidth.value,
                 categoryCount = categories.size,
-                isFloatingStyle = isFloatingStyle
+                isFloatingStyle = isFloatingStyle,
+                longestLabelLength = categories.maxOfOrNull { it.length } ?: 0
             ).dp
             val localDensity = LocalDensity.current
             val tabListState = rememberLazyListState()
@@ -742,12 +753,14 @@ fun CategoryTabRow(
                         )
                     ) {
                         itemsIndexed(categories) { index, category ->
+                            val categoryKey = categoryKeys.getOrNull(index) ?: category
                             Box(
                                 modifier = Modifier.width(tabWidth),
                                 contentAlignment = Alignment.Center
                             ) {
                                 CategoryTabItem(
                                     category = category,
+                                    categoryKey = categoryKey,
                                     index = index,
                                     selectedIndex = selectedIndex,
                                     currentPosition = currentPosition,
@@ -757,7 +770,7 @@ fun CategoryTabRow(
                                     onClick = {
                                         performHomeTopBarTap(haptic = haptic, onClick = {
                                             // [修复] 直播由分类语义驱动，而不是固定索引，支持自定义排序
-                                            if (shouldRouteTopTabToLivePage(category)) {
+                                            if (shouldRouteTopTabToLivePage(categoryKey)) {
                                                 onLiveClick()
                                             } else {
                                                 onCategorySelected(index)
@@ -807,6 +820,7 @@ fun CategoryTabRow(
 @Composable
 private fun Md3CategoryTabRow(
     categories: List<String>,
+    categoryKeys: List<String>,
     selectedIndex: Int,
     onCategorySelected: (Int) -> Unit,
     onPartitionClick: () -> Unit,
@@ -910,14 +924,15 @@ private fun Md3CategoryTabRow(
                 ) {
                     visibleIndices.forEachIndexed { visibleIndex, originalIndex ->
                         val category = categories[originalIndex]
+                        val categoryKey = categoryKeys.getOrNull(originalIndex) ?: category
                         val showIcon = shouldShowTopTabIcon(normalizedLabelMode)
                         val showText = shouldShowTopTabText(normalizedLabelMode)
-                        val icon = resolveTopTabCategoryIcon(category, uiPreset)
+                        val icon = resolveTopTabCategoryIcon(categoryKey, uiPreset)
                         val selectionFraction =
                             (1f - abs(currentVisiblePosition - visibleIndex.toFloat())).coerceIn(0f, 1f)
                         val onTabClick = {
                             performHomeTopBarTap(haptic = haptic, onClick = {
-                                if (shouldRouteTopTabToLivePage(category)) {
+                                if (shouldRouteTopTabToLivePage(categoryKey)) {
                                     onLiveClick()
                                 } else {
                                     onCategorySelected(originalIndex)
@@ -1074,6 +1089,7 @@ internal fun resolveTopTabIndicatorViewportShiftPx(
 @Composable
 fun CategoryTabItem(
     category: String,
+    categoryKey: String = category,
     index: Int,
     selectedIndex: Int,
     currentPosition: Float,
@@ -1099,7 +1115,7 @@ fun CategoryTabItem(
      val normalizedLabelMode = normalizeTopTabLabelMode(labelMode)
      val showIcon = shouldShowTopTabIcon(normalizedLabelMode)
      val showText = shouldShowTopTabText(normalizedLabelMode)
-     val icon = resolveTopTabCategoryIcon(category, uiPreset)
+     val icon = resolveTopTabCategoryIcon(categoryKey, uiPreset)
      val iconSize = if (showText) 16.dp else 18.dp
      val textSize = resolveTopTabLabelTextSizeSp(normalizedLabelMode).sp
      val textLineHeight = resolveTopTabLabelLineHeightSp(normalizedLabelMode).sp

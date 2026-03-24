@@ -29,9 +29,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.android.purebilibili.R
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
@@ -59,13 +61,15 @@ import com.android.purebilibili.core.theme.LocalUiPreset
 fun PermissionSettingsScreen(
     onBack: () -> Unit
 ) {
+    val screenTitle = stringResource(R.string.permission_management_title)
+    val backLabel = stringResource(R.string.common_back)
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("权限管理", fontWeight = FontWeight.Bold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -175,13 +179,13 @@ fun PermissionSettingsContent(
             ),
             //  DLNA 投屏所需权限
             PermissionInfo(
-                name = "设备发现 (DLNA)",
+                name = "设备发现（DLNA）",
                 permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     Manifest.permission.NEARBY_WIFI_DEVICES
                 } else {
                     Manifest.permission.ACCESS_FINE_LOCATION
                 },
-                description = "用于扫描和连接附近的投屏设备 (DLNA)",
+                description = "用于扫描和连接附近的投屏设备（DLNA）",
                 icon = CupertinoIcons.Default.Tv,
                 iconTint = iOSBlue,
                 isNormal = false,

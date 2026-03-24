@@ -39,10 +39,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.BuildConfig
+import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
@@ -64,6 +66,13 @@ fun SettingsShareScreen(
     viewModel: SettingsShareViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val screenTitle = stringResource(R.string.settings_share_title)
+    val backLabel = stringResource(R.string.common_back)
+    val shareChooserTitle = stringResource(R.string.settings_share_chooser_title)
+    val shareOpenFailed = stringResource(R.string.settings_share_open_failed)
+    val importConfirmLabel = stringResource(R.string.settings_share_import_confirm)
+    val viewSkippedLabel = stringResource(R.string.settings_share_view_skipped)
+    val cancelLabel = stringResource(R.string.common_cancel)
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val hazeState = com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState()
@@ -97,11 +106,11 @@ fun SettingsShareScreen(
                 putExtra(Intent.EXTRA_STREAM, shareUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(shareIntent, "分享设置"))
+            context.startActivity(Intent.createChooser(shareIntent, shareChooserTitle))
         }.onFailure {
             Toast.makeText(
                 context,
-                it.message ?: "无法打开分享面板",
+                it.message ?: shareOpenFailed,
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -163,7 +172,7 @@ fun SettingsShareScreen(
                     IOSClickableItem(
                         icon = Icons.Filled.Download,
                         title = "导出到文件",
-                        subtitle = "生成可分享的 JSON 设置文件",
+                        subtitle = "生成可分享的设置文件（JSON）",
                         onClick = {
                             exportLauncher.launch(
                                 buildSettingsShareFileName(
@@ -198,9 +207,9 @@ fun SettingsShareScreen(
                 IOSGroup {
                     IOSClickableItem(
                         icon = Icons.Filled.Info,
-                        title = "JSON 设置包",
+                        title = "设置包（JSON）",
                         subtitle = "支持用户查看，也支持应用内一键导入",
-                        value = "Schema v$SETTINGS_SHARE_SCHEMA_VERSION",
+                        value = "格式版本 v$SETTINGS_SHARE_SCHEMA_VERSION",
                         onClick = null,
                         iconTint = iOSOrange,
                         showChevron = false
@@ -210,13 +219,13 @@ fun SettingsShareScreen(
         }
 
         iOSLargeTitleBar(
-            title = "设置分享",
+            title = screenTitle,
             scrollOffset = scrollOffset,
             leadingContent = {
                 IconButton(onClick = onBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回"
+                        contentDescription = backLabel
                     )
                 }
             },
@@ -261,7 +270,7 @@ fun SettingsShareScreen(
             },
             confirmButton = {
                 IOSDialogAction(onClick = { viewModel.confirmImport() }) {
-                    Text("一键应用")
+                    Text(importConfirmLabel)
                 }
             },
             dismissButton = {
@@ -276,9 +285,9 @@ fun SettingsShareScreen(
                 ) {
                     Text(
                         if (pendingImportSession.preview.skippedKeys.isNotEmpty() && !showRawKeys) {
-                            "查看跳过项"
+                            viewSkippedLabel
                         } else {
-                            "取消"
+                            cancelLabel
                         }
                     )
                 }
@@ -293,7 +302,7 @@ private fun buildImportPreviewSummary(session: SettingsShareImportSession): Stri
         .ifBlank { "无可导入分类" }
     val skippedCount = session.preview.skippedKeys.size
     val skippedSummary = if (skippedCount > 0) {
-        "将跳过 $skippedCount 项本机或未知配置"
+        "将跳过 $skippedCount 项本机专属或未知配置"
     } else {
         "没有需要跳过的项目"
     }

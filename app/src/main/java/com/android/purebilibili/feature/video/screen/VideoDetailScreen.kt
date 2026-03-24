@@ -253,6 +253,15 @@ internal fun shouldShowSystemBarsOnVideoDetailExit(): Boolean {
     return true
 }
 
+internal fun shouldRestoreSystemBarsDuringVideoDetailExitTransition(
+    isExitTransitionInProgress: Boolean,
+    isActuallyLeaving: Boolean
+): Boolean {
+    if (!isExitTransitionInProgress) return false
+    if (isActuallyLeaving) return false
+    return true
+}
+
 internal fun shouldShowWatchLaterQueueBarByPolicy(
     isExternalPlaylist: Boolean,
     externalPlaylistSource: ExternalPlaylistSource,
@@ -428,6 +437,7 @@ fun VideoDetailScreen(
     startInFullscreen: Boolean = false,
     startAudioFromRoute: Boolean = false,
     autoEnterPortraitFromRoute: Boolean = false,
+    resumePositionMsFromRoute: Long = 0L,
     transitionEnabled: Boolean = false,
     predictiveBackAnimationEnabled: Boolean = true,
     transitionEnterDurationMillis: Int = 320,
@@ -806,6 +816,19 @@ fun VideoDetailScreen(
         }
     }
 
+    LaunchedEffect(isExitTransitionInProgress, isActuallyLeaving) {
+        if (!shouldRestoreSystemBarsDuringVideoDetailExitTransition(
+                isExitTransitionInProgress = isExitTransitionInProgress,
+                isActuallyLeaving = isActuallyLeaving
+            )
+        ) {
+            return@LaunchedEffect
+        }
+
+        isScreenActive = false
+        restoreStatusBar()
+    }
+
     LaunchedEffect(currentBvid) {
         forceCoverOnlyOnReturn = false
         if (shouldClearStaleReturningStateOnVideoDetailEnter(CardPositionManager.isReturningFromDetail)) {
@@ -1099,6 +1122,7 @@ fun VideoDetailScreen(
         viewModel = viewModel,
         bvid = currentBvid,
         cid = cid,
+        fallbackResumePositionMs = resumePositionMsFromRoute,
         startPaused = isPortraitFullscreen && !useSharedPortraitPlayer
     )
     val isVideoPlaying by produceState(

@@ -776,6 +776,7 @@ fun iOSHomeHeader(
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
     topCategories: List<String> = resolveHomeTopCategories().map { it.label },
+    topCategoryKeys: List<String> = resolveHomeTopCategories().map { it.name },
     categoryIndex: Int,
     onCategorySelected: (Int) -> Unit,
     onPartitionClick: () -> Unit = {},  //  新增：分区按钮回调
@@ -1601,6 +1602,7 @@ fun iOSHomeHeader(
                     ) {
                         CategoryTabRow(
                             categories = topCategories,
+                            categoryKeys = topCategoryKeys,
                             selectedIndex = categoryIndex,
                             onCategorySelected = { index ->
                                 if (topTabsVisible) onCategorySelected(index)

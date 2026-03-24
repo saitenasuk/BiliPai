@@ -21,9 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.android.purebilibili.R
 import com.android.purebilibili.core.plugin.PluginInfo
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.theme.iOSPink  // 插件图标色
@@ -32,6 +34,7 @@ import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
 import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
@@ -53,6 +56,8 @@ fun PluginsScreen(
     val plugins by PluginManager.pluginsFlow.collectAsState()
     val jsonPlugins by com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.collectAsState()
     val scope = rememberCoroutineScope()
+    val screenTitle = stringResource(R.string.plugins_center_title)
+    val backLabel = stringResource(R.string.common_back)
     
     //  编辑插件状态
     var editingPlugin by remember { mutableStateOf<com.android.purebilibili.core.plugin.json.JsonRulePlugin?>(null) }
@@ -73,10 +78,10 @@ fun PluginsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("插件中心", fontWeight = FontWeight.Bold) },
+                title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -109,6 +114,10 @@ fun PluginsContent(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
+    val contentBottomPadding = resolveBottomSafeAreaPadding(
+        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        extraBottomPadding = 16.dp
+    )
     
     // Statistics
     val totalPlugins = plugins.size + jsonPlugins.size
@@ -136,11 +145,11 @@ fun PluginsContent(
 
     fun validateImportUrlOrError(raw: String): String? {
         val normalized = raw.trim()
-        if (normalized.isBlank()) return "请输入 URL"
+        if (normalized.isBlank()) return "请输入链接地址"
         val uri = Uri.parse(normalized)
         val scheme = uri.scheme?.lowercase()
         if (scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
-            return "请输入有效的 http/https 链接"
+            return "请输入有效的 http/https 地址"
         }
         return null
     }
@@ -180,7 +189,7 @@ fun PluginsContent(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 16.dp)
+        contentPadding = PaddingValues(top = 16.dp, bottom = contentBottomPadding)
     ) {
             
             // 标题说明
@@ -294,7 +303,7 @@ fun PluginsContent(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "通过 URL 安装 JSON 规则插件",
+                                text = "通过链接安装 JSON 规则插件",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -435,8 +444,8 @@ fun PluginsContent(
                             importUrl = it
                             importError = null
                         },
-                        label = { Text("插件 URL") },
-                        placeholder = { Text("https://example.com/plugin") },
+                        label = { Text("插件链接") },
+                        placeholder = { Text("例如：https://example.com/plugin.json") },
                         singleLine = true,
                         isError = importError != null,
                         supportingText = importError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
@@ -708,7 +717,7 @@ private fun PluginItem(
                 //  显示作者
                 if (plugin.author != "Unknown") {
                     Text(
-                        text = "by ${plugin.author}",
+                        text = "作者：${plugin.author}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                     )
@@ -854,7 +863,7 @@ private fun JsonPluginItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "by ${plugin.author}",
+                        text = "作者：${plugin.author}",
                         style = MaterialTheme.typography.labelSmall,
                         color = iOSPurple
                     )
@@ -1106,7 +1115,7 @@ private fun TestResultDialog(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "时长: ${formatDuration(video.duration)}",
+                                        text = "时长：${formatDuration(video.duration)}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -1115,7 +1124,7 @@ private fun TestResultDialog(
                         }
                         if (filteredVideos.size > 3) {
                             Text(
-                                text = "... 还有 ${filteredVideos.size - 3} 个视频",
+                                text = "……还有 ${filteredVideos.size - 3} 个视频",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp)
