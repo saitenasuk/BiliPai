@@ -533,6 +533,13 @@ internal fun shouldEnableManualStartCoverOverlay(
     return shouldKeepCoverForManualStart
 }
 
+internal fun shouldFillPlayerViewportForManualStartCover(
+    shouldKeepCoverForManualStart: Boolean,
+    forceCoverDuringReturnAnimation: Boolean
+): Boolean {
+    return shouldKeepCoverForManualStart && !forceCoverDuringReturnAnimation
+}
+
 internal enum class ManualStartPlayButtonAnchor {
     Center,
     CenterEnd,
@@ -2364,6 +2371,10 @@ fun VideoPlayerSection(
     val enableManualStartCoverOverlay = shouldEnableManualStartCoverOverlay(
         shouldKeepCoverForManualStart = keepCoverForManualStart
     )
+    val fillPlayerViewportForManualStartCover = shouldFillPlayerViewportForManualStartCover(
+        shouldKeepCoverForManualStart = keepCoverForManualStart,
+        forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
+    )
     val manualStartPlayButtonLayoutSpec = remember {
         resolveManualStartPlayButtonLayoutSpec()
     }
@@ -2435,13 +2446,20 @@ fun VideoPlayerSection(
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = forcedReturnCoverModifier
+            val coverContainerModifier = if (fillPlayerViewportForManualStartCover) {
+                Modifier
+                    .matchParentSize()
+                    .background(Color.Black)
+            } else {
+                forcedReturnCoverModifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .aspectRatio(VIDEO_SHARED_COVER_ASPECT_RATIO)
                     .clip(coverCardShape)
                     .background(Color.Black)
+            }
+            Box(
+                modifier = coverContainerModifier
                     .clickable(enabled = enableManualStartCoverOverlay) {
                         playPlayerFromUserAction(playerState.player)
                     }
