@@ -38,9 +38,6 @@
 > [!CAUTION]
 > `README`, `AI.txt`, `llm.txt`, `llms.txt`, and the Wiki are maintained periodically, but fast-moving main-branch changes can still make parts of them stale. Treat them as reference only; verify current behavior with source, `CHANGELOG.md`, and real builds.
 
-> [!CAUTION]
-> The history list's "Delete All" action currently has a known issue. Avoid using it for now; prefer single-item deletion or careful batch cleanup.
-
 ## 📸 Preview
 
 <p align="center">
