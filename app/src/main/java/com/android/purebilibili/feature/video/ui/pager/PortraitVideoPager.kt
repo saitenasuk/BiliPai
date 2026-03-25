@@ -39,6 +39,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -107,6 +108,7 @@ import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.overlay.PortraitFullscreenOverlay
+import com.android.purebilibili.feature.video.player.resolveHandleAudioFocusByPolicy
 import com.android.purebilibili.feature.video.ui.section.resolveLongPressPlaybackParameters
 import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
 import com.android.purebilibili.feature.video.viewmodel.PlaybackEndAction
@@ -291,13 +293,14 @@ fun PortraitVideoPager(
 
     // [重构] 优先复用主播放器；仅在未传入 sharedPlayer 时才创建页内播放器
     val exoPlayer = sharedPlayer ?: remember(context) {
+        val audioFocusEnabled = SettingsManager.getAudioFocusEnabledSync(context)
         ExoPlayer.Builder(context)
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
                     .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
                     .build(),
-                true
+                resolveHandleAudioFocusByPolicy(audioFocusEnabled = audioFocusEnabled)
             )
             .build()
             .apply {
@@ -899,7 +902,11 @@ private fun VideoPageItem(
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 if (videoSize.width > 0 && videoSize.height > 0) {
-                    currentVideoAspect = videoSize.width.toFloat() / videoSize.height.toFloat()
+                    currentVideoAspect = resolvePortraitRuntimeVideoAspectRatio(
+                        knownVideoAspectRatio = knownVideoAspectRatio,
+                        playerVideoWidth = videoSize.width,
+                        playerVideoHeight = videoSize.height
+                    )
                 }
             }
         }
@@ -971,6 +978,10 @@ private fun VideoPageItem(
             )
         )
     }
+    var localSeekPositionMs by remember(bvid) {
+        mutableLongStateOf(initialProgressPositionMs.coerceAtLeast(0L))
+    }
+    var pendingSeekPositionMs by remember(bvid) { mutableStateOf<Long?>(null) }
     
     // 如果是当前页，监听播放器进度
     LaunchedEffect(isCurrentPage, exoPlayer, hasRenderedFirstFrame) {
@@ -988,8 +999,20 @@ private fun VideoPageItem(
                         playerPosition
                     }
                     val realDuration = if (exoPlayer.duration > 0) exoPlayer.duration else initialDuration
+                    val holdLocalSeekPosition = shouldHoldPortraitSeekUiPosition(
+                        playerPositionMs = effectivePosition,
+                        pendingSeekPositionMs = pendingSeekPositionMs
+                    )
+                    val displayedPosition = resolvePortraitDisplayedProgressPosition(
+                        playerPositionMs = effectivePosition,
+                        localSeekPositionMs = localSeekPositionMs,
+                        pendingSeekPositionMs = pendingSeekPositionMs
+                    )
+                    if (!holdLocalSeekPosition) {
+                        pendingSeekPositionMs = null
+                    }
                     progressState = PlayerProgress(
-                        current = effectivePosition,
+                        current = displayedPosition,
                         duration = realDuration,
                         buffered = exoPlayer.bufferedPosition
                     )
@@ -1239,6 +1262,7 @@ private fun VideoPageItem(
                                     player = exoPlayer
                                     useController = false
                                     keepScreenOn = true
+                                    resizeMode = VideoAspectRatio.FIT.playerResizeMode
                                     setKeepContentOnPlayerReset(true)
                                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
@@ -1248,6 +1272,9 @@ private fun VideoPageItem(
                                 playerViewRef = view
                                 if (view.player != exoPlayer) {
                                     view.player = exoPlayer
+                                }
+                                if (view.resizeMode != VideoAspectRatio.FIT.playerResizeMode) {
+                                    view.resizeMode = VideoAspectRatio.FIT.playerResizeMode
                                 }
                             },
                             modifier = Modifier.fillMaxSize()
@@ -1642,11 +1669,17 @@ private fun VideoPageItem(
             },
             onSeek = {
                 if (isCurrentPage) {
+                    val targetPosition = it.coerceAtLeast(0L)
+                    localSeekPositionMs = targetPosition
+                    pendingSeekPositionMs = targetPosition
+                    progressState = progressState.copy(current = targetPosition)
                     seekPlayerFromUserAction(exoPlayer, it)
-                    danmakuManager.seekTo(it)
+                    danmakuManager.seekTo(targetPosition)
                 }
             },
-            onSeekStart = { },
+            onSeekStart = {
+                localSeekPositionMs = progressState.current.coerceAtLeast(0L)
+            },
             onSpeedClick = { },
             onQualityClick = { },
             onRatioClick = { },
@@ -1809,6 +1842,26 @@ internal fun resolvePortraitInitialVideoAspectRatio(
         playerVideoWidth.toFloat() / playerVideoHeight.toFloat()
     } else {
         9f / 16f
+    }
+}
+
+internal fun resolvePortraitRuntimeVideoAspectRatio(
+    knownVideoAspectRatio: Float?,
+    playerVideoWidth: Int,
+    playerVideoHeight: Int
+): Float {
+    val safeKnownAspect = knownVideoAspectRatio?.takeIf { it > 0f }
+    if (playerVideoWidth <= 0 || playerVideoHeight <= 0) {
+        return safeKnownAspect ?: (9f / 16f)
+    }
+    val playerAspect = playerVideoWidth.toFloat() / playerVideoHeight.toFloat()
+    if (safeKnownAspect == null) return playerAspect
+    val knownPortrait = safeKnownAspect < 1f
+    val playerPortrait = playerAspect < 1f
+    return if (knownPortrait != playerPortrait) {
+        safeKnownAspect
+    } else {
+        playerAspect
     }
 }
 

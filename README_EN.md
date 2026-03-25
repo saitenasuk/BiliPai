@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-22 · Synced to v7.1.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-24 · Synced to v7.1.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.1.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.1.3-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -66,7 +66,7 @@
 | **Picture-in-Picture** | Floating window playback for multitasking |
 | **Audio Mode** | 🆕 Dedicated audio player with immersive/vinyl modes, lyrics, playlists, and a sleep timer |
 | **In-app Update** | 🆕 Check updates, download APK in-app, and hand off to the system installer |
-| **Background Play** | Continue listening when screen is off or in background, with more reliable prev/next controls from notifications and system media controls |
+| **Background Play** | Continue listening when screen is off or in background, with dedicated background-play and audio-focus toggles plus more reliable prev/next controls from notifications and system media controls |
 | **Playback Order** | Supports Stop After Current / In-order / Single Loop / List Loop / Auto Continue, with quick toggle in landscape and portrait |
 | **Comment Copy UX** | Long-press opens selectable-copy panel so users can drag-select exact comment text (including rich text scenarios) |
 | **Playback History** | Automatically resume playback, with a toggle and one-time prompt per target |
@@ -377,7 +377,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-03-22 (v7.1.0). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-03-24 (v7.1.3). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -416,13 +416,13 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.1.0 · 2026-03-22)
+### Latest (v7.1.3 · 2026-03-24)
 
-- 📺 **Bangumi controls move closer to the regular video player**: the bangumi landscape/fullscreen experience now reuses more shared overlay behavior and feels more unified overall.
-- 👍 **Landscape top-bar actions are now fully wired up**: like, coin, and share work for bangumi instead of showing partially implemented buttons.
-- 🔗 **Bangumi sharing is more complete**: shares now use bangumi-specific links and automatically combine the series title with the current episode title.
-- 🔄 **State feedback is more accurate**: like state, coin state, coin balance queries, and coin-result feedback now stay aligned with the real bangumi status.
-- ⚠️ **History bulk delete remains a known issue**: until that fix lands, prefer deleting items one by one or in careful smaller batches.
+- 🎧 **Background playback and audio focus are now independently configurable**: playback settings now expose dedicated toggles, making it much easier to keep audio running alongside games or other media apps.
+- 🔍 **UP space search is now built in**: users can search a creator's videos and dynamics directly inside the space page, with debounced input and clearer empty states.
+- ▶️ **Player cover and manual-start behavior feel more polished**: the detail page now keeps the entry cover more consistently and shows a clearer play affordance before the user explicitly starts playback.
+- 🧭 **Home / Dynamic / Search details were tightened up**: avatar tap behavior now follows the active navigation layout, Dynamic restores the last selected top tab, and Search uses a steadier header-blur budget during active queries.
+- 📁 **Download location display is more accurate**: the download list now prefers the real user-selected export directory instead of always showing the app-managed path.
 
 ---
 
