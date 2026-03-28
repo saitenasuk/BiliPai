@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-03-25 · Synced to v7.2.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-03-28 · Synced to v7.2.2 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.2.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.2.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -65,6 +65,8 @@
 | **In-app Update** | 🆕 Check updates, download APK in-app, and hand off to the system installer |
 | **Background Play** | Continue listening when screen is off or in background, with dedicated background-play and audio-focus toggles plus more reliable prev/next controls from notifications and system media controls |
 | **Playback Order** | Supports Stop After Current / In-order / Single Loop / List Loop / Auto Continue, with quick toggle in landscape and portrait |
+| **Portrait Interaction Fixes** | Fixes like/favorite actions after swiping to the next portrait video, and favorites now open the folder picker directly |
+| **Seek Preview Optimization** | Preview image updates are quantized to videoshot frame boundaries to reduce redraw cost during drag/tap seeking |
 | **Comment Copy UX** | Long-press opens selectable-copy panel so users can drag-select exact comment text (including rich text scenarios) |
 | **Playback History** | Automatically resume playback, with a toggle and one-time prompt per target |
 | **TV Login** | Scan QR code to login as TV client to unlock high quality |
@@ -248,6 +250,16 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 | **Image Preview** | Global non-dialog overlay with iOS-style open/close motion; comment scene uses top caption to avoid covering image content, with 3D-like text transition |
 | **@ Highlighting** | Auto-highlight @User mentions |
 
+### 💬 Message Center & Direct Messages
+
+| Feature | Description |
+|-----|-----|
+| **Message Center** | Unified entry for replies, mentions, likes, and system notices |
+| **History List** | View session history with pagination |
+| **Rich Content** | Supports stickers, mentions, and image viewing |
+| **Video Link Preview** | Detects BV links and renders inline preview cards |
+| **Deep Link Routing** | Opens video, dynamic, space, live, bangumi, music, and web targets directly from messages |
+
 ### 📥 Offline Cache
 
 | Feature | Description |
@@ -374,7 +386,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-03-25 (v7.2.0). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-03-28 (v7.2.2). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -395,6 +407,9 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 - [x] In-app update flow (manual + auto-check + startup prompt + in-app download/install)
 - [x] Plugin System Core
 - [x] Built-in Plugins
+- [x] Message Center category pages (Replies / Mentions / Likes / System Notices) with deep-link routing
+- [x] Portrait video like/favorite interaction fixes with favorite-folder sync
+- [x] Seek preview redraw optimization and cross-tab bottom-bar switching polish
 
 ### 🚧 WIP
 
@@ -413,13 +428,13 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.2.0 · 2026-03-25)
+### Latest (v7.2.2 · 2026-03-28)
 
-- 📰 **Native article search and detail are now built in**: Search adds an article tab, and article results can route directly into native article or dynamic detail pages.
-- 🕘 **Publish-time presentation is clearer**: video detail, home cards, and story cards now show a dedicated publish-time row, with precise timestamps emphasized for news/current-affairs content.
-- 📚 **History now understands article entries**: article and article-list history records are identified correctly, rendered with dedicated cards, and routed to the proper destination.
-- 🎛️ **Danmaku settings are now split by orientation**: portrait and landscape can each keep their own danmaku toggle, opacity, font scale, speed, area, and blocking rules.
-- 🖼️ **Image preview and PiP behavior were polished further**: preview overlays now respect safe insets better, and entering PiP from comment thread detail now dismisses the overlay automatically.
+- 💬 **Message Center upgrade**: the profile entry is now unified as Message Center, with dedicated pages for replies, mentions, likes, and system notices, plus direct routing from message content into video, dynamic, space, live, bangumi, music, and web destinations.
+- 🎬 **Portrait video interaction fixes**: like/favorite actions no longer get stuck after swiping to the next portrait video, and favorites now open the folder picker instead of silently writing into a default target.
+- 🖼️ **Landscape handoff and seek polish**: fixed the brief flash of the first portrait cover when returning to landscape, and reduced seek-preview redraw frequency so drag and tap seeking feel smoother.
+- 🧭 **Navigation and load-state polish**: cross-tab bottom-bar switching is no longer blocked by the wrong debounce window, repeated profile first-load requests are suppressed, and space-page loading is more stable.
+- 🧪 **Regression coverage expanded**: added strategy tests for message parsing, message-center policies, navigation rules, portrait interactions, seek preview, profile loading, and space loading.
 
 ---
 

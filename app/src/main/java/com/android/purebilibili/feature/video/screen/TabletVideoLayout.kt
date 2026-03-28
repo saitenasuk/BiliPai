@@ -36,6 +36,7 @@ import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
+import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
@@ -296,6 +297,7 @@ private fun TabletSecondaryContent(
     onPaneModeCycle: () -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit
 ) {
+    val commentAppearance = rememberVideoCommentAppearance()
     var selectedTab by rememberSaveable(success.info.bvid) {
         mutableIntStateOf(
             resolveTabletSecondaryDefaultTab(
@@ -486,7 +488,7 @@ private fun TabletSecondaryContent(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    color = commentAppearance.composerHintBackgroundColor,
                                     shape = RoundedCornerShape(14.dp),
                                     onClick = {
                                         viewModel.openRootCommentComposer()
@@ -494,7 +496,7 @@ private fun TabletSecondaryContent(
                                 ) {
                                     Text(
                                         text = "写评论，直接和 UP 主交流",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = commentAppearance.secondaryTextColor,
                                         fontSize = 13.sp,
                                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                                     )
@@ -519,8 +521,7 @@ private fun TabletSecondaryContent(
                                         onClick = {},
                                         onSubClick = { commentViewModel.openSubReply(it) },
                                         onTimestampClick = { positionMs ->
-                                            playerState.player.seekTo(positionMs)
-                                            playerState.player.play()
+                                            seekPlayerFromUserAction(playerState.player, positionMs)
                                         },
                                         onImagePreview = { images, index, rect, textContent ->
                                             previewImages = images
@@ -567,13 +568,13 @@ private fun TabletSecondaryContent(
                                 Text(
                                     text = "暂无评论",
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = commentAppearance.secondaryTextColor
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = "先看看相关推荐",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = commentAppearance.secondaryTextColor
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 TextButton(onClick = {

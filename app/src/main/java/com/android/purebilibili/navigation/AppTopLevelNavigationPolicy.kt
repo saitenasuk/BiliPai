@@ -41,7 +41,7 @@ internal fun resolveBottomBarSelectionAction(
 }
 
 internal fun shouldBypassNavigationDebounceForRoute(targetRoute: String): Boolean {
-    return targetRoute == ScreenRoutes.Home.route
+    return BottomNavItem.entries.any { item -> item.route == targetRoute }
 }
 
 internal fun canProceedWithNavigation(

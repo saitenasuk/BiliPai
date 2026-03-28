@@ -76,18 +76,7 @@ internal data class SubReplyDetailLayoutPolicy(
     val overlayRootCommentEntry: Boolean
 )
 
-internal data class SubReplyDetailAppearance(
-    val panelColor: Color,
-    val dividerColor: Color,
-    val sectionDividerColor: Color,
-    val primaryTextColor: Color,
-    val secondaryTextColor: Color,
-    val vipNameColor: Color,
-    val actionTint: Color,
-    val sortTint: Color,
-    val auxiliaryTint: Color,
-    val placeholderColor: Color
-)
+internal typealias SubReplyDetailAppearance = VideoCommentAppearance
 
 internal fun resolveSubReplyDetailLayoutPolicy(
     showRootCommentEntry: Boolean
@@ -110,19 +99,18 @@ internal fun resolveSubReplyDetailAppearance(
     outlineVariantColor: Color,
     onSurfaceColor: Color,
     onSurfaceVariantColor: Color,
-    primaryColor: Color
+    primaryColor: Color,
+    onPrimaryColor: Color
 ): SubReplyDetailAppearance {
-    return SubReplyDetailAppearance(
-        panelColor = surfaceColor,
-        dividerColor = outlineVariantColor,
-        sectionDividerColor = surfaceContainerHighColor,
-        primaryTextColor = onSurfaceColor,
-        secondaryTextColor = onSurfaceVariantColor,
-        vipNameColor = primaryColor,
-        actionTint = onSurfaceVariantColor,
-        sortTint = primaryColor.copy(alpha = 0.86f),
-        auxiliaryTint = primaryColor.copy(alpha = 0.72f),
-        placeholderColor = surfaceVariantColor
+    return resolveVideoCommentAppearance(
+        surfaceColor = surfaceColor,
+        surfaceVariantColor = surfaceVariantColor,
+        surfaceContainerHighColor = surfaceContainerHighColor,
+        outlineVariantColor = outlineVariantColor,
+        onSurfaceColor = onSurfaceColor,
+        onSurfaceVariantColor = onSurfaceVariantColor,
+        primaryColor = primaryColor,
+        onPrimaryColor = onPrimaryColor
     )
 }
 
@@ -172,26 +160,7 @@ internal fun SubReplyDetailContent(
     val layoutPolicy = remember {
         resolveSubReplyDetailLayoutPolicy(showRootCommentEntry = false)
     }
-    val colorScheme = MaterialTheme.colorScheme
-    val appearance = remember(
-        colorScheme.surface,
-        colorScheme.surfaceVariant,
-        colorScheme.surfaceContainerHigh,
-        colorScheme.outlineVariant,
-        colorScheme.onSurface,
-        colorScheme.onSurfaceVariant,
-        colorScheme.primary
-    ) {
-        resolveSubReplyDetailAppearance(
-            surfaceColor = colorScheme.surface,
-            surfaceVariantColor = colorScheme.surfaceVariant,
-            surfaceContainerHighColor = colorScheme.surfaceContainerHigh,
-            outlineVariantColor = colorScheme.outlineVariant,
-            onSurfaceColor = colorScheme.onSurface,
-            onSurfaceVariantColor = colorScheme.onSurfaceVariant,
-            primaryColor = colorScheme.primary
-        )
-    }
+    val appearance = rememberVideoCommentAppearance()
     val unusedShowUpFlag = showUpFlag
     val listState = rememberLazyListState()
     val shouldLoadMore by remember {
@@ -423,7 +392,7 @@ private fun SubReplyDetailItem(
     }
     val avatarSize = if (isRootItem) 44.dp else 40.dp
     val nameColor = if (item.member.vip?.vipStatus == 1) {
-        appearance.vipNameColor
+        appearance.accentColor
     } else {
         appearance.primaryTextColor
     }

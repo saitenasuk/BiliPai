@@ -62,7 +62,8 @@ class SubReplyDetailPresentationPolicyTest {
             outlineVariantColor = Color(0xFFD9DCE3),
             onSurfaceColor = Color(0xFF1B1C1F),
             onSurfaceVariantColor = Color(0xFF6A6F76),
-            primaryColor = Color(0xFFFB7299)
+            primaryColor = Color(0xFFFB7299),
+            onPrimaryColor = Color(0xFFFFFFFF)
         )
 
         assertEquals(Color(0xFFFFFFFF), appearance.panelColor)
@@ -70,7 +71,27 @@ class SubReplyDetailPresentationPolicyTest {
         assertEquals(Color(0xFF6A6F76), appearance.secondaryTextColor)
         assertEquals(Color(0xFFD9DCE3), appearance.dividerColor)
         assertEquals(Color(0xFFE8EAF0), appearance.sectionDividerColor)
-        assertEquals(Color(0xFFFB7299), appearance.vipNameColor)
+        assertEquals(Color(0xFFFB7299), appearance.accentColor)
+    }
+
+    @Test
+    fun `dark theme detail appearance should follow active theme colors`() {
+        val appearance = resolveSubReplyDetailAppearance(
+            surfaceColor = Color(0xFF141414),
+            surfaceVariantColor = Color(0xFF242424),
+            surfaceContainerHighColor = Color(0xFF1E1E1E),
+            outlineVariantColor = Color(0xFF333333),
+            onSurfaceColor = Color(0xFFF5F5F5),
+            onSurfaceVariantColor = Color(0xFFD0D0D0),
+            primaryColor = Color(0xFFFB7299),
+            onPrimaryColor = Color(0xFF101010)
+        )
+
+        assertEquals(Color(0xFF141414), appearance.panelColor)
+        assertEquals(Color(0xFFF5F5F5), appearance.primaryTextColor)
+        assertEquals(Color(0xFFD0D0D0), appearance.secondaryTextColor)
+        assertEquals(Color(0xFF333333), appearance.dividerColor)
+        assertEquals(Color(0xFF242424), appearance.placeholderColor)
     }
 
     private fun buildReply(

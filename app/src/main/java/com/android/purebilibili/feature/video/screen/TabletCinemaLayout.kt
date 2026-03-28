@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -85,6 +86,7 @@ import com.android.purebilibili.feature.video.ui.components.CollectionSheet
 import com.android.purebilibili.feature.video.ui.components.PagesSelector
 import com.android.purebilibili.feature.video.ui.components.RelatedVideoItem
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
@@ -793,6 +795,7 @@ private fun CinemaCommentsPane(
     onUpClick: (Long) -> Unit,
     context: android.content.Context
 ) {
+    val commentAppearance = rememberVideoCommentAppearance()
     val listState = rememberLazyListState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -867,7 +870,7 @@ private fun CinemaCommentsPane(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    color = commentAppearance.composerHintBackgroundColor,
                     shape = RoundedCornerShape(14.dp),
                     onClick = {
                         viewModel.openRootCommentComposer()
@@ -875,7 +878,7 @@ private fun CinemaCommentsPane(
                 ) {
                     Text(
                         text = "写评论，直接和 UP 主交流",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = commentAppearance.secondaryTextColor,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                     )
@@ -894,8 +897,7 @@ private fun CinemaCommentsPane(
                     onClick = {},
                     onSubClick = { commentViewModel.openSubReply(it) },
                     onTimestampClick = { positionMs ->
-                        playerState.player.seekTo(positionMs)
-                        playerState.player.play()
+                        seekPlayerFromUserAction(playerState.player, positionMs)
                     },
                     onImagePreview = { images, index, rect, textContent ->
                         previewImages = images
@@ -946,7 +948,7 @@ private fun CinemaCommentsPane(
                         Text(
                             text = "还没有评论，先看看相关推荐",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = commentAppearance.secondaryTextColor
                         )
                     }
                 }
