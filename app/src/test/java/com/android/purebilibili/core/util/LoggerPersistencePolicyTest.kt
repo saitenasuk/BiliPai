@@ -88,6 +88,10 @@ class LoggerPersistencePolicyTest {
             "Download/BiliPai/logs/last_crash_log.txt",
             resolveCrashSnapshotExportRelativePath()
         )
+        assertEquals(
+            "player_diagnostic_20260329_155725.txt",
+            resolvePlayerDiagnosticExportFileName(1_774_771_045_000L)
+        )
     }
 
     @Test

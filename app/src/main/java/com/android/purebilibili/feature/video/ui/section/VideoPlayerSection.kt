@@ -112,6 +112,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.VideoSize
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.store.FullscreenAspectRatio
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.performance.TrackJankStateFlag
 import com.android.purebilibili.core.ui.performance.TrackJankStateValue
 import com.android.purebilibili.core.ui.blur.unifiedBlur
@@ -1203,6 +1204,11 @@ fun VideoPlayerSection(
     // 📱 [优化] 复用 VideoPlayerState 中的视频尺寸状态，避免重复监听
     val videoSizeState by playerState.videoSize.collectAsStateWithLifecycle()
     val debugInfo by playerState.debugInfo.collectAsStateWithLifecycle()
+    val diagnosticEvents by playerState.diagnosticEvents.collectAsStateWithLifecycle()
+    val pendingUserAction by playerState.pendingUserAction.collectAsStateWithLifecycle()
+    val playerDiagnosticLoggingEnabled by SettingsManager
+        .getPlayerDiagnosticLoggingEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = true)
 
     // 控制器显示状态
     var showControls by remember { mutableStateOf(true) }
@@ -3525,6 +3531,9 @@ fun VideoPlayerSection(
                 //  [关键] 传入设置状态和调试信息
                 showStats = showStats,
                 debugInfo = debugInfo,
+                diagnosticEvents = diagnosticEvents,
+                pendingUserAction = pendingUserAction,
+                playerDiagnosticLoggingEnabled = playerDiagnosticLoggingEnabled,
                 //  [新增] 传入清晰度切换状态和会员状态
                 isQualitySwitching = uiState.isQualitySwitching,
                 isBuffering = isBuffering,  // 缓冲状态

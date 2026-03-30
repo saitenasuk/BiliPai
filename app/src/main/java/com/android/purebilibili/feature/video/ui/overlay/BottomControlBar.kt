@@ -36,13 +36,20 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.feature.video.playback.session.PlaybackSeekUiState
+import com.android.purebilibili.feature.video.playback.session.cancelPlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.finishPlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.resolvePlaybackSeekDisplayProgress
+import com.android.purebilibili.feature.video.playback.session.settlePlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.shouldHoldPlaybackSeekSettledProgress
+import com.android.purebilibili.feature.video.playback.session.startPlaybackSeekSession
+import com.android.purebilibili.feature.video.playback.session.updatePlaybackSeekSession
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.draw.clip
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayOptions
 import com.android.purebilibili.feature.video.playback.policy.resolveDisplayedPlaybackTransitionPosition
-import kotlin.math.abs
 
 /**
  * Bottom Control Bar Component
@@ -92,8 +99,11 @@ internal fun shouldHoldVideoProgressBarSettledProgress(
     pendingSettledProgress: Float?,
     tolerance: Float = VIDEO_PROGRESS_BAR_SETTLED_TOLERANCE
 ): Boolean {
-    val settledProgress = pendingSettledProgress ?: return false
-    return abs(progress - settledProgress) > tolerance
+    return shouldHoldPlaybackSeekSettledProgress(
+        playbackProgress = progress,
+        pendingSettledProgress = pendingSettledProgress,
+        tolerance = tolerance
+    )
 }
 
 internal fun resolveVideoProgressBarDisplayProgress(
@@ -102,12 +112,15 @@ internal fun resolveVideoProgressBarDisplayProgress(
     isDragging: Boolean,
     pendingSettledProgress: Float?
 ): Float {
-    return when {
-        isDragging -> dragProgress
-        shouldHoldVideoProgressBarSettledProgress(progress, pendingSettledProgress) ->
-            pendingSettledProgress ?: progress
-        else -> progress
-    }.coerceIn(0f, 1f)
+    return resolvePlaybackSeekDisplayProgress(
+        playbackProgress = progress,
+        state = PlaybackSeekUiState(
+            isScrubbing = isDragging,
+            dragProgress = dragProgress,
+            pendingSettledProgress = pendingSettledProgress
+        ),
+        tolerance = VIDEO_PROGRESS_BAR_SETTLED_TOLERANCE
+    )
 }
 
 data class LandscapeDanmakuPlaceholderPolicy(
@@ -946,24 +959,23 @@ fun VideoProgressBar(
 ) {
     val progress = if (duration > 0) currentPosition.toFloat() / duration else 0f
     val bufferedProgress = if (duration > 0) bufferedPosition.toFloat() / duration else 0f
-    var tempProgress by remember { mutableFloatStateOf(0f) }
-    var isDragging by remember { mutableStateOf(false) }
-    var pendingSettledProgress by remember { mutableStateOf<Float?>(null) }
+    var seekState by remember { mutableStateOf(PlaybackSeekUiState()) }
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var containerWidth by remember { mutableFloatStateOf(0f) }
 
-    LaunchedEffect(progress, pendingSettledProgress, isDragging) {
-        if (!isDragging && !shouldHoldVideoProgressBarSettledProgress(progress, pendingSettledProgress)) {
-            pendingSettledProgress = null
-            tempProgress = progress
-        }
+    LaunchedEffect(progress, seekState.pendingSettledProgress, seekState.isScrubbing) {
+        seekState = settlePlaybackSeekSession(
+            state = seekState,
+            playbackProgress = progress,
+            tolerance = VIDEO_PROGRESS_BAR_SETTLED_TOLERANCE
+        )
     }
 
     val displayProgress = resolveVideoProgressBarDisplayProgress(
         progress = progress,
-        dragProgress = tempProgress,
-        isDragging = isDragging,
-        pendingSettledProgress = pendingSettledProgress
+        dragProgress = seekState.dragProgress,
+        isDragging = seekState.isScrubbing,
+        pendingSettledProgress = seekState.pendingSettledProgress
     )
     val primaryColor = MaterialTheme.colorScheme.primary
     val targetPositionMs = (displayProgress * duration).toLong()
@@ -972,7 +984,7 @@ fun VideoProgressBar(
     } else {
         layoutPolicy.baseHeightWithoutChapterDp.dp
     }
-    val containerHeight = if (isDragging && videoshotData != null) {
+    val containerHeight = if (seekState.isScrubbing && videoshotData != null) {
         layoutPolicy.draggingContainerHeightDp.dp
     } else {
         baseHeight
@@ -985,44 +997,45 @@ fun VideoProgressBar(
             .pointerInput(Unit) {
                 containerWidth = size.width.toFloat()
                 detectTapGestures { offset ->
-                    val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
-                    tempProgress = newProgress
-                    pendingSettledProgress = newProgress
-                    onSeek((newProgress * duration).toLong())
+                    onSeekStart()
+                    val result = finishPlaybackSeekSession(
+                        startPlaybackSeekSession(offset.x / size.width)
+                    )
+                    seekState = result.state
+                    onSeek((result.committedProgress * duration).toLong())
                 }
             }
             .pointerInput(Unit) {
                 containerWidth = size.width.toFloat()
                 detectDragGestures(
                     onDragStart = { offset ->
-                        isDragging = true
-                        pendingSettledProgress = null
-                        tempProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                        seekState = startPlaybackSeekSession(offset.x / size.width)
                         dragOffsetX = offset.x
                         onScrubbingChanged(true)
                         onSeekStart()
                     },
                     onDrag = { change, _ ->
                         change.consume()
-                        tempProgress = (change.position.x / size.width).coerceIn(0f, 1f)
+                        seekState = updatePlaybackSeekSession(
+                            state = seekState,
+                            progress = change.position.x / size.width
+                        )
                         dragOffsetX = change.position.x
                     },
                     onDragEnd = {
-                        pendingSettledProgress = tempProgress
-                        isDragging = false
+                        val result = finishPlaybackSeekSession(seekState)
+                        seekState = result.state
                         onScrubbingChanged(false)
-                        onSeek((tempProgress * duration).toLong())
+                        onSeek((result.committedProgress * duration).toLong())
                     },
                     onDragCancel = {
-                        pendingSettledProgress = null
-                        isDragging = false
+                        seekState = cancelPlaybackSeekSession(seekState)
                         onScrubbingChanged(false)
-                        tempProgress = progress
                     }
                 )
             }
     ) {
-         if (isDragging) {
+         if (seekState.isScrubbing) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -1134,11 +1147,11 @@ fun VideoProgressBar(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
                             .size(
-                                if (isDragging) layoutPolicy.thumbDraggingSizeDp.dp
+                                if (seekState.isScrubbing) layoutPolicy.thumbDraggingSizeDp.dp
                                 else layoutPolicy.thumbIdleSizeDp.dp
                             )
                             .offset(
-                                x = if (isDragging) layoutPolicy.thumbDraggingOffsetDp.dp
+                                x = if (seekState.isScrubbing) layoutPolicy.thumbDraggingOffsetDp.dp
                                 else layoutPolicy.thumbIdleOffsetDp.dp
                             )
                             .background(primaryColor, CircleShape)

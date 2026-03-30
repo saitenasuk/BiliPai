@@ -1,6 +1,7 @@
 // 文件路径: feature/video/VideoPlayerOverlay.kt
 package com.android.purebilibili.feature.video.ui.overlay
 
+import android.content.ClipData
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -64,6 +65,7 @@ import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.util.ShareUtils
 import com.android.purebilibili.core.util.WindowWidthSizeClass
+import com.android.purebilibili.core.util.Logger
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -78,7 +80,9 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.HandThumbsup
 import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
+import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import com.android.purebilibili.feature.video.playback.policy.shouldHoldPlaybackTransitionPosition
 import com.android.purebilibili.feature.cast.DeviceListDialog
 import com.android.purebilibili.feature.cast.DlnaManager
@@ -97,6 +101,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.compose.currentStateAsState
 import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
+import com.android.purebilibili.feature.video.playback.session.PendingPlaybackUserAction
 import dev.chrisbanes.haze.HazeState
 
 internal fun shouldShowEpisodeEntryFromVideoData(
@@ -243,6 +248,9 @@ fun VideoPlayerOverlay(
     onLockToggle: () -> Unit = {},
     showStats: Boolean = false,
     debugInfo: PlaybackDebugInfo = PlaybackDebugInfo(),
+    diagnosticEvents: List<String> = emptyList(),
+    pendingUserAction: PendingPlaybackUserAction? = null,
+    playerDiagnosticLoggingEnabled: Boolean = true,
     realResolution: String = "",
     isQualitySwitching: Boolean = false,
     isBuffering: Boolean = false,  // 缓冲状态
@@ -406,6 +414,132 @@ fun VideoPlayerOverlay(
     }
     val debugRows = remember(effectiveDebugInfo) {
         resolvePlaybackDebugRows(effectiveDebugInfo)
+    }
+    var bufferingStartedAtMs by remember(player) { mutableLongStateOf(0L) }
+    var waitingFirstFrameStartedAtMs by remember(player, bvid, cid) { mutableLongStateOf(0L) }
+    var playbackIssueSignal by remember(player, bvid, cid) { mutableStateOf<PlaybackIssueSignal?>(null) }
+    var dismissedPlaybackIssueTypes by remember(player, bvid, cid) {
+        mutableStateOf(setOf<PlaybackIssueType>())
+    }
+    val exportDiagnosticReport: (PlaybackIssueSignal?) -> String = remember(
+        player,
+        title,
+        videoTitle,
+        bvid,
+        cid,
+        effectiveDebugInfo,
+        diagnosticEvents,
+        pendingUserAction,
+        playerDiagnosticLoggingEnabled
+    ) {
+        { issue ->
+            buildPlaybackDiagnosticReport(
+                title = videoTitle.ifBlank { title },
+                bvid = bvid,
+                cid = cid,
+                currentPositionMs = player.currentPosition,
+                bufferedPositionMs = player.bufferedPosition,
+                debugInfo = effectiveDebugInfo,
+                recentEvents = buildList {
+                    issue?.let { add("detectedIssue=${it.type}") }
+                    pendingUserAction?.let { action ->
+                        add(
+                            "pendingUserAction=${action.type} ageMs=${System.currentTimeMillis() - action.requestedAtMs}"
+                        )
+                    }
+                    addAll(diagnosticEvents)
+                }
+            )
+        }
+    }
+    LaunchedEffect(
+        playerDiagnosticLoggingEnabled,
+        player.playbackState,
+        player.playWhenReady,
+        effectiveDebugInfo.firstFrame
+    ) {
+        if (!playerDiagnosticLoggingEnabled) {
+            bufferingStartedAtMs = 0L
+            waitingFirstFrameStartedAtMs = 0L
+            playbackIssueSignal = null
+            return@LaunchedEffect
+        }
+        val now = System.currentTimeMillis()
+        bufferingStartedAtMs = when {
+            player.playbackState == Player.STATE_BUFFERING && player.playWhenReady ->
+                if (bufferingStartedAtMs == 0L) now else bufferingStartedAtMs
+            else -> 0L
+        }
+        waitingFirstFrameStartedAtMs = when {
+            player.playbackState == Player.STATE_READY &&
+                player.playWhenReady &&
+                effectiveDebugInfo.firstFrame.isBlank() ->
+                if (waitingFirstFrameStartedAtMs == 0L) now else waitingFirstFrameStartedAtMs
+            else -> 0L
+        }
+        val currentSignal = resolvePlaybackIssueSignal(
+            playbackState = player.playbackState,
+            playWhenReady = player.playWhenReady,
+            firstFrameRendered = effectiveDebugInfo.firstFrame.isNotBlank(),
+            bufferingDurationMs = if (bufferingStartedAtMs > 0L) now - bufferingStartedAtMs else 0L,
+            waitingFirstFrameDurationMs = if (waitingFirstFrameStartedAtMs > 0L) {
+                now - waitingFirstFrameStartedAtMs
+            } else {
+                0L
+            }
+        )
+        if (currentSignal == null) {
+            playbackIssueSignal = null
+        }
+    }
+    LaunchedEffect(
+        player,
+        playerDiagnosticLoggingEnabled,
+        effectiveDebugInfo.firstFrame,
+        bufferingStartedAtMs,
+        waitingFirstFrameStartedAtMs,
+        dismissedPlaybackIssueTypes,
+        pendingUserAction
+    ) {
+        if (!playerDiagnosticLoggingEnabled) {
+            playbackIssueSignal = null
+            return@LaunchedEffect
+        }
+        while (isActive) {
+            val now = System.currentTimeMillis()
+            val playbackSignal = resolvePlaybackIssueSignal(
+                playbackState = player.playbackState,
+                playWhenReady = player.playWhenReady,
+                firstFrameRendered = effectiveDebugInfo.firstFrame.isNotBlank(),
+                bufferingDurationMs = if (bufferingStartedAtMs > 0L) now - bufferingStartedAtMs else 0L,
+                waitingFirstFrameDurationMs = if (waitingFirstFrameStartedAtMs > 0L) {
+                    now - waitingFirstFrameStartedAtMs
+                } else {
+                    0L
+                }
+            )
+            val actionSignal = pendingUserAction?.let { action ->
+                resolvePlaybackActionNoResponseSignal(
+                    actionType = action.type,
+                    actionAgeMs = now - action.requestedAtMs,
+                    hasPlayerResponded = false
+                )
+            }
+            val signal = actionSignal ?: playbackSignal
+            if (signal != null && signal.type !in dismissedPlaybackIssueTypes) {
+                playbackIssueSignal = signal
+            }
+            if (!shouldMonitorPlaybackIssues(
+                    diagnosticsEnabled = playerDiagnosticLoggingEnabled,
+                    bufferingStartedAtMs = bufferingStartedAtMs,
+                    waitingFirstFrameStartedAtMs = waitingFirstFrameStartedAtMs,
+                    hasPendingUserAction = pendingUserAction != null
+                )
+            ) {
+                break
+            }
+            delay(1000)
+        }
     }
     val showFullscreenLockButton by SettingsManager
         .getShowFullscreenLockButton(context)
@@ -650,13 +784,13 @@ fun VideoPlayerOverlay(
     fun togglePlayPause() {
         if (player.playbackState == Player.STATE_ENDED) {
             onSeekTo?.invoke(0L) ?: player.seekTo(0L)
-            player.play()
+            playPlayerFromUserAction(player)
             isPlaying = true
         } else if (isPlaying) {
-            player.pause()
+            togglePlayerPlaybackFromUserAction(player)
             isPlaying = false
         } else {
-            player.play()
+            playPlayerFromUserAction(player)
             isPlaying = true
         }
     }
@@ -942,6 +1076,44 @@ fun VideoPlayerOverlay(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Player stats",
+                            color = Color.White.copy(alpha = 0.82f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontSize = overlayVisualPolicy.statsFontSp.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        if (playerDiagnosticLoggingEnabled) {
+                            Text(
+                                text = "Copy diag",
+                                color = BiliPink,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontSize = overlayVisualPolicy.statsFontSp.sp,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.clickable {
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                        as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText(
+                                            "BiliPai Player Diagnostics",
+                                            exportDiagnosticReport(null)
+                                        )
+                                    )
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "播放器诊断已复制",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
                     debugRows.forEach { row ->
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -968,6 +1140,58 @@ fun VideoPlayerOverlay(
             }
         }
 
+        if (playerDiagnosticLoggingEnabled) playbackIssueSignal?.let { signal ->
+            AlertDialog(
+                onDismissRequest = {
+                    dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
+                    playbackIssueSignal = null
+                },
+                title = {
+                    Text(signal.title)
+                },
+                text = {
+                    Text(signal.message)
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val savedPath = Logger.exportPlayerDiagnostic(
+                                context = context,
+                                content = exportDiagnosticReport(signal)
+                            )
+                            if (savedPath != null) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "已导出到: $savedPath",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "导出失败，请稍后重试",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
+                            playbackIssueSignal = null
+                        }
+                    ) {
+                        Text("导出日志")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            dismissedPlaybackIssueTypes = dismissedPlaybackIssueTypes + signal.type
+                            playbackIssueSignal = null
+                        }
+                    ) {
+                        Text("关闭")
+                    }
+                }
+            )
+        }
+
         // --- 5. 中央播放/暂停大图标 (仅全屏模式显示) ---
         AnimatedVisibility(
             visible = shouldShowCenterPlayButton(
@@ -985,7 +1209,7 @@ fun VideoPlayerOverlay(
         ) {
             OverlayPlaybackButton(
                 isPlaying = false,
-                onClick = { player.play(); isPlaying = true },
+                onClick = { playPlayerFromUserAction(player); isPlaying = true },
                 outerSize = overlayVisualPolicy.centerPlayButtonSizeDp.dp,
                 innerSize = overlayVisualPolicy.centerPlayInnerButtonSizeDp.dp,
                 glyphSize = overlayVisualPolicy.centerPlayIconSizeDp.dp

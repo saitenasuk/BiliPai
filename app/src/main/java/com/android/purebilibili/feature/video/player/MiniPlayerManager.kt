@@ -54,6 +54,7 @@ import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.VideoActivity
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackWakeMode
+import com.android.purebilibili.feature.video.playback.session.resolveShouldContinuePlaybackDuringPause
 import com.android.purebilibili.feature.video.state.isPlaybackActiveForLifecycle
 import com.android.purebilibili.feature.video.usecase.VideoLoadResult
 import com.android.purebilibili.feature.video.usecase.VideoPlaybackUseCase
@@ -131,8 +132,12 @@ internal fun shouldContinuePlaybackDuringPause(
     isBackgroundAudio: Boolean,
     wasPlaybackActive: Boolean
 ): Boolean {
-    if (isMiniMode || isPip) return true
-    return isBackgroundAudio && wasPlaybackActive
+    return resolveShouldContinuePlaybackDuringPause(
+        isMiniMode = isMiniMode,
+        isPip = isPip,
+        isBackgroundAudio = isBackgroundAudio,
+        wasPlaybackActive = wasPlaybackActive
+    )
 }
 
 internal fun shouldDisableVideoTrackOnEnterBackground(
