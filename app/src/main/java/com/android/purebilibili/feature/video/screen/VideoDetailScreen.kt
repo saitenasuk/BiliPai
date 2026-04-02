@@ -7,9 +7,13 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.database.ContentObserver
 import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.view.OrientationEventListener
 import android.view.Window
 import android.view.WindowManager
@@ -632,6 +636,14 @@ fun VideoDetailScreen(
     val isFavoriteFoldersLoading by viewModel.isFavoriteFoldersLoading.collectAsStateWithLifecycle()
     val selectedFavoriteFolderIds by viewModel.favoriteSelectedFolderIds.collectAsStateWithLifecycle()
     val isSavingFavoriteFolders by viewModel.isSavingFavoriteFolders.collectAsStateWithLifecycle()
+    val qualitySwitchFailureDialog by viewModel.qualitySwitchFailureDialog.collectAsStateWithLifecycle()
+    val playerDiagnosticLoggingEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getPlayerDiagnosticLoggingEnabled(context)
+        .collectAsStateWithLifecycle(
+            initialValue = true,
+            lifecycle = lifecycleOwner.lifecycle
+        )
+    val qualitySwitchDialogScope = rememberCoroutineScope()
     
     // [Blur] Haze State
     val hazeState = rememberRecoverableHazeState()
@@ -659,6 +671,7 @@ fun VideoDetailScreen(
     // 🔧 [修复] 追踪用户是否主动请求全屏（点击全屏按钮）
     // 使用 rememberSaveable 确保状态在横竖屏切换时保持
     var userRequestedFullscreen by rememberSaveable { mutableStateOf(false) }
+    var manualPortraitHoldActive by rememberSaveable { mutableStateOf(false) }
     
     // 📐 全屏模式逻辑：
     // - 手机：横屏时自动进入全屏
@@ -908,6 +921,7 @@ fun VideoDetailScreen(
             initialValue = false,
             lifecycle = lifecycleOwner.lifecycle
         )
+    val systemAutoRotateEnabled by rememberSystemAutoRotateEnabled(context)
     val cardAnimationEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCardAnimationEnabled(context).collectAsStateWithLifecycle(
             initialValue = true,
@@ -1322,20 +1336,24 @@ fun VideoDetailScreen(
     val isVerticalVideo by playerState.isVerticalVideo.collectAsStateWithLifecycle()
     LaunchedEffect(
         autoRotateEnabled,
+        systemAutoRotateEnabled,
         fullscreenMode,
         useTabletLayout,
         isOrientationDrivenFullscreen,
         isFullscreenMode,
         userRequestedFullscreen,
+        manualPortraitHoldActive,
         isVerticalVideo
     ) {
         val requestedOrientation = resolvePhoneVideoRequestedOrientation(
             autoRotateEnabled = autoRotateEnabled,
+            systemAutoRotateEnabled = systemAutoRotateEnabled,
             fullscreenMode = fullscreenMode,
             useTabletLayout = useTabletLayout,
             isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
             isFullscreenMode = isFullscreenMode,
             manualFullscreenRequested = userRequestedFullscreen,
+            manualPortraitHoldActive = manualPortraitHoldActive,
             isVerticalVideo = isVerticalVideo
         ) ?: return@LaunchedEffect
 
@@ -1344,30 +1362,42 @@ fun VideoDetailScreen(
         }
         com.android.purebilibili.core.util.Logger.d(
             "VideoDetailScreen",
-            "🔄 Auto-rotate: enabled=$autoRotateEnabled, mode=$fullscreenMode, horizontal=$horizontalAdaptationEnabled, requested=$requestedOrientation, fullscreen=$isFullscreenMode, verticalVideo=$isVerticalVideo"
+            "🔄 Auto-rotate: enabled=$autoRotateEnabled, system=$systemAutoRotateEnabled, hold=$manualPortraitHoldActive, mode=$fullscreenMode, horizontal=$horizontalAdaptationEnabled, requested=$requestedOrientation, fullscreen=$isFullscreenMode, verticalVideo=$isVerticalVideo"
         )
     }
     DisposableEffect(
         activity,
         autoRotateEnabled,
+        systemAutoRotateEnabled,
         fullscreenMode,
         useTabletLayout,
-        isOrientationDrivenFullscreen
+        isOrientationDrivenFullscreen,
+        manualPortraitHoldActive
     ) {
         val hostActivity = activity
         if (
             hostActivity == null ||
-            !autoRotateEnabled ||
-            !isOrientationDrivenFullscreen ||
-            !shouldApplyPhoneAutoRotatePolicy(useTabletLayout) ||
-            fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.NONE ||
-            fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.VERTICAL
+            !shouldObservePhoneAutoRotate(
+                autoRotateEnabled = autoRotateEnabled,
+                systemAutoRotateEnabled = systemAutoRotateEnabled,
+                useTabletLayout = useTabletLayout,
+                isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+                fullscreenMode = fullscreenMode,
+                manualPortraitHoldActive = manualPortraitHoldActive
+            ) ||
+            !isOrientationDrivenFullscreen
         ) {
             return@DisposableEffect onDispose {}
         }
 
         val orientationListener = object : OrientationEventListener(context) {
             override fun onOrientationChanged(orientation: Int) {
+                if (manualPortraitHoldActive) {
+                    if (shouldReleasePhoneManualPortraitHold(orientation)) {
+                        manualPortraitHoldActive = false
+                    }
+                    return
+                }
                 val isCurrentlyLandscape =
                     hostActivity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
                 val targetOrientation = resolvePhoneAutoRotateRequestedOrientation(
@@ -1723,11 +1753,8 @@ fun VideoDetailScreen(
                 // 📱 手机：通过旋转屏幕触发全屏
                 if (isLandscape) {
                     userRequestedFullscreen = false
-                    activity.requestedOrientation = if (autoRotateEnabled) {
-                        ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                    } else {
-                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    }
+                    manualPortraitHoldActive = true
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 } else {
                     val targetOrientation = resolvePhoneFullscreenEnterOrientation(
                         fullscreenMode = fullscreenMode,
@@ -1740,9 +1767,11 @@ fun VideoDetailScreen(
                     ) {
                         // 比例模式命中竖屏目标时，进入竖屏全屏覆盖层，避免点击后“无变化”。
                         userRequestedFullscreen = false
+                        manualPortraitHoldActive = false
                         enterPortraitFullscreen()
                     } else {
                         userRequestedFullscreen = true
+                        manualPortraitHoldActive = false
                         activity.requestedOrientation = targetOrientation
                     }
                 }
@@ -2789,10 +2818,12 @@ fun VideoDetailScreen(
                     isPortraitFullscreen = false
                     val activity = context.findActivity()
                     val targetOrientation = resolvePortraitRotateTargetOrientation(
-                        isOrientationDrivenFullscreen = isOrientationDrivenFullscreen
+                        isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+                        manualPortraitHoldActive = manualPortraitHoldActive
                     )
                     if (activity != null && targetOrientation != null) {
                         userRequestedFullscreen = true
+                        manualPortraitHoldActive = false
                         activity.requestedOrientation = targetOrientation
                     } else {
                         toggleFullscreen()
@@ -3436,6 +3467,52 @@ fun VideoDetailScreen(
             )
         }
 
+        qualitySwitchFailureDialog?.let { dialog ->
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissQualitySwitchFailureDialog() },
+                title = { Text(dialog.title) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(dialog.message)
+                        TextButton(
+                            onClick = {
+                                qualitySwitchDialogScope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setPlayerDiagnosticLoggingEnabled(
+                                            context,
+                                            !playerDiagnosticLoggingEnabled
+                                        )
+                                }
+                            },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                if (playerDiagnosticLoggingEnabled) {
+                                    "关闭诊断日志"
+                                } else {
+                                    "开启诊断日志"
+                                }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            com.android.purebilibili.core.util.LogCollector.exportAndShare(context)
+                        }
+                    ) {
+                        Text("导出日志")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissQualitySwitchFailureDialog() }) {
+                        Text("关闭")
+                    }
+                }
+            )
+        }
+
         // 💬 弹幕上下文菜单
         val danmakuMenuState by viewModel.danmakuMenuState.collectAsState()
         
@@ -3832,11 +3909,13 @@ internal fun resolvePhoneFullscreenEnterOrientation(
 
 internal fun resolvePhoneVideoRequestedOrientation(
     autoRotateEnabled: Boolean,
+    systemAutoRotateEnabled: Boolean = true,
     fullscreenMode: com.android.purebilibili.core.store.FullscreenMode,
     useTabletLayout: Boolean,
     isOrientationDrivenFullscreen: Boolean,
     isFullscreenMode: Boolean,
     manualFullscreenRequested: Boolean = false,
+    manualPortraitHoldActive: Boolean = false,
     isVerticalVideo: Boolean = false
 ): Int? {
     if (!shouldApplyPhoneAutoRotatePolicy(useTabletLayout)) return null
@@ -3849,7 +3928,15 @@ internal fun resolvePhoneVideoRequestedOrientation(
     if (!isOrientationDrivenFullscreen) {
         return null
     }
-    if (autoRotateEnabled) {
+    if (manualPortraitHoldActive) {
+        return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+    if (resolveEffectivePhoneAutoRotateEnabled(
+            autoRotateEnabled = autoRotateEnabled,
+            systemAutoRotateEnabled = systemAutoRotateEnabled,
+            manualPortraitHoldActive = manualPortraitHoldActive
+        )
+    ) {
         return when {
             manualFullscreenRequested -> {
                 resolvePhoneFullscreenEnterOrientation(
@@ -3860,6 +3947,9 @@ internal fun resolvePhoneVideoRequestedOrientation(
             isFullscreenMode -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
+    }
+    if (autoRotateEnabled && !systemAutoRotateEnabled && !manualFullscreenRequested) {
+        return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
     return if (isFullscreenMode) {
         resolvePhoneFullscreenEnterOrientation(
@@ -3883,21 +3973,14 @@ internal fun resolvePhoneAutoRotateRequestedOrientation(
     if (orientationDegrees == OrientationEventListener.ORIENTATION_UNKNOWN) return null
     val normalized = ((orientationDegrees % 360) + 360) % 360
 
-    fun withinWrappedRange(min: Int, max: Int): Boolean {
-        return if (min <= max) {
-            normalized in min..max
-        } else {
-            normalized >= min || normalized <= max
-        }
-    }
-
-    val portraitStable = withinWrappedRange(0, portraitSnapDegrees) ||
-        withinWrappedRange(180 - portraitSnapDegrees, 180 + portraitSnapDegrees) ||
-        withinWrappedRange(360 - portraitSnapDegrees, 359)
-    val landscapeEntry = withinWrappedRange(landscapeEnterMinDegrees, landscapeEnterMaxDegrees) ||
-        withinWrappedRange(240, 300)
-    val landscapeKeep = withinWrappedRange(landscapeKeepMinDegrees, landscapeKeepMaxDegrees) ||
-        withinWrappedRange(220, 320)
+    val portraitStable = isPhoneOrientationPortraitStable(
+        orientationDegrees = normalized,
+        portraitSnapDegrees = portraitSnapDegrees
+    )
+    val landscapeEntry = withinWrappedRange(normalized, landscapeEnterMinDegrees, landscapeEnterMaxDegrees) ||
+        withinWrappedRange(normalized, 240, 300)
+    val landscapeKeep = withinWrappedRange(normalized, landscapeKeepMinDegrees, landscapeKeepMaxDegrees) ||
+        withinWrappedRange(normalized, 220, 320)
 
     return when {
         isCurrentlyLandscape && landscapeKeep -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -3915,13 +3998,102 @@ internal fun shouldEnterPortraitFullscreenOnFullscreenToggle(
 }
 
 internal fun resolvePortraitRotateTargetOrientation(
-    isOrientationDrivenFullscreen: Boolean
+    isOrientationDrivenFullscreen: Boolean,
+    manualPortraitHoldActive: Boolean = false
 ): Int? {
-    return if (isOrientationDrivenFullscreen) {
+    return if (isOrientationDrivenFullscreen && !manualPortraitHoldActive) {
         ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     } else {
         null
     }
+}
+
+internal fun resolveEffectivePhoneAutoRotateEnabled(
+    autoRotateEnabled: Boolean,
+    systemAutoRotateEnabled: Boolean,
+    manualPortraitHoldActive: Boolean
+): Boolean {
+    return autoRotateEnabled && systemAutoRotateEnabled && !manualPortraitHoldActive
+}
+
+internal fun shouldObservePhoneAutoRotate(
+    autoRotateEnabled: Boolean,
+    systemAutoRotateEnabled: Boolean,
+    useTabletLayout: Boolean,
+    isOrientationDrivenFullscreen: Boolean,
+    fullscreenMode: com.android.purebilibili.core.store.FullscreenMode,
+    manualPortraitHoldActive: Boolean
+): Boolean {
+    if (!autoRotateEnabled) return false
+    if (!systemAutoRotateEnabled) return false
+    if (!shouldApplyPhoneAutoRotatePolicy(useTabletLayout)) return false
+    if (!isOrientationDrivenFullscreen) return false
+    if (fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.NONE) return false
+    if (fullscreenMode == com.android.purebilibili.core.store.FullscreenMode.VERTICAL) return false
+    return true
+}
+
+internal fun shouldReleasePhoneManualPortraitHold(
+    orientationDegrees: Int,
+    portraitSnapDegrees: Int = 25
+): Boolean {
+    if (orientationDegrees == OrientationEventListener.ORIENTATION_UNKNOWN) return false
+    return isPhoneOrientationPortraitStable(
+        orientationDegrees = orientationDegrees,
+        portraitSnapDegrees = portraitSnapDegrees
+    )
+}
+
+private fun isPhoneOrientationPortraitStable(
+    orientationDegrees: Int,
+    portraitSnapDegrees: Int
+): Boolean {
+    val normalized = ((orientationDegrees % 360) + 360) % 360
+    return withinWrappedRange(normalized, 0, portraitSnapDegrees) ||
+        withinWrappedRange(normalized, 180 - portraitSnapDegrees, 180 + portraitSnapDegrees) ||
+        withinWrappedRange(normalized, 360 - portraitSnapDegrees, 359)
+}
+
+private fun withinWrappedRange(
+    value: Int,
+    min: Int,
+    max: Int
+): Boolean {
+    return if (min <= max) {
+        value in min..max
+    } else {
+        value >= min || value <= max
+    }
+}
+
+@Composable
+private fun rememberSystemAutoRotateEnabled(context: Context): State<Boolean> {
+    return produceState(initialValue = readSystemAutoRotateEnabled(context), context) {
+        val contentResolver = context.contentResolver
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                value = readSystemAutoRotateEnabled(context)
+            }
+        }
+        value = readSystemAutoRotateEnabled(context)
+        contentResolver.registerContentObserver(
+            Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION),
+            false,
+            observer
+        )
+        awaitDispose {
+            contentResolver.unregisterContentObserver(observer)
+        }
+    }
+}
+
+private fun readSystemAutoRotateEnabled(context: Context): Boolean {
+    return runCatching {
+        Settings.System.getInt(
+            context.contentResolver,
+            Settings.System.ACCELEROMETER_ROTATION
+        ) == 1
+    }.getOrDefault(true)
 }
 
 internal fun resolveVideoDetailExitRequestedOrientation(
