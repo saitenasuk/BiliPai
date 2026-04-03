@@ -105,10 +105,20 @@ data class PlaybackSelectionResult(
 
 internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = true
 
+// TODO: Re-enable local adaptive DASH playback after the generated MPD seek path
+// is validated on real devices and covered by a playback-level regression test.
+private const val LOCAL_ADAPTIVE_DASH_PLAYBACK_ENABLED = false
+
 internal fun shouldUseAdaptiveDashPlayback(
     adaptiveDashSource: AdaptiveDashPlaybackSource?,
     audioUrl: String?
-): Boolean = adaptiveDashSource != null
+): Boolean {
+    // Local MPD playback regressed manual seeks on real devices in v7.3.2:
+    // the UI position updates, but decoded video jumps back to the opening frame.
+    // Keep building the adaptive source for future recovery work, but route
+    // playback through the previous legacy DASH path until seek stability is fixed.
+    return LOCAL_ADAPTIVE_DASH_PLAYBACK_ENABLED && adaptiveDashSource != null
+}
 
 internal fun resolveLocalDashManifestFileName(manifest: String): String {
     val digest = MessageDigest.getInstance("SHA-256").digest(manifest.toByteArray())
@@ -162,8 +172,12 @@ internal fun shouldResumePlaybackAfterUserSeek(
     return playWhenReadyBeforeSeek || playbackStateBeforeSeek == Player.STATE_ENDED
 }
 
-internal fun seekPlayerFromUserAction(player: Player, positionMs: Long) {
-    val shouldResume = shouldResumePlaybackAfterUserSeek(
+internal fun seekPlayerFromUserAction(
+    player: Player,
+    positionMs: Long,
+    shouldResumePlaybackOverride: Boolean? = null
+) {
+    val shouldResume = shouldResumePlaybackOverride ?: shouldResumePlaybackAfterUserSeek(
         playWhenReadyBeforeSeek = player.playWhenReady,
         playbackStateBeforeSeek = player.playbackState
     )
@@ -217,6 +231,7 @@ class VideoPlaybackUseCase(
     companion object {
         private val STANDARD_LOW_QUALITIES = listOf(32, 16)
         private const val API_ONLY_VISIBLE_QUALITY_FLOOR = 80
+        private const val PREMIUM_API_ONLY_QUALITY_FLOOR = 112
     }
 
     internal data class QualityMergeResult(
@@ -402,8 +417,17 @@ class VideoPlaybackUseCase(
                     val apiQualities = playData.accept_quality
                     val dashVideoIds = playData.dash?.video?.map { it.id }?.distinct() ?: emptyList()
 
-                    val qualityMergeResult = mergeQualityOptions(apiQualities, dashVideoIds)
-                    val qualitySelectionState = buildQualitySelectionState(apiQualities, dashVideoIds)
+                    val allowPremiumApiOnlyQualities = !VideoRepository.isAppApiCoolingDown()
+                    val qualityMergeResult = mergeQualityOptions(
+                        apiQualities = apiQualities,
+                        dashVideoIds = dashVideoIds,
+                        allowPremiumApiOnlyQualities = allowPremiumApiOnlyQualities
+                    )
+                    val qualitySelectionState = buildQualitySelectionState(
+                        apiQualities = apiQualities,
+                        dashVideoIds = dashVideoIds,
+                        allowPremiumApiOnlyQualities = allowPremiumApiOnlyQualities
+                    )
                     
                     Logger.d(
                         "VideoPlaybackUseCase",
@@ -801,7 +825,8 @@ class VideoPlaybackUseCase(
 
         val qualitySelectionState = buildQualitySelectionState(
             apiQualities = playUrlData.accept_quality,
-            dashVideoIds = playUrlData.dash?.video?.map { it.id }?.distinct() ?: emptyList()
+            dashVideoIds = playUrlData.dash?.video?.map { it.id }?.distinct() ?: emptyList(),
+            allowPremiumApiOnlyQualities = !VideoRepository.isAppApiCoolingDown()
         )
         val adaptiveDashSource = buildAdaptiveDashPlaybackSource(
             durationMs = playUrlData.timelength,
@@ -935,7 +960,8 @@ class VideoPlaybackUseCase(
 
     internal fun mergeQualityOptions(
         apiQualities: List<Int>,
-        dashVideoIds: List<Int>
+        dashVideoIds: List<Int>,
+        allowPremiumApiOnlyQualities: Boolean = true
     ): QualityMergeResult {
         val normalizedApi = apiQualities.distinct().sortedDescending()
         val normalizedDash = dashVideoIds.distinct().sortedDescending()
@@ -944,7 +970,9 @@ class VideoPlaybackUseCase(
         // Keep API-advertised login-tier qualities visible so users can re-fetch 1080P+ even when
         // the first DASH payload is temporarily capped at 720P.
         val apiOnlyHighQualities = normalizedApi.filter { qualityId ->
-            qualityId >= API_ONLY_VISIBLE_QUALITY_FLOOR && qualityId !in normalizedDash
+            qualityId >= API_ONLY_VISIBLE_QUALITY_FLOOR &&
+                qualityId !in normalizedDash &&
+                (qualityId < PREMIUM_API_ONLY_QUALITY_FLOOR || allowPremiumApiOnlyQualities)
         }
 
         val mergedQualityIds = (switchableQualities + apiOnlyHighQualities + STANDARD_LOW_QUALITIES)
@@ -960,11 +988,13 @@ class VideoPlaybackUseCase(
 
     internal fun buildQualitySelectionState(
         apiQualities: List<Int>,
-        dashVideoIds: List<Int>
+        dashVideoIds: List<Int>,
+        allowPremiumApiOnlyQualities: Boolean = true
     ): QualitySelectionState {
         val mergedQualityIds = mergeQualityOptions(
             apiQualities = apiQualities,
-            dashVideoIds = dashVideoIds
+            dashVideoIds = dashVideoIds,
+            allowPremiumApiOnlyQualities = allowPremiumApiOnlyQualities
         ).mergedQualityIds
         return QualitySelectionState(
             qualityIds = mergedQualityIds,
