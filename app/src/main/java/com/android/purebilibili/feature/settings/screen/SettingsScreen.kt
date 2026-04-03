@@ -398,9 +398,14 @@ fun SettingsScreen(
     val view = androidx.compose.ui.platform.LocalView.current
     DisposableEffect(Unit) {
         val window = (context as? android.app.Activity)?.window
+        @Suppress("DEPRECATION")
         val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
+        @Suppress("DEPRECATION")
         if (window != null) window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        onDispose { if (window != null) window.navigationBarColor = originalNavBarColor }
+        onDispose {
+            @Suppress("DEPRECATION")
+            if (window != null) window.navigationBarColor = originalNavBarColor
+        }
     }
 
     // Dialogs
