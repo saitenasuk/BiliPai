@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +42,8 @@ import com.android.purebilibili.core.ui.common.copyOnLongPress
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
 import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.ui.components.resolveAdaptiveListComponentVisualSpec
+import com.android.purebilibili.core.ui.IOSAlertDialog
+import com.android.purebilibili.core.ui.IOSDialogAction
 import com.android.purebilibili.core.store.MAX_HOME_REFRESH_COUNT
 import com.android.purebilibili.core.store.MIN_HOME_REFRESH_COUNT
 import kotlin.math.roundToInt
@@ -667,6 +671,9 @@ fun AboutSection(
     onDisclaimerClick: () -> Unit,
     onLicenseClick: () -> Unit,
     onGithubClick: () -> Unit,
+    onVerificationClick: () -> Unit,
+    onBuildSourceClick: () -> Unit,
+    onBuildFingerprintClick: () -> Unit,
     onCheckUpdateClick: () -> Unit,
     onViewReleaseNotesClick: () -> Unit,
     autoCheckUpdateEnabled: Boolean,
@@ -676,9 +683,17 @@ fun AboutSection(
     onEasterEggChange: (Boolean) -> Unit,
     updateStatusText: String = "点击检查",
     isCheckingUpdate: Boolean = false,
+    verificationLabel: String = "未验证",
+    verificationSubtitle: String = "暂未获取到可核对的 release 证据",
+    buildSourceValue: String = "本地构建",
+    buildSourceSubtitle: String = "未绑定 GitHub Release",
+    buildFingerprintValue: String = "未读取",
+    buildFingerprintCopyValue: String = "未读取",
+    buildFingerprintSubtitle: String = "暂未读取到当前安装包 SHA-256",
     versionClickCount: Int = 0,
     versionClickThreshold: Int = EasterEggs.VERSION_EASTER_EGG_THRESHOLD
 ) {
+    var detailDialogContent by remember { mutableStateOf<AppBuildInfoDialogContent?>(null) }
     val uiPreset = LocalUiPreset.current
     val autoCheckTint = rememberSettingsEntryTint(SettingsEntryTintRole.PRIMARY, iOSBlue, uiPreset)
     val easterEggTint = rememberSettingsEntryTint(SettingsEntryTintRole.TERTIARY, iOSYellow, uiPreset)
@@ -691,6 +706,9 @@ fun AboutSection(
     val notificationIcon = rememberAppNotificationIcon()
     val infoIcon = rememberAppInfoIcon()
     val sparklesIcon = rememberAppSparklesIcon()
+    val verificationIcon = rememberAppWarningIcon()
+    val buildSourceIcon = CupertinoIcons.Default.Tag
+    val buildFingerprintIcon = rememberAppLockIcon()
 
     val safeThreshold = versionClickThreshold.coerceAtLeast(1)
     val normalizedClickCount = versionClickCount.coerceAtLeast(0)
@@ -716,6 +734,53 @@ fun AboutSection(
             append(" · ")
             append(it)
         }
+    }
+
+    detailDialogContent?.let { dialogContent ->
+        val dialogScrollState = rememberScrollState()
+        IOSAlertDialog(
+            onDismissRequest = { detailDialogContent = null },
+            title = { Text(dialogContent.title) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(dialogScrollState)
+                ) {
+                    Text(
+                        text = dialogContent.value,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = dialogContent.body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                IOSDialogAction(
+                    onClick = {
+                        when (dialogContent.action) {
+                            AppBuildInfoDialogAction.VIEW_VERIFICATION -> onVerificationClick()
+                            AppBuildInfoDialogAction.VIEW_BUILD_SOURCE -> onBuildSourceClick()
+                            AppBuildInfoDialogAction.VIEW_BUILD_FINGERPRINT -> onBuildFingerprintClick()
+                        }
+                        detailDialogContent = null
+                    }
+                ) {
+                    Text(dialogContent.actionLabel)
+                }
+            },
+            dismissButton = {
+                IOSDialogAction(onClick = { detailDialogContent = null }) {
+                    Text("关闭")
+                }
+            }
+        )
     }
 
     SettingsCardGroup {
@@ -744,6 +809,56 @@ fun AboutSection(
             value = "GitHub",
             onClick = onGithubClick,
             iconTint = openSourceHomeVisual.iconTint,
+            enableCopy = true
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
+            icon = verificationIcon,
+            title = "源码一致性",
+            subtitle = verificationSubtitle,
+            value = verificationLabel,
+            onClick = {
+                detailDialogContent = resolveVerificationDialogContent(
+                    label = verificationLabel,
+                    summary = verificationSubtitle
+                )
+            },
+            iconTint = when (verificationLabel) {
+                "已验证" -> iOSGreen
+                "基本可验证" -> iOSBlue
+                else -> iOSOrange
+            }
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
+            icon = buildSourceIcon,
+            title = "构建来源",
+            subtitle = buildSourceSubtitle,
+            value = buildSourceValue,
+            onClick = {
+                detailDialogContent = resolveBuildSourceDialogContent(
+                    value = buildSourceValue,
+                    subtitle = buildSourceSubtitle
+                )
+            },
+            iconTint = iOSOrange,
+            enableCopy = true
+        )
+        SettingsDivider(startIndent = 66.dp)
+        SettingClickableItem(
+            icon = buildFingerprintIcon,
+            title = "SHA-256",
+            subtitle = buildFingerprintSubtitle,
+            value = buildFingerprintValue,
+            copyValue = buildFingerprintCopyValue,
+            onClick = {
+                detailDialogContent = resolveBuildFingerprintDialogContent(
+                    value = buildFingerprintValue,
+                    fullValue = buildFingerprintCopyValue,
+                    subtitle = buildFingerprintSubtitle
+                )
+            },
+            iconTint = iOSPurple,
             enableCopy = true
         )
         SettingsDivider(startIndent = 66.dp)

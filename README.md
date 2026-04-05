@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-04-03 · 文档已同步至 v7.3.3（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-04-05 · 文档已同步至 v7.4.2（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.3.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.4.2-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -111,7 +111,7 @@
   - 定时护眼 + 使用时长关怀提醒 + 稍后提醒
   - 关怀文案与提醒策略支持人性化优化
 - `画质切换`：
-  - 画质列表优先使用 DASH 实际可切换轨道
+  - 画质列表按接口返回展示，再用真实 DASH 轨道决定哪些档位可切换
   - 缓存切换改为目标画质精确匹配，缺失时回退 API
   - 切换提示文案更明确（目标不可用时清晰反馈）
 
@@ -527,7 +527,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-04-03（v7.3.3）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-04-05（v7.4.2）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -572,15 +572,14 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.3.3 · 2026-04-02)
+### 最近更新 (v7.4.2 · 2026-04-05)
 
-- 🔒 **隐私默认策略继续收紧**：默认仅开启崩溃追踪，使用情况统计默认关闭；播放器诊断日志继续保留用于排查黑屏、卡顿和切换清晰度失败等问题。
-- 🪵 **普通运行日志不再默认落盘**：`W/E` 级别日志仍可用于崩溃快照和手动导出，但常规运行日志不再默认写入 `runtime.log`。
-- 🕵️ **Analytics / Crashlytics 进一步脱敏**：不再上传视频 ID、直播间 ID、番剧 ID、目标用户 ID、标题、UP 名等可识别观看内容字段；Crashlytics 也不再绑定 `mid` 或写入直播标题、主播名等敏感上下文。
-- 🎬 **清晰度切换和播放记录更稳**：高阶付费画质在接口冷却期会直接提示等待时间，避免死路切换；播放心跳会更准确记录会话开始时间、真实观看时长和收尾进度。
-- 🎚️ **Seek 与播放按钮反馈更自然**：进度条拖动会记住用户开始拖动时的播放意图，中央播放按钮在“正在恢复但仍缓冲”阶段也会保持更合理的播放态反馈。
-- 💬 **评论区等级徽章与卡片长按体验更新**：评论等级徽章改为更接近 PiliPlus 风格的像素资源图，并补上 `6级高能会员` 专属样式；视频卡片长按菜单也会更贴近真实按下位置展开。
-- 📥 **多线程下载校验更严格**：分段下载会校验 `206 Partial Content` 与范围头是否匹配，请求异常时自动回退到单线程，减少合并损坏文件的概率。
+- 🎯 **普通视频起播继续向 PiliPlus 对齐**：首个 `WBI` 请求固定从 `qn=80` 起步，可播但降级的结果也会先接住，再交给播放层本地选轨。
+- 🛟 **播放地址获取失败时的回退链更完整**：登录态补上 `APP access_token -> legacy -> guest`，游客态保留 `legacy` 兜底，减少“无法获取任何画质播放地址”的硬失败页。
+- 🌫️ **玻璃封面上的时长与进度更清楚**：历史记录、收藏等封面胶囊统一改成深色玻璃基底，亮封面下也能保持白字对比度。
+- 💬 **弹幕不再整片挤成一团**：行高设置会正确换算成像素行高，调整行高、显示区域和海量模式时终于会真实生效。
+- 🔒 **播放器误触和锁定图标语义修正**：观看时不再响应双指改画面比例，横屏锁定按钮的开锁/闭锁图标与高亮状态也已修正。
+- ⚙️ **构建链更稳**：补上 KSP 增量与 configuration-cache-safe 的目录预创建任务，并把播放器大文件的纯策略逻辑拆出，增量编译稳定性更好。
 
 ### 历史版本
 

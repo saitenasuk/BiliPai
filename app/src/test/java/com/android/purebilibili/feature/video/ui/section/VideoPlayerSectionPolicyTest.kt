@@ -718,4 +718,18 @@ class VideoPlayerSectionPolicyTest {
             )
         )
     }
+
+    @Test
+    fun viewportTransformGesture_disabledDuringPlaybackEvenWhenUnlocked() {
+        assertFalse(
+            shouldEnableViewportTransformGesture(
+                isScreenLocked = false
+            )
+        )
+        assertFalse(
+            shouldEnableViewportTransformGesture(
+                isScreenLocked = true
+            )
+        )
+    }
 }

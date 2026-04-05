@@ -37,6 +37,7 @@ import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 // Import reusable components from standalone files
 import com.android.purebilibili.feature.video.ui.components.QualitySelectionMenu
 import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuDialog
@@ -196,6 +197,35 @@ internal fun shouldShowBufferingIndicator(
     return isBuffering && !isQualitySwitching && (!isVisible || isScrubbing)
 }
 
+internal enum class FullscreenLockButtonIcon {
+    LOCKED,
+    UNLOCKED
+}
+
+internal data class FullscreenLockButtonVisualState(
+    val icon: FullscreenLockButtonIcon,
+    val contentDescription: String,
+    val highlighted: Boolean
+)
+
+internal fun resolveFullscreenLockButtonVisualState(
+    isScreenLocked: Boolean
+): FullscreenLockButtonVisualState {
+    return if (isScreenLocked) {
+        FullscreenLockButtonVisualState(
+            icon = FullscreenLockButtonIcon.LOCKED,
+            contentDescription = "已锁定",
+            highlighted = true
+        )
+    } else {
+        FullscreenLockButtonVisualState(
+            icon = FullscreenLockButtonIcon.UNLOCKED,
+            contentDescription = "未锁定",
+            highlighted = false
+        )
+    }
+}
+
 internal fun resolvePageSelectorSheetOuterBottomPaddingDp(
     isFullscreen: Boolean
 ): Int {
@@ -235,6 +265,7 @@ fun VideoPlayerOverlay(
     currentQualityLabel: String,
     qualityLabels: List<String>,
     qualityIds: List<Int> = emptyList(),
+    switchableQualityIds: List<Int> = emptyList(),
     isLoggedIn: Boolean = false,
     onQualitySelected: (Int) -> Unit,
 
@@ -270,8 +301,16 @@ fun VideoPlayerOverlay(
     onDanmakuInputClick: () -> Unit = {},
     danmakuOpacity: Float = 0.85f,
     danmakuFontScale: Float = 1.0f,
+    danmakuFontWeight: Int = 5,
     danmakuSpeed: Float = 1.0f,
     danmakuDisplayArea: Float = 0.5f,
+    danmakuStrokeWidth: Float = 1.5f,
+    danmakuLineHeight: Float = 1.6f,
+    danmakuScrollDurationSeconds: Float = 7.0f,
+    danmakuStaticDurationSeconds: Float = 4.0f,
+    danmakuScrollFixedVelocity: Boolean = false,
+    danmakuStaticToScroll: Boolean = false,
+    danmakuMassiveMode: Boolean = false,
     danmakuMergeDuplicates: Boolean = true,
     danmakuAllowScroll: Boolean = true,
     danmakuAllowTop: Boolean = true,
@@ -281,10 +320,20 @@ fun VideoPlayerOverlay(
     danmakuBlockRulesRaw: String = "",
     danmakuSmartOcclusion: Boolean = true,
     danmakuFullscreenPanelWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
+    showDanmakuSyncSection: Boolean = false,
+    danmakuSyncUiState: DanmakuCloudSyncUiState = DanmakuCloudSyncUiState(),
     onDanmakuOpacityChange: (Float) -> Unit = {},
     onDanmakuFontScaleChange: (Float) -> Unit = {},
+    onDanmakuFontWeightChange: (Int) -> Unit = {},
     onDanmakuSpeedChange: (Float) -> Unit = {},
     onDanmakuDisplayAreaChange: (Float) -> Unit = {},
+    onDanmakuStrokeWidthChange: (Float) -> Unit = {},
+    onDanmakuLineHeightChange: (Float) -> Unit = {},
+    onDanmakuScrollDurationSecondsChange: (Float) -> Unit = {},
+    onDanmakuStaticDurationSecondsChange: (Float) -> Unit = {},
+    onDanmakuScrollFixedVelocityChange: (Boolean) -> Unit = {},
+    onDanmakuStaticToScrollChange: (Boolean) -> Unit = {},
+    onDanmakuMassiveModeChange: (Boolean) -> Unit = {},
     onDanmakuMergeDuplicatesChange: (Boolean) -> Unit = {},
     onDanmakuAllowScrollChange: (Boolean) -> Unit = {},
     onDanmakuAllowTopChange: (Boolean) -> Unit = {},
@@ -294,6 +343,7 @@ fun VideoPlayerOverlay(
     onDanmakuBlockRulesRawChange: (String) -> Unit = {},
     onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
     onDanmakuFullscreenPanelWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
+    onDanmakuSyncNowClick: () -> Unit = {},
     subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
     subtitleControlCallbacks: SubtitleControlCallbacks = SubtitleControlCallbacks(),
     smartOcclusionModuleState: FaceOcclusionModuleState = FaceOcclusionModuleState.Checking,
@@ -421,6 +471,9 @@ fun VideoPlayerOverlay(
     
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val fullscreenLockButtonState = remember(isScreenLocked) {
+        resolveFullscreenLockButtonVisualState(isScreenLocked = isScreenLocked)
+    }
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val hostLifecycleStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
@@ -1050,9 +1103,16 @@ fun VideoPlayerOverlay(
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
-                            if (isScreenLocked) CupertinoIcons.Default.LockOpen else CupertinoIcons.Default.Lock,
-                            contentDescription = if (isScreenLocked) "解锁" else "锁定",
-                            tint = if (isScreenLocked) MaterialTheme.colorScheme.primary else Color.White,
+                            when (fullscreenLockButtonState.icon) {
+                                FullscreenLockButtonIcon.LOCKED -> CupertinoIcons.Default.Lock
+                                FullscreenLockButtonIcon.UNLOCKED -> CupertinoIcons.Default.LockOpen
+                            },
+                            contentDescription = fullscreenLockButtonState.contentDescription,
+                            tint = if (fullscreenLockButtonState.highlighted) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                Color.White
+                            },
                             modifier = Modifier.size(overlayVisualPolicy.lockIconSizeDp.dp)
                         )
                     }
@@ -1300,6 +1360,7 @@ fun VideoPlayerOverlay(
             QualitySelectionMenu(
                 qualities = qualityLabels,
                 qualityIds = qualityIds,
+                switchableQualityIds = switchableQualityIds,
                 currentQuality = currentQualityLabel,
                 isLoggedIn = isLoggedIn,
                 isVip = isVip,
@@ -1360,8 +1421,17 @@ fun VideoPlayerOverlay(
                 ),
                 opacity = danmakuOpacity,
                 fontScale = danmakuFontScale,
+                showAdvancedSection = true,
+                fontWeight = danmakuFontWeight,
                 speed = danmakuSpeed,
                 displayArea = danmakuDisplayArea,
+                strokeWidth = danmakuStrokeWidth,
+                lineHeight = danmakuLineHeight,
+                scrollDurationSeconds = danmakuScrollDurationSeconds,
+                staticDurationSeconds = danmakuStaticDurationSeconds,
+                scrollFixedVelocity = danmakuScrollFixedVelocity,
+                staticDanmakuToScroll = danmakuStaticToScroll,
+                massiveMode = danmakuMassiveMode,
                 mergeDuplicates = danmakuMergeDuplicates,
                 allowScroll = danmakuAllowScroll,
                 allowTop = danmakuAllowTop,
@@ -1372,12 +1442,22 @@ fun VideoPlayerOverlay(
                 blockRulesRaw = danmakuBlockRulesRaw,
                 smartOcclusion = danmakuSmartOcclusion,
                 fullscreenWidthMode = danmakuFullscreenPanelWidthMode,
+                showSyncSection = showDanmakuSyncSection,
+                syncUiState = danmakuSyncUiState,
                 smartOcclusionModuleState = smartOcclusionModuleState,
                 smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
                 onOpacityChange = onDanmakuOpacityChange,
                 onFontScaleChange = onDanmakuFontScaleChange,
+                onFontWeightChange = onDanmakuFontWeightChange,
                 onSpeedChange = onDanmakuSpeedChange,
                 onDisplayAreaChange = onDanmakuDisplayAreaChange,
+                onStrokeWidthChange = onDanmakuStrokeWidthChange,
+                onLineHeightChange = onDanmakuLineHeightChange,
+                onScrollDurationSecondsChange = onDanmakuScrollDurationSecondsChange,
+                onStaticDurationSecondsChange = onDanmakuStaticDurationSecondsChange,
+                onScrollFixedVelocityChange = onDanmakuScrollFixedVelocityChange,
+                onStaticDanmakuToScrollChange = onDanmakuStaticToScrollChange,
+                onMassiveModeChange = onDanmakuMassiveModeChange,
                 onMergeDuplicatesChange = onDanmakuMergeDuplicatesChange,
                 onAllowScrollChange = onDanmakuAllowScrollChange,
                 onAllowTopChange = onDanmakuAllowTopChange,
@@ -1387,6 +1467,7 @@ fun VideoPlayerOverlay(
                 onBlockRulesRawChange = onDanmakuBlockRulesRawChange,
                 onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
                 onFullscreenWidthModeChange = onDanmakuFullscreenPanelWidthModeChange,
+                onSyncNowClick = onDanmakuSyncNowClick,
                 onSmartOcclusionDownloadClick = onDanmakuSmartOcclusionDownloadClick,
                 onDismiss = { showDanmakuSettings = false }
             )
@@ -1401,6 +1482,9 @@ fun VideoPlayerOverlay(
                 currentQualityLabel = currentQualityLabel,
                 qualityLabels = qualityLabels,
                 qualityIds = qualityIds,
+                switchableQualityIds = switchableQualityIds,
+                isLoggedIn = isLoggedIn,
+                isVip = isVip,
                 onQualitySelected = { index ->
                     val id = qualityIds.getOrNull(index) ?: 0
                     onQualityChange(id, 0L)  // 位置由上层处理

@@ -63,6 +63,7 @@ import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedT
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoMetadataSharedTransition
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
 import com.android.purebilibili.feature.home.rememberHomeGlassPillColors
+import com.android.purebilibili.feature.home.resolveHomeGlassCoverPillBaseColor
 import com.android.purebilibili.feature.video.ui.section.resolvePublishTimeRowText
 import com.android.purebilibili.feature.video.ui.section.shouldEmphasizePrecisePublishTime
 //  [预览播放] 相关引用已移除
@@ -174,13 +175,13 @@ fun ElegantVideoCard(
         glassEnabled = glassEnabled,
         blurEnabled = blurEnabled,
         emphasized = false,
-        baseColor = Color.White
+        baseColor = resolveHomeGlassCoverPillBaseColor()
     )
     val emphasizedCoverPillColors = rememberHomeGlassPillColors(
         glassEnabled = glassEnabled,
         blurEnabled = blurEnabled,
         emphasized = true,
-        baseColor = Color.White
+        baseColor = resolveHomeGlassCoverPillBaseColor()
     )
     val inlinePillColors = rememberHomeGlassPillColors(
         glassEnabled = glassEnabled,

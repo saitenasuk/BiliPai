@@ -296,6 +296,19 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun fullscreenLockButtonVisualState_matchesCurrentLockState() {
+        val locked = resolveFullscreenLockButtonVisualState(isScreenLocked = true)
+        assertEquals(FullscreenLockButtonIcon.LOCKED, locked.icon)
+        assertEquals("已锁定", locked.contentDescription)
+        assertTrue(locked.highlighted)
+
+        val unlocked = resolveFullscreenLockButtonVisualState(isScreenLocked = false)
+        assertEquals(FullscreenLockButtonIcon.UNLOCKED, unlocked.icon)
+        assertEquals("未锁定", unlocked.contentDescription)
+        assertFalse(unlocked.highlighted)
+    }
+
+    @Test
     fun playbackDebugRows_includeAllReadableStatsAndSkipEmptyValues() {
         val rows = resolvePlaybackDebugRows(
             PlaybackDebugInfo(

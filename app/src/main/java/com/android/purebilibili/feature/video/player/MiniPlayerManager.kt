@@ -45,6 +45,7 @@ import com.android.purebilibili.core.store.normalizeAppIconKey
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.MediaUtils
 import com.android.purebilibili.core.util.NetworkUtils
+import com.android.purebilibili.data.repository.VideoRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -217,6 +218,13 @@ internal fun shouldPauseBackgroundBuffering(
         playWhenReady = playWhenReady,
         playbackState = playbackState
     )
+}
+
+internal fun shouldPauseBufferingOnEnterBackground(
+    shouldPauseBuffering: Boolean,
+    shouldContinueBackgroundAudio: Boolean
+): Boolean {
+    return shouldPauseBuffering && !shouldContinueBackgroundAudio
 }
 
 internal fun resolveNotificationIsPlaying(
@@ -586,8 +594,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
             playbackState = currentPlayer.playbackState
         )
         val shouldKeepBackgroundAudio = shouldContinueBackgroundAudio()
-        val shouldDisableVideoTrack = shouldDisableVideoTrackOnEnterBackground(
+        val shouldPauseOnBackground = shouldPauseBufferingOnEnterBackground(
             shouldPauseBuffering = shouldPauseBuffering,
+            shouldContinueBackgroundAudio = shouldKeepBackgroundAudio
+        )
+        val shouldDisableVideoTrack = shouldDisableVideoTrackOnEnterBackground(
+            shouldPauseBuffering = shouldPauseOnBackground,
             shouldContinueBackgroundAudio = shouldKeepBackgroundAudio
         )
         if (shouldDisableVideoTrack) {
@@ -609,7 +621,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         if (shouldTrimDanmakuCachesOnEnterBackground(shouldDisableVideoTrack)) {
             DanmakuManager.trimCachesForBackgroundIfPresent()
         }
-        if (shouldPauseBuffering) {
+        if (shouldPauseOnBackground) {
             currentPlayer.pause()
             Logger.d(TAG, "🔋 后台模式：未播放，暂停缓冲并禁用视频轨道")
             return
@@ -1634,10 +1646,19 @@ class MiniPlayerManager private constructor(private val context: Context) :
             backgroundPlaybackUseCase.attachPlayer(currentPlayer)
             val isLoggedIn = !TokenManager.sessDataCache.isNullOrEmpty() ||
                 !TokenManager.accessTokenCache.isNullOrEmpty()
-            val defaultQuality = NetworkUtils.getPlayableDefaultQualityId(
-                context = context,
+            val storedQuality = NetworkUtils.getDefaultQualityId(context)
+            val autoHighestEnabled = SettingsManager.getAutoHighestQualitySync(context)
+            val effectiveVip = VideoRepository.refreshVipStatusForPreferredQualityIfNeeded(
                 isLoggedIn = isLoggedIn,
-                isVip = TokenManager.isVipCache
+                cachedIsVip = TokenManager.isVipCache,
+                storedQuality = storedQuality,
+                autoHighestEnabled = autoHighestEnabled
+            )
+            val defaultQuality = com.android.purebilibili.core.util.resolvePlaybackDefaultQualityId(
+                storedQuality = storedQuality,
+                autoHighestEnabled = autoHighestEnabled,
+                isLoggedIn = isLoggedIn,
+                isVip = effectiveVip
             )
             val audioQualityPreference = SettingsManager.getAudioQualitySync(context)
             val videoCodecPreference = SettingsManager.getVideoCodecSync(context)
