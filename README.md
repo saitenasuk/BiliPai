@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-04-05 · 文档已同步至 v7.4.3（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-04-06 · 文档已同步至 v7.5.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.4.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.5.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -527,7 +527,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-04-05（v7.4.3）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-04-06（v7.5.0）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -572,14 +572,12 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.4.3 · 2026-04-05)
+### 最近更新 (v7.5.0 · 2026-04-06)
 
-- 🎯 **seek、切画质和缓冲提示更稳了**：修复回拉进度后弹幕卡死，切清晰度与 seek 缓冲不再误显示暂停，并会优先显示当前网速。
-- 🖼️ **进度条预览图不再卡住**：拖动时预览帧直接跟随手指目标位置，减少滑动过程中“画面不更新”的错觉。
-- 🧹 **缓存清理支持按项选择**：新增播放地址/画质、网络、预览图、字幕弹幕、临时文件、元数据等细分清理项，默认更偏向播放排障场景。
-- 🔢 **缓存数字终于和勾选项一致**：清理弹窗中的体积提示现在显示“已选缓存”，取消某项后数字会立即跟着变化。
-- 📚 **合集体验继续补强**：合集入口与弹窗支持订阅，以及正序/倒序/最近观看三种排序方式。
-- ◼️ **安卓原生首页顶部更顺眼**：顶部统一面板从直角收口为轻圆角，保留原生风格的同时减少生硬感。
+- 🪐 **空间页升级成更稳的聚合首屏**：空间页优先走聚合数据装配，首屏更接近 PiliPlus，头部、统计区、tab 和投稿区也同步做了主题色化与平直化收口。
+- 🎬 **首次进入空间不再误判“暂无视频”**：当投稿第一页仍在补水时，页面会保留加载态，不再先落成空列表、刷新后才恢复。
+- ⬆️ **动态页补上回到顶部按钮**：滚动到一定距离后会出现悬浮回顶入口，点击后能快速回到动态流顶部。
+- 📐 **首页作者行更整齐**：已关注与未关注卡片现在会保留统一的尾部宽度，双列列表里的作者信息不再忽高忽低。
 
 ### 历史版本
 

@@ -890,6 +890,7 @@ fun ElegantVideoCard(
                 metaColor = MaterialTheme.colorScheme.primary,
                 badgeTextColor = iOSSystemGray.copy(alpha = 0.85f),
                 badgeBorderColor = iOSSystemGray.copy(alpha = 0.4f),
+                reserveTrailingSlot = true,
                 modifier = upNameModifier
             )
             
