@@ -296,6 +296,73 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun centerLoadingUiState_prefersQualitySwitchReasonAndShowsBandwidth() {
+        val state = resolveCenterLoadingUiState(
+            isBuffering = true,
+            isQualitySwitching = true,
+            isSeekTransitionPending = true,
+            bandwidthEstimate = "1.8 Mbps"
+        )
+
+        assertNotNull(state)
+        assertEquals(CenterLoadingReason.QUALITY_SWITCH, state.reason)
+        assertEquals("1.8 Mbps", state.primaryText)
+        assertEquals("正在切换清晰度...", state.secondaryText)
+    }
+
+    @Test
+    fun centerLoadingUiState_usesSeekReasonDuringSeekBuffering() {
+        val state = resolveCenterLoadingUiState(
+            isBuffering = true,
+            isQualitySwitching = false,
+            isSeekTransitionPending = true,
+            bandwidthEstimate = "856 kbps"
+        )
+
+        assertNotNull(state)
+        assertEquals(CenterLoadingReason.SEEK_BUFFERING, state.reason)
+        assertEquals("856 kbps", state.primaryText)
+        assertEquals("正在定位新进度...", state.secondaryText)
+    }
+
+    @Test
+    fun centerLoadingUiState_returnsNullForPlainBuffering() {
+        assertNull(
+            resolveCenterLoadingUiState(
+                isBuffering = true,
+                isQualitySwitching = false,
+                isSeekTransitionPending = false,
+                bandwidthEstimate = "2.4 Mbps"
+            )
+        )
+    }
+
+    @Test
+    fun centerLoadingUiState_fallsBackToGenericMessageWhenBandwidthMissing() {
+        val state = resolveCenterLoadingUiState(
+            isBuffering = true,
+            isQualitySwitching = false,
+            isSeekTransitionPending = true,
+            bandwidthEstimate = "  "
+        )
+
+        assertNotNull(state)
+        assertEquals("正在缓冲...", state.primaryText)
+        assertEquals("正在定位新进度...", state.secondaryText)
+    }
+
+    @Test
+    fun centerLoadingVisualState_usesThemePrimaryForSpinnerAndHighlight() {
+        val state = resolveCenterLoadingVisualState(
+            themePrimary = Color(0xFF7CB342)
+        )
+
+        assertEquals(Color(0xFF7CB342), state.indicatorColor)
+        assertEquals(Color(0xFF7CB342), state.primaryTextColor)
+        assertTrue(state.secondaryTextColor.alpha < 1f)
+    }
+
+    @Test
     fun fullscreenLockButtonVisualState_matchesCurrentLockState() {
         val locked = resolveFullscreenLockButtonVisualState(isScreenLocked = true)
         assertEquals(FullscreenLockButtonIcon.LOCKED, locked.icon)

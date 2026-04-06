@@ -10,6 +10,11 @@ internal enum class PlayUrlSource {
     GUEST
 }
 
+internal enum class PlayUrlRequestKind {
+    INITIAL,
+    EXPLICIT
+}
+
 internal data class VideoInfoLookupInput(
     val bvid: String,
     val aid: Long
@@ -60,9 +65,16 @@ internal fun resolveInitialStartQuality(
     isVip: Boolean,
     auto1080pEnabled: Boolean
 ): Int {
-    // PiliPlus parity: the initial WBI request stays on a stable 1080P entry
-    // point and lets the playback layer select the actual track locally.
-    return 80
+    return when {
+        isAutoHighestQuality && isVip -> 120
+        isAutoHighestQuality && isLogin -> 80
+        isAutoHighestQuality -> 64
+        targetQuality != null -> targetQuality
+        isVip -> 116
+        isLogin && auto1080pEnabled -> 80
+        isLogin -> 64
+        else -> 32
+    }
 }
 
 internal fun resolveVideoPlaybackAuthState(
@@ -234,14 +246,23 @@ internal fun buildGuestPlaybackFallbackOrder(): List<PlayUrlSource> {
 }
 
 internal fun shouldAcceptAppApiResultForTargetQuality(
+    requestKind: PlayUrlRequestKind,
     targetQn: Int,
     returnedQuality: Int,
     dashVideoIds: List<Int>
 ): Boolean {
-    // PiliPlus parity: if the initial payload is already playable, keep it and
-    // let the playback layer choose the best available track instead of failing
-    // early in the repository because the returned quality is downgraded.
-    return returnedQuality > 0 || dashVideoIds.isNotEmpty()
+    if (requestKind == PlayUrlRequestKind.INITIAL) {
+        // Startup should keep any playable payload to avoid a hard failure page
+        // when the service temporarily downgrades or omits the requested track.
+        return returnedQuality > 0 || dashVideoIds.isNotEmpty()
+    }
+
+    // Explicit quality selection must respect the requested target for both VIP
+    // and non-VIP users; otherwise the UI reports a successful switch while the
+    // backend silently returns a lower tier.
+    if (targetQn < 80) return true
+    if (dashVideoIds.distinct().contains(targetQn)) return true
+    return returnedQuality >= targetQn && returnedQuality > 0
 }
 
 internal fun buildGuestFallbackQualities(): List<Int> {

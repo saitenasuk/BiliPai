@@ -798,6 +798,26 @@ fun VideoPlayerOverlay(
             playbackTransitionPositionMs = playbackTransitionPositionMs
         )
     }
+    val centerLoadingUiState = remember(
+        isBuffering,
+        isQualitySwitching,
+        suppressCenterPlayButtonForSeekTransition,
+        playbackTransitionPositionMs,
+        debugInfo.bandwidthEstimate
+    ) {
+        resolveCenterLoadingUiState(
+            isBuffering = isBuffering,
+            isQualitySwitching = isQualitySwitching,
+            isSeekTransitionPending = suppressCenterPlayButtonForSeekTransition || playbackTransitionPositionMs != null,
+            bandwidthEstimate = debugInfo.bandwidthEstimate
+        )
+    }
+    val themePrimary = MaterialTheme.colorScheme.primary
+    val centerLoadingVisualState = remember(themePrimary) {
+        resolveCenterLoadingVisualState(
+            themePrimary = themePrimary
+        )
+    }
 
     LaunchedEffect(playbackTransitionPositionMs) {
         if (playbackTransitionPositionMs == null) {
@@ -1315,17 +1335,61 @@ fun VideoPlayerOverlay(
                 isQualitySwitching = isQualitySwitching,
                 isVisible = isVisible,
                 isScrubbing = isProgressScrubbing
-            ),
+            ) && centerLoadingUiState == null,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(tween(200)),
             exit = fadeOut(tween(200))
         ) {
-            CupertinoActivityIndicator()
+            CupertinoActivityIndicator(
+                color = centerLoadingVisualState.indicatorColor
+            )
+        }
+
+        AnimatedVisibility(
+            visible = centerLoadingUiState != null,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200))
+        ) {
+            val loadingState = centerLoadingUiState ?: return@AnimatedVisibility
+            Surface(
+                color = Color.Black.copy(alpha = 0.72f),
+                shape = RoundedCornerShape(overlayVisualPolicy.qualitySwitchCornerRadiusDp.dp),
+                modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(
+                        horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
+                        vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
+                    )
+                ) {
+                    CupertinoActivityIndicator(
+                        color = centerLoadingVisualState.indicatorColor
+                    )
+                    Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
+                    Text(
+                        text = loadingState.primaryText,
+                        color = centerLoadingVisualState.primaryTextColor,
+                        fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    loadingState.secondaryText?.let { secondaryText ->
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = secondaryText,
+                            color = centerLoadingVisualState.secondaryTextColor,
+                            fontSize = (overlayVisualPolicy.qualitySwitchMessageFontSp - 1).sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
         }
 
         // --- 5.5  清晰度切换中 Loading 指示器 ---
         AnimatedVisibility(
-            visible = isQualitySwitching,
+            visible = isQualitySwitching && centerLoadingUiState == null,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(tween(200)),
             exit = fadeOut(tween(200))
@@ -1343,11 +1407,13 @@ fun VideoPlayerOverlay(
                     )
                 ) {
                     //  iOS 风格加载器
-                    CupertinoActivityIndicator()
+                    CupertinoActivityIndicator(
+                        color = centerLoadingVisualState.indicatorColor
+                    )
                     Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
                     Text(
                         text = "正在切换清晰度...",
-                        color = Color.White,
+                        color = centerLoadingVisualState.primaryTextColor,
                         fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
                         fontWeight = FontWeight.Medium
                     )

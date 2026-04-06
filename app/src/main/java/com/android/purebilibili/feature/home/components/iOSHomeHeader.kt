@@ -369,7 +369,7 @@ internal fun resolveHomeTopUnifiedPanelCornerRadius(
     collapsedIntoStatusBar: Boolean = false
 ): Dp {
     if (collapsedIntoStatusBar) return 0.dp
-    return if (uiPreset == UiPreset.MD3) 0.dp else 28.dp
+    return if (uiPreset == UiPreset.MD3) 16.dp else 28.dp
 }
 
 internal fun resolveHomeTopEmbeddedTabHorizontalPadding(uiPreset: UiPreset = UiPreset.IOS): Dp {

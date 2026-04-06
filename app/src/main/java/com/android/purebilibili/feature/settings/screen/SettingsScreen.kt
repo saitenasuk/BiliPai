@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
+import com.android.purebilibili.core.util.CacheClearTarget
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.DEFAULT_ANALYTICS_ENABLED
 import com.android.purebilibili.core.store.DEFAULT_CRASH_TRACKING_ENABLED
@@ -116,6 +117,19 @@ fun SettingsScreen(
     var showCacheDialog by remember { mutableStateOf(false) }
     var showCacheAnimation by remember { mutableStateOf(false) }
     var cacheProgress by remember { mutableStateOf<CacheClearProgress?>(null) }
+    val cacheClearOptions = remember { resolveCacheClearOptions() }
+    var selectedCacheClearTargets by remember {
+        mutableStateOf(resolveDefaultCacheClearTargets())
+    }
+    var pendingCacheClearTargets by remember {
+        mutableStateOf(resolveDefaultCacheClearTargets())
+    }
+    val selectedCacheSizeSummary = remember(state.cacheBreakdown, selectedCacheClearTargets) {
+        resolveSelectedCacheSizeSummary(
+            breakdown = state.cacheBreakdown,
+            selectedTargets = selectedCacheClearTargets
+        )
+    }
     var versionClickCount by remember { mutableIntStateOf(0) }
     var showEasterEggDialog by remember { mutableStateOf(false) }
     var showPathDialog by remember { mutableStateOf(false) }
@@ -217,7 +231,10 @@ fun SettingsScreen(
     }
 
     // Callbacks
-    val onClearCacheAction = { showCacheDialog = true }
+    val onClearCacheAction = {
+        selectedCacheClearTargets = resolveDefaultCacheClearTargets()
+        showCacheDialog = true
+    }
     val onDownloadPathAction = { showPathDialog = true }
     
     // Logic Callbacks
@@ -365,7 +382,7 @@ fun SettingsScreen(
                 )
                 kotlinx.coroutines.delay(150)
             }
-            val clearResult = viewModel.clearCache()
+            val clearResult = viewModel.clearCache(pendingCacheClearTargets)
             if (shouldMarkCacheClearAnimationComplete(clearResult.isSuccess)) {
                 cacheProgress = CacheClearProgress(
                     current = totalSize,
@@ -411,8 +428,25 @@ fun SettingsScreen(
     // Dialogs
     if (showCacheDialog) {
         CacheClearConfirmDialog(
-            cacheSize = state.cacheSize,
-            onConfirm = { showCacheDialog = false; showCacheAnimation = true },
+            selectedCacheSizeSummary = selectedCacheSizeSummary,
+            options = cacheClearOptions,
+            selectedTargets = selectedCacheClearTargets,
+            onTargetToggle = { target, checked ->
+                selectedCacheClearTargets = if (checked) {
+                    selectedCacheClearTargets + target
+                } else {
+                    selectedCacheClearTargets - target
+                }
+            },
+            onConfirm = {
+                if (selectedCacheClearTargets.isEmpty()) {
+                    Toast.makeText(context, "请至少选择一项要清理的缓存", Toast.LENGTH_SHORT).show()
+                } else {
+                    pendingCacheClearTargets = selectedCacheClearTargets
+                    showCacheDialog = false
+                    showCacheAnimation = true
+                }
+            },
             onDismiss = { showCacheDialog = false }
         )
     }

@@ -52,11 +52,11 @@ class VideoLoadPolicyTest {
             auto1080pEnabled = true
         )
 
-        assertEquals(80, quality)
+        assertEquals(120, quality)
     }
 
     @Test
-    fun `resolveInitialStartQuality keeps stable first request for explicit low preference`() {
+    fun `resolveInitialStartQuality respects explicit low preference`() {
         val quality = resolveInitialStartQuality(
             targetQuality = 32,
             isAutoHighestQuality = false,
@@ -65,7 +65,20 @@ class VideoLoadPolicyTest {
             auto1080pEnabled = false
         )
 
-        assertEquals(80, quality)
+        assertEquals(32, quality)
+    }
+
+    @Test
+    fun `resolveInitialStartQuality respects explicit premium preference for vip`() {
+        val quality = resolveInitialStartQuality(
+            targetQuality = 120,
+            isAutoHighestQuality = false,
+            isLogin = true,
+            isVip = true,
+            auto1080pEnabled = true
+        )
+
+        assertEquals(120, quality)
     }
 
     @Test
@@ -145,12 +158,12 @@ class VideoLoadPolicyTest {
     @Test
     fun `buildStartQualityDecisionSummary includes auth and quality context`() {
         assertEquals(
-            "PLAY_DIAG start_quality bvid=BV1TEST12345 cid=9527 userSetting=116 start=80 autoHighest=false isLoggedIn=true isVip=false auto1080p=true audioLang=default",
+            "PLAY_DIAG start_quality bvid=BV1TEST12345 cid=9527 userSetting=116 start=116 autoHighest=false isLoggedIn=true isVip=false auto1080p=true audioLang=default",
             buildStartQualityDecisionSummary(
                 bvid = "BV1TEST12345",
                 cid = 9527L,
                 userSettingQuality = 116,
-                startQuality = 80,
+                startQuality = 116,
                 isAutoHighestQuality = false,
                 isLoggedIn = true,
                 isVip = false,
@@ -205,9 +218,10 @@ class VideoLoadPolicyTest {
     }
 
     @Test
-    fun `shouldAcceptAppApiResultForTargetQuality accepts downgraded playable 1080 response without target track`() {
+    fun `shouldAcceptAppApiResultForTargetQuality keeps downgraded playable 1080 response for startup recovery`() {
         assertTrue(
             shouldAcceptAppApiResultForTargetQuality(
+                requestKind = PlayUrlRequestKind.INITIAL,
                 targetQn = 80,
                 returnedQuality = 64,
                 dashVideoIds = listOf(64, 32)
@@ -332,9 +346,10 @@ class VideoLoadPolicyTest {
     }
 
     @Test
-    fun `shouldAcceptAppApiResultForTargetQuality accepts downgraded high quality response for first frame parity`() {
-        assertTrue(
+    fun `shouldAcceptAppApiResultForTargetQuality rejects downgraded high quality response for explicit selection`() {
+        assertFalse(
             shouldAcceptAppApiResultForTargetQuality(
+                requestKind = PlayUrlRequestKind.EXPLICIT,
                 targetQn = 120,
                 returnedQuality = 80,
                 dashVideoIds = listOf(80, 64)
@@ -346,6 +361,7 @@ class VideoLoadPolicyTest {
     fun `shouldAcceptAppApiResultForTargetQuality accepts when target exists in dash list`() {
         assertTrue(
             shouldAcceptAppApiResultForTargetQuality(
+                requestKind = PlayUrlRequestKind.EXPLICIT,
                 targetQn = 120,
                 returnedQuality = 80,
                 dashVideoIds = listOf(120, 80, 64)

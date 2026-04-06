@@ -126,6 +126,7 @@ class DanmakuManager private constructor(
     private var cachedCid: Long = 0L
     private var lastExplicitSeekPositionMs: Long? = null
     private var lastExplicitSeekElapsedRealtimeMs: Long? = null
+    private var lastExplicitSeekStartedPlayback: Boolean? = null
     
     //  [新增] 记录原始弹幕滚动时间（用于倍速同步）
     private var originalMoveTime: Long = 8000L  // 默认 8 秒
@@ -429,20 +430,23 @@ class DanmakuManager private constructor(
         Log.w(TAG, " Resynced danmaku timeline ($reason) at ${positionMs}ms, play=$shouldPlay")
     }
 
-    private fun markExplicitSeekResync(positionMs: Long) {
+    private fun markExplicitSeekResync(positionMs: Long, startedPlayback: Boolean) {
         lastExplicitSeekPositionMs = positionMs
         lastExplicitSeekElapsedRealtimeMs = SystemClock.elapsedRealtime()
+        lastExplicitSeekStartedPlayback = startedPlayback
     }
 
     private fun clearExplicitSeekResyncMarker() {
         lastExplicitSeekPositionMs = null
         lastExplicitSeekElapsedRealtimeMs = null
+        lastExplicitSeekStartedPlayback = null
     }
 
     private fun shouldSuppressFollowupHardResync(positionMs: Long): Boolean {
         return shouldSuppressFollowupDanmakuHardResync(
             positionMs = positionMs,
             explicitSeekPositionMs = lastExplicitSeekPositionMs,
+            explicitSeekStartedPlayback = lastExplicitSeekStartedPlayback ?: true,
             nowElapsedRealtimeMs = SystemClock.elapsedRealtime(),
             explicitSeekElapsedRealtimeMs = lastExplicitSeekElapsedRealtimeMs
         )
@@ -1510,12 +1514,13 @@ class DanmakuManager private constructor(
      */
     fun seekTo(positionMs: Long) {
         Log.w(TAG, "⏭️ seekTo($positionMs) - refreshing danmaku")
-        markExplicitSeekResync(positionMs)
+        val shouldPlay = player?.isPlaying == true
+        markExplicitSeekResync(positionMs, startedPlayback = shouldPlay)
         cachedDanmakuList?.let { list ->
             resyncDanmakuTimeline(
                 list = list,
                 positionMs = positionMs,
-                shouldPlay = player?.isPlaying == true,
+                shouldPlay = shouldPlay,
                 reason = "manual_seek"
             )
             Log.w(TAG, "⏭️ Danmaku restarted at ${positionMs}ms")

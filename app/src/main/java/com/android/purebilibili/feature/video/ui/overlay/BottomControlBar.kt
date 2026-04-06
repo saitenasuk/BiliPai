@@ -107,6 +107,18 @@ internal fun resolveDisplayedPlayerProgress(
     return progress.copy(current = resolvedCurrent)
 }
 
+internal fun resolveSeekPreviewTargetPositionMs(
+    displayPositionMs: Long,
+    dragTargetPositionMs: Long,
+    isSeekScrubbing: Boolean
+): Long {
+    return if (isSeekScrubbing) {
+        dragTargetPositionMs.coerceAtLeast(0L)
+    } else {
+        displayPositionMs.coerceAtLeast(0L)
+    }
+}
+
 internal fun shouldHoldVideoProgressBarSettledProgress(
     progress: Float,
     pendingSettledProgress: Float?,
@@ -1011,7 +1023,11 @@ fun VideoProgressBar(
             markers = sponsorMarkers
         )
     }
-    val targetPositionMs = (displayProgress * duration).toLong()
+    val targetPositionMs = resolveSeekPreviewTargetPositionMs(
+        displayPositionMs = (displayProgress * duration).toLong(),
+        dragTargetPositionMs = dragTargetPositionMs,
+        isSeekScrubbing = isSeekScrubbing
+    )
     val baseHeight = if (currentChapter != null) {
         layoutPolicy.baseHeightWithChapterDp.dp
     } else {

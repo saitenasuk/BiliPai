@@ -298,7 +298,7 @@ class iOSHomeHeaderVisualPolicyTest {
         assertEquals(8.dp, resolveHomeTopUnifiedPanelInnerPadding())
         assertEquals(10.dp, resolveHomeTopUnifiedPanelInnerPadding(UiPreset.MD3))
         assertEquals(28.dp, resolveHomeTopUnifiedPanelCornerRadius())
-        assertEquals(0.dp, resolveHomeTopUnifiedPanelCornerRadius(UiPreset.MD3))
+        assertEquals(16.dp, resolveHomeTopUnifiedPanelCornerRadius(UiPreset.MD3))
         assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding())
         assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding(UiPreset.MD3))
     }
@@ -574,6 +574,24 @@ class iOSHomeHeaderVisualPolicyTest {
         )
         assertTrue(resolveHomeTopUnifiedSearchContainerColor(isLightMode = true).alpha < 0.4f)
         assertTrue(resolveHomeTopUnifiedSearchBorderColor(isLightMode = true).alpha < 0.25f)
+    }
+
+    @Test
+    fun `md3 unified home header uses subtle outer panel rounding`() {
+        assertEquals(
+            16.dp,
+            resolveHomeTopUnifiedPanelCornerRadius(
+                uiPreset = UiPreset.MD3,
+                collapsedIntoStatusBar = false
+            )
+        )
+        assertEquals(
+            0.dp,
+            resolveHomeTopUnifiedPanelCornerRadius(
+                uiPreset = UiPreset.MD3,
+                collapsedIntoStatusBar = true
+            )
+        )
     }
 
     @Test

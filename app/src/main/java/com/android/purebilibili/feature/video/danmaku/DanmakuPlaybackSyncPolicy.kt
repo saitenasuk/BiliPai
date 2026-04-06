@@ -134,12 +134,14 @@ internal inline fun executeExplicitDanmakuResync(
 internal fun shouldSuppressFollowupDanmakuHardResync(
     positionMs: Long,
     explicitSeekPositionMs: Long?,
+    explicitSeekStartedPlayback: Boolean = true,
     nowElapsedRealtimeMs: Long,
     explicitSeekElapsedRealtimeMs: Long?,
     positionToleranceMs: Long = EXPLICIT_SEEK_RESYNC_TOLERANCE_MS,
     suppressionWindowMs: Long = EXPLICIT_SEEK_RESYNC_WINDOW_MS
 ): Boolean {
     val seekPosition = explicitSeekPositionMs ?: return false
+    if (!explicitSeekStartedPlayback) return false
     val seekElapsedRealtimeMs = explicitSeekElapsedRealtimeMs ?: return false
     if (nowElapsedRealtimeMs < seekElapsedRealtimeMs) return false
     if (nowElapsedRealtimeMs - seekElapsedRealtimeMs > suppressionWindowMs) return false

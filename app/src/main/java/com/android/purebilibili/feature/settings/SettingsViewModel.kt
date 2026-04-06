@@ -17,6 +17,7 @@ import com.android.purebilibili.core.theme.AppFontSizePreset
 import com.android.purebilibili.core.theme.AppUiScalePreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.blur.BlurIntensity
+import com.android.purebilibili.core.util.CacheClearTarget
 import com.android.purebilibili.core.util.CacheUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -490,8 +491,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    suspend fun clearCache(): Result<CacheUtils.CacheBreakdown> {
-        return CacheUtils.clearAllCache(context).mapCatching {
+    suspend fun clearCache(
+        targets: Set<CacheClearTarget> = CacheClearTarget.entries.toSet()
+    ): Result<CacheUtils.CacheBreakdown> {
+        return CacheUtils.clearCache(context, targets).mapCatching {
             // 清理后立即刷新
             val breakdown = CacheUtils.getCacheBreakdown(context)
             _cacheSize.value = breakdown.format()

@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-04-05 · 文档已同步至 v7.4.2（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-04-06 · 文档已同步至 v7.5.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.4.2-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.5.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -527,7 +527,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-04-05（v7.4.2）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-04-06（v7.5.0）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -572,14 +572,13 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.4.2 · 2026-04-05)
+### 最近更新 (v7.5.0 · 2026-04-06)
 
-- 🎯 **普通视频起播继续向 PiliPlus 对齐**：首个 `WBI` 请求固定从 `qn=80` 起步，可播但降级的结果也会先接住，再交给播放层本地选轨。
-- 🛟 **播放地址获取失败时的回退链更完整**：登录态补上 `APP access_token -> legacy -> guest`，游客态保留 `legacy` 兜底，减少“无法获取任何画质播放地址”的硬失败页。
-- 🌫️ **玻璃封面上的时长与进度更清楚**：历史记录、收藏等封面胶囊统一改成深色玻璃基底，亮封面下也能保持白字对比度。
-- 💬 **弹幕不再整片挤成一团**：行高设置会正确换算成像素行高，调整行高、显示区域和海量模式时终于会真实生效。
-- 🔒 **播放器误触和锁定图标语义修正**：观看时不再响应双指改画面比例，横屏锁定按钮的开锁/闭锁图标与高亮状态也已修正。
-- ⚙️ **构建链更稳**：补上 KSP 增量与 configuration-cache-safe 的目录预创建任务，并把播放器大文件的纯策略逻辑拆出，增量编译稳定性更好。
+- 🪐 **空间页升级成更稳的聚合首屏**：空间页优先走聚合数据加载，头部、统计区、tab 和投稿区也同步改成了更平直的主题色界面。
+- 🎬 **首次进入空间不再误判“暂无视频”**：当投稿第一页还没有加载完成时，页面会保留加载态，不再先落成空列表、刷新后才恢复。
+- 🧩 **空间页非首屏必需的信息改成后台继续加载**：合集、系列、收藏夹和部分统计不再和首屏强绑定，局部失败时也不会直接让整个空间页加载失败。
+- ⬆️ **动态页补上回到顶部按钮**：滚动到一定距离后会出现悬浮回顶入口，点击后能快速回到动态流顶部。
+- 📐 **首页作者行更整齐**：已关注与未关注卡片现在会保留统一的尾部宽度，双列列表里的作者信息不再忽高忽低。
 
 ### 历史版本
 

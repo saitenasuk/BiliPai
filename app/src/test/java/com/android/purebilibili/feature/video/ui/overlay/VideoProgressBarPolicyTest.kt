@@ -43,6 +43,30 @@ class VideoProgressBarPolicyTest {
     }
 
     @Test
+    fun seekPreviewTarget_usesLiveDragPosition_whileScrubbing() {
+        assertEquals(
+            61_000L,
+            resolveSeekPreviewTargetPositionMs(
+                displayPositionMs = 32_000L,
+                dragTargetPositionMs = 61_000L,
+                isSeekScrubbing = true
+            )
+        )
+    }
+
+    @Test
+    fun seekPreviewTarget_fallsBackToDisplayedPosition_whenNotScrubbing() {
+        assertEquals(
+            32_000L,
+            resolveSeekPreviewTargetPositionMs(
+                displayPositionMs = 32_000L,
+                dragTargetPositionMs = 61_000L,
+                isSeekScrubbing = false
+            )
+        )
+    }
+
+    @Test
     fun dragging_progress_uses_live_drag_value() {
         assertEquals(
             0.68f,

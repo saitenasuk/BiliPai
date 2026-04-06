@@ -26,6 +26,7 @@ import com.android.purebilibili.feature.settings.DarkThemeStyle
 import com.android.purebilibili.feature.settings.resolveAppLanguagePreference
 import com.android.purebilibili.feature.settings.resolveDarkThemeStylePreference
 import com.android.purebilibili.feature.settings.resolveThemeModePreference
+import com.android.purebilibili.feature.video.ui.components.CollectionSortMode
 import com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_OPACITY
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuOpacity
 import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRules
@@ -38,10 +39,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import kotlin.math.abs
@@ -503,6 +506,62 @@ internal fun mapPlayerInteractionSettingsFromPreferences(
     preferences: Preferences
 ): PlayerInteractionSettings {
     return SettingsManager.mapPlayerInteractionSettingsFromPreferences(preferences)
+}
+
+internal fun decodeCollectionSubscriptionIds(rawValue: String?): Set<String> {
+    return rawValue
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotBlank() }
+        ?.toSet()
+        ?: emptySet()
+}
+
+internal fun encodeCollectionSubscriptionIds(collectionIds: Set<String>): String {
+    return collectionIds
+        .filter { it.isNotBlank() }
+        .sorted()
+        .joinToString(",")
+}
+
+internal fun toggleCollectionSubscription(
+    subscribedCollectionIds: Set<String>,
+    collectionId: Long
+): Set<String> {
+    val normalizedId = collectionId.takeIf { it > 0L }?.toString() ?: return subscribedCollectionIds
+    return if (normalizedId in subscribedCollectionIds) {
+        subscribedCollectionIds - normalizedId
+    } else {
+        subscribedCollectionIds + normalizedId
+    }
+}
+
+internal fun decodeCollectionSortPreferences(rawValue: String?): Map<Long, CollectionSortMode> {
+    if (rawValue.isNullOrBlank()) return emptyMap()
+    return runCatching {
+        Json.parseToJsonElement(rawValue).jsonObject.entries.mapNotNull { (key, value) ->
+            val collectionId = key.toLongOrNull() ?: return@mapNotNull null
+            val sortMode = runCatching {
+                CollectionSortMode.valueOf(value.jsonPrimitive.content)
+            }.getOrNull() ?: return@mapNotNull null
+            collectionId to sortMode
+        }.toMap()
+    }.getOrDefault(emptyMap())
+}
+
+internal fun encodeCollectionSortPreferences(
+    preferences: Map<Long, CollectionSortMode>
+): String {
+    if (preferences.isEmpty()) return "{}"
+    return preferences.entries
+        .sortedBy { it.key }
+        .joinToString(
+            separator = ",",
+            prefix = "{",
+            postfix = "}"
+        ) { entry ->
+            "\"${entry.key}\":\"${entry.value.name}\""
+        }
 }
 
 object SettingsManager {
@@ -2832,6 +2891,8 @@ object SettingsManager {
     private val KEY_VIDEO_CODEC = stringPreferencesKey("video_codec_preference")
     private val KEY_VIDEO_SECOND_CODEC = stringPreferencesKey("video_second_codec_preference")
     private val KEY_AUDIO_QUALITY = intPreferencesKey("audio_quality_preference")
+    private val KEY_SUBSCRIBED_COLLECTION_IDS = stringPreferencesKey("subscribed_collection_ids")
+    private val KEY_COLLECTION_SORT_PREFERENCES = stringPreferencesKey("collection_sort_preferences")
     
     // --- WiFi 默认画质 (默认 80 = 1080P) ---
     fun getWifiQuality(context: Context): Flow<Int> = context.settingsDataStore.data
@@ -2868,6 +2929,59 @@ object SettingsManager {
     fun getMobileQualitySync(context: Context): Int {
         return context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
             .getInt("mobile_quality", 64)
+    }
+
+    fun getSubscribedCollectionIds(context: Context): Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences -> decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS]) }
+        .distinctUntilChanged()
+
+    fun isCollectionSubscribed(context: Context, collectionId: Long): Flow<Boolean> {
+        val normalizedId = collectionId.takeIf { it > 0L }?.toString()
+            ?: return kotlinx.coroutines.flow.flowOf(false)
+        return getSubscribedCollectionIds(context)
+            .map { subscribedIds -> normalizedId in subscribedIds }
+            .distinctUntilChanged()
+    }
+
+    suspend fun toggleCollectionSubscription(context: Context, collectionId: Long) {
+        if (collectionId <= 0L) return
+        context.settingsDataStore.edit { preferences ->
+            val current = decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS])
+            preferences[KEY_SUBSCRIBED_COLLECTION_IDS] = encodeCollectionSubscriptionIds(
+                toggleCollectionSubscription(current, collectionId)
+            )
+        }
+    }
+
+    fun getCollectionSortPreferences(context: Context): Flow<Map<Long, CollectionSortMode>> =
+        context.settingsDataStore.data
+            .map { preferences -> decodeCollectionSortPreferences(preferences[KEY_COLLECTION_SORT_PREFERENCES]) }
+            .distinctUntilChanged()
+
+    fun getCollectionSortMode(context: Context, collectionId: Long): Flow<CollectionSortMode> {
+        if (collectionId <= 0L) return kotlinx.coroutines.flow.flowOf(CollectionSortMode.ASCENDING)
+        return getCollectionSortPreferences(context)
+            .map { preferences -> preferences[collectionId] ?: CollectionSortMode.ASCENDING }
+            .distinctUntilChanged()
+    }
+
+    suspend fun setCollectionSortMode(
+        context: Context,
+        collectionId: Long,
+        sortMode: CollectionSortMode
+    ) {
+        if (collectionId <= 0L) return
+        context.settingsDataStore.edit { preferences ->
+            val current = decodeCollectionSortPreferences(
+                preferences[KEY_COLLECTION_SORT_PREFERENCES]
+            ).toMutableMap()
+            if (sortMode == CollectionSortMode.ASCENDING) {
+                current.remove(collectionId)
+            } else {
+                current[collectionId] = sortMode
+            }
+            preferences[KEY_COLLECTION_SORT_PREFERENCES] = encodeCollectionSortPreferences(current)
+        }
     }
     
     // --- 🚀 自动最高画质 (开启后忽略上方设置，始终选择最高可用画质) ---
