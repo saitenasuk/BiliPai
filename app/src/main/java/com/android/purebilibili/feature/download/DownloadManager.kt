@@ -182,15 +182,31 @@ object DownloadManager {
         // 🔧 取消 WorkManager 任务
         DownloadWorker.cancel(context, taskId)
         
-        // 删除文件
         val task = _tasks.value[taskId]
-        task?.filePath?.let { File(it).delete() }
-        task?.exportedFileUri?.let { deleteExportedFile(context, it) }
-        getVideoFile(taskId).delete()
-        getAudioFile(taskId).delete()
+        if (task != null) {
+            val cleanupTargets = resolveDownloadCleanupTargets(
+                taskId = taskId,
+                task = task,
+                taskDirectoryPath = getTaskDir(taskId).absolutePath
+            )
+            cleanupTargets.filePaths.forEach { path ->
+                runCatching { File(path).delete() }
+            }
+            task.exportedFileUri?.let { deleteExportedFile(context, it) }
+            val taskDir = File(cleanupTargets.taskDirectoryPath)
+            if (taskDir.exists() && taskDir.isDirectory && taskDir.listFiles().isNullOrEmpty()) {
+                taskDir.delete()
+            }
+        }
         
         _tasks.value = _tasks.value - taskId
         saveTasks()
+    }
+
+    fun updatePlaybackPosition(taskId: String, positionMs: Long) {
+        updateTask(taskId) { current ->
+            current.copy(lastPlaybackPositionMs = positionMs.coerceAtLeast(0L))
+        }
     }
     
     /**

@@ -11,6 +11,7 @@ import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.Image
@@ -148,8 +149,8 @@ internal fun resolvePluginInstallDeepLink(rawDeepLink: String): PluginInstallDee
         ?.mapNotNull { part ->
             if (part.isBlank()) return@mapNotNull null
             val pair = part.split("=", limit = 2)
-            val key = URLDecoder.decode(pair[0], StandardCharsets.UTF_8)
-            val value = URLDecoder.decode(pair.getOrElse(1) { "" }, StandardCharsets.UTF_8)
+            val key = URLDecoder.decode(pair[0], StandardCharsets.UTF_8.name())
+            val value = URLDecoder.decode(pair.getOrElse(1) { "" }, StandardCharsets.UTF_8.name())
             key to value
         }
         ?.toMap()
@@ -506,6 +507,57 @@ internal fun splashTrailSecondaryAlpha(progress: Float): Float {
     return (0.2f * (1f - trailProgress).pow(1.22f)).coerceIn(0f, 1f)
 }
 
+@RequiresApi(Build.VERSION_CODES.S)
+private fun applySplashRealtimeBlur(
+    splashView: android.view.View,
+    animatedTarget: android.view.View,
+    primaryTrailView: android.view.View?,
+    secondaryTrailView: android.view.View?,
+    radius: Float
+) {
+    splashView.setRenderEffect(
+        android.graphics.RenderEffect.createBlurEffect(
+            radius * 0.55f,
+            radius * 0.55f,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+    )
+    animatedTarget.setRenderEffect(
+        android.graphics.RenderEffect.createBlurEffect(
+            radius,
+            radius,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+    )
+    primaryTrailView?.setRenderEffect(
+        android.graphics.RenderEffect.createBlurEffect(
+            radius * 1.2f,
+            radius * 1.2f,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+    )
+    secondaryTrailView?.setRenderEffect(
+        android.graphics.RenderEffect.createBlurEffect(
+            radius * 1.45f,
+            radius * 1.45f,
+            android.graphics.Shader.TileMode.CLAMP
+        )
+    )
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+private fun clearSplashRealtimeBlur(
+    splashView: android.view.View,
+    animatedTarget: android.view.View,
+    primaryTrailView: android.view.View?,
+    secondaryTrailView: android.view.View?
+) {
+    splashView.setRenderEffect(null)
+    animatedTarget.setRenderEffect(null)
+    primaryTrailView?.setRenderEffect(null)
+    secondaryTrailView?.setRenderEffect(null)
+}
+
 internal enum class SplashFlyoutTargetType {
     SYSTEM_ICON,
     FALLBACK_ICON,
@@ -530,7 +582,7 @@ internal fun shouldLogWarmResume(
     return hasCompletedInitialResume && !isChangingConfigurations
 }
 
-@OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
 class MainActivity : AppCompatActivity() {
     
     //  PiP 状态
@@ -733,54 +785,42 @@ class MainActivity : AppCompatActivity() {
                                 trail.scaleY = scale * 1.06f
                             }
 
-                            if (shouldApplySplashRealtimeBlur(blurEffectEnabled, progress)) {
+                            if (
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                                shouldApplySplashRealtimeBlur(blurEffectEnabled, progress)
+                            ) {
                                 val radius = splashExitBlurRadiusEnd() * splashExitBlurProgress(progress)
                                 runCatching {
-                                    splashView.setRenderEffect(
-                                        android.graphics.RenderEffect.createBlurEffect(
-                                            radius * 0.55f,
-                                            radius * 0.55f,
-                                            android.graphics.Shader.TileMode.CLAMP
-                                        )
-                                    )
-                                    animatedTarget.setRenderEffect(
-                                        android.graphics.RenderEffect.createBlurEffect(
-                                            radius,
-                                            radius,
-                                            android.graphics.Shader.TileMode.CLAMP
-                                        )
-                                    )
-                                    primaryTrailView?.setRenderEffect(
-                                        android.graphics.RenderEffect.createBlurEffect(
-                                            radius * 1.2f,
-                                            radius * 1.2f,
-                                            android.graphics.Shader.TileMode.CLAMP
-                                        )
-                                    )
-                                    secondaryTrailView?.setRenderEffect(
-                                        android.graphics.RenderEffect.createBlurEffect(
-                                            radius * 1.45f,
-                                            radius * 1.45f,
-                                            android.graphics.Shader.TileMode.CLAMP
-                                        )
+                                    applySplashRealtimeBlur(
+                                        splashView = splashView,
+                                        animatedTarget = animatedTarget,
+                                        primaryTrailView = primaryTrailView,
+                                        secondaryTrailView = secondaryTrailView,
+                                        radius = radius
                                     )
                                 }.onFailure {
                                     blurEffectEnabled = false
-                                    splashView.setRenderEffect(null)
-                                    animatedTarget.setRenderEffect(null)
-                                    primaryTrailView?.setRenderEffect(null)
-                                    secondaryTrailView?.setRenderEffect(null)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        clearSplashRealtimeBlur(
+                                            splashView = splashView,
+                                            animatedTarget = animatedTarget,
+                                            primaryTrailView = primaryTrailView,
+                                            secondaryTrailView = secondaryTrailView
+                                        )
+                                    }
                                     Logger.w(TAG, "⚠️ Splash realtime blur failed, fallback to non-blur flyout", it)
                                 }
                             }
                         }
                     }
                     animator.doOnEnd {
-                        if (supportsRealtimeBlur) {
-                            splashView.setRenderEffect(null)
-                            animatedTarget.setRenderEffect(null)
-                            primaryTrailView?.setRenderEffect(null)
-                            secondaryTrailView?.setRenderEffect(null)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && supportsRealtimeBlur) {
+                            clearSplashRealtimeBlur(
+                                splashView = splashView,
+                                animatedTarget = animatedTarget,
+                                primaryTrailView = primaryTrailView,
+                                secondaryTrailView = secondaryTrailView
+                            )
                         }
                         primaryTrailView?.let { frameContainer?.removeView(it) }
                         secondaryTrailView?.let { frameContainer?.removeView(it) }

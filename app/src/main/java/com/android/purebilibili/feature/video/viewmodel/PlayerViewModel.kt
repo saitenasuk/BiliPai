@@ -3544,7 +3544,8 @@ class PlayerViewModel : ViewModel() {
             qualityDesc = "音频",
             videoUrl = "",
             audioUrl = audioUrl,
-            isAudioOnly = true
+            isAudioOnly = true,
+            isVerticalVideo = false
         )
         
         val started = com.android.purebilibili.feature.download.DownloadManager.addTask(task)
@@ -4672,6 +4673,7 @@ class PlayerViewModel : ViewModel() {
             bvid = targetBvid,
             cid = targetCid,
             title = resolvedTitle,
+            episodeLabel = targetLabel.takeIf { it.isNotBlank() && it != resolvedTitle },
             cover = targetCover.ifBlank { current.info.pic },
             ownerName = current.info.owner.name,
             ownerFace = current.info.owner.face,
@@ -4679,7 +4681,8 @@ class PlayerViewModel : ViewModel() {
             quality = qualityId,
             qualityDesc = qualityDesc,
             videoUrl = resolvedUrls.first,
-            audioUrl = resolvedUrls.second
+            audioUrl = resolvedUrls.second,
+            isVerticalVideo = current.info.dimension?.isVertical == true
         )
     }
     

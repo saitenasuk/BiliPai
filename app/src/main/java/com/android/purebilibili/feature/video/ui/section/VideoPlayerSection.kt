@@ -1877,9 +1877,30 @@ fun VideoPlayerSection(
         
         // --- [优化] 视频封面逻辑 ---
         // 使用 isFirstFrameRendered + smooth reveal 确保只有在首帧稳定后才揭开封面，避免黑屏和硬切。
-        var isFirstFrameRendered by remember(bvid) { mutableStateOf(false) }
+        val persistedRenderedFirstFrame = remember(debugInfo.firstFrame) {
+            debugInfo.firstFrame.equals("rendered", ignoreCase = true)
+        }
+        val coverBootstrapState = remember(
+            bvid,
+            forceCoverDuringReturnAnimation,
+            persistedRenderedFirstFrame,
+            playerState.player.playWhenReady,
+            playerState.player.currentPosition
+        ) {
+            resolveVideoPlayerCoverBootstrapState(
+                forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
+                shouldKeepCoverForManualStart = shouldKeepCoverForManualStart(
+                    playWhenReady = playerState.player.playWhenReady,
+                    currentPositionMs = playerState.player.currentPosition
+                ),
+                hasPersistedRenderedFirstFrame = persistedRenderedFirstFrame
+            )
+        }
+        var isFirstFrameRendered by remember(bvid) {
+            mutableStateOf(coverBootstrapState.isFirstFrameRendered)
+        }
         var hasStartedSmoothReveal by remember(bvid, forceCoverDuringReturnAnimation) {
-            mutableStateOf(false)
+            mutableStateOf(coverBootstrapState.hasStartedSmoothReveal)
         }
         val keepCoverForManualStart = shouldKeepCoverForManualStart(
             playWhenReady = playerState.player.playWhenReady,
@@ -2006,9 +2027,9 @@ fun VideoPlayerSection(
             }
         }
         
-    DisposableEffect(playerState.player) {
-        val listener = object : Player.Listener {
-            override fun onRenderedFirstFrame() {
+        DisposableEffect(playerState.player) {
+            val listener = object : Player.Listener {
+                override fun onRenderedFirstFrame() {
                 android.util.Log.d("VideoPlayerCover", "🎬 onRenderedFirstFrame triggered")
                 isFirstFrameRendered = true
                 if (!hasRenderedFirstFrameSinceForegroundRecovery) {
@@ -2061,14 +2082,24 @@ fun VideoPlayerSection(
         onDispose {
             playerState.player.removeListener(listener)
         }
-    }
+        }
+
+        LaunchedEffect(coverBootstrapState) {
+            if (coverBootstrapState.isFirstFrameRendered) {
+                isFirstFrameRendered = true
+            }
+            if (coverBootstrapState.hasStartedSmoothReveal) {
+                hasStartedSmoothReveal = true
+            }
+        }
     
     // 4. 封面图 (Cover Image) - 始终在第一帧渲染前显示
     // 统一优先使用入口卡片封面，保证从各类列表进入详情时封面与入口一致。
     val detailCoverUrl = (uiState as? PlayerUiState.Success)?.info?.pic.orEmpty()
     val rawCoverUrl = resolvePreferredVideoCoverUrl(
         entryCoverUrl = coverUrl,
-        detailCoverUrl = detailCoverUrl
+        detailCoverUrl = detailCoverUrl,
+        preferDetailCoverUrl = keepCoverForManualStart && isVerticalVideo
     )
     
     // [Fix] 使用 FormatUtils 统一处理 URL (支持无协议头 URL)

@@ -126,11 +126,13 @@ import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.viewmodel.resolvePlaybackEndAction
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal data class PortraitVideoInteractionOverride(
@@ -279,16 +281,14 @@ fun PortraitVideoPager(
 
     LaunchedEffect(watchLaterVideos) {
         if (watchLaterVideos.isEmpty()) return@LaunchedEffect
-        val existingBvids = pageItems.mapNotNull {
-            when (it) {
-                is ViewInfo -> it.bvid
-                is RelatedVideo -> it.bvid
-                else -> null
-            }
-        }.toSet()
+        val existingBvids = withContext(Dispatchers.Main.immediate) {
+            snapshotPortraitPageBvids(pageItems)
+        }
         val appendItems = watchLaterVideos.filter { it.bvid !in existingBvids }
         if (appendItems.isNotEmpty()) {
-            pageItems.addAll(appendItems)
+            withContext(Dispatchers.Main.immediate) {
+                pageItems.addAll(appendItems)
+            }
         }
     }
     
@@ -563,13 +563,9 @@ fun PortraitVideoPager(
                     isLoadingMoreRecommendations = true
                     launch {
                         try {
-                            val existingBvids = pageItems.mapNotNull { candidate ->
-                                when (candidate) {
-                                    is ViewInfo -> candidate.bvid
-                                    is RelatedVideo -> candidate.bvid
-                                    else -> null
-                                }
-                            }.toSet()
+                            val existingBvids = withContext(Dispatchers.Main.immediate) {
+                                snapshotPortraitPageBvids(pageItems)
+                            }
                             val appendItems = mergePortraitRecommendationAppendItems(
                                 currentBvid = bvid,
                                 existingBvids = existingBvids,
@@ -577,11 +573,15 @@ fun PortraitVideoPager(
                                     .getRelatedVideos(bvid)
                             )
                             if (appendItems.isNotEmpty()) {
-                                recommendationItems.addAll(appendItems)
-                                pageItems.addAll(appendItems)
+                                withContext(Dispatchers.Main.immediate) {
+                                    recommendationItems.addAll(appendItems)
+                                    pageItems.addAll(appendItems)
+                                }
                             }
                         } finally {
-                            isLoadingMoreRecommendations = false
+                            withContext(Dispatchers.Main.immediate) {
+                                isLoadingMoreRecommendations = false
+                            }
                         }
                     }
                 }

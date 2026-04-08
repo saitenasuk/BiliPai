@@ -79,17 +79,17 @@ internal fun resolveAdaptiveListComponentVisualSpec(
     return if (uiPreset == UiPreset.MD3) {
         AdaptiveListComponentVisualSpec(
             sectionStartPaddingDp = 20,
-            groupCornerRadiusDp = 28,
+            groupCornerRadiusDp = 24,
             groupTonalElevationDp = 3,
             iconCornerRadiusDp = 12,
             iconContainerSizeDp = 40,
             iconGlyphSizeDp = 22,
-            iconBackgroundAlpha = 0.18f,
+            iconBackgroundAlpha = 0.14f,
             gridCornerRadiusDp = 24,
             searchBarCornerRadiusDp = 28,
-            searchBarHeightDp = 48,
+            searchBarHeightDp = 56,
             dividerThicknessDp = 0f,
-            dividerStartIndentDp = 16
+            dividerStartIndentDp = 20
         )
     } else {
         AdaptiveListComponentVisualSpec(
@@ -106,6 +106,30 @@ internal fun resolveAdaptiveListComponentVisualSpec(
             dividerThicknessDp = 0.5f,
             dividerStartIndentDp = 66
         )
+    }
+}
+
+internal fun resolveAdaptiveGroupContainerColor(
+    uiPreset: UiPreset,
+    colorScheme: ColorScheme,
+    fallbackColor: Color
+): Color {
+    return if (uiPreset == UiPreset.MD3) {
+        colorScheme.surfaceContainerLow
+    } else {
+        fallbackColor
+    }
+}
+
+internal fun resolveAdaptiveSearchBarContainerColor(
+    uiPreset: UiPreset,
+    colorScheme: ColorScheme,
+    fallbackColor: Color
+): Color {
+    return if (uiPreset == UiPreset.MD3) {
+        colorScheme.surfaceContainerHigh
+    } else {
+        fallbackColor
     }
 }
 
@@ -262,25 +286,27 @@ fun IOSGroup(
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     val groupCornerRadius = iOSCornerRadius.Medium * cornerRadiusScale
+    val colorScheme = MaterialTheme.colorScheme
     val appliedShape = shape ?: RoundedCornerShape(
         if (uiPreset == UiPreset.MD3) visualSpec.groupCornerRadiusDp.dp else groupCornerRadius
+    )
+    val resolvedContainerColor = resolveAdaptiveGroupContainerColor(
+        uiPreset = uiPreset,
+        colorScheme = colorScheme,
+        fallbackColor = containerColor
     )
     
     Surface(
         modifier = modifier
             .padding(horizontal = if (uiPreset == UiPreset.MD3) 12.dp else 16.dp)
             .clip(appliedShape),
-        color = if (uiPreset == UiPreset.MD3) {
-            MiuixTheme.colorScheme.surfaceContainer
-        } else {
-            containerColor
-        },
+        color = resolvedContainerColor,
         shadowElevation = if (uiPreset == UiPreset.MD3) 0.dp else 0.dp,
         tonalElevation = if (uiPreset == UiPreset.MD3) 0.dp else visualSpec.groupTonalElevationDp.dp,
         border = if (uiPreset == UiPreset.MD3) {
             androidx.compose.foundation.BorderStroke(
                 0.8.dp,
-                MiuixTheme.colorScheme.dividerLine.copy(alpha = 0.45f)
+                colorScheme.outlineVariant.copy(alpha = 0.6f)
             )
         } else {
             border
@@ -690,9 +716,15 @@ fun IOSSearchBar(
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
 ) {
     val uiPreset = LocalUiPreset.current
+    val colorScheme = MaterialTheme.colorScheme
     val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val searchBarCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.searchBarCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
+    val resolvedContainerColor = resolveAdaptiveSearchBarContainerColor(
+        uiPreset = uiPreset,
+        colorScheme = colorScheme,
+        fallbackColor = containerColor
+    )
 
     BasicTextField(
         value = query,
@@ -701,7 +733,7 @@ fun IOSSearchBar(
             .fillMaxWidth()
             .height(visualSpec.searchBarHeightDp.dp)
             .clip(RoundedCornerShape(searchBarCornerRadius))
-            .background(containerColor),
+            .background(resolvedContainerColor),
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
         singleLine = true,
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),

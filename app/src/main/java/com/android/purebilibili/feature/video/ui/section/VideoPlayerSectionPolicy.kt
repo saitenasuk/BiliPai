@@ -458,6 +458,25 @@ internal fun shouldShowCoverImage(
         !hasStartedSmoothReveal
 }
 
+internal data class VideoPlayerCoverBootstrapState(
+    val isFirstFrameRendered: Boolean,
+    val hasStartedSmoothReveal: Boolean
+)
+
+internal fun resolveVideoPlayerCoverBootstrapState(
+    forceCoverDuringReturnAnimation: Boolean,
+    shouldKeepCoverForManualStart: Boolean,
+    hasPersistedRenderedFirstFrame: Boolean
+): VideoPlayerCoverBootstrapState {
+    val shouldReuseRenderedFrame = !forceCoverDuringReturnAnimation &&
+        !shouldKeepCoverForManualStart &&
+        hasPersistedRenderedFirstFrame
+    return VideoPlayerCoverBootstrapState(
+        isFirstFrameRendered = shouldReuseRenderedFrame,
+        hasStartedSmoothReveal = shouldReuseRenderedFrame
+    )
+}
+
 internal fun shouldStartSmoothCoverReveal(
     isFirstFrameRendered: Boolean,
     forceCoverDuringReturnAnimation: Boolean,
@@ -610,12 +629,17 @@ internal fun shouldEnableCoverImageCrossfade(
 
 internal fun resolvePreferredVideoCoverUrl(
     entryCoverUrl: String,
-    detailCoverUrl: String
+    detailCoverUrl: String,
+    preferDetailCoverUrl: Boolean = false
 ): String {
+    val normalizedDetailCoverUrl = detailCoverUrl.trim()
+    if (preferDetailCoverUrl && normalizedDetailCoverUrl.isNotEmpty()) {
+        return normalizedDetailCoverUrl
+    }
+
     val normalizedEntryCoverUrl = entryCoverUrl.trim()
     if (normalizedEntryCoverUrl.isNotEmpty()) return normalizedEntryCoverUrl
 
-    val normalizedDetailCoverUrl = detailCoverUrl.trim()
     if (normalizedDetailCoverUrl.isNotEmpty()) return normalizedDetailCoverUrl
 
     return ""

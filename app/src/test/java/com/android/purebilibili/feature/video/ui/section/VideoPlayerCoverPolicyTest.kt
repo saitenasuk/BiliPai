@@ -19,6 +19,18 @@ class VideoPlayerCoverPolicyTest {
     }
 
     @Test
+    fun `manual start vertical videos should prefer detail cover when requested`() {
+        assertEquals(
+            "https://img.test/detail.jpg",
+            resolvePreferredVideoCoverUrl(
+                entryCoverUrl = "https://img.test/entry.jpg",
+                detailCoverUrl = "https://img.test/detail.jpg",
+                preferDetailCoverUrl = true
+            )
+        )
+    }
+
+    @Test
     fun `detail cover should be used when entry cover is blank`() {
         assertEquals(
             "https://img.test/detail.jpg",
@@ -107,6 +119,47 @@ class VideoPlayerCoverPolicyTest {
     }
 
     @Test
+    fun `persisted rendered first frame should bootstrap cover reveal for fullscreen rehost`() {
+        assertEquals(
+            VideoPlayerCoverBootstrapState(
+                isFirstFrameRendered = true,
+                hasStartedSmoothReveal = true
+            ),
+            resolveVideoPlayerCoverBootstrapState(
+                forceCoverDuringReturnAnimation = false,
+                shouldKeepCoverForManualStart = false,
+                hasPersistedRenderedFirstFrame = true
+            )
+        )
+    }
+
+    @Test
+    fun `forced return and manual start should ignore persisted frame bootstrap`() {
+        assertEquals(
+            VideoPlayerCoverBootstrapState(
+                isFirstFrameRendered = false,
+                hasStartedSmoothReveal = false
+            ),
+            resolveVideoPlayerCoverBootstrapState(
+                forceCoverDuringReturnAnimation = true,
+                shouldKeepCoverForManualStart = false,
+                hasPersistedRenderedFirstFrame = true
+            )
+        )
+        assertEquals(
+            VideoPlayerCoverBootstrapState(
+                isFirstFrameRendered = false,
+                hasStartedSmoothReveal = false
+            ),
+            resolveVideoPlayerCoverBootstrapState(
+                forceCoverDuringReturnAnimation = false,
+                shouldKeepCoverForManualStart = true,
+                hasPersistedRenderedFirstFrame = true
+            )
+        )
+    }
+
+    @Test
     fun `manual start pending should show dedicated play button`() {
         assertTrue(shouldShowManualStartPlayButton(shouldKeepCoverForManualStart = true))
         assertFalse(shouldShowManualStartPlayButton(shouldKeepCoverForManualStart = false))
@@ -141,7 +194,7 @@ class VideoPlayerCoverPolicyTest {
     }
 
     @Test
-    fun `manual start play button should use pili plus style layout`() {
+    fun `manual start play button should use dedicated layout`() {
         val spec = resolveManualStartPlayButtonLayoutSpec()
 
         assertEquals(ManualStartPlayButtonAnchor.BottomEnd, spec.anchor)

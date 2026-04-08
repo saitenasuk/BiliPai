@@ -76,6 +76,7 @@ import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
+import com.android.purebilibili.core.util.ShareUtils
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
@@ -136,7 +137,7 @@ fun TabletCinemaLayout(
     onPlayModeClick: () -> Unit = {},
     forceCoverOnlyOnReturn: Boolean = false
 ) {
-    val context = LocalContext.current
+    val appContext = LocalContext.current
     val policy = remember(configuration.screenWidthDp) {
         resolveTabletCinemaLayoutPolicy(
             widthDp = configuration.screenWidthDp
@@ -298,7 +299,7 @@ fun TabletCinemaLayout(
                 playerState = playerState,
                 onUpClick = onUpClick,
                 onRelatedVideoClick = onRelatedVideoClick,
-                context = context
+                context = appContext
             )
         }
     }
@@ -459,6 +460,7 @@ private fun CinemaMetaPanel(
     onPageSelect: (Int) -> Unit,
     onRetryAiSummary: () -> Unit
 ) {
+    val context = LocalContext.current
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val currentPageIndex = remember(success.info.cid, success.info.pages) {
         success.info.pages.indexOfFirst { it.cid == success.info.cid }.coerceAtLeast(0)
@@ -529,7 +531,14 @@ private fun CinemaMetaPanel(
                             onTripleClick = onTripleClick,
                             onDownloadClick = onDownloadClick,
                             onWatchLaterClick = onWatchLaterClick,
-                            onCommentClick = onOpenComments
+                            onCommentClick = onOpenComments,
+                            onShareClick = {
+                                ShareUtils.shareVideo(
+                                    context,
+                                    success.info.title,
+                                    success.info.bvid
+                                )
+                            }
                         )
                     }
                     CinemaMetaPanelBlock.UP_INFO -> {

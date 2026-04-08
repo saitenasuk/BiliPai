@@ -205,4 +205,18 @@ class PortraitVideoPagerPolicyTest {
         assertEquals(9, resolved.likeCount)
         assertEquals(4, resolved.favoriteCount)
     }
+
+    @Test
+    fun portraitRecommendationSnapshot_extractsStableBvidSetFromMixedPageItems() {
+        assertEquals(
+            setOf("BV_INFO", "BV_RELATED"),
+            snapshotPortraitPageBvids(
+                listOf(
+                    ViewInfo(bvid = "BV_INFO", aid = 1L),
+                    RelatedVideo(bvid = "BV_RELATED", aid = 2L),
+                    "ignored"
+                )
+            )
+        )
+    }
 }

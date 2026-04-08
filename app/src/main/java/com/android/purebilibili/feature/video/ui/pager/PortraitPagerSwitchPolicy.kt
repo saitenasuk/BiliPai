@@ -134,6 +134,18 @@ internal fun mergePortraitRecommendationAppendItems(
         .toList()
 }
 
+internal fun snapshotPortraitPageBvids(
+    items: List<Any>
+): Set<String> {
+    return items.mapNotNull { candidate ->
+        when (candidate) {
+            is ViewInfo -> candidate.bvid
+            is RelatedVideo -> candidate.bvid
+            else -> null
+        }
+    }.toSet()
+}
+
 internal fun toViewInfoForPortraitDetail(related: RelatedVideo): ViewInfo {
     return ViewInfo(
         bvid = related.bvid,

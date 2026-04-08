@@ -30,6 +30,7 @@ data class SearchUiState(
     val query: String = "",
     val isSearching: Boolean = false,
     val showResults: Boolean = false,
+    val searchSessionId: Long = 0L,
     //  搜索类型
     val searchType: SearchType = SearchType.VIDEO,
     // 视频结果
@@ -229,6 +230,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 query = keyword, 
                 isSearching = true, 
                 showResults = true, 
+                searchSessionId = it.searchSessionId + 1,
                 suggestions = emptyList(), 
                 error = null,
                 easterEggMessage = easterEggMessage,

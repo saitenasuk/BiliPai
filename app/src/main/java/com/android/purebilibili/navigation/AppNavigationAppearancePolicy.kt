@@ -1,6 +1,7 @@
 package com.android.purebilibili.navigation
 
 import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.theme.UiPreset
 
 internal data class AppNavigationAppearance(
     val cardTransitionEnabled: Boolean,
@@ -10,14 +11,28 @@ internal data class AppNavigationAppearance(
     val bottomBarFloating: Boolean
 )
 
+private fun usesDefaultBottomBarShellSettings(homeSettings: HomeSettings): Boolean {
+    return homeSettings.isBottomBarFloating &&
+        homeSettings.bottomBarLabelMode == 0 &&
+        homeSettings.isBottomBarBlurEnabled
+}
+
 internal fun resolveAppNavigationAppearance(
-    homeSettings: HomeSettings
+    homeSettings: HomeSettings,
+    uiPreset: UiPreset = UiPreset.IOS
 ): AppNavigationAppearance {
+    val shouldUseDockedMd3Shell =
+        uiPreset == UiPreset.MD3 && usesDefaultBottomBarShellSettings(homeSettings)
+
     return AppNavigationAppearance(
         cardTransitionEnabled = homeSettings.cardTransitionEnabled,
         predictiveBackAnimationEnabled = homeSettings.predictiveBackAnimationEnabled,
         bottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled,
         bottomBarLabelMode = homeSettings.bottomBarLabelMode,
-        bottomBarFloating = homeSettings.isBottomBarFloating
+        bottomBarFloating = if (shouldUseDockedMd3Shell) {
+            false
+        } else {
+            homeSettings.isBottomBarFloating
+        }
     )
 }
