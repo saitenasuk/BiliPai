@@ -27,7 +27,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -201,6 +203,13 @@ internal fun shouldApplyInitialSearchKeyword(
     return normalizedKeyword != currentQuery || !showResults
 }
 
+internal fun shouldResetSearchResultScroll(
+    searchSessionId: Long,
+    showResults: Boolean
+): Boolean {
+    return showResults && searchSessionId > 0L
+}
+
 @OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
@@ -233,8 +242,19 @@ fun SearchScreen(
 
     // 1. 滚动状态监听 (用于列表)
     val historyListState = rememberLazyListState()
-    val resultGridState = rememberLazyGridState()
-    val resultListState = rememberLazyListState()
+    val resultStateKey = remember(state.searchSessionId, state.searchType) {
+        state.searchSessionId to state.searchType
+    }
+    val resultGridState = remember(resultStateKey) { LazyGridState() }
+    val resultListState = remember(resultStateKey) { LazyListState() }
+
+    LaunchedEffect(resultStateKey, state.showResults) {
+        if (!shouldResetSearchResultScroll(searchSessionId = state.searchSessionId, showResults = state.showResults)) {
+            return@LaunchedEffect
+        }
+        resultListState.scrollToItem(0)
+        resultGridState.scrollToItem(0)
+    }
 
     // ✨ Haze State
     val hazeState = rememberRecoverableHazeState()
@@ -283,9 +303,10 @@ fun SearchScreen(
             showHomeInfoGlassBadges = showHomeInfoGlassBadges
         )
     }
-    val genericResultCardAppearance = remember(liquidGlassEnabled) {
+    val genericResultCardAppearance = remember(liquidGlassEnabled, uiPreset) {
         resolveSearchResultCardAppearance(
-            liquidGlassEnabled = liquidGlassEnabled
+            liquidGlassEnabled = liquidGlassEnabled,
+            uiPreset = uiPreset
         )
     }
     val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsState(initial = false)

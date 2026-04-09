@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.util.NetworkUtils
+import kotlinx.coroutines.delay
 
 /**
  *  离线缓存列表页面
@@ -37,6 +39,7 @@ fun DownloadListScreen(
 ) {
     val context = LocalContext.current
     val tasks by DownloadManager.tasks.collectAsState()
+    var isNetworkAvailable by remember(context) { mutableStateOf(NetworkUtils.isNetworkAvailable(context)) }
     val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsState(initial = null)
     val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsState(initial = null)
     val taskList = tasks.values.toList().sortedByDescending { it.createdAt }
@@ -45,6 +48,13 @@ fun DownloadListScreen(
         customManagedPath = customDownloadPath,
         exportTreeUri = downloadExportTreeUri
     )
+
+    LaunchedEffect(context) {
+        while (true) {
+            isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
+            delay(1_500L)
+        }
+    }
     
     Scaffold(
         topBar = {
@@ -99,7 +109,7 @@ fun DownloadListScreen(
                     DownloadTaskItem(
                         task = task,
                         onClick = { 
-                            when (resolveDownloadTaskClickTarget(task, isNetworkAvailable = true)) {
+                            when (resolveDownloadTaskClickTarget(task, isNetworkAvailable = isNetworkAvailable)) {
                                 DownloadTaskClickTarget.OfflinePlayer -> onOfflineVideoClick(task.id)
                                 null -> Unit
                             }
@@ -264,6 +274,17 @@ private fun DownloadTaskItem(
                 )
                 
                 Spacer(modifier = Modifier.height(4.dp))
+
+                resolveDownloadTaskSecondaryText(task)?.let { secondaryText ->
+                    Text(
+                        text = secondaryText,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
                 
                 Text(
                     text = task.ownerName,

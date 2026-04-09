@@ -2,6 +2,7 @@
 package com.android.purebilibili.navigation
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -90,6 +91,7 @@ import com.android.purebilibili.core.store.AppNavigationSettings
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.resolveEffectiveHomeSettings
 import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.util.NetworkUtils
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier // 确保 Modifier 被导入
 import androidx.compose.foundation.layout.Box // 确保 Box 被导入
@@ -184,6 +186,7 @@ fun AppNavigation(
     // 单一首页视觉配置源：减少根导航层多路 DataStore 收集导致的全局重组。
     val context = androidx.compose.ui.platform.LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val downloadTasks by com.android.purebilibili.feature.download.DownloadManager.tasks.collectAsState()
     val uiPreset = LocalUiPreset.current
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsState(
         initial = com.android.purebilibili.core.store.HomeSettings()
@@ -194,7 +197,12 @@ fun AppNavigation(
             uiPreset = uiPreset
         )
     }
-    val appearance = remember(homeSettings) { resolveAppNavigationAppearance(homeSettings) }
+    val appearance = remember(homeSettings, uiPreset) {
+        resolveAppNavigationAppearance(
+            homeSettings = homeSettings,
+            uiPreset = uiPreset
+        )
+    }
     val cardTransitionEnabled = appearance.cardTransitionEnabled
     val predictiveBackAnimationEnabled = appearance.predictiveBackAnimationEnabled
     val isBottomBarBlurEnabled = appearance.bottomBarBlurEnabled
@@ -238,6 +246,21 @@ fun AppNavigation(
         autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation(),
         resumePositionMs: Long = 0L
     ) {
+        val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
+        val offlineTask = com.android.purebilibili.feature.download.resolveOfflineVideoNavigationTask(
+            tasks = downloadTasks.values,
+            bvid = bvid,
+            cid = cid,
+            isNetworkAvailable = isNetworkAvailable
+        )
+        if (offlineTask != null) {
+            navigateToVideoRoute(ScreenRoutes.OfflineVideoPlayer.createRoute(offlineTask.id))
+            return
+        }
+        if (!isNetworkAvailable) {
+            Toast.makeText(context, "当前无网络，仅支持播放已缓存视频", Toast.LENGTH_SHORT).show()
+            return
+        }
         navigateToVideoRoute(
             resolveStandardVideoRoute(
                 bvid = bvid,
@@ -261,7 +284,17 @@ fun AppNavigation(
                     "AppNavigation",
                     "SUB_DBG home click resolved video route: ${target.route}"
                 )
-                navigateToVideoRoute(target.route)
+                val intent = resolveHomeVideoNavigationIntent(request)
+                if (intent != null) {
+                    navigateToVideo(
+                        bvid = intent.bvid,
+                        cid = intent.cid,
+                        coverUrl = intent.coverUrl,
+                        autoPortrait = true
+                    )
+                } else {
+                    navigateToVideoRoute(target.route)
+                }
             }
             is HomeNavigationTarget.DynamicDetail -> {
                 com.android.purebilibili.core.util.Logger.d(

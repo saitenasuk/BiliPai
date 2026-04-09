@@ -1,6 +1,8 @@
 package com.android.purebilibili.core.ui.components
 
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSPurple
@@ -14,16 +16,17 @@ import org.junit.Test
 class AdaptiveListComponentPolicyTest {
 
     @Test
-    fun `md3 preset should use taller search bar and hide adaptive list dividers`() {
+    fun `md3 preset should use more native material search and group geometry`() {
         val spec = resolveAdaptiveListComponentVisualSpec(UiPreset.MD3)
 
-        assertEquals(48, spec.searchBarHeightDp)
+        assertEquals(56, spec.searchBarHeightDp)
         assertEquals(28, spec.searchBarCornerRadiusDp)
         assertEquals(40, spec.iconContainerSizeDp)
         assertEquals(22, spec.iconGlyphSizeDp)
-        assertEquals(0.18f, spec.iconBackgroundAlpha, 0.0001f)
+        assertEquals(24, spec.groupCornerRadiusDp)
+        assertEquals(0.14f, spec.iconBackgroundAlpha, 0.0001f)
         assertEquals(0f, spec.dividerThicknessDp, 0.0001f)
-        assertEquals(16, spec.dividerStartIndentDp)
+        assertEquals(20, spec.dividerStartIndentDp)
     }
 
     @Test
@@ -112,5 +115,54 @@ class AdaptiveListComponentPolicyTest {
         )
 
         assertTrue(spec.usePlatformDefaults)
+    }
+
+    @Test
+    fun `md3 preset should use material container colors for grouped settings and search`() {
+        val colorScheme = lightColorScheme(
+            surfaceContainerLow = Color(0xFFF4F0F8),
+            surfaceContainerHigh = Color(0xFFECE6F0)
+        )
+
+        assertEquals(
+            colorScheme.surfaceContainerLow,
+            resolveAdaptiveGroupContainerColor(
+                uiPreset = UiPreset.MD3,
+                colorScheme = colorScheme,
+                fallbackColor = Color.White
+            )
+        )
+        assertEquals(
+            colorScheme.surfaceContainerHigh,
+            resolveAdaptiveSearchBarContainerColor(
+                uiPreset = UiPreset.MD3,
+                colorScheme = colorScheme,
+                fallbackColor = Color.White
+            )
+        )
+    }
+
+    @Test
+    fun `ios preset should preserve provided fallback colors for grouped settings and search`() {
+        val colorScheme = lightColorScheme()
+        val fallbackGroupColor = Color(0xFF101010)
+        val fallbackSearchColor = Color(0xFF202020)
+
+        assertEquals(
+            fallbackGroupColor,
+            resolveAdaptiveGroupContainerColor(
+                uiPreset = UiPreset.IOS,
+                colorScheme = colorScheme,
+                fallbackColor = fallbackGroupColor
+            )
+        )
+        assertEquals(
+            fallbackSearchColor,
+            resolveAdaptiveSearchBarContainerColor(
+                uiPreset = UiPreset.IOS,
+                colorScheme = colorScheme,
+                fallbackColor = fallbackSearchColor
+            )
+        )
     }
 }

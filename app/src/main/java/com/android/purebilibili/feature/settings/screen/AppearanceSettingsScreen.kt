@@ -41,6 +41,7 @@ import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppSparklesIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -203,6 +204,25 @@ fun AppearanceSettingsContent(
             androidNativeLabel = uiPresetAndroidLabel
         )
     }
+    val uiPresetIosTitle = stringResource(R.string.appearance_ui_preset_ios_title)
+    val uiPresetIosSummary = stringResource(R.string.appearance_ui_preset_ios_summary)
+    val uiPresetAndroidTitle = stringResource(R.string.appearance_ui_preset_android_title)
+    val uiPresetAndroidSummary = stringResource(R.string.appearance_ui_preset_android_summary)
+    val uiPresetDescription = remember(
+        state.uiPreset,
+        uiPresetIosTitle,
+        uiPresetIosSummary,
+        uiPresetAndroidTitle,
+        uiPresetAndroidSummary
+    ) {
+        resolveAppearanceUiPresetDescription(
+            preset = state.uiPreset,
+            iosTitle = uiPresetIosTitle,
+            iosSummary = uiPresetIosSummary,
+            androidTitle = uiPresetAndroidTitle,
+            androidSummary = uiPresetAndroidSummary
+        )
+    }
     val selectedUiPresetLabel =
         uiPresetOptions.firstOrNull { it.value == state.uiPreset }?.label ?: state.uiPreset.label
     val themeModeTitle = stringResource(R.string.appearance_theme_mode_title)
@@ -305,6 +325,12 @@ fun AppearanceSettingsContent(
                             onSelectionChange = { preset ->
                                 viewModel.setUiPreset(preset)
                             }
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        AppearanceUiPresetDescriptionCard(
+                            title = uiPresetDescription.title,
+                            summary = uiPresetDescription.summary
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -1189,6 +1215,64 @@ fun AppearanceSettingsContent(
             }
         
 
+    }
+}
+
+@Composable
+private fun AppearanceUiPresetDescriptionCard(
+    title: String,
+    summary: String
+) {
+    val icon = rememberAppSparklesIcon()
+    val containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.44f)
+    val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        tonalElevation = 0.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Surface(
+                modifier = Modifier.size(34.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                contentColor = MaterialTheme.colorScheme.primary
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor.copy(alpha = 0.82f)
+                )
+            }
+        }
     }
 }
 

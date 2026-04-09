@@ -74,9 +74,10 @@ fun OfflineVideoPlayerScreen(
     val task = tasks[taskId]
     
     // === 状态管理 ===
-    var isFullscreen by remember { mutableStateOf(false) }
+    var isFullscreen by remember(taskId) { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
+    var initialOrientationResolved by remember(taskId) { mutableStateOf(false) }
     
     // 手势状态
     var gestureMode by remember { mutableStateOf(GestureMode.None) }
@@ -136,11 +137,14 @@ fun OfflineVideoPlayerScreen(
     }
     
     // 创建播放器
-    val player = remember {
+    val player = remember(file.absolutePath, task.lastPlaybackPositionMs) {
         ExoPlayer.Builder(context).build().apply {
             val mediaItem = MediaItem.fromUri(Uri.fromFile(file))
             setMediaItem(mediaItem)
             prepare()
+            if (task.lastPlaybackPositionMs > 0L) {
+                seekTo(task.lastPlaybackPositionMs)
+            }
             playWhenReady = true
         }
     }
@@ -199,13 +203,10 @@ fun OfflineVideoPlayerScreen(
     // 获取 Activity
     fun getActivity(): Activity? = activity
     
-    // 全屏切换函数
-    fun toggleFullscreen() {
+    fun applyWindowMode(fullscreen: Boolean) {
         val act = getActivity() ?: return
-        isFullscreen = !isFullscreen
-        
-        if (isFullscreen) {
-            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        if (fullscreen) {
+            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val windowInsetsController = WindowCompat.getInsetsController(act.window, act.window.decorView)
             windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
             windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -215,12 +216,43 @@ fun OfflineVideoPlayerScreen(
             windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
         }
     }
+
+    // 全屏切换函数
+    fun toggleFullscreen() {
+        isFullscreen = !isFullscreen
+    }
+
+    fun seekToPosition(targetPositionMs: Long) {
+        val duration = player.duration.coerceAtLeast(0L)
+        val safeTarget = if (duration > 0L) targetPositionMs.coerceIn(0L, duration) else targetPositionMs.coerceAtLeast(0L)
+        val shouldResume = shouldResumePlaybackAfterOfflineSeek(
+            playbackState = player.playbackState,
+            wasPlayingBeforeSeek = player.isPlaying,
+            targetPositionMs = safeTarget,
+            durationMs = duration
+        )
+        player.seekTo(safeTarget)
+        if (shouldResume) {
+            player.play()
+        }
+    }
     
     // 返回键处理
     BackHandler(enabled = isFullscreen) { toggleFullscreen() }
     
+    LaunchedEffect(activity, isFullscreen) {
+        applyWindowMode(isFullscreen)
+    }
+
     DisposableEffect(Unit) {
         onDispose {
+            DownloadManager.updatePlaybackPosition(
+                taskId = task.id,
+                positionMs = resolveOfflinePersistedPlaybackPosition(
+                    currentPositionMs = player.currentPosition,
+                    durationMs = player.duration
+                )
+            )
             if (miniPlayerManager.isPlayerManaged(player)) {
                 miniPlayerManager.dismiss()
             } else {
@@ -261,11 +293,39 @@ fun OfflineVideoPlayerScreen(
                     coverUrl = offlineMiniPlayerPayload.coverUrl
                 )
             }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (initialOrientationResolved || task.isAudioOnly) return
+                if (task.isVerticalVideo) {
+                    initialOrientationResolved = true
+                    return
+                }
+                val videoSize = player.videoSize
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    isFullscreen = videoSize.width >= videoSize.height
+                    initialOrientationResolved = true
+                }
+            }
         }
         player.addListener(listener)
 
         onDispose {
             player.removeListener(listener)
+        }
+    }
+
+    LaunchedEffect(player, task.id) {
+        var lastPersistedPosition = task.lastPlaybackPositionMs
+        while (isActive) {
+            val resolvedPosition = resolveOfflinePersistedPlaybackPosition(
+                currentPositionMs = player.currentPosition,
+                durationMs = player.duration
+            )
+            if (abs(resolvedPosition - lastPersistedPosition) >= 2_000L) {
+                DownloadManager.updatePlaybackPosition(task.id, resolvedPosition)
+                lastPersistedPosition = resolvedPosition
+            }
+            delay(2_000L)
         }
     }
     
@@ -315,8 +375,7 @@ fun OfflineVideoPlayerScreen(
                     },
                     onDragEnd = {
                         if (gestureMode == GestureMode.Seek) {
-                            player.seekTo(seekTargetTime)
-                            player.play()
+                            seekToPosition(seekTargetTime)
                         }
                         isGestureVisible = false
                         gestureMode = GestureMode.None
@@ -403,7 +462,7 @@ fun OfflineVideoPlayerScreen(
                             offset.x > screenWidth * 2 / 3 -> {
                                 val seekMs = seekForwardSeconds * 1000L
                                 val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
-                                player.seekTo(newPos)
+                                seekToPosition(newPos)
                                 seekFeedbackText = "+${seekForwardSeconds}s"
                                 seekFeedbackVisible = true
                             }
@@ -411,7 +470,7 @@ fun OfflineVideoPlayerScreen(
                             offset.x < screenWidth / 3 -> {
                                 val seekMs = seekBackwardSeconds * 1000L
                                 val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
-                                player.seekTo(newPos)
+                                seekToPosition(newPos)
                                 seekFeedbackText = "-${seekBackwardSeconds}s"
                                 seekFeedbackVisible = true
                             }
@@ -627,7 +686,7 @@ fun OfflineVideoPlayerScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 
                 Text(
-                    text = task.title,
+                    text = task.episodeLabel?.takeIf { it.isNotBlank() } ?: task.title,
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
@@ -655,7 +714,7 @@ fun OfflineVideoPlayerScreen(
                     currentPosition = progressState.current,
                     duration = progressState.duration,
                     bufferedPosition = progressState.buffered,
-                    onSeek = { player.seekTo(it) }
+                    onSeek = { seekToPosition(it) }
                 )
                 
                 Spacer(modifier = Modifier.height(4.dp))

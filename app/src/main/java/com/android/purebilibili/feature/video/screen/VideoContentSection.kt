@@ -215,6 +215,7 @@ fun VideoContentSection(
     onLoadMoreReplies: () -> Unit,
     onDownloadClick: () -> Unit = {},
     onWatchLaterClick: () -> Unit = {},
+    onShareClick: () -> Unit = {},
     onTimestampClick: ((Long) -> Unit)? = null,
     onDanmakuSendClick: () -> Unit = {},
     danmakuEnabled: Boolean = true,
@@ -359,6 +360,7 @@ fun VideoContentSection(
                         onOpenCollectionSheet = { showCollectionSheet = true },
                         onDownloadClick = onDownloadClick,
                         onWatchLaterClick = onWatchLaterClick,
+                        onShareClick = onShareClick,
                         contentPadding = PaddingValues(bottom = bottomContentPadding),
                         transitionEnabled = transitionEnabled,
                         ownerFollowerCount = ownerFollowerCount,
@@ -481,6 +483,7 @@ private fun VideoIntroTab(
     onOpenCollectionSheet: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
+    onShareClick: () -> Unit = {},
     contentPadding: PaddingValues,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
     ownerFollowerCount: Int? = null,
@@ -521,6 +524,7 @@ private fun VideoIntroTab(
                 onOpenCollectionSheet = onOpenCollectionSheet,
                 onDownloadClick = onDownloadClick,
                 onWatchLaterClick = onWatchLaterClick,
+                onShareClick = onShareClick,
 
                 onGloballyPositioned = { },
                 transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
@@ -769,6 +773,7 @@ private fun VideoHeaderContent(
     onOpenCollectionSheet: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
+    onShareClick: () -> Unit = {},
     onGloballyPositioned: (Float) -> Unit,
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
     ownerFollowerCount: Int? = null,
@@ -849,7 +854,8 @@ private fun VideoHeaderContent(
                 onCommentClick = {},
                 onDownloadClick = onDownloadClick,
                 onWatchLaterClick = onWatchLaterClick,
-                onFavoriteLongClick = onFavoriteLongClick
+                onFavoriteLongClick = onFavoriteLongClick,
+                onShareClick = onShareClick
             )
         }
 

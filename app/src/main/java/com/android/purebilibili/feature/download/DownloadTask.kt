@@ -23,6 +23,7 @@ data class DownloadTask(
     val bvid: String,
     val cid: Long,
     val title: String,
+    val episodeLabel: String? = null,
     val cover: String,
     val ownerName: String,
     val ownerFace: String,
@@ -43,7 +44,9 @@ data class DownloadTask(
     val localCoverPath: String? = null, // 🖼️ [新增] 本地缓存的封面路径
     val customSaveDir: String? = null,   // 📂 [新增] 自定义保存目录（单视频独立路径）
     val exportedFileUri: String? = null, // 📁 [新增] 导出到用户授权目录后的 URI
-    val isAudioOnly: Boolean = false     // 🎵 [新增] 仅下载音频
+    val isAudioOnly: Boolean = false,    // 🎵 [新增] 仅下载音频
+    val isVerticalVideo: Boolean = false,
+    val lastPlaybackPositionMs: Long = 0L
 ) {
     val id: String get() = if (isAudioOnly) "${bvid}_${cid}_audio" else "${bvid}_${cid}_$quality"
     

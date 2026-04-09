@@ -27,6 +27,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
+import com.android.purebilibili.core.util.ShareUtils
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
@@ -751,7 +752,14 @@ private fun ScrollableVideoInfoSection(
                 onDownloadClick = onDownloadClick,
                 onWatchLaterClick = onWatchLaterClick,
                 downloadProgress = downloadProgress ?: -1f,
-                onCommentClick = { /* 平板模式不需要跳转评论 */ }
+                onCommentClick = { /* 平板模式不需要跳转评论 */ },
+                onShareClick = {
+                    ShareUtils.shareVideo(
+                        context,
+                        info.title,
+                        info.bvid
+                    )
+                }
             )
         }
 

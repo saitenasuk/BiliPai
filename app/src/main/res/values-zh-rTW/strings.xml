@@ -24,7 +24,11 @@
 
     <string name="appearance_theme_color_section">主題與顏色</string>
     <string name="appearance_ui_preset_title">介面預設</string>
-    <string name="appearance_ui_preset_subtitle">在 iOS 與 Android 原生視覺之間切換</string>
+    <string name="appearance_ui_preset_subtitle">全域切換 iOS 與 Android 原生外觀預設</string>
+    <string name="appearance_ui_preset_ios_title">iOS 預設</string>
+    <string name="appearance_ui_preset_ios_summary">保留更明顯的玻璃感、圓角，以及 iOS 風格圖示與互動細節。</string>
+    <string name="appearance_ui_preset_android_title">Android 原生預設</string>
+    <string name="appearance_ui_preset_android_summary">切換到更標準的 Material 3 導航、圖示、頂欄與清單語義，同時保留模糊與液態玻璃效果。</string>
     <string name="appearance_theme_mode_title">主題模式</string>
     <string name="appearance_theme_mode_subtitle">支援點擊或左右滑動切換</string>
     <string name="appearance_dark_theme_style_title">深色風格</string>

@@ -1,11 +1,16 @@
 package com.android.purebilibili.feature.video.screen
 
 import kotlin.math.max
-import kotlin.math.min
 
 internal data class PortraitInlinePlayerLayoutSpec(
     val widthDp: Float,
     val heightDp: Float
+)
+
+internal data class StandalonePortraitPagerMotionSpec(
+    val enterDurationMillis: Int,
+    val exitDurationMillis: Int,
+    val exitScaleTarget: Float
 )
 
 internal enum class PortraitFullscreenButtonAction {
@@ -21,7 +26,7 @@ internal fun shouldUseOfficialInlinePortraitDetailExperience(
 }
 
 internal fun shouldUseSharedPlayerForPortraitFullscreen(): Boolean {
-    return false
+    return true
 }
 
 internal fun shouldShowStandalonePortraitPager(
@@ -41,11 +46,23 @@ internal fun shouldActivatePortraitFullscreenState(
     return portraitExperienceEnabled
 }
 
+internal fun resolveStandalonePortraitPagerMotionSpec(): StandalonePortraitPagerMotionSpec {
+    return StandalonePortraitPagerMotionSpec(
+        enterDurationMillis = 220,
+        exitDurationMillis = 180,
+        exitScaleTarget = 0.98f
+    )
+}
+
 internal fun shouldEnableInlinePortraitScrollTransform(
     swipeHidePlayerEnabled: Boolean,
     useOfficialInlinePortraitDetailExperience: Boolean
 ): Boolean {
-    return swipeHidePlayerEnabled || useOfficialInlinePortraitDetailExperience
+    return swipeHidePlayerEnabled
+}
+
+internal fun shouldAnimateStandalonePortraitPager(useSharedPlayer: Boolean): Boolean {
+    return !useSharedPlayer
 }
 
 internal fun resolvePortraitFullscreenButtonAction(
@@ -59,21 +76,18 @@ internal fun resolvePortraitInlinePlayerLayoutSpec(
     screenHeightDp: Float,
     isCollapsed: Boolean
 ): PortraitInlinePlayerLayoutSpec {
+    val width = screenWidthDp
+    val collapsedHeight = screenWidthDp * 9f / 16f
     if (isCollapsed) {
-        val width = min(screenWidthDp * 0.34f, 168f)
         return PortraitInlinePlayerLayoutSpec(
             widthDp = width,
-            heightDp = width * 16f / 9f
+            heightDp = collapsedHeight
         )
     }
 
-    val maxWidth = screenWidthDp * 0.9f
-    val minWidth = screenWidthDp * 0.62f
-    val maxHeight = screenHeightDp * 0.72f
-    val height = min(maxWidth * 16f / 9f, maxHeight)
-    val width = max(minWidth, min(maxWidth, height * 9f / 16f))
+    val expandedHeight = max(screenHeightDp * 0.65f, screenWidthDp)
     return PortraitInlinePlayerLayoutSpec(
         widthDp = width,
-        heightDp = height
+        heightDp = expandedHeight
     )
 }
