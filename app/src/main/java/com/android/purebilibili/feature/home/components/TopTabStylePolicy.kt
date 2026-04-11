@@ -5,6 +5,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 
 enum class TopTabMaterialMode {
@@ -91,7 +92,40 @@ internal fun resolveTopTabContentScale(
     return 1f + ((maxScale - 1f) * clampedFraction)
 }
 
-internal fun resolveMd3TopTabVisualSpec(isFloatingStyle: Boolean): Md3TopTabVisualSpec {
+internal fun resolveMd3TopTabVisualSpec(
+    isFloatingStyle: Boolean,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): Md3TopTabVisualSpec {
+    if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        return if (isFloatingStyle) {
+            Md3TopTabVisualSpec(
+                rowHeight = 50.dp,
+                selectedCapsuleHeight = 30.dp,
+                selectedCapsuleCornerRadius = 15.dp,
+                selectedCapsuleTonalElevation = 0.dp,
+                selectedCapsuleShadowElevation = 0.dp,
+                itemHorizontalPadding = 12.dp,
+                iconSize = 18.dp,
+                labelTextSize = 13.sp,
+                labelLineHeight = 18.sp,
+                iconLabelSpacing = 2.dp
+            )
+        } else {
+            Md3TopTabVisualSpec(
+                rowHeight = 44.dp,
+                selectedCapsuleHeight = 30.dp,
+                selectedCapsuleCornerRadius = 15.dp,
+                selectedCapsuleTonalElevation = 0.dp,
+                selectedCapsuleShadowElevation = 0.dp,
+                itemHorizontalPadding = 12.dp,
+                iconSize = 16.dp,
+                labelTextSize = 14.sp,
+                labelLineHeight = 18.sp,
+                iconLabelSpacing = 1.dp
+            )
+        }
+    }
+
     return if (isFloatingStyle) {
         Md3TopTabVisualSpec(
             rowHeight = 48.dp,
@@ -122,16 +156,31 @@ internal fun resolveMd3TopTabVisualSpec(isFloatingStyle: Boolean): Md3TopTabVisu
 }
 
 internal fun resolveMd3TopTabSelectedContainerColor(
-    colorScheme: ColorScheme
-): androidx.compose.ui.graphics.Color = colorScheme.primary
+    colorScheme: ColorScheme,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): androidx.compose.ui.graphics.Color = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+    colorScheme.surfaceContainerHigh
+} else {
+    colorScheme.primary
+}
 
 internal fun resolveMd3TopTabSelectedIconColor(
-    colorScheme: ColorScheme
-): androidx.compose.ui.graphics.Color = colorScheme.primary
+    colorScheme: ColorScheme,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): androidx.compose.ui.graphics.Color = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+    colorScheme.onSurface
+} else {
+    colorScheme.primary
+}
 
 internal fun resolveMd3TopTabSelectedLabelColor(
-    colorScheme: ColorScheme
-): androidx.compose.ui.graphics.Color = colorScheme.primary
+    colorScheme: ColorScheme,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): androidx.compose.ui.graphics.Color = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+    colorScheme.onSurface
+} else {
+    colorScheme.primary
+}
 
 internal fun resolveMd3TopTabUnselectedIconColor(
     colorScheme: ColorScheme
@@ -143,19 +192,21 @@ internal fun resolveMd3TopTabUnselectedLabelColor(
 
 internal fun resolveMd3TopTabIconTint(
     selectionFraction: Float,
-    colorScheme: ColorScheme
+    colorScheme: ColorScheme,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ) = androidx.compose.ui.graphics.lerp(
     resolveMd3TopTabUnselectedIconColor(colorScheme),
-    resolveMd3TopTabSelectedIconColor(colorScheme),
+    resolveMd3TopTabSelectedIconColor(colorScheme, androidNativeVariant),
     selectionFraction.coerceIn(0f, 1f)
 )
 
 internal fun resolveMd3TopTabLabelTint(
     selectionFraction: Float,
-    colorScheme: ColorScheme
+    colorScheme: ColorScheme,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ) = androidx.compose.ui.graphics.lerp(
     resolveMd3TopTabUnselectedLabelColor(colorScheme),
-    resolveMd3TopTabSelectedLabelColor(colorScheme),
+    resolveMd3TopTabSelectedLabelColor(colorScheme, androidNativeVariant),
     selectionFraction.coerceIn(0f, 1f)
 )
 

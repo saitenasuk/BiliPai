@@ -63,6 +63,8 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentOverlayHost
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.RepostDialog
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppCollectionIcon
@@ -133,7 +135,7 @@ fun SpaceScreen(
         com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("SpaceScreen")
     }
     
-    Scaffold(
+    AdaptiveScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             // [Blur] TopAppBar Container with Blur
@@ -142,10 +144,8 @@ fun SpaceScreen(
                     .fillMaxWidth()
                     .unifiedBlur(hazeState)
             ) {
-                TopAppBar(
-                    title = { 
-                        Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    },
+                AdaptiveTopAppBar(
+                    title = screenTitle,
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(rememberAppBackIcon(), contentDescription = backLabel)

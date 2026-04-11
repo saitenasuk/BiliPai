@@ -25,6 +25,7 @@ import com.android.purebilibili.feature.settings.AppThemeMode
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.theme.defaultTextStyles
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 
@@ -569,6 +570,7 @@ private fun createMd3LightColorScheme(primaryColor: Color) = createStaticMd3Colo
 @Composable
 fun PureBiliBiliTheme(
     uiPreset: UiPreset = UiPreset.IOS,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
     themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
@@ -591,11 +593,18 @@ fun PureBiliBiliTheme(
         amoledDarkTheme = amoledDarkTheme,
         uiPreset = uiPreset
     ) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val shapes = if (renderingProfile.useMaterialChrome) {
-        Shapes()
-    } else {
-        iOSShapes
+    val shapes = resolveMaterialShapes(uiPreset, androidNativeVariant)
+    val materialTypography = resolveMaterialTypography(
+        uiPreset = uiPreset,
+        androidNativeVariant = androidNativeVariant
+    ).scaled(fontSizePreset.multiplier)
+    val miuixTextStyles = remember(fontSizePreset) {
+        defaultTextStyles().scaled(fontSizePreset.multiplier)
     }
+    val miuixSmoothRounding = shouldUseMiuixSmoothRounding(
+        uiPreset = uiPreset,
+        androidNativeVariant = androidNativeVariant
+    )
     val lightMaterialScheme = enforceDynamicLightTextContrast(
         if (renderingProfile.useMaterialChrome) {
             createMd3LightColorScheme(customPrimaryColor)
@@ -627,7 +636,9 @@ fun PureBiliBiliTheme(
     val controller = remember(
         themeMode,
         dynamicColor,
-        darkTheme
+        darkTheme,
+        miuixLightColors,
+        miuixDarkColors
     ) {
         ThemeController(
             colorSchemeMode = resolveMiuixColorSchemeMode(
@@ -664,15 +675,21 @@ fun PureBiliBiliTheme(
 
     CompositionLocalProvider(
         LocalUiPreset provides uiPreset,
+        LocalAndroidNativeVariant provides androidNativeVariant,
         LocalDynamicColorActive provides isDynamicColorActive,
-        LocalCornerRadiusScale provides if (renderingProfile.useMaterialChrome) 0.9f else 1f
+        LocalCornerRadiusScale provides resolveCornerRadiusScale(
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
+        )
     ) {
         MiuixTheme(
-            controller = controller
+            controller = controller,
+            textStyles = miuixTextStyles,
+            smoothRounding = miuixSmoothRounding
         ) {
             MaterialTheme(
                 colorScheme = materialColorScheme,
-                typography = BiliTypography.scaled(fontSizePreset.multiplier),
+                typography = materialTypography,
                 shapes = shapes,
                 content = content
             )

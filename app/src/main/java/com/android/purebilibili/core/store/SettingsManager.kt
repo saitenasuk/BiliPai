@@ -16,6 +16,7 @@ import com.android.purebilibili.core.store.navigation.NavigationSettingsStore
 import com.android.purebilibili.core.store.player.PlayerSettingsStore
 import com.android.purebilibili.core.theme.AppFontSizePreset
 import com.android.purebilibili.core.theme.AppUiScalePreset
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.feature.settings.share.SettingsShareApplyResult
 import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinition
@@ -273,7 +274,8 @@ data class HomeSettings(
     val isHeaderBlurEnabled: Boolean = true,
     val headerBlurMode: HomeHeaderBlurMode = HomeHeaderBlurMode.FOLLOW_PRESET,
     val isBottomBarBlurEnabled: Boolean = true,
-    val isLiquidGlassEnabled: Boolean = true, // [New]
+    val isTopBarLiquidGlassEnabled: Boolean = true,
+    val isBottomBarLiquidGlassEnabled: Boolean = true,
     val liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC, // [New]
     val liquidGlassMode: LiquidGlassMode = LiquidGlassMode.BALANCED,
     val liquidGlassStrength: Float = 0.52f,
@@ -292,10 +294,17 @@ data class HomeSettings(
     //  [修复] 默认值改为 true，避免在 Flow 加载实际值之前错误触发弹窗
     // 当 Flow 加载完成后，如果实际值是 false，LaunchedEffect 会再次触发并显示弹窗
     val crashTrackingConsentShown: Boolean = true
-)
+) {
+    val isLiquidGlassEnabled: Boolean
+        get() = isTopBarLiquidGlassEnabled || isBottomBarLiquidGlassEnabled
+}
 
 internal fun resolveUiPresetPreferenceValue(rawValue: Int?): UiPreset {
     return UiPreset.fromValue(rawValue ?: UiPreset.IOS.value)
+}
+
+internal fun resolveAndroidNativeVariantPreferenceValue(rawValue: Int?): AndroidNativeVariant {
+    return AndroidNativeVariant.fromValue(rawValue ?: AndroidNativeVariant.MATERIAL3.value)
 }
 
 enum class DanmakuPanelWidthMode(val value: Int, val label: String, val widthFraction: Float) {
@@ -573,6 +582,7 @@ object SettingsManager {
     private val KEY_DARK_THEME_STYLE = intPreferencesKey("dark_theme_style_v1")
     private val KEY_APP_LANGUAGE = intPreferencesKey("app_language_v1")
     private val KEY_UI_PRESET = intPreferencesKey("ui_preset")
+    private val KEY_ANDROID_NATIVE_VARIANT = intPreferencesKey("android_native_variant_v1")
     private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     private val KEY_BG_PLAY = booleanPreferencesKey("bg_play")
     //  [新增] 触感反馈 (默认开启)
@@ -658,7 +668,9 @@ object SettingsManager {
     //  [新增] 首页顶部栏自动收缩 (Shrink)
     private val KEY_HEADER_COLLAPSE_ENABLED = booleanPreferencesKey("header_collapse_enabled")
     private val KEY_BOTTOM_BAR_BLUR_ENABLED = booleanPreferencesKey("bottom_bar_blur_enabled")
-    //  [New] Liquid Glass Effect Toggle (Default On)
+    private val KEY_TOP_BAR_LIQUID_GLASS_ENABLED = booleanPreferencesKey("top_bar_liquid_glass_enabled")
+    private val KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED = booleanPreferencesKey("bottom_bar_liquid_glass_enabled")
+    //  Legacy shared Liquid Glass toggle, kept as migration fallback.
     private val KEY_LIQUID_GLASS_ENABLED = booleanPreferencesKey("liquid_glass_enabled")
     
     // MOVED KEY_LIQUID_GLASS_STYLE down to where enum is defined to avoid forward reference issues if Kotlin 
@@ -721,6 +733,7 @@ object SettingsManager {
             rawMode = preferences[KEY_HOME_HEADER_BLUR_MODE],
             legacyEnabled = preferences[KEY_HEADER_BLUR_ENABLED]
         )
+        val legacyLiquidGlassEnabled = preferences[KEY_LIQUID_GLASS_ENABLED] ?: true
         return HomeSettings(
             displayMode = preferences[KEY_DISPLAY_MODE] ?: 0,
             isBottomBarFloating = preferences[KEY_BOTTOM_BAR_FLOATING] ?: true,
@@ -730,7 +743,8 @@ object SettingsManager {
             headerBlurMode = headerBlurMode,
             isHeaderCollapseEnabled = preferences[KEY_HEADER_COLLAPSE_ENABLED] ?: true,
             isBottomBarBlurEnabled = preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: true,
-            isLiquidGlassEnabled = preferences[KEY_LIQUID_GLASS_ENABLED] ?: true,
+            isTopBarLiquidGlassEnabled = preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: legacyLiquidGlassEnabled,
+            isBottomBarLiquidGlassEnabled = preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] ?: legacyLiquidGlassEnabled,
             liquidGlassStyle = FIXED_LIQUID_GLASS_STYLE,
             liquidGlassMode = FIXED_LIQUID_GLASS_MODE,
             liquidGlassStrength = FIXED_LIQUID_GLASS_STRENGTH,
@@ -1043,6 +1057,17 @@ object SettingsManager {
     suspend fun setUiPreset(context: Context, preset: UiPreset) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_UI_PRESET] = preset.value
+        }
+    }
+
+    fun getAndroidNativeVariant(context: Context): Flow<AndroidNativeVariant> =
+        context.settingsDataStore.data.map { preferences ->
+            resolveAndroidNativeVariantPreferenceValue(preferences[KEY_ANDROID_NATIVE_VARIANT])
+        }
+
+    suspend fun setAndroidNativeVariant(context: Context, variant: AndroidNativeVariant) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_ANDROID_NATIVE_VARIANT] = variant.value
         }
     }
 
@@ -1666,14 +1691,45 @@ object SettingsManager {
     }
     
     //  [New] --- Liquid Glass Effect ---
-    
+
     private val KEY_LIQUID_GLASS_STYLE = intPreferencesKey("liquid_glass_style")
 
     fun getLiquidGlassEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_LIQUID_GLASS_ENABLED] ?: true }
+        .map { preferences ->
+            val legacy = preferences[KEY_LIQUID_GLASS_ENABLED] ?: true
+            val top = preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: legacy
+            val bottom = preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] ?: legacy
+            top || bottom
+        }
 
     suspend fun setLiquidGlassEnabled(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { preferences -> preferences[KEY_LIQUID_GLASS_ENABLED] = value }
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LIQUID_GLASS_ENABLED] = value
+            preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] = value
+            preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] = value
+        }
+    }
+
+    fun getTopBarLiquidGlassEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: (preferences[KEY_LIQUID_GLASS_ENABLED] ?: true)
+        }
+
+    suspend fun setTopBarLiquidGlassEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] = value
+        }
+    }
+
+    fun getBottomBarLiquidGlassEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] ?: (preferences[KEY_LIQUID_GLASS_ENABLED] ?: true)
+        }
+
+    suspend fun setBottomBarLiquidGlassEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] = value
+        }
     }
     
     fun getLiquidGlassStyle(context: Context): Flow<LiquidGlassStyle> = context.settingsDataStore.data
@@ -2694,6 +2750,8 @@ object SettingsManager {
             if (currentVersion < HOME_VISUAL_DEFAULTS_VERSION) {
                 preferences[KEY_BOTTOM_BAR_FLOATING] = true
                 preferences[KEY_LIQUID_GLASS_ENABLED] = true
+                preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] = true
+                preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] = true
                 preferences[KEY_HEADER_BLUR_ENABLED] = true
                 preferences[KEY_HOME_VISUAL_DEFAULTS_VERSION] = HOME_VISUAL_DEFAULTS_VERSION
             }
@@ -4047,6 +4105,8 @@ object SettingsManager {
             BooleanShareablePreferenceDefinition(KEY_HEADER_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_COLLAPSE_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_TOP_BAR_LIQUID_GLASS_ENABLED, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_LIQUID_GLASS_ENABLED, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_LIQUID_GLASS_STYLE, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_BLUR_INTENSITY, SettingsShareSection.APPEARANCE),

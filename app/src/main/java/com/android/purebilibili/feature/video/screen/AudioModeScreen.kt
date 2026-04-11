@@ -43,6 +43,7 @@ import androidx.media3.common.Player
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AppIcons
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.util.FormatUtils
@@ -219,7 +220,7 @@ fun AudioModeScreen(
         }
     }
     
-    Scaffold(
+    AdaptiveScaffold(
         containerColor = Color.Black,
         //  沉浸式导航栏 - 移除系统窗口内边距
         contentWindowInsets = WindowInsets(0, 0, 0, 0),

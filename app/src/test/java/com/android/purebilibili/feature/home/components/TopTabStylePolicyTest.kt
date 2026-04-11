@@ -2,10 +2,12 @@ package com.android.purebilibili.feature.home.components
 
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -174,6 +176,38 @@ class TopTabStylePolicyTest {
     }
 
     @Test
+    fun `android native miuix top tabs should promote capsule selection styling`() {
+        val spec = resolveMd3TopTabVisualSpec(
+            isFloatingStyle = false,
+            androidNativeVariant = AndroidNativeVariant.MIUIX
+        )
+
+        assertEquals(44.dp, spec.rowHeight)
+        assertEquals(30.dp, spec.selectedCapsuleHeight)
+        assertEquals(15.dp, spec.selectedCapsuleCornerRadius)
+        assertEquals(12.dp, spec.itemHorizontalPadding)
+        assertEquals(1.dp, spec.iconLabelSpacing)
+        assertEquals(14.sp, spec.labelTextSize)
+    }
+
+    @Test
+    fun `android native miuix text tabs should stay on shared top tab row for chrome parity`() {
+        assertFalse(
+            shouldUseNativeMiuixTopTabRow(
+                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                labelMode = 2
+            )
+        )
+        assertEquals(
+            false,
+            shouldUseNativeMiuixTopTabRow(
+                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                labelMode = 0
+            )
+        )
+    }
+
+    @Test
     fun `md3 selected top tab should reuse material primary emphasis`() {
         val colorScheme = lightColorScheme(
             surface = Color.White,
@@ -189,6 +223,40 @@ class TopTabStylePolicyTest {
         assertEquals(colorScheme.primary, resolveMd3TopTabSelectedLabelColor(colorScheme))
         assertEquals(colorScheme.onSurfaceVariant, resolveMd3TopTabUnselectedIconColor(colorScheme))
         assertEquals(colorScheme.onSurfaceVariant, resolveMd3TopTabUnselectedLabelColor(colorScheme))
+    }
+
+    @Test
+    fun `android native miuix top tabs should use secondary container emphasis`() {
+        val colorScheme = lightColorScheme(
+            primary = Color(0xFF2D6A4F),
+            surfaceContainerHigh = Color(0xFFF4ECE1),
+            secondaryContainer = Color(0xFFDCEFD8),
+            onSecondaryContainer = Color(0xFF1A1C18),
+            onSurface = Color(0xFF1E1B16),
+            onSurfaceVariant = Color(0xFF6A5E61)
+        )
+
+        assertEquals(
+            colorScheme.surfaceContainerHigh,
+            resolveMd3TopTabSelectedContainerColor(
+                colorScheme = colorScheme,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            colorScheme.onSurface,
+            resolveMd3TopTabSelectedIconColor(
+                colorScheme = colorScheme,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            colorScheme.onSurface,
+            resolveMd3TopTabSelectedLabelColor(
+                colorScheme = colorScheme,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
     }
 
     @Test
@@ -216,5 +284,37 @@ class TopTabStylePolicyTest {
         assertEquals(20.dp, resolveMd3TopTabActionIconSize(isFloatingStyle = true))
         assertEquals(18.dp, resolveMd3TopTabActionIconSize(isFloatingStyle = false))
         assertEquals(4.dp, resolveMd3TopTabActionContentBottomPadding())
+    }
+
+    @Test
+    fun `android native miuix top tabs should slightly enlarge action button chrome`() {
+        assertEquals(
+            18.dp,
+            resolveMd3TopTabActionButtonCorner(
+                isFloatingStyle = true,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            14.dp,
+            resolveMd3TopTabActionButtonCorner(
+                isFloatingStyle = false,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            46.dp,
+            resolveMd3TopTabActionButtonSize(
+                isFloatingStyle = true,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            38.dp,
+            resolveMd3TopTabActionButtonSize(
+                isFloatingStyle = false,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
     }
 }

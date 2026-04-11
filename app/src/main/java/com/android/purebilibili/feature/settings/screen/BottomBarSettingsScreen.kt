@@ -55,6 +55,8 @@ import com.android.purebilibili.core.theme.BottomBarColorPalette  //  调色板
 import com.android.purebilibili.core.theme.BottomBarColorNames  //  颜色名称
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.resolveAppBookmarkIcon
 import com.android.purebilibili.core.ui.resolveAppDynamicIcon
@@ -186,10 +188,10 @@ fun BottomBarSettingsScreen(
 ) {
     val screenTitle = stringResource(R.string.bottom_bar_management_title)
     val backLabel = stringResource(R.string.common_back)
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(screenTitle, fontWeight = FontWeight.Bold) },
+            AdaptiveTopAppBar(
+                title = screenTitle,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(rememberAppBackIcon(), contentDescription = backLabel)

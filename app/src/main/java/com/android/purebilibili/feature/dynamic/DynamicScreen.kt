@@ -43,6 +43,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.imageLoader
+import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.BiliGradientButton
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.ui.EmptyState
@@ -322,7 +323,7 @@ fun DynamicScreen(
         }
     }
 
-    Scaffold(
+    AdaptiveScaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent // 透明背景以显示渐变
     ) { padding ->

@@ -85,7 +85,9 @@ import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.theme.BottomBarColors  // 统一底栏颜色配置
 import com.android.purebilibili.core.theme.BottomBarColorPalette  // 调色板
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.iOSCornerRadius
 import kotlinx.coroutines.launch  //  延迟导航
@@ -95,6 +97,8 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
 import com.android.purebilibili.core.ui.animation.horizontalDragGesture
+import com.android.purebilibili.core.ui.motion.BottomBarMotionProfile
+import com.android.purebilibili.core.ui.motion.resolveBottomBarMotionSpec
 import dev.chrisbanes.haze.hazeEffect // [New]
 import dev.chrisbanes.haze.HazeStyle   // [New]
 // [LayerBackdrop] AndroidLiquidGlass library for real background refraction
@@ -304,6 +308,20 @@ internal data class AndroidNativeBottomBarTuning(
     val indicatorLensRadiusDp: Float
 )
 
+private enum class SharedFloatingBottomBarIconStyle {
+    MATERIAL,
+    CUPERTINO
+}
+
+internal data class MiuixFloatingBottomBarTuning(
+    val shellHeightDp: Float,
+    val cornerRadiusDp: Float,
+    val outerHorizontalPaddingDp: Float,
+    val innerHorizontalPaddingDp: Float,
+    val indicatorHeightDp: Float,
+    val shellBlurRadiusDp: Float
+)
+
 internal data class AndroidNativeIndicatorSpec(
     val usesLens: Boolean,
     val captureTintedContentLayer: Boolean
@@ -338,6 +356,20 @@ internal fun resolveAndroidNativeBottomBarContainerColor(
     } else {
         surfaceColor.copy(alpha = tuning.shellSurfaceAlpha)
     }
+}
+
+internal fun resolveMiuixFloatingBottomBarTuning(
+    darkTheme: Boolean,
+    glassEnabled: Boolean
+): MiuixFloatingBottomBarTuning {
+    return MiuixFloatingBottomBarTuning(
+        shellHeightDp = 68f,
+        cornerRadiusDp = 34f,
+        outerHorizontalPaddingDp = 20f,
+        innerHorizontalPaddingDp = 6f,
+        indicatorHeightDp = 58f,
+        shellBlurRadiusDp = if (glassEnabled) 12f else if (darkTheme) 8f else 6f
+    )
 }
 
 internal fun resolveAndroidNativeBottomBarGlassEnabled(
@@ -472,10 +504,13 @@ internal fun resolveBottomBarIndicatorVisualPolicy(
     position: Float,
     isDragging: Boolean,
     velocity: Float,
-    useNeutralIndicatorTint: Boolean
+    useNeutralIndicatorTint: Boolean,
+    motionSpec: com.android.purebilibili.core.ui.motion.BottomBarMotionSpec = resolveBottomBarMotionSpec()
 ): BottomBarIndicatorVisualPolicy {
     val isFractional = abs(position - position.roundToInt().toFloat()) > 0.001f
-    val isInMotion = isDragging || isFractional || abs(velocity) > 45f
+    val isInMotion = isDragging ||
+        isFractional ||
+        abs(velocity) > motionSpec.refraction.movingVelocityThresholdPxPerSecond
     return BottomBarIndicatorVisualPolicy(
         isInMotion = isInMotion,
         shouldRefract = isInMotion,
@@ -499,15 +534,17 @@ internal fun resolveBottomBarRefractionLayerPolicy(
 internal fun resolveBottomBarRefractionMotionProfile(
     position: Float,
     velocity: Float,
-    isDragging: Boolean
+    isDragging: Boolean,
+    motionSpec: com.android.purebilibili.core.ui.motion.BottomBarMotionSpec = resolveBottomBarMotionSpec()
 ): BottomBarRefractionMotionProfile {
     val signedFractionalOffset = position - position.roundToInt().toFloat()
     val fractionalProgress = (abs(signedFractionalOffset) * 2f).coerceIn(0f, 1f)
-    val speedProgress = (abs(velocity) / 1400f).coerceIn(0f, 1f)
+    val speedProgress = (abs(velocity) / motionSpec.refraction.speedProgressDivisorPxPerSecond)
+        .coerceIn(0f, 1f)
     val baseProgress = fractionalProgress.coerceAtLeast(speedProgress)
     val rawProgress = when {
-        isDragging -> baseProgress.coerceAtLeast(0.18f)
-        baseProgress > 0.03f -> baseProgress
+        isDragging -> baseProgress.coerceAtLeast(motionSpec.refraction.dragProgressFloor)
+        baseProgress > motionSpec.refraction.motionDeadzone -> baseProgress
         else -> 0f
     }
     if (rawProgress <= 0f) {
@@ -731,23 +768,44 @@ fun FrostedBottomBar(
     forceLowBlurBudget: Boolean = false
 ) {
     if (LocalUiPreset.current == UiPreset.MD3) {
-        MaterialBottomBar(
-            currentItem = currentItem,
-            onItemClick = onItemClick,
-            modifier = modifier,
-            visibleItems = visibleItems,
-            onToggleSidebar = onToggleSidebar,
-            isFloating = isFloating,
-            isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet,
-            labelMode = labelMode,
-            blurEnabled = hazeState != null,
-            hazeState = hazeState,
-            backdrop = backdrop,
-            homeSettings = homeSettings,
-            motionTier = motionTier,
-            isTransitionRunning = isTransitionRunning,
-            forceLowBlurBudget = forceLowBlurBudget
-        )
+        val androidNativeVariant = LocalAndroidNativeVariant.current
+        if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+            MiuixBottomBar(
+                currentItem = currentItem,
+                onItemClick = onItemClick,
+                modifier = modifier,
+                visibleItems = visibleItems,
+                onToggleSidebar = onToggleSidebar,
+                isFloating = isFloating,
+                isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet,
+                labelMode = labelMode,
+                blurEnabled = hazeState != null,
+                hazeState = hazeState,
+                backdrop = backdrop,
+                homeSettings = homeSettings,
+                motionTier = motionTier,
+                isTransitionRunning = isTransitionRunning,
+                forceLowBlurBudget = forceLowBlurBudget
+            )
+        } else {
+            MaterialBottomBar(
+                currentItem = currentItem,
+                onItemClick = onItemClick,
+                modifier = modifier,
+                visibleItems = visibleItems,
+                onToggleSidebar = onToggleSidebar,
+                isFloating = isFloating,
+                isTablet = com.android.purebilibili.core.util.LocalWindowSizeClass.current.isTablet,
+                labelMode = labelMode,
+                blurEnabled = hazeState != null,
+                hazeState = hazeState,
+                backdrop = backdrop,
+                homeSettings = homeSettings,
+                motionTier = motionTier,
+                isTransitionRunning = isTransitionRunning,
+                forceLowBlurBudget = forceLowBlurBudget
+            )
+        }
         return
     }
 
@@ -779,6 +837,15 @@ fun FrostedBottomBar(
     // 📐 [平板适配]
     val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
     val isTablet = windowSizeClass.isTablet
+    val bottomBarMotionSpec = remember(isFloating) {
+        resolveBottomBarMotionSpec(
+            profile = if (isFloating) {
+                BottomBarMotionProfile.IOS_FLOATING
+            } else {
+                BottomBarMotionProfile.DEFAULT
+            }
+        )
+    }
     
     // 背景颜色
     val blurIntensity = com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity()
@@ -843,6 +910,7 @@ fun FrostedBottomBar(
         val dampedDragState = rememberDampedDragAnimationState(
             initialIndex = if (selectedIndex >= 0) selectedIndex else 0,
             itemCount = itemCount,
+            motionSpec = bottomBarMotionSpec,
             onIndexChanged = { index -> 
                 if (index in visibleItems.indices) {
                     onItemClick(visibleItems[index])
@@ -865,64 +933,9 @@ fun FrostedBottomBar(
             }
         }
         
-        // 📐 计算指示器位置和变形参数 (用于 Shader)
         val density = LocalDensity.current
-        val indicatorWidthPx = with(density) { 90.dp.toPx() }  // Synced with LiquidIndicator
-        val indicatorHeightPx = with(density) { 52.dp.toPx() } // Synced with LiquidIndicator
-        val itemWidthPx = with(density) { itemWidth.toPx() }
-        val startPaddingPx = with(density) { rowPadding.toPx() }
-        
-        // CenterX: padding + (currentPos * width) + half_width
-        // 但这里还需要考虑 Row 的 offset。Row 是居中的。
-        // 如果 widthIn(max=640) 生效，content 居中，indicator 坐标也需要偏移?
-        // 简化起见，我们假设 LiquidGlass 应用于 "Container Box"，该 Box 与 Content 是一一对应的尺寸。
-        // 下面的 UI 结构中，Haze Box 是 widthIn(max=640)，居中。
-        // 因此 Shader 坐标系应该是以 Haze Box 为准。
-        
-        val indicatorCenterX = startPaddingPx + dampedDragState.value * itemWidthPx + (itemWidthPx / 2f)
-        val indicatorCenterY = with(density) { (if(isFloating) floatingHeight else dockedHeight).toPx() / 2f }
-        
-        // 变形逻辑
-        val velocity = dampedDragState.velocity
-        val velocityFraction = (velocity / 3000f).coerceIn(-1f, 1f)
-        val deformation = abs(velocityFraction) * 0.4f
-        val targetScaleX = 1f + deformation
-        val targetScaleY = 1f - (deformation * 0.6f)
-        
-        // Animate scales with High Viscosity (Slower response, less bounce)
-        val scaleX by animateFloatAsState(targetValue = targetScaleX, animationSpec = spring(dampingRatio = 0.85f, stiffness = 350f), label = "scaleX")
-        val scaleY by animateFloatAsState(targetValue = targetScaleY, animationSpec = spring(dampingRatio = 0.85f, stiffness = 350f), label = "scaleY")
-        val dragScale by animateFloatAsState(targetValue = if (dampedDragState.isDragging) 1.0f else 1f, animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f), label = "dragScale")
-
-        val finalScaleX = scaleX * dragScale
-        val finalScaleY = scaleY * dragScale
-        
-        // [Fix] Dynamic Refraction & Aberration Intensity
-        // Only refract when moving. Static = 0 intensity.
-        val isMoving = dampedDragState.isDragging || abs(dampedDragState.velocity) > 50f
         val isDarkTheme = isSystemInDarkTheme()
-        // [Restored] Full intensity for both themes - readability handled via text color
-        val targetIntensity = if (isMoving) 0.85f else 0f
-        val animatedIntensity by animateFloatAsState(
-            targetValue = targetIntensity, 
-            animationSpec = spring(dampingRatio = 1f, stiffness = 400f), 
-            label = "intensity"
-        )
-        
-        // [New] Dynamic Chromatic Aberration (RGB Split)
-        // Intensity increases with speed, simulating stress on glass
-        // [Adaptive] Reduced in light mode for cleaner look
-        val aberrationStrength = if (isDarkTheme) {
-            (abs(velocityFraction) * 0.025f).coerceIn(0f, 0.05f)
-        } else {
-            (abs(velocityFraction) * 0.012f).coerceIn(0f, 0.02f) // Light: subtle aberration
-        }
-        val animatedAberration by animateFloatAsState(
-            targetValue = if (isMoving) aberrationStrength else 0f,
-            animationSpec = spring(dampingRatio = 0.7f, stiffness = 300f),
-            label = "aberration"
-        )
-        
+
         // 圆角
         val cornerRadiusScale = com.android.purebilibili.core.theme.LocalCornerRadiusScale.current
         val floatingCornerRadius = com.android.purebilibili.core.theme.iOSCornerRadius.Floating * cornerRadiusScale
@@ -934,7 +947,7 @@ fun FrostedBottomBar(
 
     // [Fix] 确保指示器互斥显示的最终逻辑
     // 当底栏停靠时，强制禁用液态玻璃（Liquid Glass），仅使用标准磨砂（Frosted Glass）
-    val showGlassEffect = homeSettings.isLiquidGlassEnabled && isFloating
+    val showGlassEffect = homeSettings.isBottomBarLiquidGlassEnabled && isFloating
     val liquidGlassTuning = remember(
         homeSettings.liquidGlassProgress,
         homeSettings.liquidGlassStyle
@@ -1078,18 +1091,23 @@ fun FrostedBottomBar(
                             position = indicatorPosition,
                             isDragging = dampedDragState.isDragging,
                             velocity = dampedDragState.velocity,
-                            useNeutralIndicatorTint = liquidGlassTuning.useNeutralIndicatorTint
+                            useNeutralIndicatorTint = liquidGlassTuning.useNeutralIndicatorTint,
+                            motionSpec = bottomBarMotionSpec
                         )
                         val refractionMotionProfile = resolveBottomBarRefractionMotionProfile(
                             position = indicatorPosition,
                             velocity = dampedDragState.velocity,
-                            isDragging = dampedDragState.isDragging
+                            isDragging = dampedDragState.isDragging,
+                            motionSpec = bottomBarMotionSpec
                         )
-                        val exportPanelOffsetPx = with(density) { 4.dp.toPx() } *
+                        val panelOffsetPx = with(density) {
+                            bottomBarMotionSpec.refraction.panelOffsetMaxDp.dp.toPx()
+                        }
+                        val exportPanelOffsetPx = panelOffsetPx *
                             refractionMotionProfile.exportPanelOffsetFraction
-                        val indicatorPanelOffsetPx = with(density) { 4.dp.toPx() } *
+                        val indicatorPanelOffsetPx = panelOffsetPx *
                             refractionMotionProfile.indicatorPanelOffsetFraction
-                        val visiblePanelOffsetPx = with(density) { 4.dp.toPx() } *
+                        val visiblePanelOffsetPx = panelOffsetPx *
                             refractionMotionProfile.visiblePanelOffsetFraction
                         val indicatorPolicy = remember(itemCount) {
                             resolveBottomBarIndicatorPolicy(itemCount = itemCount)
@@ -1148,6 +1166,7 @@ fun FrostedBottomBar(
                             chromaticBoost = liquidGlassTuning.indicatorChromaticBoost,
                             liquidGlassStyle = homeSettings.liquidGlassStyle, // [New] Pass style
                             liquidGlassTuning = liquidGlassTuning,
+                            motionSpec = bottomBarMotionSpec,
                             // Dynamic refraction: moving -> refract icons/text/cover, static -> keep pure color.
                             backdrop = indicatorBackdrop,
                             lensAmountScale = refractionMotionProfile.indicatorLensAmountScale,
@@ -1264,7 +1283,7 @@ private fun MaterialBottomBar(
     val showIcon = shouldShowBottomBarIcon(normalizedLabelMode)
     val showText = shouldShowBottomBarText(normalizedLabelMode)
     val glassEnabled = resolveAndroidNativeBottomBarGlassEnabled(
-        liquidGlassEnabled = homeSettings.isLiquidGlassEnabled,
+        liquidGlassEnabled = homeSettings.isBottomBarLiquidGlassEnabled,
         blurEnabled = blurEnabled
     )
     val androidNativeTuning = resolveAndroidNativeBottomBarTuning(
@@ -1414,7 +1433,154 @@ private fun MaterialBottomBar(
 }
 
 @Composable
-private fun KernelSuAlignedBottomBar(
+private fun MiuixBottomBar(
+    currentItem: BottomNavItem,
+    onItemClick: (BottomNavItem) -> Unit,
+    modifier: Modifier = Modifier,
+    visibleItems: List<BottomNavItem>,
+    onToggleSidebar: (() -> Unit)?,
+    isFloating: Boolean,
+    isTablet: Boolean,
+    labelMode: Int,
+    blurEnabled: Boolean,
+    hazeState: HazeState?,
+    backdrop: LayerBackdrop?,
+    homeSettings: com.android.purebilibili.core.store.HomeSettings,
+    motionTier: MotionTier,
+    isTransitionRunning: Boolean,
+    forceLowBlurBudget: Boolean
+) {
+    val haptic = rememberHapticFeedback()
+    val normalizedLabelMode = normalizeBottomBarLabelMode(labelMode)
+    val showIcon = shouldShowBottomBarIcon(normalizedLabelMode)
+    val showText = shouldShowBottomBarText(normalizedLabelMode)
+    val displayMode = resolveMd3BottomBarDisplayMode(labelMode).toMiuixNavigationDisplayMode()
+    val glassEnabled = resolveAndroidNativeBottomBarGlassEnabled(
+        liquidGlassEnabled = homeSettings.isBottomBarLiquidGlassEnabled,
+        blurEnabled = blurEnabled
+    )
+    val tuning = resolveAndroidNativeBottomBarTuning(
+        blurEnabled = glassEnabled,
+        darkTheme = isSystemInDarkTheme()
+    )
+    val blurIntensity = currentUnifiedBlurIntensity()
+    val baseSurfaceColor = if (isFloating) {
+        MiuixTheme.colorScheme.surfaceContainer
+    } else {
+        MiuixTheme.colorScheme.surface
+    }
+    val containerColor = if (isFloating) {
+        resolveAndroidNativeBottomBarContainerColor(
+            surfaceColor = baseSurfaceColor,
+            tuning = tuning,
+            glassEnabled = glassEnabled
+        )
+    } else {
+        resolveBottomBarSurfaceColor(
+            surfaceColor = baseSurfaceColor,
+            blurEnabled = blurEnabled,
+            blurIntensity = blurIntensity
+        )
+    }
+    val floatingChromeSpec = resolveMd3BottomBarFloatingChromeSpec(isFloating = true)
+
+    if (isFloating) {
+        KernelSuAlignedBottomBar(
+            currentItem = currentItem,
+            onItemClick = onItemClick,
+            modifier = modifier,
+            visibleItems = visibleItems,
+            onToggleSidebar = onToggleSidebar,
+            isTablet = isTablet,
+            showIcon = showIcon,
+            showText = showText,
+            blurEnabled = blurEnabled,
+            backdrop = backdrop,
+            containerColor = containerColor,
+            tuning = tuning,
+            glassEnabled = glassEnabled,
+            iconStyle = SharedFloatingBottomBarIconStyle.CUPERTINO,
+            haptic = haptic
+        )
+        return
+    }
+
+    val barModifier = modifier
+        .fillMaxWidth()
+        .then(
+            if (blurEnabled && hazeState != null) {
+                Modifier.unifiedBlur(
+                    hazeState = hazeState,
+                    surfaceType = BlurSurfaceType.BOTTOM_BAR,
+                    motionTier = motionTier,
+                    isScrolling = false,
+                    isTransitionRunning = isTransitionRunning,
+                    forceLowBudget = forceLowBlurBudget
+                )
+            } else {
+                Modifier
+            }
+        )
+
+    MiuixFloatingNavigationBar(
+        modifier = barModifier,
+        color = containerColor,
+        cornerRadius = if (isFloating) floatingChromeSpec.cornerRadiusDp.dp else 0.dp,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalOutSidePadding = if (isFloating) {
+            floatingChromeSpec.horizontalOutsidePaddingDp.dp
+        } else {
+            0.dp
+        },
+        shadowElevation = if (isFloating) floatingChromeSpec.shadowElevationDp.dp else 0.dp,
+        showDivider = false,
+        defaultWindowInsetsPadding = true,
+        mode = displayMode
+    ) {
+        visibleItems.forEach { item ->
+            val itemLabel = resolveBottomNavItemLabel(item)
+            MiuixBottomBarItemShell(
+                selected = currentItem == item,
+                label = itemLabel
+            ) {
+                MiuixFloatingNavigationBarItem(
+                    selected = currentItem == item,
+                    onClick = {
+                        performMaterialBottomBarTap(
+                            haptic = haptic,
+                            onClick = { onItemClick(item) }
+                        )
+                    },
+                    icon = resolveMaterialBottomBarIcon(item, currentItem == item),
+                    label = itemLabel
+                )
+            }
+        }
+
+        if (isTablet && onToggleSidebar != null) {
+            val sidebarLabel = stringResource(R.string.sidebar_toggle)
+            MiuixBottomBarItemShell(
+                selected = false,
+                label = sidebarLabel
+            ) {
+                MiuixFloatingNavigationBarItem(
+                    selected = false,
+                    onClick = {
+                        performMaterialBottomBarTap(
+                            haptic = haptic,
+                            onClick = onToggleSidebar
+                        )
+                    },
+                    icon = Icons.AutoMirrored.Outlined.MenuOpen,
+                    label = sidebarLabel
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MiuixFloatingCapsuleBottomBar(
     currentItem: BottomNavItem,
     onItemClick: (BottomNavItem) -> Unit,
     modifier: Modifier = Modifier,
@@ -1430,9 +1596,201 @@ private fun KernelSuAlignedBottomBar(
     glassEnabled: Boolean,
     haptic: (HapticType) -> Unit
 ) {
+    val density = LocalDensity.current
+    val darkTheme = isSystemInDarkTheme()
+    val bottomBarMotionSpec = remember {
+        resolveBottomBarMotionSpec(profile = BottomBarMotionProfile.MIUI_FLOATING)
+    }
+    val visualTuning = remember(darkTheme, glassEnabled) {
+        resolveMiuixFloatingBottomBarTuning(
+            darkTheme = darkTheme,
+            glassEnabled = glassEnabled
+        )
+    }
+    val shellShape = RoundedCornerShape(visualTuning.cornerRadiusDp.dp)
+    val allItems = remember(visibleItems, isTablet, onToggleSidebar) {
+        buildList {
+            addAll(visibleItems)
+            if (isTablet && onToggleSidebar != null) add(null)
+        }
+    }
+    val totalItems = allItems.size.coerceAtLeast(1)
+    val selectedIndex = visibleItems.indexOf(currentItem).coerceAtLeast(0)
+    val dampedDragState = rememberDampedDragAnimationState(
+        initialIndex = selectedIndex,
+        itemCount = totalItems,
+        motionSpec = bottomBarMotionSpec,
+        onIndexChanged = { index ->
+            when {
+                index in visibleItems.indices -> onItemClick(visibleItems[index])
+                isTablet && onToggleSidebar != null && index == visibleItems.size -> onToggleSidebar()
+            }
+        }
+    )
+    LaunchedEffect(selectedIndex) {
+        dampedDragState.updateIndex(selectedIndex)
+    }
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val selectedAccent = remember(primaryColor, darkTheme) {
+        resolveAndroidNativeIndicatorColor(
+            themeColor = primaryColor,
+            darkTheme = darkTheme
+        ).copy(alpha = if (darkTheme) 0.78f else 0.70f)
+    }
+    val selectedColor = primaryColor
+    val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f)
+
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = visualTuning.outerHorizontalPaddingDp.dp,
+                    end = visualTuning.outerHorizontalPaddingDp.dp,
+                    bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                )
+        ) {
+            val shellHeight = visualTuning.shellHeightDp.dp
+            val indicatorWidth = (maxWidth - (visualTuning.innerHorizontalPaddingDp.dp * 2)) / totalItems
+            val itemWidthPx = with(density) { indicatorWidth.toPx() }.coerceAtLeast(1f)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(shellHeight)
+                    .run {
+                        if (backdrop != null) {
+                            drawBackdrop(
+                                backdrop = backdrop,
+                                shape = { shellShape },
+                                effects = {
+                                    if (glassEnabled || blurEnabled) {
+                                        vibrancy()
+                                        blur(visualTuning.shellBlurRadiusDp.dp.toPx())
+                                    }
+                                },
+                                highlight = {
+                                    Highlight.Default.copy(alpha = if (glassEnabled) 0.9f else 0.18f)
+                                },
+                                shadow = {
+                                    Shadow.Default.copy(
+                                        color = Color.Black.copy(alpha = if (darkTheme) 0.26f else 0.14f)
+                                    )
+                                },
+                                onDrawSurface = {
+                                    drawRect(containerColor)
+                                }
+                            )
+                        } else {
+                            background(containerColor, shellShape)
+                        }
+                    }
+                    .clip(shellShape)
+                    .border(
+                        width = 0.8.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (darkTheme) 0.26f else 0.18f),
+                        shape = shellShape
+                    )
+                    .padding(horizontal = visualTuning.innerHorizontalPaddingDp.dp)
+            ) {
+                if (selectedIndex in visibleItems.indices) {
+                    Box(
+                        modifier = Modifier
+                            .offset(x = indicatorWidth * dampedDragState.value)
+                            .width(indicatorWidth)
+                            .fillMaxHeight()
+                            .padding(vertical = ((shellHeight - visualTuning.indicatorHeightDp.dp) / 2))
+                            .graphicsLayer {
+                                val fraction = (dampedDragState.dragOffset / itemWidthPx).coerceIn(-1f, 1f)
+                                scaleX = 1f + (
+                                    abs(fraction) *
+                                        bottomBarMotionSpec.indicator.railFractionStretchMultiplier
+                                    )
+                            }
+                            .background(selectedAccent, shellShape)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .horizontalDragGesture(
+                            dragState = dampedDragState,
+                            itemWidthPx = itemWidthPx
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    visibleItems.forEach { item ->
+                        MiuixFloatingBottomBarItem(
+                            item = item,
+                            selected = currentItem == item,
+                            showIcon = showIcon,
+                            showText = showText,
+                            isTablet = isTablet,
+                            selectedColor = selectedColor,
+                            unselectedColor = unselectedColor,
+                            onClick = {
+                                performMaterialBottomBarTap(
+                                    haptic = haptic,
+                                    onClick = { onItemClick(item) }
+                                )
+                            },
+                            interactive = true
+                        )
+                    }
+
+                    if (isTablet && onToggleSidebar != null) {
+                        MiuixFloatingBottomBarItem(
+                            item = null,
+                            labelOverride = stringResource(R.string.sidebar_toggle),
+                            selected = false,
+                            showIcon = showIcon,
+                            showText = showText,
+                            isTablet = isTablet,
+                            selectedColor = selectedColor,
+                            unselectedColor = unselectedColor,
+                            onClick = {
+                                performMaterialBottomBarTap(
+                                    haptic = haptic,
+                                    onClick = onToggleSidebar
+                                )
+                            },
+                            interactive = true
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KernelSuAlignedBottomBar(
+    currentItem: BottomNavItem,
+    onItemClick: (BottomNavItem) -> Unit,
+    modifier: Modifier = Modifier,
+    visibleItems: List<BottomNavItem>,
+    onToggleSidebar: (() -> Unit)?,
+    isTablet: Boolean,
+    showIcon: Boolean,
+    showText: Boolean,
+    blurEnabled: Boolean,
+    backdrop: Backdrop?,
+    containerColor: Color,
+    tuning: AndroidNativeBottomBarTuning,
+    glassEnabled: Boolean,
+    iconStyle: SharedFloatingBottomBarIconStyle = SharedFloatingBottomBarIconStyle.MATERIAL,
+    haptic: (HapticType) -> Unit
+) {
     val shellShape = resolveSharedBottomBarCapsuleShape()
     val tintedContentBackdrop = rememberLayerBackdrop()
     val density = LocalDensity.current
+    val bottomBarMotionSpec = remember {
+        resolveBottomBarMotionSpec(profile = BottomBarMotionProfile.ANDROID_NATIVE_FLOATING)
+    }
     val allItems = remember(visibleItems, isTablet, onToggleSidebar) {
         buildList {
             addAll(visibleItems)
@@ -1459,6 +1817,7 @@ private fun KernelSuAlignedBottomBar(
     val dampedDragState = rememberDampedDragAnimationState(
         initialIndex = selectedIndex,
         itemCount = totalItems,
+        motionSpec = bottomBarMotionSpec,
         onIndexChanged = { index ->
             when {
                 index in visibleItems.indices -> onItemClick(visibleItems[index])
@@ -1475,7 +1834,8 @@ private fun KernelSuAlignedBottomBar(
                 position = dampedDragState.value,
                 isDragging = dampedDragState.isDragging,
                 velocity = dampedDragState.velocity,
-                useNeutralIndicatorTint = false
+                useNeutralIndicatorTint = false,
+                motionSpec = bottomBarMotionSpec
             )
         }
     }
@@ -1493,7 +1853,8 @@ private fun KernelSuAlignedBottomBar(
             resolveBottomBarRefractionMotionProfile(
                 position = dampedDragState.value,
                 velocity = dampedDragState.velocity,
-                isDragging = dampedDragState.isDragging
+                isDragging = dampedDragState.isDragging,
+                motionSpec = bottomBarMotionSpec
             )
         }
     }
@@ -1527,20 +1888,20 @@ private fun KernelSuAlignedBottomBar(
 
             val exportPanelOffsetPx by remember(density, itemWidthPx) {
                 derivedStateOf {
-                    val fraction = (dampedDragState.dragOffset / itemWidthPx).coerceIn(-1f, 1f)
-                    with(density) { 4.dp.toPx() } * fraction.sign * EaseOut.transform(abs(fraction)) * 0.5f
+                    with(density) { bottomBarMotionSpec.refraction.panelOffsetMaxDp.dp.toPx() } *
+                        refractionMotionProfile.exportPanelOffsetFraction
                 }
             }
             val indicatorPanelOffsetPx by remember(density, itemWidthPx) {
                 derivedStateOf {
-                    val fraction = (dampedDragState.dragOffset / itemWidthPx).coerceIn(-1f, 1f)
-                    with(density) { 4.dp.toPx() } * fraction.sign * EaseOut.transform(abs(fraction))
+                    with(density) { bottomBarMotionSpec.refraction.panelOffsetMaxDp.dp.toPx() } *
+                        refractionMotionProfile.indicatorPanelOffsetFraction
                 }
             }
             val visiblePanelOffsetPx by remember(density, itemWidthPx) {
                 derivedStateOf {
-                    val fraction = (dampedDragState.dragOffset / itemWidthPx).coerceIn(-1f, 1f)
-                    with(density) { 4.dp.toPx() } * fraction.sign * EaseOut.transform(abs(fraction)) * 0.25f
+                    with(density) { bottomBarMotionSpec.refraction.panelOffsetMaxDp.dp.toPx() } *
+                        refractionMotionProfile.visiblePanelOffsetFraction
                 }
             }
 
@@ -1629,13 +1990,14 @@ private fun KernelSuAlignedBottomBar(
                         ) {
                             visibleItems.forEach { item ->
                                 AndroidNativeBottomBarItem(
+                                    item = item,
                                     label = resolveBottomNavItemLabel(item),
                                     selected = currentItem == item,
                                     showIcon = showIcon,
                                     showText = showText,
                                     selectedColor = selectedColor,
                                     unselectedColor = unselectedColor,
-                                    icon = resolveMaterialBottomBarIcon(item, currentItem == item),
+                                    iconStyle = iconStyle,
                                     onClick = {},
                                     interactive = false
                                 )
@@ -1643,13 +2005,14 @@ private fun KernelSuAlignedBottomBar(
 
                             if (isTablet && onToggleSidebar != null) {
                                 AndroidNativeBottomBarItem(
+                                    item = null,
                                     label = stringResource(R.string.sidebar_toggle),
                                     selected = false,
                                     showIcon = showIcon,
                                     showText = showText,
                                     selectedColor = selectedColor,
                                     unselectedColor = unselectedColor,
-                                    icon = Icons.AutoMirrored.Outlined.MenuOpen,
+                                    iconStyle = iconStyle,
                                     onClick = {},
                                     interactive = false
                                 )
@@ -1664,9 +2027,22 @@ private fun KernelSuAlignedBottomBar(
                             .offset(x = indicatorWidth * dampedDragState.value)
                             .graphicsLayer { 
                                 this.translationX = indicatorPanelOffsetPx 
-                                val rawVelocity = dampedDragState.velocity / 10f
-                                this.scaleX = 1f / (1f - (rawVelocity * 0.75f).coerceIn(-0.2f, 0.2f))
-                                this.scaleY = 1f * (1f - (rawVelocity * 0.25f).coerceIn(-0.2f, 0.2f))
+                                val normalizedVelocity =
+                                    dampedDragState.velocity /
+                                        bottomBarMotionSpec.indicator.capsuleVelocityNormalizationDivisor
+                                val maxDelta = bottomBarMotionSpec.indicator.capsuleVelocityClamp
+                                this.scaleX = 1f / (
+                                    1f - (
+                                        normalizedVelocity *
+                                            bottomBarMotionSpec.indicator.capsuleVelocityScaleXMultiplier
+                                        ).coerceIn(-maxDelta, maxDelta)
+                                    )
+                                this.scaleY = 1f * (
+                                    1f - (
+                                        normalizedVelocity *
+                                            bottomBarMotionSpec.indicator.capsuleVelocityScaleYMultiplier
+                                        ).coerceIn(-maxDelta, maxDelta)
+                                    )
                             }
                             .width(indicatorWidth)
                             .fillMaxHeight()
@@ -1716,13 +2092,14 @@ private fun KernelSuAlignedBottomBar(
                 ) {
                     visibleItems.forEach { item ->
                         AndroidNativeBottomBarItem(
+                            item = item,
                             label = resolveBottomNavItemLabel(item),
                             selected = currentItem == item,
                             showIcon = showIcon,
                             showText = showText,
                             selectedColor = selectedColor,
                             unselectedColor = unselectedColor,
-                            icon = resolveMaterialBottomBarIcon(item, currentItem == item),
+                            iconStyle = iconStyle,
                             onClick = {
                                 performMaterialBottomBarTap(
                                     haptic = haptic,
@@ -1735,13 +2112,14 @@ private fun KernelSuAlignedBottomBar(
 
                     if (isTablet && onToggleSidebar != null) {
                         AndroidNativeBottomBarItem(
+                            item = null,
                             label = stringResource(R.string.sidebar_toggle),
                             selected = false,
                             showIcon = showIcon,
                             showText = showText,
                             selectedColor = selectedColor,
                             unselectedColor = unselectedColor,
-                            icon = Icons.AutoMirrored.Outlined.MenuOpen,
+                            iconStyle = iconStyle,
                             onClick = {
                                 performMaterialBottomBarTap(
                                     haptic = haptic,
@@ -1759,13 +2137,14 @@ private fun KernelSuAlignedBottomBar(
 
 @Composable
 private fun RowScope.AndroidNativeBottomBarItem(
+    item: BottomNavItem?,
     label: String,
     selected: Boolean,
     showIcon: Boolean,
     showText: Boolean,
     selectedColor: Color,
     unselectedColor: Color,
-    icon: ImageVector,
+    iconStyle: SharedFloatingBottomBarIconStyle,
     onClick: () -> Unit,
     interactive: Boolean
 ) {
@@ -1797,11 +2176,31 @@ private fun RowScope.AndroidNativeBottomBarItem(
             verticalArrangement = Arrangement.Center
         ) {
             if (showIcon) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = contentColor
-                )
+                CompositionLocalProvider(LocalContentColor provides contentColor) {
+                    when {
+                        item == null && iconStyle == SharedFloatingBottomBarIconStyle.CUPERTINO -> {
+                            Icon(
+                                imageVector = CupertinoIcons.Outlined.SidebarLeft,
+                                contentDescription = label
+                            )
+                        }
+                        item == null -> {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.MenuOpen,
+                                contentDescription = label
+                            )
+                        }
+                        iconStyle == SharedFloatingBottomBarIconStyle.CUPERTINO -> {
+                            if (selected) item.selectedIcon() else item.unselectedIcon()
+                        }
+                        else -> {
+                            Icon(
+                                imageVector = resolveMaterialBottomBarIcon(item, selected),
+                                contentDescription = label
+                            )
+                        }
+                    }
+                }
             }
             if (showText) {
                 Text(
@@ -1815,7 +2214,7 @@ private fun RowScope.AndroidNativeBottomBarItem(
 }
 
 @Composable
-private fun RowScope.MiuixBottomBarItemShell(
+private fun MiuixBottomBarItemShell(
     selected: Boolean,
     label: String,
     content: @Composable () -> Unit
@@ -1856,6 +2255,82 @@ private fun RowScope.MiuixBottomBarItemShell(
             .padding(horizontal = 4.dp)
     ) {
         content()
+    }
+}
+
+@Composable
+private fun RowScope.MiuixFloatingBottomBarItem(
+    item: BottomNavItem?,
+    selected: Boolean,
+    showIcon: Boolean,
+    showText: Boolean,
+    isTablet: Boolean,
+    selectedColor: Color,
+    unselectedColor: Color,
+    onClick: () -> Unit,
+    interactive: Boolean,
+    labelOverride: String? = null
+) {
+    val label = labelOverride ?: item?.let { resolveBottomNavItemLabel(it) }.orEmpty()
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) selectedColor else unselectedColor,
+        label = "${label}_miuix_floating_bottom_bar_color"
+    )
+
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .clip(resolveSharedBottomBarCapsuleShape())
+            .then(
+                if (interactive) {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onClick
+                    )
+                } else {
+                    Modifier
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (showIcon) {
+                Box(
+                    modifier = Modifier
+                        .size(if (showText) 22.dp else 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CompositionLocalProvider(LocalContentColor provides contentColor) {
+                        when {
+                            item == null -> Icon(
+                                imageVector = CupertinoIcons.Outlined.SidebarLeft,
+                                contentDescription = label,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            selected -> item.selectedIcon()
+                            else -> item.unselectedIcon()
+                        }
+                    }
+                }
+            }
+            if (showText) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = label,
+                    color = contentColor,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    fontSize = if (isTablet) 12.sp else 11.sp,
+                    lineHeight = if (isTablet) 12.sp else 11.sp,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 

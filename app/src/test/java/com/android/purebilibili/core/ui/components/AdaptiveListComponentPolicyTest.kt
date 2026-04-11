@@ -3,6 +3,7 @@ package com.android.purebilibili.core.ui.components
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSPurple
@@ -27,6 +28,20 @@ class AdaptiveListComponentPolicyTest {
         assertEquals(0.14f, spec.iconBackgroundAlpha, 0.0001f)
         assertEquals(0f, spec.dividerThicknessDp, 0.0001f)
         assertEquals(20, spec.dividerStartIndentDp)
+    }
+
+    @Test
+    fun `android native miuix variant should soften grouped settings geometry`() {
+        val spec = resolveAdaptiveListComponentVisualSpec(
+            uiPreset = UiPreset.MD3,
+            androidNativeVariant = AndroidNativeVariant.MIUIX
+        )
+
+        assertEquals(52, spec.searchBarHeightDp)
+        assertEquals(22, spec.searchBarCornerRadiusDp)
+        assertEquals(20, spec.groupCornerRadiusDp)
+        assertEquals(18, spec.sectionStartPaddingDp)
+        assertEquals(18, spec.dividerStartIndentDp)
     }
 
     @Test
@@ -120,6 +135,7 @@ class AdaptiveListComponentPolicyTest {
     @Test
     fun `md3 preset should use material container colors for grouped settings and search`() {
         val colorScheme = lightColorScheme(
+            surfaceContainer = Color(0xFFF0EBF4),
             surfaceContainerLow = Color(0xFFF4F0F8),
             surfaceContainerHigh = Color(0xFFECE6F0)
         )
@@ -138,6 +154,51 @@ class AdaptiveListComponentPolicyTest {
                 uiPreset = UiPreset.MD3,
                 colorScheme = colorScheme,
                 fallbackColor = Color.White
+            )
+        )
+    }
+
+    @Test
+    fun `android native miuix variant should use denser shared container tones`() {
+        val colorScheme = lightColorScheme(
+            surfaceContainer = Color(0xFFF0EBF4),
+            surfaceContainerLow = Color(0xFFF4F0F8),
+            surfaceContainerHigh = Color(0xFFECE6F0)
+        )
+
+        assertEquals(
+            colorScheme.surfaceContainer,
+            resolveAdaptiveGroupContainerColor(
+                uiPreset = UiPreset.MD3,
+                colorScheme = colorScheme,
+                fallbackColor = Color.White,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            colorScheme.surfaceContainer,
+            resolveAdaptiveSearchBarContainerColor(
+                uiPreset = UiPreset.MD3,
+                colorScheme = colorScheme,
+                fallbackColor = Color.White,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+    }
+
+    @Test
+    fun `android native miuix variant should route search to miuix field`() {
+        assertTrue(
+            shouldUseNativeMiuixSearchBar(
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            false,
+            shouldUseNativeMiuixSearchBar(
+                uiPreset = UiPreset.IOS,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
             )
         )
     }

@@ -39,7 +39,8 @@ class CommonListAppearancePolicyTest {
             homeSettings = HomeSettings(
                 headerBlurMode = HomeHeaderBlurMode.FOLLOW_PRESET,
                 isBottomBarBlurEnabled = false,
-                isLiquidGlassEnabled = false,
+                isTopBarLiquidGlassEnabled = false,
+                isBottomBarLiquidGlassEnabled = false,
                 showHomeCoverGlassBadges = false,
                 showHomeInfoGlassBadges = false
             ),

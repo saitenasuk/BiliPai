@@ -206,10 +206,12 @@ fun AppNavigation(
             uiPreset = uiPreset
         )
     }
-    val appearance = remember(homeSettings, uiPreset) {
+    val androidNativeVariant = com.android.purebilibili.core.theme.LocalAndroidNativeVariant.current
+    val appearance = remember(homeSettings, uiPreset, androidNativeVariant) {
         resolveAppNavigationAppearance(
             homeSettings = homeSettings,
-            uiPreset = uiPreset
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
         )
     }
     val cardTransitionEnabled = appearance.cardTransitionEnabled

@@ -935,6 +935,9 @@ class MainActivity : AppCompatActivity() {
 
             // 1. 获取存储的模式 (默认为跟随系统)
             val uiPreset by SettingsManager.getUiPreset(context).collectAsState(initial = UiPreset.IOS)
+            val androidNativeVariant by SettingsManager.getAndroidNativeVariant(context).collectAsState(
+                initial = com.android.purebilibili.core.theme.AndroidNativeVariant.MATERIAL3
+            )
             val themeMode by SettingsManager.getThemeMode(context).collectAsState(initial = AppThemeMode.FOLLOW_SYSTEM)
             val darkThemeStyle by SettingsManager.getDarkThemeStyle(context).collectAsState(initial = DarkThemeStyle.DEFAULT)
             val appLanguage by SettingsManager.getAppLanguage(context).collectAsState(
@@ -1024,6 +1027,7 @@ class MainActivity : AppCompatActivity() {
             // 6. 传入参数
             PureBiliBiliTheme(
                 uiPreset = uiPreset,
+                androidNativeVariant = androidNativeVariant,
                 themeMode = themeMode,
                 darkTheme = useDarkTheme,
                 dynamicColor = effectiveDynamicColor,

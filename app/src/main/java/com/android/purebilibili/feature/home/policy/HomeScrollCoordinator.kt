@@ -40,6 +40,14 @@ internal fun resolveHomeHeaderSettleTransition(
     )
 }
 
+internal fun resolveHomeHeaderTransitionRunning(
+    isFeedScrolling: Boolean,
+    isPagerScrolling: Boolean,
+    isHeaderSettleAnimating: Boolean
+): Boolean {
+    return isFeedScrolling || isPagerScrolling || isHeaderSettleAnimating
+}
+
 internal fun shouldExpandHomeHeaderForSettledPage(
     currentHeaderOffsetPx: Float,
     firstVisibleItemIndex: Int,

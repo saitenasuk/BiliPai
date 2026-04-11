@@ -2,6 +2,7 @@ package com.android.purebilibili.core.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,8 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalDynamicColorActive
 import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.iOSCornerRadius
 import com.android.purebilibili.core.theme.iOSBlue
@@ -74,9 +77,25 @@ internal data class AdaptiveSwitchVisualSpec(
 )
 
 internal fun resolveAdaptiveListComponentVisualSpec(
-    uiPreset: UiPreset
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): AdaptiveListComponentVisualSpec {
-    return if (uiPreset == UiPreset.MD3) {
+    return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        AdaptiveListComponentVisualSpec(
+            sectionStartPaddingDp = 18,
+            groupCornerRadiusDp = 20,
+            groupTonalElevationDp = 0,
+            iconCornerRadiusDp = 10,
+            iconContainerSizeDp = 38,
+            iconGlyphSizeDp = 20,
+            iconBackgroundAlpha = 0.12f,
+            gridCornerRadiusDp = 20,
+            searchBarCornerRadiusDp = 22,
+            searchBarHeightDp = 52,
+            dividerThicknessDp = 0f,
+            dividerStartIndentDp = 18
+        )
+    } else if (uiPreset == UiPreset.MD3) {
         AdaptiveListComponentVisualSpec(
             sectionStartPaddingDp = 20,
             groupCornerRadiusDp = 24,
@@ -112,10 +131,15 @@ internal fun resolveAdaptiveListComponentVisualSpec(
 internal fun resolveAdaptiveGroupContainerColor(
     uiPreset: UiPreset,
     colorScheme: ColorScheme,
-    fallbackColor: Color
+    fallbackColor: Color,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): Color {
     return if (uiPreset == UiPreset.MD3) {
-        colorScheme.surfaceContainerLow
+        if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+            colorScheme.surfaceContainer
+        } else {
+            colorScheme.surfaceContainerLow
+        }
     } else {
         fallbackColor
     }
@@ -124,14 +148,31 @@ internal fun resolveAdaptiveGroupContainerColor(
 internal fun resolveAdaptiveSearchBarContainerColor(
     uiPreset: UiPreset,
     colorScheme: ColorScheme,
-    fallbackColor: Color
+    fallbackColor: Color,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): Color {
     return if (uiPreset == UiPreset.MD3) {
-        colorScheme.surfaceContainerHigh
+        if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+            colorScheme.surfaceContainer
+        } else {
+            colorScheme.surfaceContainerHigh
+        }
     } else {
         fallbackColor
     }
 }
+
+internal fun shouldUseNativeMiuixSearchBar(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant
+): Boolean = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
+
+private val miuixAdaptiveSearchShape = RoundedCornerShape(percent = 50)
+private val miuixAdaptiveSearchLeadingStartPadding = 16.dp
+private val miuixAdaptiveSearchLeadingEndPadding = 8.dp
+private val miuixAdaptiveSearchTrailingStartPadding = 8.dp
+private val miuixAdaptiveSearchTrailingEndPadding = 16.dp
+private val miuixAdaptiveSearchMinHeight = 45.dp
 
 internal fun resolveAdaptiveSemanticIconTint(
     iconTint: Color,
@@ -252,10 +293,18 @@ fun AppAdaptiveSwitch(
 @Composable
 fun IOSSectionTitle(title: String) {
     val uiPreset = LocalUiPreset.current
-    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
+        )
+    }
     Text(
         text = if (uiPreset == UiPreset.MD3) title else title.uppercase(),
-        style = if (uiPreset == UiPreset.MD3) {
+        style = if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+            MaterialTheme.typography.labelLarge
+        } else if (uiPreset == UiPreset.MD3) {
             MaterialTheme.typography.titleSmall
         } else {
             MaterialTheme.typography.labelMedium
@@ -265,11 +314,17 @@ fun IOSSectionTitle(title: String) {
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
-        letterSpacing = if (uiPreset == UiPreset.MD3) 0.sp else 0.5.sp,
+        letterSpacing = if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+            0.15.sp
+        } else if (uiPreset == UiPreset.MD3) {
+            0.sp
+        } else {
+            0.5.sp
+        },
         modifier = Modifier.padding(
-            start = if (uiPreset == UiPreset.MD3) 20.dp else visualSpec.sectionStartPaddingDp.dp,
-            top = if (uiPreset == UiPreset.MD3) 28.dp else 24.dp,
-            bottom = if (uiPreset == UiPreset.MD3) 10.dp else 8.dp
+            start = if (uiPreset == UiPreset.MD3) visualSpec.sectionStartPaddingDp.dp else visualSpec.sectionStartPaddingDp.dp,
+            top = if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) 24.dp else if (uiPreset == UiPreset.MD3) 28.dp else 24.dp,
+            bottom = if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) 8.dp else if (uiPreset == UiPreset.MD3) 10.dp else 8.dp
         )
     )
 }
@@ -283,8 +338,14 @@ fun IOSGroup(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val cornerRadiusScale = LocalCornerRadiusScale.current
-    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
+        )
+    }
     val groupCornerRadius = iOSCornerRadius.Medium * cornerRadiusScale
     val colorScheme = MaterialTheme.colorScheme
     val appliedShape = shape ?: RoundedCornerShape(
@@ -293,12 +354,21 @@ fun IOSGroup(
     val resolvedContainerColor = resolveAdaptiveGroupContainerColor(
         uiPreset = uiPreset,
         colorScheme = colorScheme,
-        fallbackColor = containerColor
+        fallbackColor = containerColor,
+        androidNativeVariant = androidNativeVariant
     )
     
     Surface(
         modifier = modifier
-            .padding(horizontal = if (uiPreset == UiPreset.MD3) 12.dp else 16.dp)
+            .padding(
+                horizontal = if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+                    14.dp
+                } else if (uiPreset == UiPreset.MD3) {
+                    12.dp
+                } else {
+                    16.dp
+                }
+            )
             .clip(appliedShape),
         color = resolvedContainerColor,
         shadowElevation = if (uiPreset == UiPreset.MD3) 0.dp else 0.dp,
@@ -306,7 +376,11 @@ fun IOSGroup(
         border = if (uiPreset == UiPreset.MD3) {
             androidx.compose.foundation.BorderStroke(
                 0.8.dp,
-                colorScheme.outlineVariant.copy(alpha = 0.6f)
+                if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+                    colorScheme.outline.copy(alpha = 0.22f)
+                } else {
+                    colorScheme.outlineVariant.copy(alpha = 0.6f)
+                }
             )
         } else {
             border
@@ -716,15 +790,34 @@ fun IOSSearchBar(
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val colorScheme = MaterialTheme.colorScheme
-    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(
+            uiPreset = uiPreset,
+            androidNativeVariant = androidNativeVariant
+        )
+    }
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val searchBarCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.searchBarCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
     val resolvedContainerColor = resolveAdaptiveSearchBarContainerColor(
         uiPreset = uiPreset,
         colorScheme = colorScheme,
-        fallbackColor = containerColor
+        fallbackColor = containerColor,
+        androidNativeVariant = androidNativeVariant
     )
+
+    if (shouldUseNativeMiuixSearchBar(uiPreset, androidNativeVariant)) {
+        MiuixAdaptiveSearchBar(
+            query = query,
+            onQueryChange = onQueryChange,
+            modifier = modifier,
+            placeholder = placeholder,
+            containerColor = resolvedContainerColor,
+            height = visualSpec.searchBarHeightDp.dp
+        )
+        return
+    }
 
     BasicTextField(
         value = query,
@@ -783,6 +876,89 @@ fun IOSSearchBar(
                             contentDescription = "Clear",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun MiuixAdaptiveSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier,
+    placeholder: String,
+    containerColor: Color,
+    height: androidx.compose.ui.unit.Dp
+) {
+    val capsuleShape = miuixAdaptiveSearchShape
+    val inputTextStyle = MiuixTheme.textStyles.main
+        .copy(fontWeight = FontWeight.Medium)
+        .merge(MaterialTheme.typography.bodyMedium)
+        .copy(color = MiuixTheme.colorScheme.onSurface)
+
+    BasicTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(capsuleShape)
+            .background(containerColor),
+        singleLine = true,
+        textStyle = inputTextStyle,
+        cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+        decorationBox = { innerTextField ->
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    modifier = Modifier.padding(
+                        start = miuixAdaptiveSearchLeadingStartPadding,
+                        end = miuixAdaptiveSearchLeadingEndPadding
+                    ),
+                    imageVector = Icons.Default.Search,
+                    tint = MiuixTheme.colorScheme.onSurfaceContainerHigh,
+                    contentDescription = null
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = miuixAdaptiveSearchMinHeight),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MiuixTheme.colorScheme.onSurfaceContainerHigh
+                        )
+                    }
+                    innerTextField()
+                }
+                if (query.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier.padding(
+                            start = miuixAdaptiveSearchTrailingStartPadding,
+                            end = miuixAdaptiveSearchTrailingEndPadding
+                        ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            modifier = Modifier
+                                .clip(capsuleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { onQueryChange("") },
+                            imageVector = Icons.Default.Clear,
+                            tint = MiuixTheme.colorScheme.onSurfaceContainerHighest,
+                            contentDescription = "Clear"
                         )
                     }
                 }

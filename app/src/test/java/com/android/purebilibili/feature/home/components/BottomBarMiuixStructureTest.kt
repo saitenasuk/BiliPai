@@ -31,6 +31,21 @@ class BottomBarMiuixStructureTest {
         assertTrue(visibleOffsetUses == 2)
     }
 
+    @Test
+    fun `android native miuix variant routes to dedicated miuix bottom bar renderer`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+
+        assertTrue(source.contains("val androidNativeVariant = LocalAndroidNativeVariant.current"))
+        assertTrue(source.contains("androidNativeVariant == AndroidNativeVariant.MIUIX"))
+        assertTrue(source.contains("MiuixBottomBar("))
+        assertTrue(source.contains("if (isFloating) {"))
+        assertTrue(source.contains("KernelSuAlignedBottomBar("))
+        assertTrue(source.contains("iconStyle = SharedFloatingBottomBarIconStyle.CUPERTINO"))
+        assertTrue(source.contains("private enum class SharedFloatingBottomBarIconStyle"))
+        assertTrue(source.contains("MiuixFloatingNavigationBar("))
+        assertTrue(source.contains("MiuixFloatingNavigationBarItem("))
+    }
+
     private fun loadSource(path: String): String {
         val normalizedPath = path.removePrefix("app/")
         val sourceFile = listOf(

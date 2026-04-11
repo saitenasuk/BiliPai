@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.imageLoader
 import com.android.purebilibili.R
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.data.model.response.DynamicItem
@@ -80,10 +82,10 @@ fun DynamicDetailScreen(
     val likedDynamics by interactionViewModel.likedDynamics.collectAsState()
     var showRepostDialog by remember { mutableStateOf<String?>(null) }
 
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(screenTitle) },
+            AdaptiveTopAppBar(
+                title = screenTitle,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(rememberAppBackIcon(), contentDescription = backLabel)

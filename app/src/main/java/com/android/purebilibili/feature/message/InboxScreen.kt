@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,8 +22,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.data.model.response.SessionItem
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -47,27 +49,16 @@ fun InboxScreen(
         }
     }
 
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
+            AdaptiveTopAppBar(
+                title = "消息",
+                subtitle = uiState.unreadData?.let { unread ->
+                    totalPrivateUnreadCount(unread).takeIf { it > 0 }?.let { "私信 $it 条未读" }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                title = {
-                    Column {
-                        Text("消息")
-                        uiState.unreadData?.let { unread ->
-                            val total = totalPrivateUnreadCount(unread)
-                            if (total > 0) {
-                                Text(
-                                    text = "私信 ${total} 条未读",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 }
             )

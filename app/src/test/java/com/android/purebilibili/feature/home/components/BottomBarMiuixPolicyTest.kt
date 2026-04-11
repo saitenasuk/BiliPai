@@ -47,6 +47,7 @@ class BottomBarMiuixPolicyTest {
         assertTrue(source.contains("resolveAndroidNativeBottomBarTuning("))
         assertTrue(source.contains("resolveAndroidNativeBottomBarContainerColor("))
         assertTrue(source.contains("KernelSuAlignedBottomBar("))
+        assertTrue(source.contains("SharedFloatingBottomBarIconStyle.CUPERTINO"))
     }
 
     @Test

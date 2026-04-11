@@ -46,8 +46,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.VideoItem
@@ -361,7 +364,7 @@ fun WatchLaterScreen(
         }
     }
 
-    Scaffold(
+    AdaptiveScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             // 使用 Box 包裹实现毛玻璃背景
@@ -370,11 +373,11 @@ fun WatchLaterScreen(
                     .fillMaxWidth()
                     .unifiedBlur(hazeState)
             ) {
-                TopAppBar(
-                    title = { Text("稍后再看", fontWeight = FontWeight.Bold) },
+                AdaptiveTopAppBar(
+                    title = "稍后再看",
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                            Icon(rememberAppBackIcon(), contentDescription = "返回")
                         }
                     },
                     actions = {
