@@ -159,7 +159,7 @@ internal fun resolveMd3TopTabSelectedContainerColor(
     colorScheme: ColorScheme,
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): androidx.compose.ui.graphics.Color = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
-    colorScheme.surfaceContainerHigh
+    colorScheme.secondaryContainer
 } else {
     colorScheme.primary
 }
@@ -168,7 +168,7 @@ internal fun resolveMd3TopTabSelectedIconColor(
     colorScheme: ColorScheme,
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): androidx.compose.ui.graphics.Color = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
-    colorScheme.onSurface
+    colorScheme.onSecondaryContainer
 } else {
     colorScheme.primary
 }
@@ -177,7 +177,7 @@ internal fun resolveMd3TopTabSelectedLabelColor(
     colorScheme: ColorScheme,
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): androidx.compose.ui.graphics.Color = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
-    colorScheme.onSurface
+    colorScheme.onSecondaryContainer
 } else {
     colorScheme.primary
 }

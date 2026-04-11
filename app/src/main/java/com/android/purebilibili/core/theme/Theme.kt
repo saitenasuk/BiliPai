@@ -601,10 +601,6 @@ fun PureBiliBiliTheme(
     val miuixTextStyles = remember(fontSizePreset) {
         defaultTextStyles().scaled(fontSizePreset.multiplier)
     }
-    val miuixSmoothRounding = shouldUseMiuixSmoothRounding(
-        uiPreset = uiPreset,
-        androidNativeVariant = androidNativeVariant
-    )
     val lightMaterialScheme = enforceDynamicLightTextContrast(
         if (renderingProfile.useMaterialChrome) {
             createMd3LightColorScheme(customPrimaryColor)
@@ -684,8 +680,7 @@ fun PureBiliBiliTheme(
     ) {
         MiuixTheme(
             controller = controller,
-            textStyles = miuixTextStyles,
-            smoothRounding = miuixSmoothRounding
+            textStyles = miuixTextStyles
         ) {
             MaterialTheme(
                 colorScheme = materialColorScheme,

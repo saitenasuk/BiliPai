@@ -33,6 +33,10 @@ import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.common.CopySelectionDialog
 import com.android.purebilibili.core.ui.rememberAppMoreIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
@@ -42,6 +46,7 @@ import com.android.purebilibili.feature.dynamic.resolveDynamicCardContentPadding
 import com.android.purebilibili.feature.dynamic.resolveDynamicCardOuterPadding
 import com.android.purebilibili.data.model.response.DynamicStatModule
 import com.android.purebilibili.data.model.response.DynamicType
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  *  动态卡片V2 - 官方风格
@@ -65,6 +70,9 @@ fun DynamicCardV2(
     val stat = item.modules.module_stat
     val type = DynamicType.fromApiValue(item.type)
     val cardClickAction = remember(item) { resolveDynamicCardPrimaryAction(item) }
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
     val isPrimaryClickEnabled = remember(cardClickAction, onDynamicDetailClick) {
         when (cardClickAction) {
             is DynamicCardPrimaryAction.OpenDynamicDetail -> onDynamicDetailClick != null
@@ -78,7 +86,10 @@ fun DynamicCardV2(
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = resolveDynamicCardOuterPadding(), vertical = 6.dp)
+            .padding(
+                horizontal = resolveDynamicCardOuterPadding(),
+                vertical = if (isMiuix) 4.dp else 6.dp
+            )
             .clickable(enabled = isPrimaryClickEnabled) {
                 dispatchDynamicCardPrimaryAction(
                     action = cardClickAction,
@@ -88,8 +99,13 @@ fun DynamicCardV2(
                     onLiveClick = onLiveClick
                 )
             },
-        backgroundColor = MaterialTheme.colorScheme.surface, // 纯白背景，减少割裂感
-        shape = RoundedCornerShape(20.dp) // 更大的圆角
+        backgroundColor = if (isMiuix) MiuixTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface,
+        borderColor = if (isMiuix) {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+        },
+        shape = RoundedCornerShape(if (isMiuix) 18.dp else 20.dp)
     ) {
     Column(
         modifier = Modifier

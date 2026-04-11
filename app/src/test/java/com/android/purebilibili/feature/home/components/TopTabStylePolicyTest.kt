@@ -191,8 +191,8 @@ class TopTabStylePolicyTest {
     }
 
     @Test
-    fun `android native miuix text tabs should stay on shared top tab row for chrome parity`() {
-        assertFalse(
+    fun `android native miuix text tabs should use native miuix row while icon modes stay shared`() {
+        assertTrue(
             shouldUseNativeMiuixTopTabRow(
                 androidNativeVariant = AndroidNativeVariant.MIUIX,
                 labelMode = 2
@@ -203,6 +203,12 @@ class TopTabStylePolicyTest {
             shouldUseNativeMiuixTopTabRow(
                 androidNativeVariant = AndroidNativeVariant.MIUIX,
                 labelMode = 0
+            )
+        )
+        assertFalse(
+            shouldUseNativeMiuixTopTabRow(
+                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                labelMode = 1
             )
         )
     }
@@ -226,7 +232,7 @@ class TopTabStylePolicyTest {
     }
 
     @Test
-    fun `android native miuix top tabs should use secondary container emphasis`() {
+    fun `android native miuix top tabs should use miuix secondary container emphasis`() {
         val colorScheme = lightColorScheme(
             primary = Color(0xFF2D6A4F),
             surfaceContainerHigh = Color(0xFFF4ECE1),
@@ -237,21 +243,21 @@ class TopTabStylePolicyTest {
         )
 
         assertEquals(
-            colorScheme.surfaceContainerHigh,
+            colorScheme.secondaryContainer,
             resolveMd3TopTabSelectedContainerColor(
                 colorScheme = colorScheme,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
             )
         )
         assertEquals(
-            colorScheme.onSurface,
+            colorScheme.onSecondaryContainer,
             resolveMd3TopTabSelectedIconColor(
                 colorScheme = colorScheme,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
             )
         )
         assertEquals(
-            colorScheme.onSurface,
+            colorScheme.onSecondaryContainer,
             resolveMd3TopTabSelectedLabelColor(
                 colorScheme = colorScheme,
                 androidNativeVariant = AndroidNativeVariant.MIUIX

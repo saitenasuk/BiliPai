@@ -136,11 +136,15 @@ internal fun resolveHomeTopLinkedBottomBarAppearance(
 internal fun resolveHomeTopChromeMaterialMode(
     isHeaderBlurEnabled: Boolean,
     isBottomBarBlurEnabled: Boolean,
-    isLiquidGlassEnabled: Boolean
+    isLiquidGlassEnabled: Boolean,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): TopTabMaterialMode {
+    if (androidNativeVariant == AndroidNativeVariant.MIUIX && (isHeaderBlurEnabled || isBottomBarBlurEnabled)) {
+        return TopTabMaterialMode.BLUR
+    }
     return when {
         isLiquidGlassEnabled -> TopTabMaterialMode.LIQUID_GLASS
-        !isHeaderBlurEnabled -> TopTabMaterialMode.PLAIN
+        !isHeaderBlurEnabled && !isBottomBarBlurEnabled -> TopTabMaterialMode.PLAIN
         else -> TopTabMaterialMode.BLUR
     }
 }
@@ -667,9 +671,18 @@ internal fun resolveHomeTopPanelChromeRenderMode(
 internal fun resolveHomeTopSearchChromeRenderMode(
     renderMode: HomeTopChromeRenderMode,
     uiPreset: UiPreset = UiPreset.IOS,
-    useUnifiedPanel: Boolean = false
+    useUnifiedPanel: Boolean = false,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): HomeTopChromeRenderMode {
     if (useUnifiedPanel) {
+        if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+            return when (renderMode) {
+                HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+                HomeTopChromeRenderMode.LIQUID_GLASS_HAZE,
+                HomeTopChromeRenderMode.BLUR -> renderMode
+                HomeTopChromeRenderMode.PLAIN -> HomeTopChromeRenderMode.PLAIN
+            }
+        }
         return when (renderMode) {
             HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
             HomeTopChromeRenderMode.LIQUID_GLASS_HAZE -> renderMode
@@ -681,6 +694,39 @@ internal fun resolveHomeTopSearchChromeRenderMode(
         renderMode = renderMode,
         uiPreset = uiPreset
     )
+}
+
+internal fun resolveHomeTopUnifiedTabChromeRenderMode(
+    localTabChromeRenderMode: HomeTopChromeRenderMode,
+    uiPreset: UiPreset = UiPreset.IOS,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
+    useUnifiedLiquidChrome: Boolean
+): HomeTopChromeRenderMode {
+    if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        return localTabChromeRenderMode
+    }
+    return if (useUnifiedLiquidChrome) {
+        localTabChromeRenderMode
+    } else {
+        HomeTopChromeRenderMode.PLAIN
+    }
+}
+
+internal fun resolveHomeTopUnifiedTabSurfaceColor(
+    tabContainerColor: Color,
+    tabOverlayAlpha: Float,
+    uiPreset: UiPreset = UiPreset.IOS,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3,
+    useUnifiedLiquidChrome: Boolean
+): Color {
+    if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        return tabContainerColor.copy(alpha = tabOverlayAlpha)
+    }
+    return if (useUnifiedLiquidChrome) {
+        tabContainerColor.copy(alpha = tabOverlayAlpha)
+    } else {
+        Color.Transparent
+    }
 }
 
 internal fun resolveHomeTopUnifiedSearchContainerColor(
@@ -1108,8 +1154,9 @@ fun iOSHomeHeader(
     // [Feature] Liquid Glass Logic
     val topChromeMaterialMode = resolveHomeTopChromeMaterialMode(
         isHeaderBlurEnabled = isHeaderBlurEnabled,
-        isBottomBarBlurEnabled = false,
-        isLiquidGlassEnabled = homeSettings?.isTopBarLiquidGlassEnabled == true
+        isBottomBarBlurEnabled = linkedBottomBarAppearance.blurEnabled,
+        isLiquidGlassEnabled = homeSettings?.isTopBarLiquidGlassEnabled == true,
+        androidNativeVariant = androidNativeVariant
     )
     val isGlassEnabled = topChromeMaterialMode == TopTabMaterialMode.LIQUID_GLASS
     val isTopChromeBlurEnabled = topChromeMaterialMode != TopTabMaterialMode.PLAIN
@@ -1310,7 +1357,8 @@ fun iOSHomeHeader(
     val searchChromeRenderMode = resolveHomeTopSearchChromeRenderMode(
         renderMode = topChromeRenderMode,
         uiPreset = uiPreset,
-        useUnifiedPanel = useUnifiedTopPanel
+        useUnifiedPanel = useUnifiedTopPanel,
+        androidNativeVariant = androidNativeVariant
     )
     val searchContentBackdrop = rememberLayerBackdrop()
     val localTopChromeRenderMode = resolveHomeTopLocalChromeRenderMode(
@@ -2026,20 +2074,23 @@ fun iOSHomeHeader(
                             tabShape
                         },
                         tabChromeRenderMode = if (useUnifiedTopPanel) {
-                            if (useUnifiedLiquidChrome) {
-                                localTabChromeRenderMode
-                            } else {
-                                HomeTopChromeRenderMode.PLAIN
-                            }
+                            resolveHomeTopUnifiedTabChromeRenderMode(
+                                localTabChromeRenderMode = localTabChromeRenderMode,
+                                uiPreset = uiPreset,
+                                androidNativeVariant = androidNativeVariant,
+                                useUnifiedLiquidChrome = useUnifiedLiquidChrome
+                            )
                         } else {
                             localTabChromeRenderMode
                         },
                         tabSurfaceColor = if (useUnifiedTopPanel) {
-                            if (useUnifiedLiquidChrome) {
-                                tabChromeColors.containerColor.copy(alpha = tabOverlayAlpha)
-                            } else {
-                                Color.Transparent
-                            }
+                            resolveHomeTopUnifiedTabSurfaceColor(
+                                tabContainerColor = tabChromeColors.containerColor,
+                                tabOverlayAlpha = tabOverlayAlpha,
+                                uiPreset = uiPreset,
+                                androidNativeVariant = androidNativeVariant,
+                                useUnifiedLiquidChrome = useUnifiedLiquidChrome
+                            )
                         } else {
                             tabSurfaceColor.copy(alpha = tabOverlayAlpha)
                         },

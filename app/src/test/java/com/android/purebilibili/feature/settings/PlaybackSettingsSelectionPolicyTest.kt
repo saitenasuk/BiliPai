@@ -32,6 +32,26 @@ class PlaybackSettingsSelectionPolicyTest {
     }
 
     @Test
+    fun `md3 segmented labels should shrink for crowded language options`() {
+        assertEquals(
+            13f,
+            resolveMd3SegmentedLabelFontSizeSp(
+                optionCount = 4,
+                longestLabelLength = "English".length
+            ),
+            0.001f
+        )
+        assertEquals(
+            15f,
+            resolveMd3SegmentedLabelFontSizeSp(
+                optionCount = 3,
+                longestLabelLength = "HEVC".length
+            ),
+            0.001f
+        )
+    }
+
+    @Test
     fun `resolveEffectiveMobileQuality should clamp to 480p when data saver active`() {
         assertEquals(32, resolveEffectiveMobileQuality(rawMobileQuality = 80, isDataSaverActive = true))
         assertEquals(16, resolveEffectiveMobileQuality(rawMobileQuality = 16, isDataSaverActive = true))

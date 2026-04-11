@@ -45,6 +45,32 @@ class AdaptiveListComponentPolicyTest {
     }
 
     @Test
+    fun `android native miuix variant should use denser list row spacing`() {
+        val spec = resolveAdaptiveListRowVisualSpec(
+            uiPreset = UiPreset.MD3,
+            androidNativeVariant = AndroidNativeVariant.MIUIX
+        )
+
+        assertEquals(16, spec.insideHorizontalPaddingDp)
+        assertEquals(14, spec.insideVerticalPaddingDp)
+        assertEquals(14, spec.trailingIconSizeDp)
+        assertEquals(6, spec.trailingSpacingDp)
+    }
+
+    @Test
+    fun `md3 preset should keep roomier shared list row spacing`() {
+        val spec = resolveAdaptiveListRowVisualSpec(
+            uiPreset = UiPreset.MD3,
+            androidNativeVariant = AndroidNativeVariant.MATERIAL3
+        )
+
+        assertEquals(18, spec.insideHorizontalPaddingDp)
+        assertEquals(16, spec.insideVerticalPaddingDp)
+        assertEquals(16, spec.trailingIconSizeDp)
+        assertEquals(8, spec.trailingSpacingDp)
+    }
+
+    @Test
     fun `ios preset should preserve compact inset list geometry`() {
         val spec = resolveAdaptiveListComponentVisualSpec(UiPreset.IOS)
 

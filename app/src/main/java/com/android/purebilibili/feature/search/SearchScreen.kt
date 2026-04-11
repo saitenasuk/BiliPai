@@ -101,12 +101,15 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.hazeSource
 import com.android.purebilibili.core.ui.blur.unifiedBlur
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.data.model.response.HotItem
 import com.android.purebilibili.data.model.response.SearchArticleItem
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 internal fun shouldShowSearchHotSection(
     hotItemCount: Int,
@@ -139,9 +142,18 @@ internal data class SearchChromeVisualSpec(
 )
 
 internal fun resolveSearchChromeVisualSpec(
-    uiPreset: UiPreset
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): SearchChromeVisualSpec {
-    return if (uiPreset == UiPreset.MD3) {
+    return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        SearchChromeVisualSpec(
+            inputHeightDp = 46,
+            inputCornerRadiusDp = 23,
+            actionContainerCornerRadiusDp = 18,
+            useFilledSearchAction = true,
+            suggestionContainerCornerRadiusDp = 18
+        )
+    } else if (uiPreset == UiPreset.MD3) {
         SearchChromeVisualSpec(
             inputHeightDp = 48,
             inputCornerRadiusDp = 28,
@@ -229,7 +241,10 @@ fun SearchScreen(
     onAvatarClick: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
-    val searchChromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val searchChromeSpec = remember(uiPreset, androidNativeVariant) {
+        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
+    }
     val state by viewModel.uiState.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
     val configuration = LocalConfiguration.current
@@ -1156,8 +1171,11 @@ fun SearchTopBar(
     modifier: Modifier = Modifier
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val layoutSpec = remember { resolveSearchTopBarLayoutSpec() }
-    val chromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val chromeSpec = remember(uiPreset, androidNativeVariant) {
+        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
+    }
     val backIcon = rememberAppBackIcon()
     val searchIcon = rememberAppSearchIcon()
     val clearIcon = rememberAppClearIcon()
@@ -1226,7 +1244,9 @@ fun SearchTopBar(
                             shape = RoundedCornerShape(chromeSpec.inputCornerRadiusDp.dp)
                         )
                         .background(
-                            if (uiPreset == UiPreset.MD3) {
+                            if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+                                MiuixTheme.colorScheme.surfaceContainerHigh
+                            } else if (uiPreset == UiPreset.MD3) {
                                 MaterialTheme.colorScheme.surfaceContainerHigh
                             } else {
                                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
@@ -1329,13 +1349,18 @@ fun HistoryChip(
     onDelete: () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val historyIcon = rememberAppHistoryIcon()
     val clearIcon = rememberAppClearIcon()
     val deleteLabel = stringResource(R.string.common_delete)
-    val chromeSpec = remember(uiPreset) { resolveSearchChromeVisualSpec(uiPreset) }
+    val chromeSpec = remember(uiPreset, androidNativeVariant) {
+        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
+    }
     Surface(
         onClick = onClick,
-        color = if (uiPreset == UiPreset.MD3) {
+        color = if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+            MiuixTheme.colorScheme.surfaceContainerHigh
+        } else if (uiPreset == UiPreset.MD3) {
             MaterialTheme.colorScheme.surfaceContainerHigh
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
@@ -1969,15 +1994,29 @@ private fun SearchResultCardSurface(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
     Surface(
         modifier = modifier.fillMaxWidth(),
         onClick = onClick,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = appearance.containerAlpha),
-        shape = RoundedCornerShape(12.dp),
-        tonalElevation = appearance.tonalElevationDp.dp,
-        shadowElevation = appearance.shadowElevationDp.dp,
+        color = if (isMiuix) {
+            MiuixTheme.colorScheme.surfaceContainer
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = appearance.containerAlpha)
+        },
+        shape = RoundedCornerShape(if (isMiuix) 18.dp else 12.dp),
+        tonalElevation = if (isMiuix) 0.dp else appearance.tonalElevationDp.dp,
+        shadowElevation = if (isMiuix) 0.dp else appearance.shadowElevationDp.dp,
         border = if (appearance.borderAlpha > 0f) {
-            androidx.compose.foundation.BorderStroke(0.8.dp, Color.White.copy(alpha = appearance.borderAlpha))
+            androidx.compose.foundation.BorderStroke(
+                0.8.dp,
+                if (isMiuix) {
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+                } else {
+                    Color.White.copy(alpha = appearance.borderAlpha)
+                }
+            )
         } else {
             null
         }

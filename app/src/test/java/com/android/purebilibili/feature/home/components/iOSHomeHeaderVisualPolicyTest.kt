@@ -242,6 +242,53 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `miuix unified search keeps blur and liquid glass render modes`() {
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopSearchChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.MD3,
+                useUnifiedPanel = true,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+        assertEquals(
+            HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+            resolveHomeTopSearchChromeRenderMode(
+                renderMode = HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
+                uiPreset = UiPreset.MD3,
+                useUnifiedPanel = true,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
+            )
+        )
+    }
+
+    @Test
+    fun `miuix unified top tabs keep their local glass render mode and surface`() {
+        val tabColor = Color.White.copy(alpha = 0.42f)
+
+        assertEquals(
+            HomeTopChromeRenderMode.BLUR,
+            resolveHomeTopUnifiedTabChromeRenderMode(
+                localTabChromeRenderMode = HomeTopChromeRenderMode.BLUR,
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                useUnifiedLiquidChrome = false
+            )
+        )
+        assertEquals(
+            tabColor.copy(alpha = 0.5f),
+            resolveHomeTopUnifiedTabSurfaceColor(
+                tabContainerColor = tabColor,
+                tabOverlayAlpha = 0.5f,
+                uiPreset = UiPreset.MD3,
+                androidNativeVariant = AndroidNativeVariant.MIUIX,
+                useUnifiedLiquidChrome = false
+            )
+        )
+    }
+
+    @Test
     fun `md3 partial collapse softens search content alpha instead of using linear fade`() {
         val layout = resolveHomeHeaderScrollLayout(
             headerOffsetPx = -26f,
@@ -577,9 +624,9 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `top chrome uses plain when both header blur and liquid glass are disabled`() {
+    fun `top chrome uses blur when linked bottom bar blur is enabled`() {
         assertEquals(
-            TopTabMaterialMode.PLAIN,
+            TopTabMaterialMode.BLUR,
             resolveHomeTopChromeMaterialMode(
                 isHeaderBlurEnabled = false,
                 isBottomBarBlurEnabled = true,
@@ -737,6 +784,19 @@ class iOSHomeHeaderVisualPolicyTest {
                 renderMode = HomeTopChromeRenderMode.BLUR,
                 uiPreset = UiPreset.MD3,
                 useUnifiedPanel = true
+            )
+        )
+    }
+
+    @Test
+    fun `miuix top chrome prefers blur over liquid glass when blur is enabled`() {
+        assertEquals(
+            TopTabMaterialMode.BLUR,
+            resolveHomeTopChromeMaterialMode(
+                isHeaderBlurEnabled = true,
+                isBottomBarBlurEnabled = true,
+                isLiquidGlassEnabled = true,
+                androidNativeVariant = AndroidNativeVariant.MIUIX
             )
         )
     }

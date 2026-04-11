@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -22,12 +23,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.theme.AndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
+import com.android.purebilibili.core.theme.LocalUiPreset
+import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.data.model.response.SessionItem
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -220,12 +226,23 @@ private fun MessageCenterShortcutCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
     Surface(
         modifier = modifier
-            .height(96.dp)
+            .height(if (isMiuix) 88.dp else 96.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        shape = RoundedCornerShape(if (isMiuix) 18.dp else 20.dp),
+        color = if (isMiuix) MiuixTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        border = if (isMiuix) {
+            androidx.compose.foundation.BorderStroke(
+                0.8.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+            )
+        } else {
+            null
+        }
     ) {
         Column(
             modifier = Modifier
@@ -312,6 +329,9 @@ fun SessionListItem(
     onToggleTop: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val isMiuix = uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX
 
     val displayName = InboxUserInfoResolver.resolveDisplayName(
         cached = userInfo,
@@ -322,18 +342,23 @@ fun SessionListItem(
         session = session
     )
 
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .then(
-                if (session.top_ts > 0) {
-                    Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                } else {
-                    Modifier
-                }
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = if (isMiuix) 12.dp else 0.dp, vertical = if (isMiuix) 3.dp else 0.dp),
+        shape = RoundedCornerShape(if (isMiuix) 16.dp else 0.dp),
+        color = when {
+            isMiuix && session.top_ts > 0 -> MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+            isMiuix -> MiuixTheme.colorScheme.surfaceContainer
+            session.top_ts > 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            else -> Color.Transparent
+        }
+    ) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = if (isMiuix) 10.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box {
@@ -447,6 +472,7 @@ fun SessionListItem(
                 }
             }
         }
+    }
     }
 }
 

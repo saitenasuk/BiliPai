@@ -76,6 +76,13 @@ internal data class AdaptiveSwitchVisualSpec(
     val uncheckedBorderColor: Color
 )
 
+internal data class AdaptiveListRowVisualSpec(
+    val insideHorizontalPaddingDp: Int,
+    val insideVerticalPaddingDp: Int,
+    val trailingIconSizeDp: Int,
+    val trailingSpacingDp: Int
+)
+
 internal fun resolveAdaptiveListComponentVisualSpec(
     uiPreset: UiPreset,
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
@@ -124,6 +131,34 @@ internal fun resolveAdaptiveListComponentVisualSpec(
             searchBarHeightDp = 40,
             dividerThicknessDp = 0.5f,
             dividerStartIndentDp = 66
+        )
+    }
+}
+
+internal fun resolveAdaptiveListRowVisualSpec(
+    uiPreset: UiPreset,
+    androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
+): AdaptiveListRowVisualSpec {
+    return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        AdaptiveListRowVisualSpec(
+            insideHorizontalPaddingDp = 16,
+            insideVerticalPaddingDp = 14,
+            trailingIconSizeDp = 14,
+            trailingSpacingDp = 6
+        )
+    } else if (uiPreset == UiPreset.MD3) {
+        AdaptiveListRowVisualSpec(
+            insideHorizontalPaddingDp = 18,
+            insideVerticalPaddingDp = 16,
+            trailingIconSizeDp = 16,
+            trailingSpacingDp = 8
+        )
+    } else {
+        AdaptiveListRowVisualSpec(
+            insideHorizontalPaddingDp = 16,
+            insideVerticalPaddingDp = 14,
+            trailingIconSizeDp = 20,
+            trailingSpacingDp = 6
         )
     }
 }
@@ -403,7 +438,13 @@ fun IOSSwitchItem(
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
     val uiPreset = LocalUiPreset.current
-    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    }
+    val rowSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListRowVisualSpec(uiPreset, androidNativeVariant)
+    }
     val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
@@ -413,21 +454,24 @@ fun IOSSwitchItem(
             summary = subtitle,
             enabled = enabled,
             onClick = { onCheckedChange(!checked) },
-            insideMargin = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+            insideMargin = PaddingValues(
+                horizontal = rowSpec.insideHorizontalPaddingDp.dp,
+                vertical = rowSpec.insideVerticalPaddingDp.dp
+            ),
             startAction = {
                 if (icon != null) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(effectiveIconTint.copy(alpha = 0.16f)),
+                            .size(visualSpec.iconContainerSizeDp.dp)
+                            .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
+                            .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
                             tint = effectiveIconTint,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
                         )
                     }
                 }
@@ -502,7 +546,13 @@ fun IOSClickableItem(
     showChevron: Boolean = true
 ) {
     val uiPreset = LocalUiPreset.current
-    val visualSpec = remember(uiPreset) { resolveAdaptiveListComponentVisualSpec(uiPreset) }
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    }
+    val rowSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListRowVisualSpec(uiPreset, androidNativeVariant)
+    }
     val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val iconCornerRadius = if (uiPreset == UiPreset.MD3) visualSpec.iconCornerRadiusDp.dp else iOSCornerRadius.Small * cornerRadiusScale
@@ -511,22 +561,25 @@ fun IOSClickableItem(
             title = title,
             summary = subtitle,
             onClick = onClick,
-            insideMargin = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+            insideMargin = PaddingValues(
+                horizontal = rowSpec.insideHorizontalPaddingDp.dp,
+                vertical = rowSpec.insideVerticalPaddingDp.dp
+            ),
             startAction = {
                 when {
                     icon != null -> {
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(effectiveIconTint.copy(alpha = 0.16f)),
+                                .size(visualSpec.iconContainerSizeDp.dp)
+                                .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
+                                .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = icon,
                                 contentDescription = null,
                                 tint = effectiveIconTint,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
                             )
                         }
                     }
@@ -534,13 +587,13 @@ fun IOSClickableItem(
                     iconPainter != null -> {
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(14.dp))
+                                .size(visualSpec.iconContainerSizeDp.dp)
+                                .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
                                 .background(
                                     if (effectiveIconTint == Color.Unspecified) {
                                         Color.Transparent
                                     } else {
-                                        effectiveIconTint.copy(alpha = 0.16f)
+                                        effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)
                                     }
                                 ),
                             contentAlignment = Alignment.Center
@@ -549,7 +602,7 @@ fun IOSClickableItem(
                                 painter = iconPainter,
                                 contentDescription = null,
                                 tint = effectiveIconTint,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
                             )
                         }
                     }
@@ -559,7 +612,11 @@ fun IOSClickableItem(
                 if (!value.isNullOrBlank()) {
                     Text(
                         text = value,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
+                            MaterialTheme.typography.bodySmall
+                        } else {
+                            MaterialTheme.typography.bodyMedium
+                        },
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         modifier = if (enableCopy) {
                             Modifier.copyOnLongPress(copyValue ?: value, title)
@@ -567,14 +624,14 @@ fun IOSClickableItem(
                             Modifier
                         }
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(rowSpec.trailingSpacingDp.dp))
                 }
                 if (onClick != null && showChevron) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                         contentDescription = null,
                         tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(rowSpec.trailingIconSizeDp.dp)
                     )
                 }
             }

@@ -194,9 +194,11 @@ internal fun shouldUseNativeMiuixTopTabRow(
     androidNativeVariant: AndroidNativeVariant,
     labelMode: Int
 ): Boolean {
-    // Keep MIUIX tabs on the shared row so the home header chrome stays
-    // fully driven by the same blur/liquid-glass settings as the bottom bar.
-    return false
+    val normalized = normalizeTopTabLabelMode(labelMode)
+    // Native Miuix TabRow is text-first. Keep icon-only / icon+text modes on the shared row.
+    return androidNativeVariant == AndroidNativeVariant.MIUIX &&
+        shouldShowTopTabText(normalized) &&
+        !shouldShowTopTabIcon(normalized)
 }
 
 private fun resolveTopTabCategoryForIcon(categoryKey: String): HomeCategory? {
@@ -1123,6 +1125,10 @@ private fun MiuixCategoryTabRow(
             ).coerceIn(0, (categories.size - 1).coerceAtLeast(0))
         }
     }
+    val topTabSpec = resolveMd3TopTabVisualSpec(
+        isFloatingStyle = false,
+        androidNativeVariant = AndroidNativeVariant.MIUIX
+    )
     val actionButtonSize = resolveMd3TopTabActionButtonSize(
         isFloatingStyle = false,
         androidNativeVariant = AndroidNativeVariant.MIUIX
@@ -1139,7 +1145,7 @@ private fun MiuixCategoryTabRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(resolveMd3TopTabVisualSpec(false, AndroidNativeVariant.MIUIX).rowHeight)
+            .height(topTabSpec.rowHeight)
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1162,37 +1168,50 @@ private fun MiuixCategoryTabRow(
                         }
                     })
                 },
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(topTabSpec.rowHeight),
                 colors = MiuixTabRowDefaults.tabRowColors(
-                    backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                    backgroundColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.10f),
                     contentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    selectedBackgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                    selectedBackgroundColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.18f),
                     selectedContentColor = MiuixTheme.colorScheme.onSecondaryContainer
-                )
+                ),
+                height = topTabSpec.rowHeight,
+                cornerRadius = topTabSpec.selectedCapsuleCornerRadius + 4.dp,
+                itemSpacing = 6.dp
             )
         }
 
         Spacer(modifier = Modifier.width(4.dp))
 
-        Box(
+        Surface(
             modifier = Modifier
                 .size(actionButtonSize)
-                .clip(RoundedCornerShape(actionButtonCorner))
-                .background(MiuixTheme.colorScheme.surfaceContainer)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) {
                     performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                resolveTopTabPartitionIcon(UiPreset.MD3),
-                contentDescription = "浏览全部分区",
-                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.size(actionIconSize)
+            },
+            shape = RoundedCornerShape(actionButtonCorner),
+            color = MiuixTheme.colorScheme.primary.copy(alpha = 0.10f),
+            border = BorderStroke(
+                width = 0.8.dp,
+                color = MiuixTheme.colorScheme.primary.copy(alpha = 0.16f)
             )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    resolveTopTabPartitionIcon(UiPreset.MD3),
+                    contentDescription = "浏览全部分区",
+                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                    modifier = Modifier.size(actionIconSize)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(8.dp))

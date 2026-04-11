@@ -102,6 +102,16 @@ class BottomBarSurfaceColorPolicyTest {
     }
 
     @Test
+    fun `android native blur disables liquid glass surface treatment`() {
+        assertFalse(
+            resolveAndroidNativeBottomBarGlassEnabled(
+                liquidGlassEnabled = true,
+                blurEnabled = true
+            )
+        )
+    }
+
+    @Test
     fun `android native indicator keeps capsule static when idle`() {
         val spec = resolveAndroidNativeIndicatorSpec(isMoving = false)
 

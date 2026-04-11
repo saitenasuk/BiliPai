@@ -375,7 +375,7 @@ internal fun resolveMiuixFloatingBottomBarTuning(
 internal fun resolveAndroidNativeBottomBarGlassEnabled(
     liquidGlassEnabled: Boolean,
     blurEnabled: Boolean
-): Boolean = liquidGlassEnabled || blurEnabled
+): Boolean = liquidGlassEnabled && !blurEnabled
 
 internal fun resolveAndroidNativeIndicatorSpec(
     isMoving: Boolean
@@ -594,8 +594,10 @@ internal fun resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme: Boolean): 
 
 internal fun resolveBottomBarChromeMaterialMode(
     showGlassEffect: Boolean,
-    hasBlur: Boolean
+    hasBlur: Boolean,
+    preferBlurWhenAvailable: Boolean = false
 ): TopTabMaterialMode {
+    if (preferBlurWhenAvailable && hasBlur) return TopTabMaterialMode.BLUR
     return when {
         showGlassEffect -> TopTabMaterialMode.LIQUID_GLASS
         hasBlur -> TopTabMaterialMode.BLUR
@@ -965,7 +967,8 @@ fun FrostedBottomBar(
     }
     val bottomChromeMaterialMode = resolveBottomBarChromeMaterialMode(
         showGlassEffect = showGlassEffect,
-        hasBlur = hazeState != null
+        hasBlur = hazeState != null,
+        preferBlurWhenAvailable = false
     )
     val barColor = resolveBottomBarContainerColor(
         surfaceColor = MaterialTheme.colorScheme.surface,
@@ -1460,7 +1463,7 @@ private fun MiuixBottomBar(
         blurEnabled = blurEnabled
     )
     val tuning = resolveAndroidNativeBottomBarTuning(
-        blurEnabled = glassEnabled,
+        blurEnabled = glassEnabled || blurEnabled,
         darkTheme = isSystemInDarkTheme()
     )
     val blurIntensity = currentUnifiedBlurIntensity()
@@ -1500,7 +1503,11 @@ private fun MiuixBottomBar(
             tuning = tuning,
             glassEnabled = glassEnabled,
             iconStyle = SharedFloatingBottomBarIconStyle.CUPERTINO,
-            haptic = haptic
+            haptic = haptic,
+            hazeState = hazeState,
+            motionTier = motionTier,
+            isTransitionRunning = isTransitionRunning,
+            forceLowBlurBudget = forceLowBlurBudget
         )
         return
     }
@@ -1783,7 +1790,11 @@ private fun KernelSuAlignedBottomBar(
     tuning: AndroidNativeBottomBarTuning,
     glassEnabled: Boolean,
     iconStyle: SharedFloatingBottomBarIconStyle = SharedFloatingBottomBarIconStyle.MATERIAL,
-    haptic: (HapticType) -> Unit
+    haptic: (HapticType) -> Unit,
+    hazeState: HazeState? = null,
+    motionTier: MotionTier = MotionTier.Normal,
+    isTransitionRunning: Boolean = false,
+    forceLowBlurBudget: Boolean = false
 ) {
     val shellShape = resolveSharedBottomBarCapsuleShape()
     val tintedContentBackdrop = rememberLayerBackdrop()
@@ -1909,6 +1920,20 @@ private fun KernelSuAlignedBottomBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(shellHeight)
+                    .then(
+                        if (blurEnabled && !glassEnabled && backdrop == null && hazeState != null) {
+                            Modifier.unifiedBlur(
+                                hazeState = hazeState,
+                                surfaceType = BlurSurfaceType.BOTTOM_BAR,
+                                motionTier = motionTier,
+                                isScrolling = false,
+                                isTransitionRunning = isTransitionRunning,
+                                forceLowBudget = forceLowBlurBudget
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
                     .graphicsLayer {
                         val progress = dampedDragState.pressProgress
                         val bumpScale = androidx.compose.ui.util.lerp(1f, 1f + 16f.dp.toPx() / size.width, progress)
@@ -1920,15 +1945,15 @@ private fun KernelSuAlignedBottomBar(
                             drawBackdrop(
                                 backdrop = backdrop,
                                 shape = { shellShape },
-                                effects = {
-                                    if (glassEnabled) {
-                                        vibrancy()
-                                        blur(tuning.shellBlurRadiusDp.dp.toPx())
-                                    }
-                                },
-                                highlight = {
-                                    Highlight.Default.copy(alpha = if (glassEnabled) 1f else 0f)
-                                },
+	                                effects = {
+	                                    if (glassEnabled || blurEnabled) {
+	                                        vibrancy()
+	                                        blur(tuning.shellBlurRadiusDp.dp.toPx())
+	                                    }
+	                                },
+	                                highlight = {
+	                                    Highlight.Default.copy(alpha = if (glassEnabled) 1f else if (blurEnabled) 0.18f else 0f)
+	                                },
                                 shadow = {
                                     Shadow.Default.copy(
                                         color = Color.Black.copy(alpha = tuning.shellShadowElevationDp)
