@@ -519,11 +519,13 @@ private fun TabletSecondaryContent(
                                         emoteMap = success.emoteMap,
                                         upMid = success.info.owner.mid,
                                         showUpFlag = commentState.showUpFlag,
+                                        isPinned = reply.rpid in commentState.pinnedReplyIds,
                                         onClick = {},
                                         onSubClick = { commentViewModel.openSubReply(it) },
                                         onTimestampClick = { positionMs ->
                                             seekPlayerFromUserAction(playerState.player, positionMs)
                                         },
+                                        maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
                                         onImagePreview = { images, index, rect, textContent ->
                                             previewImages = images
                                             previewInitialIndex = index
@@ -537,6 +539,13 @@ private fun TabletSecondaryContent(
                                             viewModel.setReplyingTo(reply)
                                             viewModel.showCommentInputDialog()
                                         },
+                                        onReportClick = { reason -> commentViewModel.reportComment(reply.rpid, reason) },
+                                        canToggleTop = shouldShowReplyTopAction(
+                                            currentMid = commentState.currentMid,
+                                            upMid = success.info.owner.mid,
+                                            item = reply
+                                        ),
+                                        onToggleTopClick = { commentViewModel.toggleTopComment(reply) },
                                         onDeleteClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
                                             { commentViewModel.startDissolve(reply.rpid) }
                                         } else null,

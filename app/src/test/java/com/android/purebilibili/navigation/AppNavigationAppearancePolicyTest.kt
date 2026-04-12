@@ -1,6 +1,7 @@
 package com.android.purebilibili.navigation
 
 import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,13 +41,13 @@ class AppNavigationAppearancePolicyTest {
     }
 
     @Test
-    fun md3Preset_usesDockedBottomBarWhenShellSettingsAreStillDefault() {
+    fun md3Preset_keepsFloatingBottomBarWhenShellSettingsAreStillDefault() {
         val appearance = resolveAppNavigationAppearance(
             homeSettings = HomeSettings(),
             uiPreset = UiPreset.MD3
         )
 
-        assertFalse(appearance.bottomBarFloating)
+        assertTrue(appearance.bottomBarFloating)
         assertTrue(appearance.bottomBarBlurEnabled)
         assertEquals(0, appearance.bottomBarLabelMode)
     }
@@ -65,5 +66,18 @@ class AppNavigationAppearancePolicyTest {
         assertTrue(appearance.bottomBarFloating)
         assertFalse(appearance.bottomBarBlurEnabled)
         assertEquals(1, appearance.bottomBarLabelMode)
+    }
+
+    @Test
+    fun md3MiuixPreset_keepsFloatingBottomBarWhenShellSettingsAreDefault() {
+        val appearance = resolveAppNavigationAppearance(
+            homeSettings = HomeSettings(),
+            uiPreset = UiPreset.MD3,
+            androidNativeVariant = AndroidNativeVariant.MIUIX
+        )
+
+        assertTrue(appearance.bottomBarFloating)
+        assertTrue(appearance.bottomBarBlurEnabled)
+        assertEquals(0, appearance.bottomBarLabelMode)
     }
 }

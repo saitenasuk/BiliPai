@@ -2,7 +2,6 @@
 package com.android.purebilibili.core.ui.animation
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.horizontalDrag
@@ -11,9 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.util.fastCoerceIn
-import com.android.purebilibili.core.ui.motion.interactiveSnapSpring
-import com.android.purebilibili.core.ui.motion.pressFeedbackSpring
-import com.android.purebilibili.core.ui.motion.selectionSpring
+import com.android.purebilibili.core.ui.motion.BottomBarMotionSpec
+import com.android.purebilibili.core.ui.motion.resolveBottomBarMotionSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -28,11 +26,12 @@ import kotlin.math.sign
  * - 释放后弹回吸附到最近选项
  * - 支持速度感知的弹性形变
  */
-class DampedDragAnimationState(
+internal class DampedDragAnimationState(
     initialIndex: Int,
     private val itemCount: Int,
     private val scope: CoroutineScope,
-    private val onIndexChanged: (Int) -> Unit
+    private val onIndexChanged: (Int) -> Unit,
+    private val motionSpec: BottomBarMotionSpec
 ) {
     /** 当前动画值（浮点索引，用于平滑过渡） */
     private val animatable = Animatable(initialIndex.toFloat())
@@ -79,7 +78,7 @@ class DampedDragAnimationState(
             isDragging = true
             // 按压缩放 — 参考 LiquidBottomTabs press()
             scope.launch {
-                pressProgressAnimation.animateTo(1f, pressFeedbackSpring())
+                pressProgressAnimation.animateTo(1f, motionSpec.drag.pressSpring.toSpringSpec())
             }
         }
         
@@ -88,13 +87,19 @@ class DampedDragAnimationState(
         val isOverscrolling = currentValue < 0f || currentValue > (itemCount - 1).toFloat()
         
         // [调整] 提升灵敏度系数 (0.6 -> 1.0) 确保完全跟手
-        val baseResistance = 1.0f 
-        val dragResistance = if (isOverscrolling) 0.3f else baseResistance
-        
-        val deltaIndex = (dragAmountPx / itemWidthPx) * dragResistance
-        
+        val baseResistance = motionSpec.drag.baseResistance
+        val overscrollResistance = motionSpec.drag.overscrollResistance
+
         // 允许边缘回弹：放宽限制范围
-        val newValue = (animatable.value + deltaIndex).fastCoerceIn(-0.5f, (itemCount - 0.5f))
+        val newValue = (
+            animatable.value +
+                (dragAmountPx / itemWidthPx) *
+                if (isOverscrolling) overscrollResistance else baseResistance
+            )
+            .fastCoerceIn(
+                -motionSpec.drag.overscrollLimitItems,
+                (itemCount - 1).toFloat() + motionSpec.drag.overscrollLimitItems
+            )
         
         scope.launch {
             animatable.snapTo(newValue)
@@ -133,7 +138,7 @@ class DampedDragAnimationState(
         // 2. 预测终点 (Projected End Point)
         // 简单的投射：当前位置 + 速度 * 时间常数 (模拟滑行)
         // 使用 0.2s 作为预测时间窗
-        val projectedValue = currentValue + velocityItems * 0.2f
+        val projectedValue = currentValue + velocityItems * motionSpec.drag.flingProjectionTimeSeconds
         
         // 3. 确定目标索引
         // 如果速度很快 (> 1 item/s)，则强制切换到下一个/上一个
@@ -145,8 +150,9 @@ class DampedDragAnimationState(
         val baseIndex = currentValue.roundToInt()
         
         // 强制约束 nextIndex 在 baseIndex ± 1 范围内 (前提是确实发生了显著移动)
-        if (abs(nextIndex - baseIndex) > 1) {
-            nextIndex = baseIndex + (nextIndex - baseIndex).sign
+        val maxReleaseStep = motionSpec.drag.maxReleaseStepCount.coerceAtLeast(1)
+        if (abs(nextIndex - baseIndex) > maxReleaseStep) {
+            nextIndex = baseIndex + (nextIndex - baseIndex).sign * maxReleaseStep
         }
         
         targetIndex = nextIndex.coerceIn(0, itemCount - 1)
@@ -154,18 +160,18 @@ class DampedDragAnimationState(
         scope.launch {
             animatable.animateTo(
                 targetValue = targetIndex.toFloat(),
-                animationSpec = selectionSpring(),
+                animationSpec = motionSpec.drag.selectionSpring.toSpringSpec(),
                 initialVelocity = velocityItems
             )
             onIndexChanged(targetIndex)
         }
         // 释放按压缩放 — 参考 LiquidBottomTabs release()
         scope.launch {
-            pressProgressAnimation.animateTo(0f, pressFeedbackSpring())
+            pressProgressAnimation.animateTo(0f, motionSpec.drag.pressSpring.toSpringSpec())
         }
         // 偏移量归零 — 弹性回弹
         scope.launch {
-            offsetAnimation.animateTo(0f, interactiveSnapSpring())
+            offsetAnimation.animateTo(0f, motionSpec.drag.offsetSnapSpring.toSpringSpec())
         }
     }
     
@@ -184,7 +190,7 @@ class DampedDragAnimationState(
         scope.launch {
             animatable.animateTo(
                 targetValue = index.toFloat(),
-                animationSpec = selectionSpring()
+                animationSpec = motionSpec.drag.selectionSpring.toSpringSpec()
             )
         }
     }
@@ -194,20 +200,22 @@ class DampedDragAnimationState(
  * 创建并记住阻尼拖拽动画状态
  */
 @Composable
-fun rememberDampedDragAnimationState(
+internal fun rememberDampedDragAnimationState(
     initialIndex: Int,
     itemCount: Int,
-    onIndexChanged: (Int) -> Unit
+    onIndexChanged: (Int) -> Unit,
+    motionSpec: BottomBarMotionSpec = resolveBottomBarMotionSpec()
 ): DampedDragAnimationState {
     val scope = rememberCoroutineScope()
     val currentOnIndexChanged by rememberUpdatedState(onIndexChanged)
     
-    return remember(itemCount) {
+    return remember(itemCount, motionSpec) {
         DampedDragAnimationState(
             initialIndex = initialIndex,
             itemCount = itemCount,
             scope = scope,
-            onIndexChanged = { currentOnIndexChanged(it) }
+            onIndexChanged = { currentOnIndexChanged(it) },
+            motionSpec = motionSpec
         )
     }
 }
@@ -215,7 +223,7 @@ fun rememberDampedDragAnimationState(
 /**
  * 水平拖拽手势 Modifier (带速度追踪)
  */
-fun Modifier.horizontalDragGesture(
+internal fun Modifier.horizontalDragGesture(
     dragState: DampedDragAnimationState,
     itemWidthPx: Float
 ): Modifier = this.pointerInput(dragState, itemWidthPx) {

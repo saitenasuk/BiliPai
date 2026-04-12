@@ -89,6 +89,7 @@ import com.android.purebilibili.feature.video.ui.components.RelatedVideoItem
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
+import com.android.purebilibili.feature.video.ui.components.shouldShowReplyTopAction
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
@@ -902,12 +903,14 @@ private fun CinemaCommentsPane(
                     item = reply,
                     upMid = success.info.owner.mid,
                     showUpFlag = commentState.showUpFlag,
+                    isPinned = reply.rpid in commentState.pinnedReplyIds,
                     emoteMap = success.emoteMap,
                     onClick = {},
                     onSubClick = { commentViewModel.openSubReply(it) },
                     onTimestampClick = { positionMs ->
                         seekPlayerFromUserAction(playerState.player, positionMs)
                     },
+                    maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
                     onImagePreview = { images, index, rect, textContent ->
                         previewImages = images
                         previewInitialIndex = index
@@ -921,6 +924,13 @@ private fun CinemaCommentsPane(
                         viewModel.setReplyingTo(reply)
                         viewModel.showCommentInputDialog()
                     },
+                    onReportClick = { reason -> commentViewModel.reportComment(reply.rpid, reason) },
+                    canToggleTop = shouldShowReplyTopAction(
+                        currentMid = commentState.currentMid,
+                        upMid = success.info.owner.mid,
+                        item = reply
+                    ),
+                    onToggleTopClick = { commentViewModel.toggleTopComment(reply) },
                     onDeleteClick = if (
                         commentState.currentMid > 0 && reply.mid == commentState.currentMid
                     ) {

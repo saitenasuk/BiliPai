@@ -53,7 +53,6 @@ import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSYellow
-import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.theme.DarkBackground
 import com.android.purebilibili.core.theme.DarkSurface
 import com.android.purebilibili.core.theme.DarkSurfaceVariant
@@ -61,6 +60,9 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.ui.BiliGradientButton
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.AdaptiveTopAppBarStyle
 import com.android.purebilibili.core.ui.AdaptiveSplitLayout
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
@@ -75,6 +77,7 @@ import com.android.purebilibili.core.ui.rememberAppProfileAddIcon
 import com.android.purebilibili.core.ui.rememberAppRefreshIcon
 import com.android.purebilibili.core.ui.rememberAppRestoreIcon
 import com.android.purebilibili.core.ui.rememberAppSettingsIcon
+import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.ui.rememberAppWarningIcon
 import com.android.purebilibili.core.ui.wallpaper.ProfileWallpaperLayout
 import com.android.purebilibili.core.ui.wallpaper.ProfileWallpaperTransform
@@ -316,11 +319,12 @@ fun ProfileScreen(
         }
         is ProfileUiState.Error -> {
             // 🔧 [新增] 离线/错误状态 - 显示错误信息并提供重试和离线缓存入口
-            Scaffold(
+            AdaptiveScaffold(
                 containerColor = MaterialTheme.colorScheme.background,
                 topBar = {
-                    CenterAlignedTopAppBar(
-                        title = { Text("我的") },
+                    AdaptiveTopAppBar(
+                        title = "我的",
+                        style = AdaptiveTopAppBarStyle.CENTERED,
                         navigationIcon = {
                             IconButton(onClick = onBack) {
                                 Icon(rememberAppBackIcon(), contentDescription = "Back")
@@ -390,7 +394,7 @@ fun ProfileScreen(
                 TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
             }
             
-            Scaffold(
+            AdaptiveScaffold(
                 modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
                 containerColor = MaterialTheme.colorScheme.background,
                 // [Immersive] Mobile hides default TopBar, Tablet keeps it
@@ -401,8 +405,10 @@ fun ProfileScreen(
                                 .fillMaxWidth()
                                 .unifiedBlur(hazeState)
                         ) {
-                            LargeTopAppBar(
-                                title = { Text("我的", fontWeight = FontWeight.Bold) },
+                            AdaptiveTopAppBar(
+                                title = "我的",
+                                largeTitle = "我的",
+                                style = AdaptiveTopAppBarStyle.LARGE,
                                 navigationIcon = {
                                     IconButton(onClick = onBack) {
                                         Icon(rememberAppBackIcon(), contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
@@ -413,7 +419,6 @@ fun ProfileScreen(
                                         Icon(rememberAppSettingsIcon(), contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
                                     }
                                 },
-                                scrollBehavior = scrollBehavior,
                                 colors = TopAppBarDefaults.largeTopAppBarColors(
                                     containerColor = Color.Transparent,
                                     scrolledContainerColor = Color.Transparent
@@ -1054,8 +1059,9 @@ fun MobileProfileContent(
                 .height(statusBarTopPadding + 64.dp)
                 .background(topBarScrimColor)
         )
-        CenterAlignedTopAppBar(
-            title = { Text("我的", fontWeight = FontWeight.Bold) },
+        AdaptiveTopAppBar(
+            title = "我的",
+            style = AdaptiveTopAppBarStyle.CENTERED,
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(rememberAppBackIcon(), contentDescription = "Back", tint = contentColor)
@@ -1066,7 +1072,6 @@ fun MobileProfileContent(
                     Icon(rememberAppSettingsIcon(), contentDescription = "Settings", tint = contentColor)
                 }
             },
-            scrollBehavior = scrollBehavior,
             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                 containerColor = Color.Transparent,
                 scrolledContainerColor = Color.Transparent,
@@ -1478,9 +1483,7 @@ private data class ProfileWallpaperActionItem(
 
 @Composable
 fun LevelTag(level: Int) {
-    Surface(color = if (level >= 5) iOSOrange else iOSSystemGray, shape = RoundedCornerShape(2.dp)) {
-        Text("LV$level", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
-    }
+    UserLevelBadge(level = level)
 }
 
 @Composable

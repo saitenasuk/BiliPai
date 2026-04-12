@@ -122,6 +122,7 @@ fun VideoCommentSheetHost(
     screenHeightPx: Int = 0,
     topReservedPx: Int = 0,
     onTimestampClick: ((Long) -> Unit)? = null,
+    maxTimestampMs: Long? = null,
     onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -294,6 +295,7 @@ fun VideoCommentSheetHost(
                                 onUserClick = onUserClick,
                                 onCommentUrlClick = openCommentUrl,
                                 onTimestampClick = onTimestampClick,
+                                maxTimestampMs = maxTimestampMs,
                                 onImagePreview = previewCallback
                             )
                         }
@@ -315,16 +317,21 @@ fun VideoCommentSheetHost(
                                     showUpFlag = commentState.showUpFlag,
                                     onImagePreview = previewCallback,
                                     onReplyClick = onReplyClick,
+                                    onConversationClick = commentViewModel::openSubReplyConversation,
+                                    onConversationBack = commentViewModel::closeSubReplyConversation,
+                                    isConversationMode = subReplyState.conversationAnchor != null,
                                     dissolvingIds = subReplyState.dissolvingIds,
                                     currentMid = commentState.currentMid,
                                     onDissolveStart = { rpid -> commentViewModel.startSubDissolve(rpid) },
                                     onDeleteComment = { rpid -> commentViewModel.deleteSubComment(rpid) },
                                     onCommentLike = commentViewModel::likeComment,
+                                    onReportComment = commentViewModel::reportComment,
                                     likedComments = commentState.likedComments,
                                     onUrlClick = openCommentUrl,
                                     onAvatarClick = { mid ->
                                         mid.toLongOrNull()?.let(onUserClick)
-                                    }
+                                    },
+                                    maxTimestampMs = maxTimestampMs
                                 )
                             }
                         }
@@ -345,6 +352,7 @@ private fun VideoCommentMainList(
     onUserClick: (Long) -> Unit,
     onCommentUrlClick: (String) -> Unit,
     onTimestampClick: ((Long) -> Unit)?,
+    maxTimestampMs: Long?,
     onImagePreview: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit
 ) {
     val state by viewModel.commentState.collectAsState()
@@ -405,7 +413,7 @@ private fun VideoCommentMainList(
                         item = reply,
                         upMid = state.upMid,
                         showUpFlag = state.showUpFlag,
-                        isPinned = false,
+                        isPinned = reply.rpid in state.pinnedReplyIds,
                         onClick = {},
                         onSubClick = { parentReply ->
                             if (shouldOpenPortraitCommentThreadDetail(useEmbeddedPresentation = true)) {
@@ -413,6 +421,7 @@ private fun VideoCommentMainList(
                             }
                         },
                         onTimestampClick = onTimestampClick,
+                        maxTimestampMs = maxTimestampMs,
                         onImagePreview = onImagePreview,
                         onLikeClick = { viewModel.likeComment(reply.rpid) },
                         onReplyClick = {
@@ -420,6 +429,13 @@ private fun VideoCommentMainList(
                                 onReplyClick(reply)
                             }
                         },
+                        onReportClick = { reason -> viewModel.reportComment(reply.rpid, reason) },
+                        canToggleTop = shouldShowReplyTopAction(
+                            currentMid = state.currentMid,
+                            upMid = state.upMid,
+                            item = reply
+                        ),
+                        onToggleTopClick = { viewModel.toggleTopComment(reply) },
                         onUrlClick = onCommentUrlClick,
                         onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) ?: Unit }
                     )

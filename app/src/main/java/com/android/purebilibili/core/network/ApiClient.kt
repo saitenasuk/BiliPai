@@ -587,6 +587,7 @@ interface BilibiliApi {
         @retrofit2.http.Field("root") root: Long? = null,
         @retrofit2.http.Field("parent") parent: Long? = null,
         @retrofit2.http.Field("pictures") pictures: String? = null,
+        @retrofit2.http.Field("sync_to_dynamic") syncToDynamic: Int? = null,
         @retrofit2.http.Field("csrf") csrf: String
     ): AddReplyResponse
 
@@ -645,6 +646,16 @@ interface BilibiliApi {
         @retrofit2.http.Field("oid") oid: Long,
         @retrofit2.http.Field("type") type: Int = 1,
         @retrofit2.http.Field("rpid") rpid: Long,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/v2/reply/top")
+    suspend fun setReplyTop(
+        @retrofit2.http.Field("oid") oid: Long,
+        @retrofit2.http.Field("type") type: Int = 1,
+        @retrofit2.http.Field("rpid") rpid: Long,
+        @retrofit2.http.Field("action") action: Int,
         @retrofit2.http.Field("csrf") csrf: String
     ): SimpleApiResponse
     

@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
 import com.android.purebilibili.core.theme.UiPreset
 import com.android.purebilibili.core.theme.iOSSystemGray4
@@ -127,6 +128,7 @@ fun IOSModalBottomSheet(
     content: @Composable () -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
     val visualSpec = remember(uiPreset) { resolveAdaptiveBottomSheetVisualSpec(uiPreset) }
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -137,13 +139,21 @@ fun IOSModalBottomSheet(
             topEnd = visualSpec.cornerRadiusDp.dp
         ),
         containerColor = if (uiPreset == UiPreset.MD3) {
-            MaterialTheme.colorScheme.surfaceContainerLow
+            if (isNativeMiuixEnabled(uiPreset, androidNativeVariant)) {
+                MaterialTheme.colorScheme.surfaceContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            }
         } else {
             containerColor
         },
         scrimColor = scrimColor,
         dragHandle = if (visualSpec.useMaterialDragHandle) {
-            { BottomSheetDefaults.DragHandle() }
+            if (isNativeMiuixEnabled(uiPreset, androidNativeVariant)) {
+                { IOSDragHandle() }
+            } else {
+                { BottomSheetDefaults.DragHandle() }
+            }
         } else {
             dragHandle
         },

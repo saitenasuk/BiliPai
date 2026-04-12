@@ -1855,6 +1855,8 @@ private fun VideoPageItem(
             upMid = authorMid,
             expectedReplyCount = if (isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.reply else stat.reply,
             emoteMap = currentSuccess?.emoteMap ?: emptyMap(),
+            maxTimestampMs = currentSuccess?.videoDurationMs?.takeIf { it > 0L }
+                ?: progressState.duration.takeIf { it > 0L },
             onRootCommentClick = { viewModel.openRootCommentComposer() },
             onReplyClick = { reply ->
                 viewModel.setReplyingTo(reply)
@@ -1885,8 +1887,9 @@ private fun VideoPageItem(
                 canUploadImage = commentState.canUploadImage,
                 canInputComment = commentState.canInputComment,
                 emotePackages = emotePackages,
-                onSend = { message, imageUris ->
-                    viewModel.sendComment(message, imageUris)
+                currentVideoPositionMsProvider = { exoPlayer.currentPosition.coerceAtLeast(0L) },
+                onSend = { message, imageUris, syncToDynamic ->
+                    viewModel.sendComment(message, imageUris, syncToDynamic)
                     viewModel.hideCommentInputDialog()
                 }
             )

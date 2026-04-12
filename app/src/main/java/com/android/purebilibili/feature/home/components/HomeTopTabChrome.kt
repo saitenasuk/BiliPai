@@ -62,7 +62,7 @@ internal fun HomeTopTabChrome(
             .height(currentTabHeight)
             .graphicsLayer { alpha = tabAlpha * tabContentAlpha }
             .offset { IntOffset(x = 0, y = tabVerticalOffset.roundToPx()) }
-            .clip(RoundedCornerShape(bottomStart = 0.dp, bottomEnd = 0.dp))
+            .clip(tabShape)
     ) {
         Box(
             modifier = Modifier

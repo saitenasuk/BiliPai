@@ -3150,7 +3150,11 @@ class PlayerViewModel : ViewModel() {
      * 发送评论
      * @param inputMessage 可选直接传入的内容，如果不传则使用 state 中的内容
      */
-    fun sendComment(inputMessage: String? = null, imageUris: List<Uri> = emptyList()) {
+    fun sendComment(
+        inputMessage: String? = null,
+        imageUris: List<Uri> = emptyList(),
+        syncToDynamic: Boolean = false
+    ) {
         if (inputMessage != null) {
             _commentInput.value = inputMessage
         }
@@ -3188,7 +3192,8 @@ class PlayerViewModel : ViewModel() {
                     message = message,
                     root = root,
                     parent = parent,
-                    pictures = pictures
+                    pictures = pictures,
+                    syncToDynamic = syncToDynamic
                 )
                 .onSuccess { reply ->
                     toast(if (replyTo != null) "回复成功" else "评论成功")

@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-04-10 · 文档已同步至 v7.5.3（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-04-12 · 文档已同步至 v7.7.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.5.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.7.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -527,7 +527,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-04-10（v7.5.3）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-04-12（v7.7.0）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -572,13 +572,13 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.5.3 · 2026-04-10)
+### 最近更新 (v7.7.0 · 2026-04-12)
 
-- 🔎 **搜索与空间加载更稳**：搜索结果补上请求代际校验、分页兜底和去重合并，UP 空间投稿列表在首屏预览不足时也会继续补齐正式列表。
-- ⚙️ **设置搜索更可用**：常用设置项支持更细粒度的功能关键词检索，并能直接定位到外观、播放和底栏设置中的对应分组。
-- ✨ **动效与导航继续收口**：导航、列表入场、图片预览、底部面板和底栏显隐改用更统一的动效节奏，返回体验也更连贯。
-- 📺 **番剧播放链路补强**：番剧播放地址请求补上更稳的签名链路，清晰度展示与切换也更合理。
-- 📱 **竖屏推荐流更分散**：连续上滑时的推荐候选改为会话内稳定打散，减少总是连续刷到同类视频的情况。
+- 💬 **评论抓取升级**：新增主评论、二级评论和对话评论的 gRPC 抓取链路，并保留 REST 回退。
+- 🎖️ **评论徽章对齐**：等级、UP、粉丝团装扮、粉丝牌和名牌统一为更精致的本地徽章样式，播放中也保持身份徽章显示。
+- 🧩 **评论富文本完善**：支持 @ 用户、话题、服务端链接标题、BVID、投票、笔记、opus、时间戳和图片预览跳转。
+- ✍️ **评论操作增强**：长按菜单新增复制、自由复制、保存、回复、举报、置顶/取消置顶和删除，输入框支持插入播放进度与同步动态。
+- 🎧 **听视频封面升级**：封面改为更大的圆角长方形，保留 3D 翻转并加入更接近 Apple Music 的模糊背景与卡片层次。
 
 ### 历史版本
 

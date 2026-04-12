@@ -25,6 +25,8 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.isHeaderBlurEnabled)
         assertEquals(HomeHeaderBlurMode.FOLLOW_PRESET, result.headerBlurMode)
         assertTrue(result.isBottomBarBlurEnabled)
+        assertTrue(result.isTopBarLiquidGlassEnabled)
+        assertTrue(result.isBottomBarLiquidGlassEnabled)
         assertTrue(result.isLiquidGlassEnabled)
         assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
@@ -49,7 +51,8 @@ class HomeSettingsMappingPolicyTest {
             booleanPreferencesKey("header_blur_enabled") to false,
             booleanPreferencesKey("header_collapse_enabled") to false,
             booleanPreferencesKey("bottom_bar_blur_enabled") to false,
-            booleanPreferencesKey("liquid_glass_enabled") to false,
+            booleanPreferencesKey("top_bar_liquid_glass_enabled") to false,
+            booleanPreferencesKey("bottom_bar_liquid_glass_enabled") to false,
             intPreferencesKey("liquid_glass_style") to LiquidGlassStyle.IOS26.value,
             intPreferencesKey("grid_column_count") to 4,
             booleanPreferencesKey("card_animation_enabled") to true,
@@ -72,6 +75,8 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(HomeHeaderBlurMode.ALWAYS_OFF, result.headerBlurMode)
         assertFalse(result.isHeaderCollapseEnabled)
         assertFalse(result.isBottomBarBlurEnabled)
+        assertFalse(result.isTopBarLiquidGlassEnabled)
+        assertFalse(result.isBottomBarLiquidGlassEnabled)
         assertFalse(result.isLiquidGlassEnabled)
         assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
@@ -131,6 +136,19 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
         assertEquals(0.52f, result.liquidGlassStrength)
         assertEquals(0.5f, result.liquidGlassProgress)
+    }
+
+    @Test
+    fun legacySharedLiquidGlassToggle_backfillsTopAndBottomSwitches() {
+        val prefs = mutablePreferencesOf(
+            booleanPreferencesKey("liquid_glass_enabled") to false
+        )
+
+        val result = mapHomeSettingsFromPreferences(prefs)
+
+        assertFalse(result.isTopBarLiquidGlassEnabled)
+        assertFalse(result.isBottomBarLiquidGlassEnabled)
+        assertFalse(result.isLiquidGlassEnabled)
     }
 
     @Test

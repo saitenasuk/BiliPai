@@ -63,6 +63,8 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentOverlayHost
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.RepostDialog
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppCollectionIcon
@@ -74,6 +76,7 @@ import com.android.purebilibili.core.ui.rememberAppSearchIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
 import com.android.purebilibili.core.ui.components.IOSSearchBar
+import com.android.purebilibili.core.ui.components.UserLevelBadge
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -133,7 +136,7 @@ fun SpaceScreen(
         com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("SpaceScreen")
     }
     
-    Scaffold(
+    AdaptiveScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             // [Blur] TopAppBar Container with Blur
@@ -142,10 +145,8 @@ fun SpaceScreen(
                     .fillMaxWidth()
                     .unifiedBlur(hazeState)
             ) {
-                TopAppBar(
-                    title = { 
-                        Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    },
+                AdaptiveTopAppBar(
+                    title = screenTitle,
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(rememberAppBackIcon(), contentDescription = backLabel)
@@ -1214,7 +1215,7 @@ private fun SpaceHeader(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            SpaceMetaTag(text = "LV${userInfo.level}", emphasized = true)
+                            UserLevelBadge(level = userInfo.level)
                             if (userInfo.vip.status == 1 && userInfo.vip.label.text.isNotEmpty()) {
                                 SpaceMetaTag(text = userInfo.vip.label.text)
                             }

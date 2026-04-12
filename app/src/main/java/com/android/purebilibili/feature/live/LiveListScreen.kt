@@ -50,7 +50,10 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 
 
 // 辅助函数：格式化数字
@@ -293,20 +296,14 @@ fun LiveListScreen(
         extraBottomPadding = 92.dp
     )
 
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
             Column {
-                TopAppBar(
-                    title = { 
-                        Text(
-                            "直播", 
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
-                        ) 
-                    },
+                AdaptiveTopAppBar(
+                    title = "直播",
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                            Icon(rememberAppBackIcon(), contentDescription = "返回")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(

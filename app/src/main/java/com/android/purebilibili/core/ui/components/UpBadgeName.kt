@@ -1,10 +1,7 @@
 package com.android.purebilibili.core.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -52,21 +49,7 @@ fun UpBadgeName(
             modifier = modifier,
             verticalAlignment = if (shouldShowMeta) Alignment.Top else Alignment.CenterVertically
         ) {
-            Surface(
-                color = badgeBackgroundColor,
-                shape = RoundedCornerShape(badgeCornerRadius),
-                border = BorderStroke(1.dp, badgeBorderColor),
-                shadowElevation = 0.dp,
-                tonalElevation = 0.dp
-            ) {
-                Text(
-                    text = "UP",
-                    color = badgeTextColor,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier
-                        .padding(horizontal = badgeHorizontalPadding, vertical = badgeVerticalPadding)
-                )
-            }
+            UserUpBadge()
 
             Spacer(modifier = Modifier.width(spacing))
 

@@ -7,6 +7,46 @@ import kotlin.test.assertNull
 class HomeScrollCoordinatorTest {
 
     @Test
+    fun collapsedHeaderWithoutMotion_doesNotCountAsHeaderTransition() {
+        assertEquals(
+            false,
+            resolveHomeHeaderTransitionRunning(
+                isFeedScrolling = false,
+                isPagerScrolling = false,
+                isHeaderSettleAnimating = false
+            )
+        )
+    }
+
+    @Test
+    fun activeScrollOrSettle_countsAsHeaderTransition() {
+        assertEquals(
+            true,
+            resolveHomeHeaderTransitionRunning(
+                isFeedScrolling = true,
+                isPagerScrolling = false,
+                isHeaderSettleAnimating = false
+            )
+        )
+        assertEquals(
+            true,
+            resolveHomeHeaderTransitionRunning(
+                isFeedScrolling = false,
+                isPagerScrolling = true,
+                isHeaderSettleAnimating = false
+            )
+        )
+        assertEquals(
+            true,
+            resolveHomeHeaderTransitionRunning(
+                isFeedScrolling = false,
+                isPagerScrolling = false,
+                isHeaderSettleAnimating = true
+            )
+        )
+    }
+
+    @Test
     fun horizontalDominantPreScroll_doesNotDriveHomeHeader() {
         assertEquals(
             false,

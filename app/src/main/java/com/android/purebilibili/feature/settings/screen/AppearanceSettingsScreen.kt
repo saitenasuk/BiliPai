@@ -103,33 +103,70 @@ fun AppearanceSettingsScreen(
         }
     }
     
-    MiuixScaffold(
-        topBar = {
-            MiuixSmallTopAppBar(
-                title = screenTitle,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
+    val useMaterialAndroidChrome =
+        state.uiPreset == UiPreset.MD3 && state.androidNativeVariant == AndroidNativeVariant.MATERIAL3
+
+    if (useMaterialAndroidChrome) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(screenTitle) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(rememberAppBackIcon(), contentDescription = backLabel)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0.dp)
+        ) { padding ->
+            AppearanceSettingsContent(
+                modifier = Modifier.padding(padding),
+                state = state,
+                onNavigateToIconSettings = onNavigateToIconSettings,
+                onNavigateToAnimationSettings = onNavigateToAnimationSettings,
+                viewModel = viewModel,
+                context = context,
+                onAppLanguageChange = { language ->
+                    if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
+                        pendingLanguageRestart = language
                     }
                 }
             )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
-        AppearanceSettingsContent(
-            modifier = Modifier.padding(padding),
-            state = state,
-            onNavigateToIconSettings = onNavigateToIconSettings,
-            onNavigateToAnimationSettings = onNavigateToAnimationSettings,
-            viewModel = viewModel,
-            context = context,
-            onAppLanguageChange = { language ->
-                if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
-                    pendingLanguageRestart = language
+        }
+    } else {
+        MiuixScaffold(
+            topBar = {
+                MiuixSmallTopAppBar(
+                    title = screenTitle,
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(rememberAppBackIcon(), contentDescription = backLabel)
+                        }
+                    }
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0.dp)
+        ) { padding ->
+            AppearanceSettingsContent(
+                modifier = Modifier.padding(padding),
+                state = state,
+                onNavigateToIconSettings = onNavigateToIconSettings,
+                onNavigateToAnimationSettings = onNavigateToAnimationSettings,
+                viewModel = viewModel,
+                context = context,
+                onAppLanguageChange = { language ->
+                    if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
+                        pendingLanguageRestart = language
+                    }
                 }
-            }
-        )
+            )
+        }
     }
 
     pendingLanguageRestart?.let { pendingLanguage ->
@@ -216,25 +253,49 @@ fun AppearanceSettingsContent(
     }
     val uiPresetIosTitle = stringResource(R.string.appearance_ui_preset_ios_title)
     val uiPresetIosSummary = stringResource(R.string.appearance_ui_preset_ios_summary)
-    val uiPresetAndroidTitle = stringResource(R.string.appearance_ui_preset_android_title)
-    val uiPresetAndroidSummary = stringResource(R.string.appearance_ui_preset_android_summary)
+    val uiPresetAndroidMaterialTitle = stringResource(R.string.appearance_ui_preset_android_material_title)
+    val uiPresetAndroidMaterialSummary = stringResource(R.string.appearance_ui_preset_android_material_summary)
+    val uiPresetAndroidMiuixTitle = stringResource(R.string.appearance_ui_preset_android_miuix_title)
+    val uiPresetAndroidMiuixSummary = stringResource(R.string.appearance_ui_preset_android_miuix_summary)
+    val androidNativeVariantTitle = stringResource(R.string.appearance_android_native_variant_title)
+    val androidNativeVariantSubtitle = stringResource(R.string.appearance_android_native_variant_subtitle)
+    val androidNativeVariantMaterialLabel = stringResource(R.string.appearance_android_native_variant_material3)
+    val androidNativeVariantMiuixLabel = stringResource(R.string.appearance_android_native_variant_miuix)
+    val androidNativeVariantOptions = remember(
+        androidNativeVariantMaterialLabel,
+        androidNativeVariantMiuixLabel
+    ) {
+        resolveAndroidNativeVariantSegmentOptions(
+            material3Label = androidNativeVariantMaterialLabel,
+            miuixLabel = androidNativeVariantMiuixLabel
+        )
+    }
     val uiPresetDescription = remember(
         state.uiPreset,
+        state.androidNativeVariant,
         uiPresetIosTitle,
         uiPresetIosSummary,
-        uiPresetAndroidTitle,
-        uiPresetAndroidSummary
+        uiPresetAndroidMaterialTitle,
+        uiPresetAndroidMaterialSummary,
+        uiPresetAndroidMiuixTitle,
+        uiPresetAndroidMiuixSummary
     ) {
         resolveAppearanceUiPresetDescription(
             preset = state.uiPreset,
+            androidNativeVariant = state.androidNativeVariant,
             iosTitle = uiPresetIosTitle,
             iosSummary = uiPresetIosSummary,
-            androidTitle = uiPresetAndroidTitle,
-            androidSummary = uiPresetAndroidSummary
+            materialTitle = uiPresetAndroidMaterialTitle,
+            materialSummary = uiPresetAndroidMaterialSummary,
+            miuixTitle = uiPresetAndroidMiuixTitle,
+            miuixSummary = uiPresetAndroidMiuixSummary
         )
     }
     val selectedUiPresetLabel =
         uiPresetOptions.firstOrNull { it.value == state.uiPreset }?.label ?: state.uiPreset.label
+    val selectedAndroidNativeVariantLabel = androidNativeVariantOptions
+        .firstOrNull { it.value == state.androidNativeVariant }
+        ?.label ?: state.androidNativeVariant.label
     val themeModeTitle = stringResource(R.string.appearance_theme_mode_title)
     val themeModeSubtitle = stringResource(R.string.appearance_theme_mode_subtitle)
     val themeModeFollowSystemLabel = stringResource(R.string.theme_mode_follow_system)
@@ -337,6 +398,26 @@ fun AppearanceSettingsContent(
                                 viewModel.setUiPreset(preset)
                             }
                         )
+
+                        AnimatedVisibility(
+                            visible = state.uiPreset == UiPreset.MD3,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            Column(modifier = Modifier.padding(top = 16.dp)) {
+                                IOSDivider()
+                                Spacer(modifier = Modifier.height(8.dp))
+                                IOSSlidingSegmentedSetting(
+                                    title = "${androidNativeVariantTitle}：$selectedAndroidNativeVariantLabel",
+                                    subtitle = androidNativeVariantSubtitle,
+                                    options = androidNativeVariantOptions,
+                                    selectedValue = state.androidNativeVariant,
+                                    onSelectionChange = { variant ->
+                                        viewModel.setAndroidNativeVariant(variant)
+                                    }
+                                )
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(12.dp))
                         AppearanceUiPresetDescriptionCard(

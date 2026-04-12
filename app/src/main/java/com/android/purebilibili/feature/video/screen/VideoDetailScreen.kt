@@ -2559,6 +2559,8 @@ fun VideoDetailScreen(
                                                         },
                                                         onLoadMoreReplies = { commentViewModel.loadComments() },
                                                         onCommentUrlClick = openCommentUrl,
+                                                        onReportComment = commentViewModel::reportComment,
+                                                        onToggleTopComment = commentViewModel::toggleTopComment,
                                                         onDownloadClick = { viewModel.openDownloadDialog() },
                                                         onWatchLaterClick = { viewModel.toggleWatchLater() },
                                                         onShareClick = {
@@ -3196,8 +3198,9 @@ fun VideoDetailScreen(
             canUploadImage = commentState.canUploadImage,
             canInputComment = commentState.canInputComment,
             emotePackages = emotePackages, // [新增]
-            onSend = { message, imageUris ->
-                viewModel.sendComment(message, imageUris)
+            currentVideoPositionMsProvider = { playerState.player.currentPosition.coerceAtLeast(0L) },
+            onSend = { message, imageUris, syncToDynamic ->
+                viewModel.sendComment(message, imageUris, syncToDynamic)
                 viewModel.hideCommentInputDialog()
             }
         )
@@ -3486,7 +3489,8 @@ fun VideoDetailScreen(
             onTimestampClick = { positionMs ->
                 seekPlayerFromUserAction(playerState.player, positionMs)
                 commentViewModel.closeSubReply()
-            }
+            },
+            maxTimestampMs = successState?.videoDurationMs?.takeIf { it > 0L }
         )
 
         // 📁 收藏夹选择弹窗

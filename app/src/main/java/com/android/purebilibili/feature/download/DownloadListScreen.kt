@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.NetworkUtils
 import kotlinx.coroutines.delay
 
@@ -56,13 +59,13 @@ fun DownloadListScreen(
         }
     }
     
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("离线缓存") },
+            AdaptiveTopAppBar(
+                title = "离线缓存",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                        Icon(rememberAppBackIcon(), contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

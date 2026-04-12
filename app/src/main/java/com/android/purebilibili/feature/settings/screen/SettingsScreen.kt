@@ -53,6 +53,8 @@ import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.EasterEggs
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LogCollector
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
@@ -1159,12 +1161,10 @@ private fun MobileSettingsLayout(
 
     LaunchedEffect(Unit) { isVisible = true }
 
-    Scaffold(
+    AdaptiveScaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(screenTitle, fontWeight = FontWeight.Bold)
-                },
+            AdaptiveTopAppBar(
+                title = screenTitle,
                 navigationIcon = {
                     IconButton(
                         onClick = onBack

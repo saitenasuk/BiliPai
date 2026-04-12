@@ -67,12 +67,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.VideoGridItemSkeleton
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
@@ -424,7 +427,7 @@ fun CommonListScreen(
             onVideoClick(bvid, cid, coverUrl)
         }
 
-    Scaffold(
+    AdaptiveScaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.background
     ) { scaffoldPadding ->
@@ -661,11 +664,11 @@ fun CommonListScreen(
                     }
             ) {
                 Column {
-                    TopAppBar(
-                        title = { Text(state.title) },
+                    AdaptiveTopAppBar(
+                        title = state.title,
                         navigationIcon = {
                             IconButton(onClick = onBack) {
-                                Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back")
+                                Icon(rememberAppBackIcon(), contentDescription = "Back")
                             }
                         },
                         actions = {

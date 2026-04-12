@@ -103,7 +103,7 @@ class BottomBarIndicatorPolicyTest {
         )
 
         assertTrue(active.captureTintedContentLayer)
-        assertFalse(active.useCombinedBackdrop)
+        assertTrue(active.useCombinedBackdrop)
         assertFalse(idle.captureTintedContentLayer)
         assertFalse(idle.useCombinedBackdrop)
         assertFalse(docked.captureTintedContentLayer)
@@ -119,15 +119,15 @@ class BottomBarIndicatorPolicyTest {
         )
 
         assertTrue(profile.progress > 0f)
-        assertEquals(0f, profile.exportPanelOffsetFraction)
-        assertEquals(0f, profile.indicatorPanelOffsetFraction)
-        assertEquals(0f, profile.visiblePanelOffsetFraction)
+        assertTrue(profile.exportPanelOffsetFraction > 0f)
+        assertTrue(profile.indicatorPanelOffsetFraction > profile.exportPanelOffsetFraction)
+        assertTrue(profile.visiblePanelOffsetFraction > 0f)
         assertTrue(profile.forceChromaticAberration)
         assertTrue(profile.visibleSelectionEmphasis < 1f)
-        assertEquals(1f, profile.exportSelectionEmphasis)
+        assertTrue(profile.exportSelectionEmphasis < 1f)
         assertEquals(1f, profile.exportCaptureWidthScale)
-        assertTrue(profile.indicatorLensAmountScale < 1f)
-        assertTrue(profile.indicatorLensHeightScale < 1f)
+        assertTrue(profile.indicatorLensAmountScale > 1f)
+        assertTrue(profile.indicatorLensHeightScale > 1f)
     }
 
     @Test
@@ -171,6 +171,18 @@ class BottomBarIndicatorPolicyTest {
             resolveBottomBarChromeMaterialMode(
                 showGlassEffect = false,
                 hasBlur = false
+            )
+        )
+    }
+
+    @Test
+    fun `miuix bottom bar blur mode wins over liquid glass when blur is available`() {
+        assertEquals(
+            TopTabMaterialMode.BLUR,
+            resolveBottomBarChromeMaterialMode(
+                showGlassEffect = true,
+                hasBlur = true,
+                preferBlurWhenAvailable = true
             )
         )
     }

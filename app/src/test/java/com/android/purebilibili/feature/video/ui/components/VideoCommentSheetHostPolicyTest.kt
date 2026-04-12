@@ -59,9 +59,9 @@ class VideoCommentSheetHostPolicyTest {
     }
 
     @Test
-    fun `thread only detail should preserve player area above`() {
+    fun `thread only detail should fill the screen`() {
         assertEquals(
-            0.55f,
+            1f,
             resolveVideoCommentSheetHostHeightFraction(
                 mainSheetVisible = false,
                 screenHeightPx = 1000,
