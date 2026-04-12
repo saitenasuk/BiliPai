@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-04-12 · 文档已同步至 v7.7.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-04-12 · 文档已同步至 v7.7.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.7.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.7.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -527,7 +527,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-04-12（v7.7.0）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-04-12（v7.7.1）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -572,13 +572,13 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.7.0 · 2026-04-12)
+### 最近更新 (v7.7.1 · 2026-04-12)
 
-- 💬 **评论抓取升级**：新增主评论、二级评论和对话评论的 gRPC 抓取链路，并保留 REST 回退。
-- 🎖️ **评论徽章对齐**：等级、UP、粉丝团装扮、粉丝牌和名牌统一为更精致的本地徽章样式，播放中也保持身份徽章显示。
-- 🧩 **评论富文本完善**：支持 @ 用户、话题、服务端链接标题、BVID、投票、笔记、opus、时间戳和图片预览跳转。
-- ✍️ **评论操作增强**：长按菜单新增复制、自由复制、保存、回复、举报、置顶/取消置顶和删除，输入框支持插入播放进度与同步动态。
-- 🎧 **听视频封面升级**：封面改为更大的圆角长方形，保留 3D 翻转并加入更接近 Apple Music 的模糊背景与卡片层次。
+- 🏷️ **UP 标识开关**：外观设置新增“UP主标识”，可控制首页、今日推荐单、相关推荐和视频详情列表中的 UP 标识显示。
+- 🌊 **底栏拖动优化**：底栏拖动释放按真实像素速度计算目标位置，液态玻璃移动指示器在拖动结束后保持更稳定的折射和可见性。
+- 🔗 **评论链接跳转**：评论里的视频、搜索、空间链接优先在应用内打开，搜索链接会直接进入搜索页并填入关键词。
+- 💬 **宽屏楼中楼**：宽屏/平板右侧评论区点击楼中楼后在右侧展开，不再遮挡视频播放区域。
+- 🙏 **致谢补充**：README 补充 PiliPlus、Miuix、BilibiliSponsorBlock、AndroidLiquidGlass 等项目。
 
 ### 历史版本
 
@@ -629,9 +629,12 @@ cd BiliPai
 | [DanmakuFlameMaster](https://github.com/bilibili/DanmakuFlameMaster) | B 站弹幕引擎 |
 | [DanmakuRenderEngine](https://github.com/bytedance/DanmakuRenderEngine) | 字节跳动高性能弹幕引擎 |
 | [bilibili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) | B 站 API 文档 |
+| [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) | 播放链路、评论样式和移动端体验参考 |
 | [biliSendCommAntifraud](https://github.com/freedom-introvert/biliSendCommAntifraud) | 评论反诈检测参考实现 |
+| [BilibiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock) | 空降助手片段数据与 API 参考 |
+| [Miuix](https://github.com/compose-miuix-ui/miuix) | Compose Multiplatform 的 Miuix 风格组件 |
 | [Haze](https://github.com/chrisbanes/haze) | 毛玻璃效果库 |
-| [Backdrop](https://github.com/Kyant0/AndroidLiquidGlass) | 液态玻璃效果 |
+| [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | 液态玻璃效果 |
 | [Lottie](https://github.com/airbnb/lottie-android) | Airbnb 动画库 |
 | [Coil](https://github.com/coil-kt/coil) | Kotlin 图片加载库 |
 | [Compose Shimmer](https://github.com/valentinilk/compose-shimmer) | 骨架屏加载效果 |

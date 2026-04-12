@@ -76,6 +76,7 @@ fun StoryVideoCard(
     scrollLiteModeEnabled: Boolean = false,
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
+    showUpBadge: Boolean = true,
     showPublishTime: Boolean = false,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
@@ -460,6 +461,7 @@ fun StoryVideoCard(
                 metaColor = MaterialTheme.colorScheme.primary,
                 badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                 badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                showUpBadge = showUpBadge,
                 modifier = upNameModifier
             )
             

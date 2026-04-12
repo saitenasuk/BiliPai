@@ -36,6 +36,7 @@ fun UpBadgeName(
     spacing: Dp = 6.dp,
     reserveTrailingSlot: Boolean = false,
     trailingSlotMinWidth: Dp = 40.dp,
+    showUpBadge: Boolean = true,
     maxLines: Int = 1,
     overflow: TextOverflow = TextOverflow.Ellipsis
 ) {
@@ -49,9 +50,10 @@ fun UpBadgeName(
             modifier = modifier,
             verticalAlignment = if (shouldShowMeta) Alignment.Top else Alignment.CenterVertically
         ) {
-            UserUpBadge()
-
-            Spacer(modifier = Modifier.width(spacing))
+            if (shouldRenderUserUpBadge(showUpBadge)) {
+                UserUpBadge()
+                Spacer(modifier = Modifier.width(spacing))
+            }
 
             leadingContent?.let {
                 it()

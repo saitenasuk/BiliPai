@@ -366,6 +366,9 @@ fun AppearanceSettingsContent(
     val homeInfoGlassBadgesVisible by SettingsManager
         .getHomeInfoGlassBadgesVisible(context)
         .collectAsState(initial = true)
+    val homeUpBadgesVisible by SettingsManager
+        .getHomeUpBadgesVisible(context)
+        .collectAsState(initial = true)
     val showMd3DynamicColorControl =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val showThemeColorPicker = !state.dynamicColor
@@ -1218,6 +1221,24 @@ fun AppearanceSettingsContent(
                                 }
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSPurple
+                        )
+
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.PersonCropCircleBadgePlus,
+                            title = "UP主标识",
+                            subtitle = if (homeUpBadgesVisible) {
+                                "首页和相关推荐显示 UP 标识"
+                            } else {
+                                "首页和相关推荐隐藏 UP 标识"
+                            },
+                            checked = homeUpBadgesVisible,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setHomeUpBadgesVisible(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue
                         )
                         
                         // 网格列数设置 (仅在双列网格模式下显示)

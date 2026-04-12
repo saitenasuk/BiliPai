@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.automirrored.outlined.Sort
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -43,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.buildAnnotatedString
@@ -58,6 +61,8 @@ import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
 import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
+import com.android.purebilibili.feature.video.viewmodel.CommentUiState
+import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.HandThumbsup
@@ -81,6 +86,14 @@ internal data class SubReplyDetailLayoutPolicy(
     val overlayRootCommentEntry: Boolean
 )
 
+internal data class SubReplyAuxiliaryBadgeVisualSpec(
+    val imageSizeDp: Int,
+    val imageCornerRadiusDp: Int,
+    val imageLabelSpacingDp: Int,
+    val labelFontSizeSp: Int,
+    val labelLineHeightSp: Int
+)
+
 internal typealias SubReplyDetailAppearance = VideoCommentAppearance
 
 internal fun resolveSubReplyDetailLayoutPolicy(
@@ -90,6 +103,16 @@ internal fun resolveSubReplyDetailLayoutPolicy(
         listBottomPaddingDp = 16,
         footerTopPaddingDp = 0,
         overlayRootCommentEntry = false
+    )
+}
+
+internal fun resolveSubReplyAuxiliaryBadgeVisualSpec(): SubReplyAuxiliaryBadgeVisualSpec {
+    return SubReplyAuxiliaryBadgeVisualSpec(
+        imageSizeDp = 46,
+        imageCornerRadiusDp = 12,
+        imageLabelSpacingDp = 8,
+        labelFontSizeSp = 12,
+        labelLineHeightSp = 12
     )
 }
 
@@ -172,6 +195,65 @@ internal fun resolveSubReplyAuxiliaryImageUrl(item: ReplyItem): String? {
 }
 
 @Composable
+internal fun VideoInlineSubReplyDetailContent(
+    state: SubReplyUiState,
+    commentState: CommentUiState,
+    emoteMap: Map<String, String>,
+    maxTimestampMs: Long?,
+    onLoadMore: () -> Unit,
+    onDismiss: () -> Unit,
+    onRootCommentClick: () -> Unit,
+    onTimestampClick: ((Long) -> Unit)?,
+    onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)?,
+    onReplyClick: (ReplyItem) -> Unit,
+    onConversationClick: (ReplyItem) -> Unit,
+    onConversationBack: () -> Unit,
+    onDissolveStart: (Long) -> Unit,
+    onDeleteComment: (Long) -> Unit,
+    onCommentLike: (Long) -> Unit,
+    onReportComment: (Long, Int) -> Unit,
+    onUrlClick: (String) -> Unit,
+    onAvatarClick: (String) -> Unit
+) {
+    val rootReply = state.rootReply
+    if (!state.visible || rootReply == null) return
+
+    BackHandler(enabled = true) {
+        onDismiss()
+    }
+
+    SubReplyDetailContent(
+        rootReply = rootReply,
+        subReplies = state.items,
+        isLoading = state.isLoading,
+        isEnd = state.isEnd,
+        emoteMap = emoteMap,
+        onLoadMore = onLoadMore,
+        onDismiss = onDismiss,
+        applyStatusBarPadding = false,
+        onRootCommentClick = onRootCommentClick,
+        onTimestampClick = onTimestampClick,
+        upMid = state.upMid.takeIf { it > 0L } ?: commentState.upMid,
+        showUpFlag = commentState.showUpFlag,
+        onImagePreview = onImagePreview,
+        onReplyClick = onReplyClick,
+        onConversationClick = onConversationClick,
+        onConversationBack = onConversationBack,
+        isConversationMode = state.conversationAnchor != null,
+        dissolvingIds = state.dissolvingIds,
+        currentMid = commentState.currentMid,
+        onDissolveStart = onDissolveStart,
+        onDeleteComment = onDeleteComment,
+        onCommentLike = onCommentLike,
+        onReportComment = onReportComment,
+        likedComments = commentState.likedComments,
+        onUrlClick = onUrlClick,
+        onAvatarClick = onAvatarClick,
+        maxTimestampMs = maxTimestampMs
+    )
+}
+
+@Composable
 internal fun SubReplyDetailContent(
     rootReply: ReplyItem,
     subReplies: List<ReplyItem>,
@@ -180,6 +262,7 @@ internal fun SubReplyDetailContent(
     emoteMap: Map<String, String>,
     onLoadMore: () -> Unit,
     onDismiss: () -> Unit,
+    applyStatusBarPadding: Boolean = false,
     onRootCommentClick: (() -> Unit)? = null,
     onTimestampClick: ((Long) -> Unit)? = null,
     upMid: Long = 0,
@@ -242,6 +325,7 @@ internal fun SubReplyDetailContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (applyStatusBarPadding) Modifier.statusBarsPadding() else Modifier)
                 .padding(start = 20.dp, end = 8.dp, top = 10.dp, bottom = 10.dp)
                 .testTag(SUB_REPLY_DETAIL_HEADER_TAG),
             verticalAlignment = Alignment.CenterVertically
@@ -746,6 +830,7 @@ private fun SubReplyAuxiliaryBadge(
     auxiliaryLabel: String,
     appearance: SubReplyDetailAppearance
 ) {
+    val visualSpec = remember { resolveSubReplyAuxiliaryBadgeVisualSpec() }
     Column(
         horizontalAlignment = Alignment.End
     ) {
@@ -757,17 +842,18 @@ private fun SubReplyAuxiliaryBadge(
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .size(visualSpec.imageSizeDp.dp)
+                    .clip(RoundedCornerShape(visualSpec.imageCornerRadiusDp.dp))
                     .background(appearance.placeholderColor)
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(visualSpec.imageLabelSpacingDp.dp))
         }
         Text(
             text = auxiliaryLabel.replace("NO.", "NO.\n"),
-            fontSize = 11.sp,
-            lineHeight = 11.sp,
+            fontSize = visualSpec.labelFontSizeSp.sp,
+            lineHeight = visualSpec.labelLineHeightSp.sp,
             color = appearance.auxiliaryTint,
             fontWeight = FontWeight.SemiBold
         )

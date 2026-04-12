@@ -290,6 +290,7 @@ data class HomeSettings(
     val compactVideoStatsOnCover: Boolean = true, //  播放量/评论数显示在封面底部（默认开启）
     val showHomeCoverGlassBadges: Boolean = true, // 首页封面玻璃信息显示
     val showHomeInfoGlassBadges: Boolean = true, // 首页信息区玻璃标签显示
+    val showHomeUpBadges: Boolean = true, // 首页和相关推荐 UP 主标识显示
     val easterEggEnabled: Boolean = false, // 下拉刷新趣味提示开关
     //  [修复] 默认值改为 true，避免在 Flow 加载实际值之前错误触发弹窗
     // 当 Flow 加载完成后，如果实际值是 false，LaunchedEffect 会再次触发并显示弹窗
@@ -697,6 +698,7 @@ object SettingsManager {
     private val KEY_COMPACT_VIDEO_STATS_ON_COVER = booleanPreferencesKey("compact_video_stats_on_cover")
     private val KEY_HOME_COVER_GLASS_BADGES_VISIBLE = booleanPreferencesKey("home_cover_glass_badges_visible")
     private val KEY_HOME_INFO_GLASS_BADGES_VISIBLE = booleanPreferencesKey("home_info_glass_badges_visible")
+    private val KEY_HOME_UP_BADGES_VISIBLE = booleanPreferencesKey("home_up_badges_visible")
     //  [合并] 崩溃追踪同意弹窗
     private val KEY_CRASH_TRACKING_CONSENT_SHOWN = booleanPreferencesKey("crash_tracking_consent_shown")
     private val KEY_LIQUID_GLASS_MODE = intPreferencesKey("liquid_glass_mode")
@@ -759,6 +761,7 @@ object SettingsManager {
             compactVideoStatsOnCover = preferences[KEY_COMPACT_VIDEO_STATS_ON_COVER] ?: true,
             showHomeCoverGlassBadges = preferences[KEY_HOME_COVER_GLASS_BADGES_VISIBLE] ?: true,
             showHomeInfoGlassBadges = preferences[KEY_HOME_INFO_GLASS_BADGES_VISIBLE] ?: true,
+            showHomeUpBadges = preferences[KEY_HOME_UP_BADGES_VISIBLE] ?: true,
             easterEggEnabled = preferences[KEY_EASTER_EGG_ENABLED] ?: false,
             // 保持现有运行时行为：首次未配置时按 false 返回
             crashTrackingConsentShown = preferences[KEY_CRASH_TRACKING_CONSENT_SHOWN] ?: false
@@ -1401,6 +1404,15 @@ object SettingsManager {
     suspend fun setHomeInfoGlassBadgesVisible(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_HOME_INFO_GLASS_BADGES_VISIBLE] = value
+        }
+    }
+
+    fun getHomeUpBadgesVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_HOME_UP_BADGES_VISIBLE] ?: true }
+
+    suspend fun setHomeUpBadgesVisible(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HOME_UP_BADGES_VISIBLE] = value
         }
     }
 
@@ -4120,6 +4132,7 @@ object SettingsManager {
             ),
             BooleanShareablePreferenceDefinition(KEY_PREDICTIVE_BACK_ANIMATION_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_COMPACT_VIDEO_STATS_ON_COVER, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_HOME_UP_BADGES_VISIBLE, SettingsShareSection.APPEARANCE),
 
             BooleanShareablePreferenceDefinition(KEY_AUTO_PLAY, SettingsShareSection.PLAYBACK),
             IntShareablePreferenceDefinition(KEY_PLAYBACK_COMPLETION_BEHAVIOR, SettingsShareSection.PLAYBACK),

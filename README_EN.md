@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-12 · Synced to v7.7.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-04-12 · Synced to v7.7.1 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.7.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.7.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -388,7 +388,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-04-12 (v7.7.0). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-04-12 (v7.7.1). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -430,13 +430,13 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.7.0 · 2026-04-12)
+### Latest (v7.7.1 · 2026-04-12)
 
-- 💬 **Comment fetching**: main replies, sub replies, and conversation replies now use a gRPC path with REST fallback.
-- 🎖️ **Comment badges**: level, UP, fan-group decoration, fan medal, and nameplate rendering now use a more polished local badge style, including during playback.
-- 🧩 **Rich comments**: mentions, topics, server link titles, BVID links, votes, notes, opus entries, timestamps, and image previews are parsed consistently.
-- ✍️ **Comment actions**: long press now supports copy, free copy, save, reply, report, pin/unpin, and delete; the composer can insert playback progress and sync to dynamic.
-- 🎧 **Audio mode artwork**: covers are larger rounded rectangles with retained 3D flipping, blurred artwork background, and stronger card depth.
+- 🏷️ **UP badge toggle**: Appearance settings can now show or hide UP badges in home cards, Today Watch, related videos, and video detail lists.
+- 🌊 **Bottom bar drag**: drag release uses real pixel velocity, and the liquid-glass moving indicator keeps refraction and tint more stable after release.
+- 🔗 **Comment links**: video, search, and space links in comments now prefer in-app navigation; search links open the search screen with the keyword filled in.
+- 💬 **Wide-screen comment threads**: sub replies open inside the right-side comment pane on tablet and wide layouts instead of covering the player.
+- 🙏 **Acknowledgements**: README now credits PiliPlus, Miuix, BilibiliSponsorBlock, AndroidLiquidGlass, and related projects.
 
 ---
 
@@ -466,7 +466,13 @@ Issues and Pull Requests are welcome!
 
 | Project | Description |
 |-----|-----|
+| [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) | Playback flow, comment presentation, and mobile UX reference |
 | [biliSendCommAntifraud](https://github.com/freedom-introvert/biliSendCommAntifraud) | Reference implementation for comment anti-fraud detection |
+| [BilibiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock) | Sponsor skip segment data and API reference |
+| [Miuix](https://github.com/compose-miuix-ui/miuix) | Miuix-style Compose Multiplatform components |
+| [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) | Liquid glass visual effect reference |
+| [Haze](https://github.com/chrisbanes/haze) | Blur and frosted-glass effects |
+| [Compose Cupertino](https://github.com/alexzhirkevich/compose-cupertino) | Cupertino-style Compose UI components |
 
 ---
 

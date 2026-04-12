@@ -325,6 +325,36 @@ internal fun shouldOpenCommentUrlInApp(url: String): Boolean {
     return host.contains("bilibili.com") || host.contains("b23.tv")
 }
 
+internal sealed interface CommentUrlNavigationTarget {
+    data class Video(val videoId: String) : CommentUrlNavigationTarget
+    data class Search(val keyword: String) : CommentUrlNavigationTarget
+    data class Space(val mid: Long) : CommentUrlNavigationTarget
+}
+
+internal fun resolveCommentUrlNavigationTarget(rawUrl: String): CommentUrlNavigationTarget? {
+    val url = rawUrl.trim()
+    if (url.isEmpty()) return null
+    return when (val target = com.android.purebilibili.core.util.BilibiliNavigationTargetParser.parse(url)) {
+        is com.android.purebilibili.core.util.BilibiliNavigationTarget.Video -> {
+            target.videoId.trim()
+                .takeIf { it.isNotEmpty() }
+                ?.let(CommentUrlNavigationTarget::Video)
+        }
+
+        is com.android.purebilibili.core.util.BilibiliNavigationTarget.Search -> {
+            target.keyword.trim()
+                .takeIf { it.isNotEmpty() }
+                ?.let(CommentUrlNavigationTarget::Search)
+        }
+
+        is com.android.purebilibili.core.util.BilibiliNavigationTarget.Space -> {
+            target.mid.takeIf { it > 0L }?.let(CommentUrlNavigationTarget::Space)
+        }
+
+        else -> null
+    }
+}
+
 internal fun resolveDanmakuDialogTopReservePx(
     isLandscape: Boolean,
     isFullscreenMode: Boolean,
@@ -496,6 +526,7 @@ fun VideoDetailScreen(
     onHomeClick: () -> Unit = onBack,
     onNavigateToAudioMode: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    onSearchKeywordClick: (String) -> Unit = {},
     onVideoClick: (String, android.os.Bundle?) -> Unit,
     onUpClick: (Long) -> Unit = {},
     miniPlayerManager: MiniPlayerManager? = null,
@@ -509,6 +540,9 @@ fun VideoDetailScreen(
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val configuration = LocalConfiguration.current
+    val homeUpBadgesVisible by com.android.purebilibili.core.store.SettingsManager
+        .getHomeUpBadgesVisible(context)
+        .collectAsState(initial = true)
     val motionSpec = remember(transitionEnterDurationMillis) {
         resolveVideoDetailMotionSpec(transitionEnterDurationMillis)
     }
@@ -556,20 +590,23 @@ fun VideoDetailScreen(
         val url = rawUrl.trim()
         if (url.isEmpty()) return@openCommentUrl
 
-        val parsedResult = com.android.purebilibili.core.util.BilibiliUrlParser.parse(url)
-        if (parsedResult.bvid != null) {
-            navigateToRelatedVideo(parsedResult.bvid, null)
-            return@openCommentUrl
-        }
+        when (val target = resolveCommentUrlNavigationTarget(url)) {
+            is CommentUrlNavigationTarget.Video -> {
+                navigateToRelatedVideo(target.videoId, null)
+                return@openCommentUrl
+            }
 
-        if (shouldOpenCommentUrlInApp(url)) {
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                .setPackage(context.packageName)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            val launchedInApp = runCatching {
-                context.startActivity(intent)
-            }.isSuccess
-            if (launchedInApp) return@openCommentUrl
+            is CommentUrlNavigationTarget.Search -> {
+                onSearchKeywordClick(target.keyword)
+                return@openCommentUrl
+            }
+
+            is CommentUrlNavigationTarget.Space -> {
+                onUpClick(target.mid)
+                return@openCommentUrl
+            }
+
+            null -> Unit
         }
 
         runCatching { uriHandler.openUri(url) }
@@ -2109,6 +2146,8 @@ fun VideoDetailScreen(
                         currentAudioQuality = audioQualityPreference,
                         onAudioQualityChange = { viewModel.setAudioQuality(it) },
                         onRelatedVideoClick = navigateToRelatedVideo,
+                        showUpBadge = homeUpBadgesVisible,
+                        onSearchKeywordClick = onSearchKeywordClick,
                         // 🔁 [新增] 播放模式
                         currentPlayMode = currentPlayMode,
                         onPlayModeClick = { com.android.purebilibili.feature.video.player.PlaylistManager.togglePlayMode() },
@@ -2618,6 +2657,7 @@ fun VideoDetailScreen(
                                                         onBgmClick = onBgmClick,
                                                         ownerFollowerCount = success.ownerFollowerCount,
                                                         ownerVideoCount = success.ownerVideoCount,
+                                                        showUpBadge = homeUpBadgesVisible,
                                                         showInteractionActions = shouldShowVideoDetailActionButtons(),
                                                         isVideoPlaying = isVideoPlaying
                                                     )
@@ -3469,29 +3509,35 @@ fun VideoDetailScreen(
         }
         
         val successState = uiState as? PlayerUiState.Success
-        VideoCommentSheetHost(
-            mainSheetVisible = false,
-            onDismiss = { commentViewModel.closeSubReply() },
-            commentViewModel = commentViewModel,
-            aid = successState?.info?.aid ?: 0L,
-            upMid = commentState.upMid,
-            expectedReplyCount = commentState.replyCount,
-            emoteMap = successState?.emoteMap ?: emptyMap(),
-            onRootCommentClick = { viewModel.openRootCommentComposer() },
-            onReplyClick = { replyItem ->
-                android.util.Log.d("VideoDetailScreen", "📝 Reply to: ${replyItem.member.uname}")
-                viewModel.setReplyingTo(replyItem)
-                viewModel.showCommentInputDialog()
-            },
-            onUserClick = onUpClick,
-            screenHeightPx = screenHeightPx,
-            topReservedPx = danmakuDialogTopReservePx,
-            onTimestampClick = { positionMs ->
-                seekPlayerFromUserAction(playerState.player, positionMs)
-                commentViewModel.closeSubReply()
-            },
-            maxTimestampMs = successState?.videoDurationMs?.takeIf { it > 0L }
-        )
+        if (shouldShowDetachedVideoCommentThreadHost(useTabletLayout = useTabletLayout)) {
+            VideoCommentSheetHost(
+                mainSheetVisible = false,
+                onDismiss = { commentViewModel.closeSubReply() },
+                commentViewModel = commentViewModel,
+                aid = successState?.info?.aid ?: 0L,
+                upMid = commentState.upMid,
+                expectedReplyCount = commentState.replyCount,
+                emoteMap = successState?.emoteMap ?: emptyMap(),
+                onRootCommentClick = { viewModel.openRootCommentComposer() },
+                onReplyClick = { replyItem ->
+                    android.util.Log.d("VideoDetailScreen", "📝 Reply to: ${replyItem.member.uname}")
+                    viewModel.setReplyingTo(replyItem)
+                    viewModel.showCommentInputDialog()
+                },
+                onUserClick = onUpClick,
+                onVideoClick = { targetVideoId ->
+                    navigateToRelatedVideo(targetVideoId, null)
+                },
+                onSearchKeywordClick = onSearchKeywordClick,
+                screenHeightPx = screenHeightPx,
+                topReservedPx = danmakuDialogTopReservePx,
+                onTimestampClick = { positionMs ->
+                    seekPlayerFromUserAction(playerState.player, positionMs)
+                    commentViewModel.closeSubReply()
+                },
+                maxTimestampMs = successState?.videoDurationMs?.takeIf { it > 0L }
+            )
+        }
 
         // 📁 收藏夹选择弹窗
         if (showFavoriteFolderDialog) {
@@ -4047,6 +4093,12 @@ internal fun shouldUseOrientationDrivenFullscreen(
     useTabletLayout: Boolean
 ): Boolean {
     return !useTabletLayout 
+}
+
+internal fun shouldShowDetachedVideoCommentThreadHost(
+    useTabletLayout: Boolean
+): Boolean {
+    return !useTabletLayout
 }
 
 internal fun shouldApplyPhoneAutoRotatePolicy(

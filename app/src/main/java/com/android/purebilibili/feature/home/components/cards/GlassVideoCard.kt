@@ -77,6 +77,7 @@ fun GlassVideoCard(
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
+    showUpBadge: Boolean = true,
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
     onClick: (String, Long) -> Unit
 ) {
@@ -441,6 +442,7 @@ fun GlassVideoCard(
                             nameColor = onSurfaceVariant,
                             badgeTextColor = onSurfaceVariant.copy(alpha = 0.85f),
                             badgeBorderColor = onSurfaceVariant.copy(alpha = 0.35f),
+                            showUpBadge = showUpBadge,
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         

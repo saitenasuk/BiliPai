@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
+import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.core.store.LiquidGlassMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -111,6 +112,81 @@ class BottomBarIndicatorPolicyTest {
     }
 
     @Test
+    fun `idle hold keeps refraction layer alive without marking indicator moving`() {
+        val idle = BottomBarIndicatorVisualPolicy(
+            isInMotion = false,
+            shouldRefract = false,
+            useNeutralTint = false
+        )
+
+        val held = resolveBottomBarIndicatorVisualPolicyWithHold(
+            basePolicy = idle,
+            keepRefractionLayerAlive = true
+        )
+        val released = resolveBottomBarIndicatorVisualPolicyWithHold(
+            basePolicy = idle,
+            keepRefractionLayerAlive = false
+        )
+
+        assertFalse(held.isInMotion)
+        assertTrue(held.shouldRefract)
+        assertFalse(released.shouldRefract)
+    }
+
+    @Test
+    fun `ios moving indicator keeps visible tint on light floating bar`() {
+        val color = resolveIosFloatingBottomIndicatorColor(
+            themeColor = Color(0xFF6750A4),
+            isDarkTheme = false,
+            visualPolicy = BottomBarIndicatorVisualPolicy(
+                isInMotion = true,
+                shouldRefract = true,
+                useNeutralTint = true
+            ),
+            liquidGlassTuning = resolveLiquidGlassTuning(progress = 0.2f)
+        )
+
+        assertTrue(color.red < 0.75f)
+        assertTrue(color.alpha > 0f)
+    }
+
+    @Test
+    fun `ios moving indicator keeps theme color when neutral tint is disabled`() {
+        val themeColor = Color(0xFF6750A4)
+        val color = resolveIosFloatingBottomIndicatorColor(
+            themeColor = themeColor,
+            isDarkTheme = false,
+            visualPolicy = BottomBarIndicatorVisualPolicy(
+                isInMotion = true,
+                shouldRefract = true,
+                useNeutralTint = false
+            ),
+            liquidGlassTuning = resolveLiquidGlassTuning(progress = 0.7f)
+        )
+
+        assertEquals(themeColor.red, color.red)
+        assertEquals(themeColor.green, color.green)
+        assertEquals(themeColor.blue, color.blue)
+        assertTrue(color.alpha > 0f)
+    }
+
+    @Test
+    fun `ios moving indicator alpha has floor on bright floating bar`() {
+        val alpha = resolveIosFloatingBottomIndicatorTintAlpha(
+            visualPolicy = BottomBarIndicatorVisualPolicy(
+                isInMotion = true,
+                shouldRefract = true,
+                useNeutralTint = true
+            ),
+            isDarkTheme = false,
+            liquidGlassProgress = 0.2f,
+            configuredAlpha = 0.12f
+        )
+
+        assertTrue(alpha >= 0.22f)
+    }
+
+    @Test
     fun `moving refraction profile adds panel offset and suppresses visible emphasis`() {
         val profile = resolveBottomBarRefractionMotionProfile(
             position = 1.32f,
@@ -124,6 +200,7 @@ class BottomBarIndicatorPolicyTest {
         assertTrue(profile.visiblePanelOffsetFraction > 0f)
         assertTrue(profile.forceChromaticAberration)
         assertTrue(profile.visibleSelectionEmphasis < 1f)
+        assertTrue(profile.visibleSelectionEmphasis >= 0.68f)
         assertTrue(profile.exportSelectionEmphasis < 1f)
         assertEquals(1f, profile.exportCaptureWidthScale)
         assertTrue(profile.indicatorLensAmountScale > 1f)

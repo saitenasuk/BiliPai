@@ -120,6 +120,17 @@ class SubReplyDetailPresentationPolicyTest {
     }
 
     @Test
+    fun `auxiliary badge visual spec keeps decoration legible`() {
+        val spec = resolveSubReplyAuxiliaryBadgeVisualSpec()
+
+        assertEquals(46, spec.imageSizeDp)
+        assertEquals(12, spec.imageCornerRadiusDp)
+        assertEquals(8, spec.imageLabelSpacingDp)
+        assertEquals(12, spec.labelFontSizeSp)
+        assertEquals(12, spec.labelLineHeightSp)
+    }
+
+    @Test
     fun `light theme detail appearance should follow theme surface instead of dark palette`() {
         val appearance = resolveSubReplyDetailAppearance(
             surfaceColor = Color(0xFFFFFFFF),

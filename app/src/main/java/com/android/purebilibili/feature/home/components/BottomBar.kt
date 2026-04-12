@@ -515,6 +515,19 @@ internal data class BottomBarIndicatorVisualPolicy(
     val useNeutralTint: Boolean
 )
 
+internal const val BOTTOM_BAR_REFRACTION_IDLE_HOLD_MS = 96L
+
+internal fun resolveBottomBarIndicatorVisualPolicyWithHold(
+    basePolicy: BottomBarIndicatorVisualPolicy,
+    keepRefractionLayerAlive: Boolean
+): BottomBarIndicatorVisualPolicy {
+    return if (basePolicy.shouldRefract || !keepRefractionLayerAlive) {
+        basePolicy
+    } else {
+        basePolicy.copy(shouldRefract = true)
+    }
+}
+
 internal data class BottomBarRefractionLayerPolicy(
     val captureTintedContentLayer: Boolean,
     val useCombinedBackdrop: Boolean
@@ -608,7 +621,7 @@ internal fun resolveBottomBarRefractionMotionProfile(
         exportPanelOffsetFraction = panelOffsetFraction * 0.5f,
         indicatorPanelOffsetFraction = panelOffsetFraction,
         visiblePanelOffsetFraction = panelOffsetFraction * 0.25f,
-        visibleSelectionEmphasis = lerp(1f, 0.38f, progress),
+        visibleSelectionEmphasis = lerp(1f, 0.68f, progress),
         exportSelectionEmphasis = lerp(1f, 0.72f, progress),
         exportCaptureWidthScale = 1f,
         forceChromaticAberration = progress > 0.02f,
@@ -623,6 +636,36 @@ internal fun resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme: Boolean): 
     } else {
         Color(0xFFFDFEFF)
     }
+}
+
+internal fun resolveIosFloatingBottomIndicatorColor(
+    themeColor: Color,
+    isDarkTheme: Boolean,
+    visualPolicy: BottomBarIndicatorVisualPolicy,
+    liquidGlassTuning: LiquidGlassTuning
+): Color {
+    val baseColor = if (visualPolicy.useNeutralTint) {
+        resolveIos26BottomIndicatorGrayColor(isDarkTheme = isDarkTheme)
+    } else {
+        themeColor
+    }
+    return baseColor.copy(alpha = liquidGlassTuning.indicatorTintAlpha)
+}
+
+internal fun resolveIosFloatingBottomIndicatorTintAlpha(
+    visualPolicy: BottomBarIndicatorVisualPolicy,
+    isDarkTheme: Boolean,
+    liquidGlassProgress: Float,
+    configuredAlpha: Float
+): Float {
+    val baseAlpha = resolveBottomBarIndicatorTintAlpha(
+        shouldRefract = visualPolicy.shouldRefract,
+        liquidGlassProgress = liquidGlassProgress,
+        configuredAlpha = configuredAlpha
+    )
+    if (!visualPolicy.shouldRefract) return baseAlpha
+    val movingAlphaFloor = if (isDarkTheme) 0.20f else 0.22f
+    return baseAlpha.coerceAtLeast(movingAlphaFloor)
 }
 
 internal fun resolveBottomBarChromeMaterialMode(
@@ -1116,101 +1159,114 @@ fun FrostedBottomBar(
                             .then(if (isFloating) Modifier.fillMaxHeight() else Modifier.height(dockedHeight))
                             // liquidGlass refracts the icons/text around indicator during horizontal swipe
                             // liquidGlass removed: Refraction now handled by LiquidIndicator using LayerBackdrop
-                    ) {
-                        // 关键修复：
-                        // 1) 移动态时导出一层隐藏的 tint 内容给 capsule 折射
-                        // 2) capsule 使用页面 backdrop + tint 内容的 combined backdrop
-                        val tintedContentBackdrop = rememberLayerBackdrop()
-                        val isDark = isSystemInDarkTheme()
-                        val indicatorPosition = dampedDragState.value
-                        val indicatorVisualPolicy = resolveBottomBarIndicatorVisualPolicy(
-                            position = indicatorPosition,
-                            isDragging = dampedDragState.isDragging,
-                            velocity = dampedDragState.velocity,
-                            useNeutralIndicatorTint = liquidGlassTuning.useNeutralIndicatorTint,
-                            motionSpec = bottomBarMotionSpec
-                        )
-                        val refractionMotionProfile = resolveBottomBarRefractionMotionProfile(
-                            position = indicatorPosition,
-                            velocity = dampedDragState.velocity,
-                            isDragging = dampedDragState.isDragging,
-                            motionSpec = bottomBarMotionSpec
-                        )
-                        val panelOffsetPx = with(density) {
-                            bottomBarMotionSpec.refraction.panelOffsetMaxDp.dp.toPx()
-                        }
-                        val exportPanelOffsetPx = panelOffsetPx *
-                            refractionMotionProfile.exportPanelOffsetFraction
-                        val indicatorPanelOffsetPx = panelOffsetPx *
-                            refractionMotionProfile.indicatorPanelOffsetFraction
-                        val visiblePanelOffsetPx = panelOffsetPx *
-                            refractionMotionProfile.visiblePanelOffsetFraction
-                        val indicatorPolicy = remember(itemCount) {
-                            resolveBottomBarIndicatorPolicy(itemCount = itemCount)
-                        }
-                        val indicatorColor = when {
-                            indicatorVisualPolicy.shouldRefract ->
-                                resolveBottomBarMovingIndicatorSurfaceColor(isDarkTheme = isDark)
-                            indicatorVisualPolicy.useNeutralTint ->
-                                resolveIos26BottomIndicatorGrayColor(isDarkTheme = isDark)
-                            else -> MaterialTheme.colorScheme.primary
-                        }
-                        val indicatorTintAlpha = resolveBottomBarIndicatorTintAlpha(
-                            shouldRefract = indicatorVisualPolicy.shouldRefract,
-                            liquidGlassProgress = liquidGlassTuning.progress,
-                            configuredAlpha = liquidGlassTuning.indicatorTintAlpha
-                        )
-                        val refractionLayerPolicy = resolveBottomBarRefractionLayerPolicy(
-                            isFloating = isFloating,
-                            isLiquidGlassEnabled = showGlassEffect,
-                            indicatorVisualPolicy = indicatorVisualPolicy
-                        )
-                        val combinedIndicatorBackdrop = when {
-                            refractionLayerPolicy.useCombinedBackdrop && backdrop != null ->
-                                rememberCombinedBackdrop(backdrop, tintedContentBackdrop)
-                            else -> null
-                        }
-                        val indicatorBackdrop: Backdrop? = when {
-                            !indicatorVisualPolicy.shouldRefract -> null
-                            combinedIndicatorBackdrop != null -> combinedIndicatorBackdrop
-                            refractionLayerPolicy.captureTintedContentLayer -> tintedContentBackdrop
-                            else -> backdrop
-                        }
-                        LiquidIndicator(
-                            position = indicatorPosition,
-                            itemWidth = itemWidth,
-                            itemCount = itemCount,
-                            // Keep refraction active during in-flight horizontal motion (drag + settle).
-                            isDragging = indicatorVisualPolicy.isInMotion,
-                            velocity = dampedDragState.velocity,
-                            startPadding = rowPadding,
-                            viewportShiftPx = indicatorPanelOffsetPx,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .offset(y = bottomIndicatorYOffset)
-                                .alpha(indicatorAlpha),
-                            clampToBounds = indicatorPolicy.clampToBounds,
-                            edgeInset = indicatorPolicy.edgeInsetDp.dp,
-                            indicatorWidthMultiplier = indicatorPolicy.widthMultiplier,
-                            indicatorMinWidth = indicatorPolicy.minWidthDp.dp,
-                            indicatorMaxWidth = indicatorPolicy.maxWidthDp.dp,
-                            maxWidthToItemRatio = indicatorPolicy.maxWidthToItemRatio,
-                            indicatorHeight = bottomIndicatorHeight,
-                            isLiquidGlassEnabled = showGlassEffect,
-                            lensIntensityBoost = liquidGlassTuning.indicatorLensBoost,
-                            edgeWarpBoost = liquidGlassTuning.indicatorEdgeWarpBoost,
-                            chromaticBoost = liquidGlassTuning.indicatorChromaticBoost,
-                            liquidGlassStyle = homeSettings.liquidGlassStyle, // [New] Pass style
-                            liquidGlassTuning = liquidGlassTuning,
-                            motionSpec = bottomBarMotionSpec,
-                            // Dynamic refraction: moving -> refract icons/text/cover, static -> keep pure color.
-                            backdrop = indicatorBackdrop,
-                            lensAmountScale = refractionMotionProfile.indicatorLensAmountScale,
-                            lensHeightScale = refractionMotionProfile.indicatorLensHeightScale,
-                            forceChromaticAberration = refractionLayerPolicy.useCombinedBackdrop &&
-                                refractionMotionProfile.forceChromaticAberration,
-                            color = indicatorColor.copy(alpha = indicatorTintAlpha)
-                        )
+                        ) {
+                            // 关键修复：
+                            // 1) 移动态时导出一层隐藏的 tint 内容给 capsule 折射
+                            // 2) capsule 使用页面 backdrop + tint 内容的 combined backdrop
+                            val tintedContentBackdrop = rememberLayerBackdrop()
+                            val isDark = isSystemInDarkTheme()
+                            val indicatorPosition = dampedDragState.value
+                            val baseIndicatorVisualPolicy = resolveBottomBarIndicatorVisualPolicy(
+                                position = indicatorPosition,
+                                isDragging = dampedDragState.isDragging,
+                                velocity = dampedDragState.velocityPxPerSecond,
+                                useNeutralIndicatorTint = liquidGlassTuning.useNeutralIndicatorTint,
+                                motionSpec = bottomBarMotionSpec
+                            )
+                            var keepRefractionLayerAlive by remember { mutableStateOf(false) }
+                            LaunchedEffect(baseIndicatorVisualPolicy.isInMotion) {
+                                if (baseIndicatorVisualPolicy.isInMotion) {
+                                    keepRefractionLayerAlive = true
+                                } else {
+                                    kotlinx.coroutines.delay(BOTTOM_BAR_REFRACTION_IDLE_HOLD_MS)
+                                    keepRefractionLayerAlive = false
+                                }
+                            }
+                            val indicatorVisualPolicy = resolveBottomBarIndicatorVisualPolicyWithHold(
+                                basePolicy = baseIndicatorVisualPolicy,
+                                keepRefractionLayerAlive = keepRefractionLayerAlive
+                            )
+                            val refractionMotionProfile = resolveBottomBarRefractionMotionProfile(
+                                position = indicatorPosition,
+                                velocity = dampedDragState.velocityPxPerSecond,
+                                isDragging = dampedDragState.isDragging,
+                                motionSpec = bottomBarMotionSpec
+                            )
+                            val panelOffsetPx = with(density) {
+                                bottomBarMotionSpec.refraction.panelOffsetMaxDp.dp.toPx()
+                            }
+                            val exportPanelOffsetPx = panelOffsetPx *
+                                refractionMotionProfile.exportPanelOffsetFraction
+                            val indicatorPanelOffsetPx = panelOffsetPx *
+                                refractionMotionProfile.indicatorPanelOffsetFraction
+                            val visiblePanelOffsetPx = panelOffsetPx *
+                                refractionMotionProfile.visiblePanelOffsetFraction
+                            val indicatorPolicy = remember(itemCount) {
+                                resolveBottomBarIndicatorPolicy(itemCount = itemCount)
+                            }
+                            val indicatorColor = resolveIosFloatingBottomIndicatorColor(
+                                themeColor = MaterialTheme.colorScheme.primary,
+                                isDarkTheme = isDark,
+                                visualPolicy = indicatorVisualPolicy,
+                                liquidGlassTuning = liquidGlassTuning
+                            )
+                            val indicatorTintAlpha = resolveIosFloatingBottomIndicatorTintAlpha(
+                                visualPolicy = indicatorVisualPolicy,
+                                isDarkTheme = isDark,
+                                liquidGlassProgress = liquidGlassTuning.progress,
+                                configuredAlpha = liquidGlassTuning.indicatorTintAlpha
+                            )
+                            val refractionLayerPolicy = resolveBottomBarRefractionLayerPolicy(
+                                isFloating = isFloating,
+                                isLiquidGlassEnabled = showGlassEffect,
+                                indicatorVisualPolicy = indicatorVisualPolicy
+                            )
+                            val combinedIndicatorBackdrop = when {
+                                refractionLayerPolicy.useCombinedBackdrop && backdrop != null ->
+                                    rememberCombinedBackdrop(backdrop, tintedContentBackdrop)
+                                else -> null
+                            }
+                            val indicatorBackdrop: Backdrop? = when {
+                                !indicatorVisualPolicy.shouldRefract -> null
+                                combinedIndicatorBackdrop != null -> combinedIndicatorBackdrop
+                                refractionLayerPolicy.captureTintedContentLayer -> tintedContentBackdrop
+                                else -> backdrop
+                            }
+                            LiquidIndicator(
+                                position = indicatorPosition,
+                                itemWidth = itemWidth,
+                                itemCount = itemCount,
+                                // Keep refraction active during in-flight horizontal motion (drag + settle).
+                                isDragging = indicatorVisualPolicy.isInMotion,
+                                velocity = dampedDragState.velocityPxPerSecond,
+                                startPadding = rowPadding,
+                                viewportShiftPx = indicatorPanelOffsetPx,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .offset(y = bottomIndicatorYOffset)
+                                    .alpha(indicatorAlpha),
+                                clampToBounds = indicatorPolicy.clampToBounds,
+                                edgeInset = indicatorPolicy.edgeInsetDp.dp,
+                                indicatorWidthMultiplier = indicatorPolicy.widthMultiplier,
+                                indicatorMinWidth = indicatorPolicy.minWidthDp.dp,
+                                indicatorMaxWidth = indicatorPolicy.maxWidthDp.dp,
+                                maxWidthToItemRatio = indicatorPolicy.maxWidthToItemRatio,
+                                indicatorHeight = bottomIndicatorHeight,
+                                isLiquidGlassEnabled = showGlassEffect,
+                                lensIntensityBoost = liquidGlassTuning.indicatorLensBoost,
+                                edgeWarpBoost = liquidGlassTuning.indicatorEdgeWarpBoost,
+                                chromaticBoost = liquidGlassTuning.indicatorChromaticBoost,
+                                liquidGlassStyle = homeSettings.liquidGlassStyle, // [New] Pass style
+                                liquidGlassTuning = liquidGlassTuning,
+                                motionSpec = bottomBarMotionSpec,
+                                // Dynamic refraction: moving -> refract icons/text/cover, static -> keep pure color.
+                                backdrop = indicatorBackdrop,
+                                lensAmountScale = refractionMotionProfile.indicatorLensAmountScale,
+                                lensHeightScale = refractionMotionProfile.indicatorLensHeightScale,
+                                forceChromaticAberration = refractionLayerPolicy.useCombinedBackdrop &&
+                                    refractionMotionProfile.forceChromaticAberration,
+                                color = indicatorColor.copy(alpha = indicatorTintAlpha)
+                            )
 
                         if (refractionLayerPolicy.captureTintedContentLayer) {
                             Box(
@@ -1946,14 +2002,31 @@ private fun KernelSuAlignedBottomBar(
     LaunchedEffect(selectedIndex) {
         dampedDragState.updateIndex(selectedIndex)
     }
-    val indicatorVisualPolicy by remember {
+    val baseIndicatorVisualPolicy by remember {
         derivedStateOf {
             resolveBottomBarIndicatorVisualPolicy(
                 position = dampedDragState.value,
                 isDragging = dampedDragState.isDragging,
-                velocity = dampedDragState.velocity,
+                velocity = dampedDragState.velocityPxPerSecond,
                 useNeutralIndicatorTint = false,
                 motionSpec = bottomBarMotionSpec
+            )
+        }
+    }
+    var keepRefractionLayerAlive by remember { mutableStateOf(false) }
+    LaunchedEffect(baseIndicatorVisualPolicy.isInMotion) {
+        if (baseIndicatorVisualPolicy.isInMotion) {
+            keepRefractionLayerAlive = true
+        } else {
+            kotlinx.coroutines.delay(BOTTOM_BAR_REFRACTION_IDLE_HOLD_MS)
+            keepRefractionLayerAlive = false
+        }
+    }
+    val indicatorVisualPolicy by remember {
+        derivedStateOf {
+            resolveBottomBarIndicatorVisualPolicyWithHold(
+                basePolicy = baseIndicatorVisualPolicy,
+                keepRefractionLayerAlive = keepRefractionLayerAlive
             )
         }
     }
@@ -1970,7 +2043,7 @@ private fun KernelSuAlignedBottomBar(
         derivedStateOf {
             resolveBottomBarRefractionMotionProfile(
                 position = dampedDragState.value,
-                velocity = dampedDragState.velocity,
+                velocity = dampedDragState.velocityPxPerSecond,
                 isDragging = dampedDragState.isDragging,
                 motionSpec = bottomBarMotionSpec
             )
