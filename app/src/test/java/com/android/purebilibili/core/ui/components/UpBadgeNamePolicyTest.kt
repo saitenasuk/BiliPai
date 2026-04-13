@@ -57,6 +57,12 @@ class UpBadgeNamePolicyTest {
     }
 
     @Test
+    fun `user up badge follows visibility setting`() {
+        assertTrue(shouldRenderUserUpBadge(showUpBadge = true))
+        assertFalse(shouldRenderUserUpBadge(showUpBadge = false))
+    }
+
+    @Test
     fun `user up badge spec matches pili plus small badge`() {
         assertEquals(
             UserUpBadgeVisualSpec(

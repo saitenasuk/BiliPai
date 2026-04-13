@@ -37,6 +37,7 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.predictiveBackAnimationEnabled)
         assertFalse(result.smartVisualGuardEnabled)
         assertTrue(result.compactVideoStatsOnCover)
+        assertTrue(result.showHomeUpBadges)
         assertFalse(result.easterEggEnabled)
         assertFalse(result.crashTrackingConsentShown)
     }
@@ -61,6 +62,7 @@ class HomeSettingsMappingPolicyTest {
             booleanPreferencesKey("predictive_back_animation_enabled") to false,
             booleanPreferencesKey("smart_visual_guard_enabled") to false,
             booleanPreferencesKey("compact_video_stats_on_cover") to false,
+            booleanPreferencesKey("home_up_badges_visible") to false,
             booleanPreferencesKey("easter_egg_enabled") to true,
             booleanPreferencesKey("crash_tracking_consent_shown") to true
         )
@@ -89,6 +91,7 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.predictiveBackAnimationEnabled)
         assertFalse(result.smartVisualGuardEnabled)
         assertFalse(result.compactVideoStatsOnCover)
+        assertFalse(result.showHomeUpBadges)
         assertTrue(result.easterEggEnabled)
         assertTrue(result.crashTrackingConsentShown)
     }

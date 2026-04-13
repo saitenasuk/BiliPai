@@ -13,10 +13,41 @@ import androidx.compose.ui.util.fastCoerceIn
 import com.android.purebilibili.core.ui.motion.BottomBarMotionSpec
 import com.android.purebilibili.core.ui.motion.resolveBottomBarMotionSpec
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sign
+
+internal fun resolveDampedDragVelocityItemsPerSecond(
+    velocityPxPerSecond: Float,
+    itemWidthPx: Float
+): Float {
+    if (itemWidthPx <= 0f) return 0f
+    return velocityPxPerSecond / itemWidthPx
+}
+
+internal fun resolveDampedDragReleaseTargetIndex(
+    currentValue: Float,
+    velocityPxPerSecond: Float,
+    itemWidthPx: Float,
+    itemCount: Int,
+    motionSpec: BottomBarMotionSpec
+): Int {
+    if (itemCount <= 0) return 0
+    val velocityItems = resolveDampedDragVelocityItemsPerSecond(
+        velocityPxPerSecond = velocityPxPerSecond,
+        itemWidthPx = itemWidthPx
+    )
+    val projectedValue = currentValue + velocityItems * motionSpec.drag.flingProjectionTimeSeconds
+    var nextIndex = projectedValue.roundToInt()
+    val baseIndex = currentValue.roundToInt()
+    val maxReleaseStep = motionSpec.drag.maxReleaseStepCount.coerceAtLeast(1)
+    if (abs(nextIndex - baseIndex) > maxReleaseStep) {
+        nextIndex = baseIndex + (nextIndex - baseIndex).sign * maxReleaseStep
+    }
+    return nextIndex.coerceIn(0, itemCount - 1)
+}
 
 /**
  * 🌊 阻尼拖拽动画状态
@@ -45,8 +76,12 @@ internal class DampedDragAnimationState(
     /** 当前动画位置 */
     val value: Float get() = animatable.value
     
-    /** 当前速度（用于形变效果） */
+    /** 当前索引速度（items/s，用于 capsule 形变等索引空间动画） */
     val velocity: Float get() = animatable.velocity
+
+    /** 最近一次释放手势的像素速度（px/s，用于折射/透镜强度） */
+    var velocityPxPerSecond by mutableFloatStateOf(0f)
+        private set
     
     /** 按压进度 (0f..1f) */
     val pressProgress: Float get() = pressProgressAnimation.value
@@ -68,22 +103,44 @@ internal class DampedDragAnimationState(
     /** 动画是否正在运行 */
     val isRunning: Boolean get() = animatable.isRunning
 
+    private var desiredValue = initialIndex.toFloat()
+    private var desiredDragOffsetPx = 0f
+    private var motionGeneration = 0
+    private var positionJob: Job? = null
+    private var pressJob: Job? = null
+    private var selectionJob: Job? = null
+    private var offsetJob: Job? = null
+
+    private fun startNewMotion(): Int {
+        motionGeneration += 1
+        return motionGeneration
+    }
+
     /**
      * 处理拖拽事件
      * @param dragAmountPx 拖拽像素距离
      * @param itemWidthPx 单个项目宽度（像素）
      */
     fun onDrag(dragAmountPx: Float, itemWidthPx: Float) {
+        if (itemWidthPx <= 0f || itemCount <= 0) return
         if (!isDragging) {
             isDragging = true
+            startNewMotion()
+            selectionJob?.cancel()
+            positionJob?.cancel()
+            offsetJob?.cancel()
+            desiredValue = animatable.value
+            desiredDragOffsetPx = offsetAnimation.value
+            velocityPxPerSecond = 0f
             // 按压缩放 — 参考 LiquidBottomTabs press()
-            scope.launch {
+            pressJob?.cancel()
+            pressJob = scope.launch {
                 pressProgressAnimation.animateTo(1f, motionSpec.drag.pressSpring.toSpringSpec())
             }
         }
         
         // [优化] 橡皮筋阻尼物理：
-        val currentValue = animatable.value
+        val currentValue = desiredValue
         val isOverscrolling = currentValue < 0f || currentValue > (itemCount - 1).toFloat()
         
         // [调整] 提升灵敏度系数 (0.6 -> 1.0) 确保完全跟手
@@ -92,7 +149,7 @@ internal class DampedDragAnimationState(
 
         // 允许边缘回弹：放宽限制范围
         val newValue = (
-            animatable.value +
+            desiredValue +
                 (dragAmountPx / itemWidthPx) *
                 if (isOverscrolling) overscrollResistance else baseResistance
             )
@@ -100,13 +157,19 @@ internal class DampedDragAnimationState(
                 -motionSpec.drag.overscrollLimitItems,
                 (itemCount - 1).toFloat() + motionSpec.drag.overscrollLimitItems
             )
+        desiredValue = newValue
         
-        scope.launch {
+        positionJob?.cancel()
+        positionJob = scope.launch {
+            animatable.stop()
             animatable.snapTo(newValue)
         }
         // 累计偏移量 — 用于面板偏移
-        scope.launch {
-            offsetAnimation.snapTo(offsetAnimation.value + dragAmountPx)
+        desiredDragOffsetPx += dragAmountPx
+        offsetJob?.cancel()
+        offsetJob = scope.launch {
+            offsetAnimation.stop()
+            offsetAnimation.snapTo(desiredDragOffsetPx)
         }
     }
     
@@ -115,8 +178,14 @@ internal class DampedDragAnimationState(
      */
     fun snapTo(targetValue: Float) {
         // 更新目标索引以防止 offset 累积误差
+        val generation = startNewMotion()
+        selectionJob?.cancel()
+        positionJob?.cancel()
+        desiredValue = targetValue
         targetIndex = targetValue.roundToInt().coerceIn(0, itemCount - 1)
-        scope.launch {
+        positionJob = scope.launch {
+            if (generation != motionGeneration) return@launch
+            animatable.stop()
             animatable.snapTo(targetValue)
         }
     }
@@ -127,50 +196,51 @@ internal class DampedDragAnimationState(
      * @param itemWidthPx 项目宽度 (px)
      */
     fun onDragEnd(velocityX: Float, itemWidthPx: Float) {
+        if (itemWidthPx <= 0f || itemCount <= 0) return
         isDragging = false
+        val generation = motionGeneration
+        velocityPxPerSecond = velocityX
         
-        val currentValue = animatable.value
+        val currentValue = desiredValue
         
         // [核心优化] 基于速度的意图判断 (Fling Logic)
         // 1. 计算这一帧的归一化速度 (items/sec)
-        val velocityItems = velocityX / itemWidthPx
+        val velocityItems = resolveDampedDragVelocityItemsPerSecond(
+            velocityPxPerSecond = velocityX,
+            itemWidthPx = itemWidthPx
+        )
+        val releaseTargetIndex = resolveDampedDragReleaseTargetIndex(
+            currentValue = currentValue,
+            velocityPxPerSecond = velocityX,
+            itemWidthPx = itemWidthPx,
+            itemCount = itemCount,
+            motionSpec = motionSpec
+        )
+        targetIndex = releaseTargetIndex
+        desiredValue = releaseTargetIndex.toFloat()
         
-        // 2. 预测终点 (Projected End Point)
-        // 简单的投射：当前位置 + 速度 * 时间常数 (模拟滑行)
-        // 使用 0.2s 作为预测时间窗
-        val projectedValue = currentValue + velocityItems * motionSpec.drag.flingProjectionTimeSeconds
-        
-        // 3. 确定目标索引
-        // 如果速度很快 (> 1 item/s)，则强制切换到下一个/上一个
-        // 否则回弹到最近的整数
-        var nextIndex = projectedValue.roundToInt()
-        
-        // 4. 限制跳跃范围：一次只允许跳一格 (防止飞太远)
-        // 获取当前基础索引 (int part)
-        val baseIndex = currentValue.roundToInt()
-        
-        // 强制约束 nextIndex 在 baseIndex ± 1 范围内 (前提是确实发生了显著移动)
-        val maxReleaseStep = motionSpec.drag.maxReleaseStepCount.coerceAtLeast(1)
-        if (abs(nextIndex - baseIndex) > maxReleaseStep) {
-            nextIndex = baseIndex + (nextIndex - baseIndex).sign * maxReleaseStep
-        }
-        
-        targetIndex = nextIndex.coerceIn(0, itemCount - 1)
-        
-        scope.launch {
+        selectionJob?.cancel()
+        selectionJob = scope.launch {
+            positionJob?.cancel()
             animatable.animateTo(
-                targetValue = targetIndex.toFloat(),
+                targetValue = releaseTargetIndex.toFloat(),
                 animationSpec = motionSpec.drag.selectionSpring.toSpringSpec(),
                 initialVelocity = velocityItems
             )
-            onIndexChanged(targetIndex)
+            if (generation == motionGeneration) {
+                velocityPxPerSecond = 0f
+                onIndexChanged(releaseTargetIndex)
+            }
         }
         // 释放按压缩放 — 参考 LiquidBottomTabs release()
-        scope.launch {
+        pressJob?.cancel()
+        pressJob = scope.launch {
             pressProgressAnimation.animateTo(0f, motionSpec.drag.pressSpring.toSpringSpec())
         }
         // 偏移量归零 — 弹性回弹
-        scope.launch {
+        desiredDragOffsetPx = 0f
+        offsetJob?.cancel()
+        offsetJob = scope.launch {
             offsetAnimation.animateTo(0f, motionSpec.drag.offsetSnapSpring.toSpringSpec())
         }
     }
@@ -186,8 +256,14 @@ internal class DampedDragAnimationState(
         // If targetIndex matches but we are stuck at an offset (e.g. 2.8 vs 3.0 via snapTo), 
         // we MUST force restart the animation.
         if (index == targetIndex && (isRunning || abs(value - index.toFloat()) < 0.005f)) return
+        val generation = startNewMotion()
+        selectionJob?.cancel()
+        positionJob?.cancel()
+        velocityPxPerSecond = 0f
         targetIndex = index
-        scope.launch {
+        desiredValue = index.toFloat()
+        selectionJob = scope.launch {
+            if (generation != motionGeneration) return@launch
             animatable.animateTo(
                 targetValue = index.toFloat(),
                 animationSpec = motionSpec.drag.selectionSpring.toSpringSpec()

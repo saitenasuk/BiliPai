@@ -19,6 +19,9 @@ import androidx.compose.runtime.collectAsState //  新增
 import androidx.compose.runtime.getValue //  新增
 import androidx.compose.runtime.LaunchedEffect // 新增
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -233,6 +236,22 @@ fun AppNavigation(
         if (canNav) lastNavigationTime.longValue = currentTime
         canNav
     }
+    var inAppSearchKeyword by remember { mutableStateOf<String?>(null) }
+    val effectiveInitialSearchKeyword = inAppSearchKeyword ?: initialSearchKeyword
+    val consumeInitialSearchKeyword: (String) -> Unit = { consumedKeyword ->
+        if (inAppSearchKeyword == consumedKeyword) {
+            inAppSearchKeyword = null
+        } else {
+            onInitialSearchKeywordConsumed(consumedKeyword)
+        }
+    }
+    val navigateToSearchKeyword: (String) -> Unit = navigateToSearchKeyword@{ keyword ->
+        val normalizedKeyword = keyword.trim()
+        if (normalizedKeyword.isEmpty()) return@navigateToSearchKeyword
+        if (!canNavigate(false)) return@navigateToSearchKeyword
+        inAppSearchKeyword = normalizedKeyword
+        navController.navigate(ScreenRoutes.Search.route)
+    }
     fun navigateToVideoRoute(route: String) {
         // 🔒 防抖检查
         if (!canNavigate(false)) return
@@ -359,6 +378,16 @@ fun AppNavigation(
             is MessageLinkNavigationAction.Web -> {
                 navController.navigate(ScreenRoutes.Web.createRoute(action.url))
             }
+        }
+    }
+
+    fun navigateToBangumiTarget(seasonId: Long, epId: Long) {
+        when {
+            seasonId > 0L && epId > 0L -> navController.navigate(
+                ScreenRoutes.BangumiPlayer.createRoute(seasonId, epId)
+            )
+            seasonId > 0L -> navController.navigate(ScreenRoutes.BangumiDetail.createRoute(seasonId, epId))
+            epId > 0L -> navController.navigate(ScreenRoutes.BangumiDetail.createRoute(0L, epId))
         }
     }
 
@@ -1044,6 +1073,7 @@ fun AppNavigation(
                     onNavigateToSearch = {
                         if (canNavigate(false)) navController.navigate(ScreenRoutes.Search.route)
                     },
+                    onSearchKeywordClick = navigateToSearchKeyword,
                     // [修复] 传递视频点击导航回调
                     onVideoClick = { vid, options ->
                         val targetCid = options?.getLong(
@@ -1424,6 +1454,7 @@ fun AppNavigation(
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 DynamicScreen(
                     onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onBangumiClick = { seasonId, epId -> navigateToBangumiTarget(seasonId, epId) },
                     onDynamicDetailClick = { dynamicId ->
                         navController.navigate(ScreenRoutes.DynamicDetail.createRoute(dynamicId))
                     },
@@ -1450,13 +1481,14 @@ fun AppNavigation(
             popExitTransition = { slideExitRight(navMotionSpec) }
         ) { backStackEntry ->
             val dynamicId = android.net.Uri.decode(backStackEntry.arguments?.getString("dynamicId") ?: "")
-            com.android.purebilibili.feature.dynamic.DynamicDetailScreen(
-                dynamicId = dynamicId,
-                onBack = { navController.popBackStack() },
-                onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
-                onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
-                onLiveClick = { roomId, title, uname ->
-                    navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                com.android.purebilibili.feature.dynamic.DynamicDetailScreen(
+                    dynamicId = dynamicId,
+                    onBack = { navController.popBackStack() },
+                    onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onBangumiClick = { seasonId, epId -> navigateToBangumiTarget(seasonId, epId) },
+                    onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },
+                    onLiveClick = { roomId, title, uname ->
+                        navController.navigate(ScreenRoutes.Live.createRoute(roomId, title, uname))
                 }
             )
         }
@@ -1495,8 +1527,8 @@ fun AppNavigation(
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 SearchScreen(
                     userFace = homeState.user.face, // 传入头像 URL
-                    initialKeyword = initialSearchKeyword.orEmpty(),
-                    onInitialKeywordConsumed = onInitialSearchKeywordConsumed,
+                    initialKeyword = effectiveInitialSearchKeyword.orEmpty(),
+                    onInitialKeywordConsumed = consumeInitialSearchKeyword,
                     onBack = { navController.popBackStack() },
                     onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") },
                     onUpClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },  //  点击UP主跳转到空间

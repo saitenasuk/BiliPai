@@ -56,6 +56,13 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
+    fun queryByUpBadgeKeyword_hitsAppearanceEntry() {
+        val results = resolveSettingsSearchResults("UP主标识")
+
+        assertTrue(results.any { it.target == SettingsSearchTarget.APPEARANCE })
+    }
+
+    @Test
     fun queryByMd3Alias_hitsAppearanceEntry() {
         val results = resolveSettingsSearchResults("md3")
 

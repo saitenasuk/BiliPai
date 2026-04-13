@@ -91,6 +91,20 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
+    fun detachedCommentThreadHost_isPhoneOnly() {
+        assertTrue(
+            shouldShowDetachedVideoCommentThreadHost(
+                useTabletLayout = false
+            )
+        )
+        assertFalse(
+            shouldShowDetachedVideoCommentThreadHost(
+                useTabletLayout = true
+            )
+        )
+    }
+
+    @Test
     fun sharedCoverTransition_requiresSwitchAndBothScopes() {
         assertTrue(
             shouldEnableVideoCoverSharedTransition(

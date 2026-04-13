@@ -146,6 +146,7 @@ fun ElegantVideoCard(
     compactStatsOnCover: Boolean = true, // 播放量/评论数是否贴在封面底部
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
+    showUpBadge: Boolean = true,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
@@ -891,6 +892,7 @@ fun ElegantVideoCard(
                 badgeTextColor = iOSSystemGray.copy(alpha = 0.85f),
                 badgeBorderColor = iOSSystemGray.copy(alpha = 0.4f),
                 reserveTrailingSlot = true,
+                showUpBadge = showUpBadge,
                 modifier = upNameModifier
             )
             

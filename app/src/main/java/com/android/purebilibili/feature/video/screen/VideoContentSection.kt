@@ -259,6 +259,7 @@ fun VideoContentSection(
     onBgmClick: (BgmInfo) -> Unit = {},
     ownerFollowerCount: Int? = null,
     ownerVideoCount: Int? = null,
+    showUpBadge: Boolean = true,
     showInteractionActions: Boolean = true,
     isVideoPlaying: Boolean = false
 ) {
@@ -368,6 +369,7 @@ fun VideoContentSection(
                         transitionEnabled = transitionEnabled,
                         ownerFollowerCount = ownerFollowerCount,
                         ownerVideoCount = ownerVideoCount,
+                        showUpBadge = showUpBadge,
                         onFavoriteLongClick = onFavoriteLongClick,
                         aiSummary = aiSummary,
                         aiSummaryPrompt = aiSummaryPrompt,
@@ -493,6 +495,7 @@ private fun VideoIntroTab(
     transitionEnabled: Boolean = false,  // 🔗 共享元素过渡开关
     ownerFollowerCount: Int? = null,
     ownerVideoCount: Int? = null,
+    showUpBadge: Boolean = true,
     onFavoriteLongClick: () -> Unit = {},
     aiSummary: AiSummaryData? = null,
     aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
@@ -579,6 +582,7 @@ private fun VideoIntroTab(
                     video = video,
                     isFollowed = video.owner.mid in followingMids,
                     transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
+                    showUpBadge = showUpBadge,
                     onClick = openRelatedVideo
                 )
             }

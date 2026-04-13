@@ -90,6 +90,10 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
             "顶部栏自动收缩",
             "首页收缩",
             "统计信息贴封面",
+            "up主标识",
+            "up标识",
+            "UP主标识",
+            "UP标识",
             "md3",
             "material",
             "android",
@@ -373,9 +377,9 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry(
         target = SettingsSearchTarget.APPEARANCE,
         title = "首页展示 / 顶部栏自动收缩",
-        subtitle = "展示样式、顶部栏自动收缩、玻璃样式",
+        subtitle = "展示样式、顶部栏自动收缩、玻璃样式、UP主标识",
         section = "外观设置",
-        aliases = listOf("首页展示", "顶部栏自动收缩", "展示样式", "封面玻璃样式", "信息区玻璃样式", "统计信息贴封面"),
+        aliases = listOf("首页展示", "顶部栏自动收缩", "展示样式", "封面玻璃样式", "信息区玻璃样式", "统计信息贴封面", "UP主标识", "UP标识", "up主标识", "up标识"),
         focusId = SettingsSearchFocusIds.APPEARANCE_HOME
     ),
     SettingsSearchEntry(

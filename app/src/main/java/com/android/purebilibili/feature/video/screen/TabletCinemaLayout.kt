@@ -87,6 +87,7 @@ import com.android.purebilibili.feature.video.ui.components.CollectionSheet
 import com.android.purebilibili.feature.video.ui.components.PagesSelector
 import com.android.purebilibili.feature.video.ui.components.RelatedVideoItem
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.ui.components.VideoInlineSubReplyDetailContent
 import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
 import com.android.purebilibili.feature.video.ui.components.shouldShowReplyTopAction
@@ -100,6 +101,7 @@ import com.android.purebilibili.feature.video.ui.section.shouldShowAiSummaryEntr
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
+import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import kotlinx.coroutines.launch
@@ -133,6 +135,8 @@ fun TabletCinemaLayout(
     onAudioQualityChange: (Int) -> Unit = {},
     transitionEnabled: Boolean = false,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    showUpBadge: Boolean = true,
+    onSearchKeywordClick: (String) -> Unit = {},
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode =
         com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
@@ -300,7 +304,9 @@ fun TabletCinemaLayout(
                 playerState = playerState,
                 onUpClick = onUpClick,
                 onRelatedVideoClick = onRelatedVideoClick,
-                context = appContext
+                context = appContext,
+                showUpBadge = showUpBadge,
+                onSearchKeywordClick = onSearchKeywordClick
             )
         }
     }
@@ -657,9 +663,20 @@ private fun CinemaSideCurtain(
     playerState: VideoPlayerState,
     onUpClick: (Long) -> Unit,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
-    context: android.content.Context
+    context: android.content.Context,
+    showUpBadge: Boolean,
+    onSearchKeywordClick: (String) -> Unit
 ) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val subReplyState by commentViewModel.subReplyState.collectAsState()
+    LaunchedEffect(subReplyState.visible) {
+        if (subReplyState.visible) {
+            onTabSelected(0)
+            if (pagerState.currentPage != 0) {
+                pagerState.animateScrollToPage(0)
+            }
+        }
+    }
     Row(
         modifier = Modifier.fillMaxHeight(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -771,11 +788,14 @@ private fun CinemaSideCurtain(
                                     CinemaCommentsPane(
                                         success = success,
                                         commentState = commentState,
+                                        subReplyState = subReplyState,
                                         commentViewModel = commentViewModel,
                                         viewModel = viewModel,
                                         playerState = playerState,
                                         onUpClick = onUpClick,
-                                        context = context
+                                        context = context,
+                                        onRelatedVideoClick = onRelatedVideoClick,
+                                        onSearchKeywordClick = onSearchKeywordClick
                                     )
                                 }
 
@@ -783,7 +803,8 @@ private fun CinemaSideCurtain(
                                     CinemaRelatedPane(
                                         success = success,
                                         onRelatedVideoClick = onRelatedVideoClick,
-                                        context = context
+                                        context = context,
+                                        showUpBadge = showUpBadge
                                     )
                                 }
                             }
@@ -799,11 +820,14 @@ private fun CinemaSideCurtain(
 private fun CinemaCommentsPane(
     success: PlayerUiState.Success,
     commentState: CommentUiState,
+    subReplyState: SubReplyUiState,
     commentViewModel: VideoCommentViewModel,
     viewModel: PlayerViewModel,
     playerState: VideoPlayerState,
     onUpClick: (Long) -> Unit,
-    context: android.content.Context
+    context: android.content.Context,
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    onSearchKeywordClick: (String) -> Unit
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
     val listState = rememberLazyListState()
@@ -812,14 +836,23 @@ private fun CinemaCommentsPane(
     val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
         val url = rawUrl.trim()
         if (url.isEmpty()) return@openCommentUrl
-        if (shouldOpenCommentUrlInApp(url)) {
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                .setPackage(context.packageName)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            val launchedInApp = runCatching {
-                context.startActivity(intent)
-            }.isSuccess
-            if (launchedInApp) return@openCommentUrl
+        when (val target = resolveCommentUrlNavigationTarget(url)) {
+            is CommentUrlNavigationTarget.Video -> {
+                onRelatedVideoClick(target.videoId, null)
+                return@openCommentUrl
+            }
+
+            is CommentUrlNavigationTarget.Search -> {
+                onSearchKeywordClick(target.keyword)
+                return@openCommentUrl
+            }
+
+            is CommentUrlNavigationTarget.Space -> {
+                onUpClick(target.mid)
+                return@openCommentUrl
+            }
+
+            null -> Unit
         }
         runCatching { uriHandler.openUri(url) }
     }
@@ -855,7 +888,40 @@ private fun CinemaCommentsPane(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    if (subReplyState.visible && subReplyState.rootReply != null) {
+        VideoInlineSubReplyDetailContent(
+            state = subReplyState,
+            commentState = commentState,
+            emoteMap = success.emoteMap,
+            maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
+            onLoadMore = { commentViewModel.loadMoreSubReplies() },
+            onDismiss = { commentViewModel.closeSubReply() },
+            onRootCommentClick = { viewModel.openRootCommentComposer() },
+            onTimestampClick = { positionMs ->
+                seekPlayerFromUserAction(playerState.player, positionMs)
+            },
+            onImagePreview = { images, index, rect, textContent ->
+                previewImages = images
+                previewInitialIndex = index
+                sourceRect = rect
+                previewTextContent = textContent
+                showImagePreview = true
+            },
+            onReplyClick = { reply ->
+                viewModel.setReplyingTo(reply)
+                viewModel.showCommentInputDialog()
+            },
+            onConversationClick = commentViewModel::openSubReplyConversation,
+            onConversationBack = commentViewModel::closeSubReplyConversation,
+            onDissolveStart = { rpid -> commentViewModel.startSubDissolve(rpid) },
+            onDeleteComment = { rpid -> commentViewModel.deleteSubComment(rpid) },
+            onCommentLike = commentViewModel::likeComment,
+            onReportComment = commentViewModel::reportComment,
+            onUrlClick = openCommentUrl,
+            onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
+        )
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -998,13 +1064,15 @@ private fun CinemaCommentsPane(
             )
         }
     }
+    }
 }
 
 @Composable
 private fun CinemaRelatedPane(
     success: PlayerUiState.Success,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
-    context: android.content.Context
+    context: android.content.Context,
+    showUpBadge: Boolean
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1017,6 +1085,7 @@ private fun CinemaRelatedPane(
             RelatedVideoItem(
                 video = video,
                 isFollowed = video.owner.mid in success.followingMids,
+                showUpBadge = showUpBadge,
                 onClick = {
                     val activity = (context as? Activity)
                         ?: (context as? ContextWrapper)?.baseContext as? Activity

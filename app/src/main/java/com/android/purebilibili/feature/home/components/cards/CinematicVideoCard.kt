@@ -101,6 +101,7 @@ fun CinematicVideoCard(
     motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false,
     isDataSaverActive: Boolean = false,
+    showUpBadge: Boolean = true,
     onDismiss: (() -> Unit)? = null,
     onWatchLater: (() -> Unit)? = null,
     onClick: (String, Long) -> Unit
@@ -338,6 +339,7 @@ fun CinematicVideoCard(
                          nameColor = Color.White.copy(alpha = 0.9f),
                          badgeTextColor = Color.White.copy(alpha = 0.92f),
                          badgeBorderColor = Color.White.copy(alpha = 0.45f),
+                         showUpBadge = showUpBadge,
                          modifier = upNameModifier
                      )
                      
