@@ -126,6 +126,7 @@ import com.android.purebilibili.feature.video.viewmodel.PlaybackEndAction
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import com.android.purebilibili.feature.video.viewmodel.PlayerViewModel
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import com.android.purebilibili.feature.video.viewmodel.resolvePlaybackCompletionRepeatMode
 import com.android.purebilibili.feature.video.viewmodel.resolvePlaybackEndAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -361,6 +362,9 @@ fun PortraitVideoPager(
                 volume = 1.0f
                 setPlaybackSpeed(SettingsManager.getPreferredPlaybackSpeedSync(context))
             }
+    }
+    LaunchedEffect(exoPlayer, playbackCompletionBehavior) {
+        exoPlayer.repeatMode = resolvePlaybackCompletionRepeatMode(playbackCompletionBehavior)
     }
 
     if (!useSharedPlayer) {

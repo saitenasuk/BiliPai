@@ -209,6 +209,9 @@ internal fun seekPlayerFromUserAction(
         "USER_DBG seekPlayerFromUserAction: target=$positionMs, shouldResume=$shouldResume, " +
             "beforeState=${player.playbackState}, beforePlaying=${player.isPlaying}, beforePwr=${player.playWhenReady}"
     )
+    if (shouldResume) {
+        player.playWhenReady = true
+    }
     player.seekTo(positionMs)
     if (shouldResume) {
         playPlayerForUserIntent(
@@ -600,6 +603,7 @@ class VideoPlaybackUseCase(
         }
 
         player.setMediaSource(finalSource)
+        player.playWhenReady = playWhenReady
         if (seekTo > 0) {
             player.seekTo(seekTo)
         }
@@ -618,6 +622,7 @@ class VideoPlaybackUseCase(
         
         val mediaItem = MediaItem.fromUri(url)
         player.setMediaItem(mediaItem)
+        player.playWhenReady = playWhenReady
         if (seekTo > 0) {
             player.seekTo(seekTo)
         }

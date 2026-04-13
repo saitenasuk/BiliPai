@@ -1153,6 +1153,15 @@ interface BangumiApi {
         @retrofit2.http.Field("season_id") seasonId: Long,
         @retrofit2.http.Field("csrf") csrf: String
     ): com.android.purebilibili.data.model.response.SimpleApiResponse
+
+    // 更新追番/追剧状态：1=想看, 2=在看, 3=看过
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("pgc/web/follow/status/update")
+    suspend fun updateBangumiFollowStatus(
+        @retrofit2.http.Field("season_id") seasonId: Long,
+        @retrofit2.http.Field("status") status: Int,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): com.android.purebilibili.data.model.response.SimpleApiResponse
     
     //  [新增] 我的追番列表
     @GET("x/space/bangumi/follow/list")
