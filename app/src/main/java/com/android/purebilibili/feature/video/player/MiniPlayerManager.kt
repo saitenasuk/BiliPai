@@ -1148,7 +1148,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 🎯 标记通过导航离开（在返回按钮点击时调用）
      *  [修复] 在默认模式和画中画模式下立即暂停播放，解决生命周期时序问题
      */
-    fun markLeavingByNavigation(expectedBvid: String? = null) {
+    fun markLeavingByNavigation(expectedBvid: String? = null, forceStop: Boolean = false) {
         if (!shouldHandleNavigationLeaveForBvid(expectedBvid = expectedBvid, currentBvid = currentBvid)) {
             Logger.d(
                 TAG,
@@ -1164,7 +1164,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         // 画中画模式说明："切到桌面进入系统画中画"，返回主页时应停止
         val mode = getCurrentMode()
         val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
-        if (shouldClearPlaybackNotificationOnNavigationExit(mode, stopPlaybackOnExit)) {
+        if (forceStop || shouldClearPlaybackNotificationOnNavigationExit(mode, stopPlaybackOnExit)) {
             Logger.d(TAG, "🔇 ${mode.label}：通过导航离开，立即停止播放")
             // 停止所有播放器（外部和内部）
             _externalPlayer?.let { player ->

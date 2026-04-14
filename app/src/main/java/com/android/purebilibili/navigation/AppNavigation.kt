@@ -422,6 +422,19 @@ fun AppNavigation(
         }
     }
 
+    fun navigateToSpace(mid: Long) {
+        if (mid <= 0L) return
+        if (!canNavigate(false)) return
+        val currentEntry = navController.currentBackStackEntry
+        val alreadyOnTargetSpace =
+            currentEntry?.destination?.route == ScreenRoutes.Space.route &&
+                currentEntry.arguments?.getLong("mid") == mid
+        if (alreadyOnTargetSpace) return
+        navController.navigate(ScreenRoutes.Space.createRoute(mid)) {
+            launchSingleTop = true
+        }
+    }
+
     fun forceNavigateToHome() {
         lastNavigationTime.longValue = System.currentTimeMillis()
 
@@ -1039,7 +1052,7 @@ fun AppNavigation(
                     coverUrl = coverUrl,
                     // 传递 cid 参数
                     cid = backStackEntry.arguments?.getLong("cid") ?: 0L,
-                    onUpClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },  //  点击UP跳转空间
+                    onUpClick = { mid -> navigateToSpace(mid) },  //  点击UP跳转空间
                     miniPlayerManager = miniPlayerManager,
                     isInPipMode = isInPipMode,
                     isVisible = true,
@@ -1530,6 +1543,11 @@ fun AppNavigation(
                     initialKeyword = effectiveInitialSearchKeyword.orEmpty(),
                     onInitialKeywordConsumed = consumeInitialSearchKeyword,
                     onBack = { navController.popBackStack() },
+                    onOpenTrending = {
+                        if (canNavigate(false)) {
+                            navController.navigate(ScreenRoutes.SearchTrending.route)
+                        }
+                    },
                     onVideoClick = { bvid, cid -> navigateToVideo(bvid, cid, "") },
                     onUpClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) },  //  点击UP主跳转到空间
                     onBangumiClick = { seasonId ->
@@ -1569,6 +1587,17 @@ fun AppNavigation(
                     }
                 )
             }
+        }
+
+        composable(
+            route = ScreenRoutes.SearchTrending.route,
+            enterTransition = { slideEnterLeft(navMotionSpec) },
+            popExitTransition = { slideExitRight(navMotionSpec) }
+        ) {
+            com.android.purebilibili.feature.search.SearchTrendingScreen(
+                onBack = { navController.popBackStack() },
+                onKeywordClick = navigateToSearchKeyword
+            )
         }
 
         // --- Settings & Login ---

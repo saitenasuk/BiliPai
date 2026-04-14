@@ -16,6 +16,7 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.http.GET
+import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.Query
 import retrofit2.http.QueryMap
@@ -255,7 +256,9 @@ interface BilibiliApi {
     @GET("https://api.live.bilibili.com/xlive/web-ucenter/user/following")
     suspend fun getFollowedLive(
         @Query("page") page: Int = 1,
-        @Query("page_size") pageSize: Int = 30
+        @Query("page_size") pageSize: Int = 30,
+        @Query("ignoreRecord") ignoreRecord: Int = 1,
+        @Query("hit_ab") hitAb: Boolean = true
     ): FollowedLiveResponse
     
     //  [新增] 获取直播分区列表
@@ -283,6 +286,16 @@ interface BilibiliApi {
     suspend fun getLiveRoomDetail(
         @Query("room_id") roomId: Long
     ): LiveRoomDetailResponse
+
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getH5InfoByRoom")
+    suspend fun getLiveRoomH5Info(
+        @Query("room_id") roomId: Long
+    ): ResponseBody
+
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/dM/gethistory")
+    suspend fun getLiveDanmakuHistory(
+        @Query("roomid") roomId: Long
+    ): ResponseBody
     
     //  [新增] 获取直播弹幕 WebSocket 信息
     @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo")
@@ -312,7 +325,8 @@ interface BilibiliApi {
         @Query("codec") codec: String = "0,1",        // 0=avc, 1=hevc
         @Query("qn") quality: Int = 150,              // 150=高清
         @Query("platform") platform: String = "web",
-        @Query("ptype") ptype: Int = 8
+        @Query("ptype") ptype: Int = 8,
+        @Query("only_audio") onlyAudio: Int? = null
     ): LivePlayUrlResponse
     
     //  [新增] 旧版直播流 API - 可靠返回 quality_description 画质列表
@@ -356,6 +370,21 @@ interface BilibiliApi {
         @Query("platform") platform: String = "pc",
         @Query("room_id") roomId: Long
     ): com.android.purebilibili.data.model.response.LiveEmoticonRootResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("https://api.live.bilibili.com/liveact/shield_user")
+    suspend fun shieldLiveUser(
+        @retrofit2.http.Field("uid") uid: Long,
+        @retrofit2.http.Field("roomid") roomId: Long,
+        @retrofit2.http.Field("type") type: Int,
+        @retrofit2.http.Field("csrf") csrf: String,
+        @retrofit2.http.Field("csrf_token") csrfToken: String
+    ): SimpleApiResponse
+
+    @GET("https://api.live.bilibili.com/av/v1/SuperChat/getMessageList")
+    suspend fun getLiveSuperChatMessages(
+        @Query("room_id") roomId: Long
+    ): ResponseBody
 
 
     // ==================== 视频播放模块 ====================
@@ -846,31 +875,76 @@ interface SearchApi {
     @GET("x/web-interface/search/square")
     suspend fun getHotSearch(@Query("limit") limit: Int = 10): HotSearchResponse
 
+    @GET("https://s.search.bilibili.com/main/hotword")
+    suspend fun getTrendingList(
+        @Query("limit") limit: Int = 30
+    ): com.android.purebilibili.data.model.response.SearchTrendingResponse
+
+    @GET("https://app.bilibili.com/x/v2/search/recommend")
+    suspend fun getSearchRecommend(
+        @Query("build") build: Int = 8430300,
+        @Query("channel") channel: String = "master",
+        @Query("version") version: String = "8.43.0",
+        @Query("c_locale") cLocale: String = "zh_CN",
+        @Query("mobi_app") mobiApp: String = "android",
+        @Query("platform") platform: String = "android",
+        @Query("s_locale") sLocale: String = "zh_CN",
+        @Query("from") from: Int = 2
+    ): com.android.purebilibili.data.model.response.SearchRecommendResponse
+
     //  综合搜索 (不支持排序)
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/search/all/v2")
     suspend fun searchAll(@QueryMap params: Map<String, String>): SearchResponse
     
     //  [修复] 分类搜索 - 支持排序和时长筛选
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun search(@QueryMap params: Map<String, String>): SearchTypeResponse
     
     //  [新增] UP主搜索 - 专用解析
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchUp(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SearchUpResponse
     
     //  [新增] 番剧搜索 - search_type=media_bangumi
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchBangumi(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.BangumiSearchResponse
 
     //  [新增] 影视搜索 - search_type=media_ft
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchMediaFt(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.BangumiSearchResponse
     
     //  [新增] 直播搜索 - search_type=live_room
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchLive(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.LiveRoomSearchResponse
 
     //  [新增] 专栏搜索 - search_type=article
+    @Headers(
+        "Origin: https://search.bilibili.com",
+        "Referer: https://search.bilibili.com/"
+    )
     @GET("x/web-interface/wbi/search/type")
     suspend fun searchArticle(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SearchArticleResponse
     
@@ -879,7 +953,7 @@ interface SearchApi {
     suspend fun getSearchSuggest(
         @Query("term") term: String,
         @Query("main_ver") mainVer: String = "v1",
-        @Query("highlight") highlight: Int = 0
+        @Query("highlight") highlight: String = term
     ): SearchSuggestResponse
 }
 

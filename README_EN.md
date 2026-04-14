@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-13 · Synced to v7.8.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-04-14 · Synced to v7.8.1 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.8.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.8.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -388,7 +388,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-04-13 (v7.8.0). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-04-14 (v7.8.1). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -430,13 +430,13 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.8.0 · 2026-04-13)
+### Latest (v7.8.1 · 2026-04-14)
 
-- ▶️ **Playback recovery**: videos keep playback intent after network stalls, source reloads, and seeks into unloaded ranges, then resume automatically when loading completes.
-- 🔁 **Repeat-one fix**: single-video loop now syncs to the underlying player repeat mode, reducing end-state pauses.
-- 📺 **Bangumi parity**: the Bangumi home page now follows the PiliPlus-style feed with recent follows, schedule, and recommendations.
-- ✅ **Bangumi follow states**: supports Want / Watching / Watched / Unfollow from both detail and player content.
-- 📚 **Long Bangumi episode lists**: removes the 200-episode truncation and fixes range chips such as `251-300` not updating previews.
+- 🔴 **Live stack upgrades**: followed-live loading, room snapshots, danmaku history, super chat seeds, and live-room shielding are being filled in to improve live usage first.
+- 🎛️ **Live playback controls**: live stream requests now expose audio-only parameters, richer room APIs, and like-click counts for future control improvements.
+- 🔎 **Search landing refactor**: the search home now includes trending, discovery, suggestions, and a dedicated hot-search page backed by official endpoints.
+- ⚠️ **Search experience notice**: search is still being refactored step by step, so landing, trending, suggestions, and result transitions may feel unstable in some cases.
+- ⚡ **Direct default search**: the top-right search action can now submit the current default suggested keyword even when the text field is empty.
 
 ---
 
