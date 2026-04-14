@@ -538,7 +538,7 @@ fun BangumiPlayerScreen(
                                 detail = state.seasonDetail,
                                 currentEpisode = state.currentEpisode,
                                 onEpisodeClick = { viewModel.switchEpisode(it) },
-                                onFollowClick = { viewModel.toggleFollow() }
+                                onFollowStatusSelect = { viewModel.updateFollowStatus(it) }
                             )
                         }
                     }

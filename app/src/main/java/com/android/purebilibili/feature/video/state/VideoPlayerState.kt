@@ -40,6 +40,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackWakeMode
 import com.android.purebilibili.feature.video.playback.session.resolvePlaybackPauseDecision
 import com.android.purebilibili.feature.video.playback.session.resolvePlaybackResumeDecision
@@ -47,6 +48,7 @@ import com.android.purebilibili.feature.video.playback.session.PendingPlaybackUs
 import com.android.purebilibili.feature.video.playback.session.PlaybackUserActionTracker
 import com.android.purebilibili.feature.video.player.resolveHandleAudioFocusByPolicy
 import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
+import com.android.purebilibili.feature.video.viewmodel.resolvePlaybackCompletionRepeatMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -323,6 +325,7 @@ class VideoPlayerState(
     val diagnosticEvents: StateFlow<List<String>> = _diagnosticEvents.asStateFlow()
     val pendingUserAction: StateFlow<PendingPlaybackUserAction?> =
         PlaybackUserActionTracker.stateFor(player)
+    private var pendingResumeIntentAfterBuffering = false
     
     // 📱 竖屏全屏模式状态
     private val _isPortraitFullscreen = MutableStateFlow(false)
@@ -390,6 +393,9 @@ class VideoPlayerState(
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                pendingResumeIntentAfterBuffering = false
+            }
             PlaybackUserActionTracker.resolveIfResponded(
                 player = player,
                 playbackState = player.playbackState,
@@ -419,6 +425,35 @@ class VideoPlayerState(
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            if (
+                shouldRememberResumeIntentForBuffering(
+                    hasPendingResumeIntent = pendingResumeIntentAfterBuffering,
+                    isPlaying = player.isPlaying,
+                    playWhenReady = player.playWhenReady,
+                    playbackState = playbackState
+                )
+            ) {
+                pendingResumeIntentAfterBuffering = true
+            }
+            if (
+                shouldAutoResumeAfterBufferingRecovery(
+                    hasPendingResumeIntent = pendingResumeIntentAfterBuffering,
+                    isPlaying = player.isPlaying,
+                    playWhenReady = player.playWhenReady,
+                    playbackState = playbackState
+                )
+            ) {
+                pendingResumeIntentAfterBuffering = false
+                appendDiagnosticEvent("bufferingRecovery -> resumePlayback")
+                Logger.d(
+                    "VideoPlayerState",
+                    "USER_DBG buffering recovered with lost play intent, resuming: " +
+                        "state=$playbackState, pos=${player.currentPosition}"
+                )
+                player.play()
+            } else if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+                pendingResumeIntentAfterBuffering = false
+            }
             PlaybackUserActionTracker.resolveIfResponded(
                 player = player,
                 playbackState = playbackState,
@@ -441,6 +476,23 @@ class VideoPlayerState(
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (
+                shouldClearResumeIntentForPlayWhenReadyChange(
+                    playWhenReady = playWhenReady,
+                    reason = reason
+                )
+            ) {
+                pendingResumeIntentAfterBuffering = false
+            } else if (
+                shouldRememberResumeIntentForBuffering(
+                    hasPendingResumeIntent = pendingResumeIntentAfterBuffering,
+                    isPlaying = player.isPlaying,
+                    playWhenReady = playWhenReady,
+                    playbackState = player.playbackState
+                )
+            ) {
+                pendingResumeIntentAfterBuffering = true
+            }
             PlaybackUserActionTracker.resolveIfResponded(
                 player = player,
                 playbackState = player.playbackState,
@@ -829,6 +881,12 @@ fun rememberVideoPlayerState(
                     playWhenReady = !startPaused
                 }
         }
+    }
+    val playbackCompletionBehavior by SettingsManager
+        .getPlaybackCompletionBehavior(context)
+        .collectAsState(initial = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
+    LaunchedEffect(player, playbackCompletionBehavior) {
+        player.repeatMode = resolvePlaybackCompletionRepeatMode(playbackCompletionBehavior)
     }
 
     val sessionActivityPendingIntent = remember(context, bvid) {

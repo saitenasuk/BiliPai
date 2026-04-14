@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-13 · Synced to v7.7.2 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-04-13 · Synced to v7.8.0 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.7.2-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.8.0-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -388,7 +388,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-04-13 (v7.7.2). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-04-13 (v7.8.0). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -430,12 +430,13 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.7.2 · 2026-04-13)
+### Latest (v7.8.0 · 2026-04-13)
 
-- 🔧 **Dynamic is being rewritten**: the feed is being split into All / Uploads / Bangumi / Articles / UP tabs with direct Bangumi routing, but this area still has defects and instability, and some dynamic types may behave incorrectly.
-- 🎲 **Portrait feed randomization**: vertical swipe recommendations now mix in home-feed candidates first and filter near-duplicate content instead of chaining similar related videos.
-- 💬 **Sub-replies without hiding video**: secondary comment threads in phone video detail now prefer the space below the player instead of always taking over the whole screen.
-- 📍 **Comment fallback**: comment reads now fall back to REST when gRPC payloads miss location metadata, reducing incomplete comment rendering.
+- ▶️ **Playback recovery**: videos keep playback intent after network stalls, source reloads, and seeks into unloaded ranges, then resume automatically when loading completes.
+- 🔁 **Repeat-one fix**: single-video loop now syncs to the underlying player repeat mode, reducing end-state pauses.
+- 📺 **Bangumi parity**: the Bangumi home page now follows the PiliPlus-style feed with recent follows, schedule, and recommendations.
+- ✅ **Bangumi follow states**: supports Want / Watching / Watched / Unfollow from both detail and player content.
+- 📚 **Long Bangumi episode lists**: removes the 200-episode truncation and fixes range chips such as `251-300` not updating previews.
 
 ---
 

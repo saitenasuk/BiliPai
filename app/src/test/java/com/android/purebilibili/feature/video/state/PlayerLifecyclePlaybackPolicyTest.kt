@@ -88,6 +88,64 @@ class PlayerLifecyclePlaybackPolicyTest {
     }
 
     @Test
+    fun bufferingWithPlaybackIntentRemembersResumeIntent() {
+        assertTrue(
+            shouldRememberResumeIntentForBuffering(
+                hasPendingResumeIntent = false,
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+    }
+
+    @Test
+    fun pausedBufferingDoesNotCreateResumeIntent() {
+        assertFalse(
+            shouldRememberResumeIntentForBuffering(
+                hasPendingResumeIntent = false,
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+    }
+
+    @Test
+    fun userPauseClearsPendingResumeIntent() {
+        assertTrue(
+            shouldClearResumeIntentForPlayWhenReadyChange(
+                playWhenReady = false,
+                reason = Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
+            )
+        )
+    }
+
+    @Test
+    fun bufferingRecoveryAutoResumesOnlyWhenIntentWasLost() {
+        assertTrue(
+            shouldAutoResumeAfterBufferingRecovery(
+                hasPendingResumeIntent = true,
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
+    fun bufferingRecoveryDoesNotAutoResumeWhenPlayerStillHasIntent() {
+        assertFalse(
+            shouldAutoResumeAfterBufferingRecovery(
+                hasPendingResumeIntent = true,
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
     fun volumeShouldRestoreWhenLifecycleResumesAndPlayerWasMutedByPauseFlow() {
         assertTrue(
             shouldRestorePlayerVolumeOnResume(

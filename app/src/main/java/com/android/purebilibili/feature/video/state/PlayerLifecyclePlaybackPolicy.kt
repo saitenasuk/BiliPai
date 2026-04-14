@@ -28,6 +28,35 @@ internal fun shouldResumeAfterLifecyclePause(
     return wasPlaybackActive && !currentlyActive
 }
 
+internal fun shouldRememberResumeIntentForBuffering(
+    hasPendingResumeIntent: Boolean,
+    isPlaying: Boolean,
+    playWhenReady: Boolean,
+    playbackState: Int
+): Boolean {
+    return playbackState == Player.STATE_BUFFERING &&
+        (hasPendingResumeIntent || isPlaying || playWhenReady)
+}
+
+internal fun shouldClearResumeIntentForPlayWhenReadyChange(
+    playWhenReady: Boolean,
+    reason: Int
+): Boolean {
+    return !playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
+}
+
+internal fun shouldAutoResumeAfterBufferingRecovery(
+    hasPendingResumeIntent: Boolean,
+    isPlaying: Boolean,
+    playWhenReady: Boolean,
+    playbackState: Int
+): Boolean {
+    return hasPendingResumeIntent &&
+        !isPlaying &&
+        !playWhenReady &&
+        playbackState == Player.STATE_READY
+}
+
 internal fun shouldRestorePlayerVolumeOnResume(
     shouldResume: Boolean,
     currentVolume: Float,
