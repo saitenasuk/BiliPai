@@ -225,6 +225,15 @@ internal fun shouldResetSearchResultScroll(
     return showResults && searchSessionId > 0L
 }
 
+internal fun resolveSearchSubmitKeyword(
+    query: String,
+    suggestedKeyword: String
+): String {
+    val normalizedQuery = query.trim()
+    if (normalizedQuery.isNotBlank()) return normalizedQuery
+    return suggestedKeyword.trim()
+}
+
 @OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
@@ -233,6 +242,7 @@ fun SearchScreen(
     initialKeyword: String = "",
     onInitialKeywordConsumed: (String) -> Unit = {},
     onBack: () -> Unit,
+    onOpenTrending: () -> Unit,
     onVideoClick: (String, Long) -> Unit,
     onUpClick: (Long) -> Unit,  //  点击UP主跳转到空间
     onBangumiClick: (Long) -> Unit, //  点击番剧/影视跳转详情
@@ -910,16 +920,14 @@ fun SearchScreen(
                     }
                 }
             } else {
-                // 判断是否使用分栏布局 (平板横屏)
                 val useSplitLayout = shouldUseSearchSplitLayout(
                     widthDp = configuration.screenWidthDp
                 )
-
                 val enterOffsetPx = with(density) { searchHomeMotionSpec.enterOffsetDp.dp.roundToPx() }
                 val exitOffsetPx = with(density) { searchHomeMotionSpec.exitOffsetDp.dp.roundToPx() }
 
                 AnimatedContent(
-                targetState = showHotSectionHeader,
+                    targetState = showHotSectionHeader,
                     transitionSpec = {
                         val resolvedEnterOffset = if (searchHomeMotionSpec.enterFromTop) {
                             -enterOffsetPx
@@ -931,29 +939,27 @@ fun SearchScreen(
                         } else {
                             exitOffsetPx
                         }
-                        val targetEnter = fadeIn(
-                            animationSpec = emphasizedEnterTween(
-                                searchHomeMotionSpec.fadeInDurationMillis
-                            )
-                        ) + slideInVertically(
-                            animationSpec = emphasizedEnterTween(
-                                searchHomeMotionSpec.sizeTransformDurationMillis
-                            ),
-                            initialOffsetY = { resolvedEnterOffset }
-                        )
-                        val initialExit = fadeOut(
-                            animationSpec = emphasizedExitTween(
-                                searchHomeMotionSpec.fadeOutDurationMillis
-                            )
-                        ) + slideOutVertically(
-                            animationSpec = emphasizedExitTween(
-                                searchHomeMotionSpec.fadeOutDurationMillis
-                            ),
-                            targetOffsetY = { resolvedExitOffset }
-                        )
                         ContentTransform(
-                            targetContentEnter = targetEnter,
-                            initialContentExit = initialExit,
+                            targetContentEnter = fadeIn(
+                                animationSpec = emphasizedEnterTween(
+                                    searchHomeMotionSpec.fadeInDurationMillis
+                                )
+                            ) + slideInVertically(
+                                animationSpec = emphasizedEnterTween(
+                                    searchHomeMotionSpec.sizeTransformDurationMillis
+                                ),
+                                initialOffsetY = { resolvedEnterOffset }
+                            ),
+                            initialContentExit = fadeOut(
+                                animationSpec = emphasizedExitTween(
+                                    searchHomeMotionSpec.fadeOutDurationMillis
+                                )
+                            ) + slideOutVertically(
+                                animationSpec = emphasizedExitTween(
+                                    searchHomeMotionSpec.fadeOutDurationMillis
+                                ),
+                                targetOffsetY = { resolvedExitOffset }
+                            ),
                             sizeTransform = SizeTransform(
                                 clip = false,
                                 sizeAnimationSpec = { _, _ ->
@@ -965,113 +971,36 @@ fun SearchScreen(
                         )
                     },
                     label = "searchHomeContent"
-                ) { targetShowHotSection ->
-                    if (useSplitLayout && targetShowHotSection) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier)
-                        ) {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .weight(searchLayoutPolicy.leftPaneWeight)
-                                    .fillMaxHeight(),
-                                contentPadding = PaddingValues(
-                                    top = contentTopPadding + 16.dp,
-                                    bottom = resultBottomPadding,
-                                    start = searchLayoutPolicy.splitOuterPaddingDp.dp,
-                                    end = searchLayoutPolicy.splitInnerGapDp.dp
-                                ),
-                                verticalArrangement = Arrangement.spacedBy(24.dp)
-                            ) {
-                                item {
-                                    SearchHistorySection(
-                                        historyList = state.historyList,
-                                        onItemClick = {
-                                            viewModel.search(it)
-                                            keyboardController?.hide()
-                                        },
-                                        onClear = { viewModel.clearHistory() },
-                                        onDelete = { viewModel.deleteHistory(it) }
-                                    )
-                                }
+                ) {
+                    SearchLandingContent(
+                        historyListState = historyListState,
+                        useSplitLayout = useSplitLayout,
+                        layoutPolicy = searchLayoutPolicy,
+                        contentTopPadding = contentTopPadding,
+                        bottomPadding = resultBottomPadding,
+                        hotList = state.hotList,
+                        discoverTitle = state.discoverTitle,
+                        discoverList = state.discoverList,
+                        historyList = state.historyList,
+                        hotSearchEnabled = hotSearchEnabled,
+                        onToggleHotSearch = {
+                            scope.launch {
+                                SettingsManager.setSearchHotSectionEnabled(context, !hotSearchEnabled)
                             }
-
-                            LazyColumn(
-                                modifier = Modifier
-                                    .weight(searchLayoutPolicy.rightPaneWeight)
-                                    .fillMaxHeight(),
-                                contentPadding = PaddingValues(
-                                    top = contentTopPadding + 16.dp,
-                                    bottom = resultBottomPadding,
-                                    start = searchLayoutPolicy.splitInnerGapDp.dp,
-                                    end = searchLayoutPolicy.splitOuterPaddingDp.dp
-                                )
-                            ) {
-                                item {
-                                    SearchHotSection(
-                                        hotList = state.hotList,
-                                        hotSearchEnabled = hotSearchEnabled,
-                                        hotColumns = searchLayoutPolicy.hotSearchColumns,
-                                        onToggleHotSearch = {
-                                            scope.launch {
-                                                SettingsManager.setSearchHotSectionEnabled(context, !hotSearchEnabled)
-                                            }
-                                        },
-                                        onItemClick = {
-                                            viewModel.search(it)
-                                            keyboardController?.hide()
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .responsiveContentWidth()
-                                .then(if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier),
-                            state = historyListState,
-                            contentPadding = PaddingValues(
-                                top = contentTopPadding + 16.dp,
-                                bottom = resultBottomPadding,
-                                start = searchLayoutPolicy.resultHorizontalPaddingDp.dp,
-                                end = searchLayoutPolicy.resultHorizontalPaddingDp.dp
-                            )
-                        ) {
-                            if (targetShowHotSection) {
-                                item {
-                                    SearchHotSection(
-                                        hotList = state.hotList,
-                                        hotSearchEnabled = hotSearchEnabled,
-                                        hotColumns = searchLayoutPolicy.hotSearchColumns,
-                                        onToggleHotSearch = {
-                                            scope.launch {
-                                                SettingsManager.setSearchHotSectionEnabled(context, !hotSearchEnabled)
-                                            }
-                                        },
-                                        onItemClick = {
-                                            viewModel.search(it)
-                                            keyboardController?.hide()
-                                        }
-                                    )
-                                }
-                            }
-
-                            item {
-                                SearchHistorySection(
-                                    historyList = state.historyList,
-                                    onItemClick = {
-                                        viewModel.search(it)
-                                        keyboardController?.hide()
-                                    },
-                                    onClear = { viewModel.clearHistory() },
-                                    onDelete = { viewModel.deleteHistory(it) }
-                                )
-                            }
-                        }
-                    }
+                        },
+                        onRefreshHot = viewModel::refreshHotSearch,
+                        onOpenTrending = onOpenTrending,
+                        onRefreshDiscover = viewModel::refreshDiscover,
+                        onKeywordClick = {
+                            viewModel.search(it)
+                            keyboardController?.hide()
+                        },
+                        onClearHistory = viewModel::clearHistory,
+                        onDeleteHistory = viewModel::deleteHistory,
+                        modifier = Modifier.then(
+                            if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier
+                        )
+                    )
                 }
             }
 
@@ -1087,6 +1016,7 @@ fun SearchScreen(
                 onClearQuery = { viewModel.onQueryChange("") },
                 focusRequester = searchFocusRequester,  //  传递 focusRequester
                 placeholder = state.defaultSearchHint.ifBlank { "搜索视频、UP主..." },
+                suggestedKeyword = state.defaultSearchHint,
                 reducedMotionBudget = searchMotionBudget == SearchMotionBudget.REDUCED,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -1106,52 +1036,19 @@ fun SearchScreen(
             
             // ---  搜索建议下拉列表 ---
             if (state.suggestions.isNotEmpty() && state.query.isNotEmpty() && !state.showResults) {
-                Surface(
+                SearchSuggestionDropdown(
+                    suggestions = state.suggestions,
+                    onSuggestionClick = { suggestion ->
+                        viewModel.search(suggestion)
+                        keyboardController?.hide()
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = contentTopPadding + 4.dp)
+                        .padding(top = contentTopPadding + 6.dp)
                         .padding(horizontal = searchLayoutPolicy.resultHorizontalPaddingDp.dp)
                         .align(Alignment.TopCenter)
-                        .responsiveContentWidth(),
-                    shape = RoundedCornerShape(searchChromeSpec.suggestionContainerCornerRadiusDp.dp),
-                    shadowElevation = 8.dp,
-                    color = if (uiPreset == UiPreset.MD3) {
-                        MaterialTheme.colorScheme.surfaceContainer
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    }
-                ) {
-                    Column(
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    ) {
-                        state.suggestions.forEachIndexed { index, suggestion ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusable()
-                                    .clickable {
-                                        viewModel.search(suggestion)
-                                        keyboardController?.hide()
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    rememberAppSearchIcon(),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = suggestion,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 15.sp
-                                )
-                            }
-                        }
-                    }
-                }
+                        .responsiveContentWidth()
+                )
             }
         }
     }
@@ -1166,6 +1063,7 @@ fun SearchTopBar(
     onSearch: (String) -> Unit,
     onClearQuery: () -> Unit,
     placeholder: String = "搜索视频、UP主...",
+    suggestedKeyword: String = "",
     focusRequester: androidx.compose.ui.focus.FocusRequester = remember { androidx.compose.ui.focus.FocusRequester() },
     reducedMotionBudget: Boolean = false,
     modifier: Modifier = Modifier
@@ -1205,6 +1103,13 @@ fun SearchTopBar(
     )
     val backLabel = stringResource(R.string.common_back)
     val searchLabel = stringResource(R.string.common_search)
+    val resolvedSubmitKeyword = remember(query, suggestedKeyword) {
+        resolveSearchSubmitKeyword(
+            query = query,
+            suggestedKeyword = suggestedKeyword
+        )
+    }
+    val canSubmit = resolvedSubmitKeyword.isNotBlank()
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -1255,15 +1160,6 @@ fun SearchTopBar(
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        searchIcon,
-                        null,
-                        tint = searchIconColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
                     BasicTextField(
                         value = query,
                         onValueChange = onQueryChange,
@@ -1278,7 +1174,13 @@ fun SearchTopBar(
                         singleLine = true,
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                if (canSubmit) {
+                                    onSearch(resolvedSubmitKeyword)
+                                }
+                            }
+                        ),
                         decorationBox = { inner ->
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (query.isEmpty()) {
@@ -1296,45 +1198,49 @@ fun SearchTopBar(
                             }
                         }
                     )
-
-                    if (query.isNotEmpty()) {
-                        IconButton(
-                            onClick = onClearQuery,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                clearIcon,
-                                null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                if (chromeSpec.useFilledSearchAction) {
-                    FilledTonalButton(
-                        onClick = { onSearch(query) },
-                        enabled = query.isNotEmpty(),
-                        shape = RoundedCornerShape(chromeSpec.actionContainerCornerRadiusDp.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Text(searchLabel, fontSize = 15.sp)
-                    }
-                } else {
-                    TextButton(
-                        onClick = { onSearch(query) },
-                        enabled = query.isNotEmpty()
-                    ) {
-                        Text(
-                            searchLabel,
-                            color = if (query.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
-                            fontSize = 16.sp
+                IconButton(
+                    onClick = onClearQuery,
+                    enabled = query.isNotEmpty(),
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        clearIcon,
+                        contentDescription = stringResource(R.string.common_clear),
+                        tint = if (query.isNotEmpty()) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        }
+                    )
+                }
+
+                IconButton(
+                    onClick = { onSearch(resolvedSubmitKeyword) },
+                    enabled = canSubmit,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(chromeSpec.actionContainerCornerRadiusDp.dp))
+                        .background(
+                            if (canSubmit) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                            } else {
+                                Color.Transparent
+                            }
                         )
-                    }
+                ) {
+                    Icon(
+                        searchIcon,
+                        contentDescription = searchLabel,
+                        tint = if (canSubmit) {
+                            searchIconColor
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        }
+                    )
                 }
             }
         }

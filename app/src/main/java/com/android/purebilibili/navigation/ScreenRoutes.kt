@@ -3,6 +3,7 @@ package com.android.purebilibili.navigation
 sealed class ScreenRoutes(val route: String) {
     object Home : ScreenRoutes("home")
     object Search : ScreenRoutes("search")
+    object SearchTrending : ScreenRoutes("search_trending")
     object Settings : ScreenRoutes("settings")
     object Login : ScreenRoutes("login")
     object Profile : ScreenRoutes("profile")
