@@ -50,7 +50,7 @@ class VideoPlaybackUserSeekPolicyTest {
         seekPlayerFromUserAction(player, 12_345L)
 
         verify(exactly = 1) { player.playWhenReady = true }
-        verify(exactly = 2) { player.seekTo(12_345L) }
+        verify(exactly = 1) { player.seekTo(12_345L) }
         verify(exactly = 1) { player.play() }
     }
 
@@ -81,7 +81,7 @@ class VideoPlaybackUserSeekPolicyTest {
         )
 
         verify(exactly = 1) { player.playWhenReady = true }
-        verify(exactly = 2) { player.seekTo(12_345L) }
+        verify(exactly = 1) { player.seekTo(12_345L) }
         verify(exactly = 1) { player.play() }
     }
 }

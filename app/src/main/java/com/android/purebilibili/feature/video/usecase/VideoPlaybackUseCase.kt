@@ -108,6 +108,16 @@ data class PlaybackSelectionResult(
 
 internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = true
 
+internal fun applyPlaybackIntentAfterSourceChange(
+    player: Player,
+    playWhenReady: Boolean
+) {
+    player.playWhenReady = playWhenReady
+    if (playWhenReady) {
+        player.play()
+    }
+}
+
 // TODO: Re-enable local adaptive DASH playback after the generated MPD seek path
 // is validated on real devices and covered by a playback-level regression test.
 private const val LOCAL_ADAPTIVE_DASH_PLAYBACK_ENABLED = false
@@ -140,20 +150,9 @@ internal fun playPlayerFromUserAction(player: Player) {
     playPlayerForUserIntent(player, trackUserAction = true)
 }
 
-internal fun shouldRunCompatibilitySeekBeforeExplicitPlay(
-    playbackState: Int,
-    isPlaying: Boolean,
-    hasMediaItems: Boolean
-): Boolean {
-    return hasMediaItems &&
-        playbackState == Player.STATE_READY &&
-        !isPlaying
-}
-
 private fun playPlayerForUserIntent(
     player: Player,
-    trackUserAction: Boolean,
-    compatibilitySeekPositionMs: Long? = null
+    trackUserAction: Boolean
 ) {
     if (trackUserAction) {
         PlaybackUserActionTracker.recordAction(
@@ -170,14 +169,6 @@ private fun playPlayerForUserIntent(
     val hasMediaItems = player.mediaItemCount > 0
     if (shouldPreparePlayerBeforeExplicitPlay(player.playbackState, hasMediaItems)) {
         player.prepare()
-    }
-    if (shouldRunCompatibilitySeekBeforeExplicitPlay(
-            playbackState = player.playbackState,
-            isPlaying = player.isPlaying,
-            hasMediaItems = hasMediaItems
-        )
-    ) {
-        player.seekTo((compatibilitySeekPositionMs ?: player.currentPosition).coerceAtLeast(0L))
     }
     player.play()
     Logger.d(
@@ -216,8 +207,7 @@ internal fun seekPlayerFromUserAction(
     if (shouldResume) {
         playPlayerForUserIntent(
             player = player,
-            trackUserAction = false,
-            compatibilitySeekPositionMs = positionMs
+            trackUserAction = false
         )
     }
 }
@@ -610,7 +600,10 @@ class VideoPlaybackUseCase(
         if (shouldPreparePlayerOnLoad(playWhenReady)) {
             player.prepare()
         }
-        player.playWhenReady = playWhenReady
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = playWhenReady
+        )
     }
     
     /**
@@ -629,7 +622,10 @@ class VideoPlaybackUseCase(
         if (shouldPreparePlayerOnLoad(playWhenReady)) {
             player.prepare()
         }
-        player.playWhenReady = playWhenReady
+        applyPlaybackIntentAfterSourceChange(
+            player = player,
+            playWhenReady = playWhenReady
+        )
     }
     
     /**
