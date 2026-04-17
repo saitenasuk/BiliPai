@@ -2,11 +2,16 @@ package com.android.purebilibili.feature.space
 
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.SeasonArchiveItem
+import com.android.purebilibili.data.model.response.SeasonArchiveStat
 import com.android.purebilibili.data.model.response.SeasonItem
 import com.android.purebilibili.data.model.response.SeasonMeta
 import com.android.purebilibili.data.model.response.SeriesArchiveItem
+import com.android.purebilibili.data.model.response.SeriesArchiveStat
 import com.android.purebilibili.data.model.response.SeriesItem
 import com.android.purebilibili.data.model.response.SeriesMeta
+import com.android.purebilibili.data.model.response.SpaceAggregateCard
+import com.android.purebilibili.data.model.response.SpaceAggregateData
+import com.android.purebilibili.data.model.response.SpaceAggregateImages
 import com.android.purebilibili.data.model.response.SpaceTopArcData
 import com.android.purebilibili.data.model.response.SpaceUserInfo
 import com.android.purebilibili.data.model.response.SpaceVideoItem
@@ -198,6 +203,49 @@ class SpaceLoadPolicyTest {
         assertEquals(listOf(4L), updated.collectedFavoriteFolders.map { it.id })
         assertEquals("BVSEASON", updated.seasonArchives.getValue(1L).single().bvid)
         assertEquals("BVSERIES", updated.seriesArchives.getValue(2L).single().bvid)
+        assertEquals(
+            listOf("视频", "图文", "合集", "系列", "音频"),
+            updated.contributionTabs.map { it.title }
+        )
+    }
+
+    @Test
+    fun `mapSeasonArchiveToVideoItem preserves danmaku count`() {
+        val item = mapSeasonArchiveToVideoItem(
+            item = SeasonArchiveItem(
+                bvid = "BVSEASON",
+                title = "合集视频",
+                stat = SeasonArchiveStat(view = 100, danmaku = 23, reply = 7)
+            ),
+            mid = 42L
+        )
+
+        assertEquals(100, item.stat.view)
+        assertEquals(23, item.stat.danmaku)
+        assertEquals(7, item.stat.reply)
+    }
+
+    @Test
+    fun `mapSeriesArchiveToVideoItem preserves danmaku count`() {
+        val item = mapSeriesArchiveToVideoItem(
+            item = SeriesArchiveItem(
+                bvid = "BVSERIES",
+                title = "系列视频",
+                stat = SeriesArchiveStat(view = 200, danmaku = 34, reply = 8)
+            ),
+            mid = 42L
+        )
+
+        assertEquals(200, item.stat.view)
+        assertEquals(34, item.stat.danmaku)
+        assertEquals(8, item.stat.reply)
+    }
+
+    @Test
+    fun `space archive shared transition key uses non blank bvid`() {
+        assertEquals("BVSEASON", resolveSpaceArchiveSharedTransitionKey("BVSEASON"))
+        assertNull(resolveSpaceArchiveSharedTransitionKey(""))
+        assertNull(resolveSpaceArchiveSharedTransitionKey("   "))
     }
 
     @Test
@@ -272,8 +320,21 @@ class SpaceLoadPolicyTest {
                 totalAudios = 0,
                 articles = emptyList(),
                 totalArticles = 0,
+                homeFavoriteFolders = emptyList(),
+                homeFavoriteFolderCount = 0,
+                homeCoinVideos = emptyList(),
+                homeCoinVideoCount = 0,
+                homeLikeVideos = emptyList(),
+                homeLikeVideoCount = 0,
+                homeBangumiItems = emptyList(),
+                homeBangumiCount = 0,
+                homeComicItems = emptyList(),
+                homeComicCount = 0,
+                mainTabs = buildDefaultSpaceMainTabs(),
+                contributionTabs = buildDefaultSpaceContributionTabs(),
                 defaultMainTab = SpaceMainTab.CONTRIBUTION,
-                defaultSubTab = SpaceSubTab.VIDEO
+                defaultSubTab = SpaceSubTab.VIDEO,
+                defaultContributionTabId = buildDefaultSpaceContributionTabs().first().id
             ),
             selectedMainTab = SpaceMainTab.CONTRIBUTION,
             selectedSubTab = SpaceSubTab.VIDEO
@@ -282,6 +343,28 @@ class SpaceLoadPolicyTest {
         assertTrue(state.isLoadingMore)
         assertEquals(133, state.totalVideos)
         assertTrue(state.videos.isEmpty())
+    }
+
+    @Test
+    fun `resolveSpaceInitialSeedFromAggregate falls back to night header image`() {
+        val seed = resolveSpaceInitialSeedFromAggregate(
+            data = SpaceAggregateData(
+                card = SpaceAggregateCard(
+                    mid = "42",
+                    name = "UP",
+                    face = "https://i0.hdslb.com/bfs/face/demo.jpg"
+                ),
+                images = SpaceAggregateImages(
+                    imgUrl = "",
+                    nightImgUrl = "https://i0.hdslb.com/bfs/space/night-cover.jpg"
+                )
+            )
+        )
+
+        assertEquals(
+            "https://i0.hdslb.com/bfs/space/night-cover.jpg",
+            seed?.userInfo?.topPhoto
+        )
     }
 
     @Test

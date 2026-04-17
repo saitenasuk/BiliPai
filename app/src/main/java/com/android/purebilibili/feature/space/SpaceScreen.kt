@@ -66,7 +66,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -88,6 +92,7 @@ import com.android.purebilibili.core.ui.components.IOSSearchBar
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_COVER_ASPECT_RATIO
 import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.FollowBangumiItem
@@ -1171,8 +1176,11 @@ private fun SpaceContent(
                                 duration = FormatUtils.formatDuration(archive.duration),
                                 publishTime = FormatUtils.formatPublishTime(archive.pubdate),
                                 play = archive.stat.view,
-                                reply = archive.stat.reply,
-                                onClick = { onVideoClick(archive.bvid) }
+                                secondaryCount = archive.stat.danmaku,
+                                onClick = { onVideoClick(archive.bvid) },
+                                sharedTransitionKey = resolveSpaceArchiveSharedTransitionKey(archive.bvid),
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         }
                     }
@@ -1215,8 +1223,11 @@ private fun SpaceContent(
                                 duration = FormatUtils.formatDuration(archive.duration),
                                 publishTime = FormatUtils.formatPublishTime(archive.pubdate),
                                 play = archive.stat.view,
-                                reply = archive.stat.reply,
-                                onClick = { onVideoClick(archive.bvid) }
+                                secondaryCount = archive.stat.danmaku,
+                                onClick = { onVideoClick(archive.bvid) },
+                                sharedTransitionKey = resolveSpaceArchiveSharedTransitionKey(archive.bvid),
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         }
                     }
@@ -1464,6 +1475,11 @@ private fun SpaceHeader(
     val fans = relationStat?.follower?.toLong() ?: 0L
     val following = relationStat?.following?.toLong() ?: 0L
     val likes = upStat?.likes ?: 0L
+    val colorScheme = MaterialTheme.colorScheme
+    val followButtonColors = resolveSpaceFollowButtonColors(
+        isFollowed = userInfo.isFollowed,
+        colorScheme = colorScheme
+    )
 
     val heroHeight = 216.dp
     val avatarSize = 84.dp
@@ -1496,9 +1512,9 @@ private fun SpaceHeader(
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(
-                                    Color(0xFFF7F3ED),
-                                    Color(0xFFF6F0FB),
-                                    Color(0xFFFFFFFF)
+                                    colorScheme.surfaceVariant.copy(alpha = 0.86f),
+                                    colorScheme.secondaryContainer.copy(alpha = 0.56f),
+                                    colorScheme.surface
                                 )
                             )
                         )
@@ -1511,10 +1527,10 @@ private fun SpaceHeader(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.04f),
+                                colorScheme.surface.copy(alpha = 0.04f),
                                 Color.Transparent,
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
-                                MaterialTheme.colorScheme.surface
+                                colorScheme.surface.copy(alpha = 0.78f),
+                                colorScheme.surface
                             )
                         )
                     )
@@ -1650,16 +1666,8 @@ private fun SpaceHeader(
                                     .height(36.dp),
                                 shape = RoundedCornerShape(999.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (userInfo.isFollowed) {
-                                        Color(0xFFF2E7D5)
-                                    } else {
-                                        MaterialTheme.colorScheme.primary
-                                    },
-                                    contentColor = if (userInfo.isFollowed) {
-                                        Color(0xFF7A6440)
-                                    } else {
-                                        MaterialTheme.colorScheme.onPrimary
-                                    }
+                                    containerColor = followButtonColors.backgroundColor,
+                                    contentColor = followButtonColors.textColor
                                 ),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                             ) {
@@ -1717,8 +1725,8 @@ private fun SpaceHeader(
                 if (userInfo.liveRoom?.liveStatus == 1 && userInfo.liveRoom.url.isNotBlank()) {
                     SpaceBadgeChip(
                         text = "直播中",
-                        containerColor = Color(0xFFFFEEF3),
-                        contentColor = Color(0xFFFB4D7A),
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
                         onClick = {
                             onLiveClick(
                                 userInfo.liveRoom.url,
@@ -1768,6 +1776,10 @@ private fun SpaceMainTabRow(
     selectedTab: SpaceMainTab,
     onSelect: (SpaceMainTab) -> Unit
 ) {
+    val selectedColors = resolveSpaceSelectionChipColors(
+        isSelected = true,
+        colorScheme = MaterialTheme.colorScheme
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1791,7 +1803,7 @@ private fun SpaceMainTabRow(
                         text = tab.title,
                         fontSize = 18.sp,
                         fontWeight = if (tab.tab == selectedTab) FontWeight.Bold else FontWeight.Medium,
-                        color = if (tab.tab == selectedTab) Color(0xFF8A6B2E) else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (tab.tab == selectedTab) selectedColors.backgroundColor else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Box(
@@ -1800,7 +1812,7 @@ private fun SpaceMainTabRow(
                             .height(4.dp)
                             .clip(RoundedCornerShape(999.dp))
                             .background(
-                                if (tab.tab == selectedTab) Color(0xFF8A6B2E) else Color.Transparent
+                                if (tab.tab == selectedTab) selectedColors.backgroundColor else Color.Transparent
                             )
                     )
                 }
@@ -1819,6 +1831,7 @@ private fun SpaceContributionTabRow(
     selectedTabId: String,
     onSelect: (String) -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -1826,20 +1839,25 @@ private fun SpaceContributionTabRow(
     ) {
         items(tabs, key = { it.id }) { tab ->
             val isSelected = tab.id == selectedTabId
+            val chipColors = resolveSpaceSelectionChipColors(
+                isSelected = isSelected,
+                colorScheme = colorScheme,
+                unselectedAlpha = 0f
+            )
             if (isSelected) {
                 Surface(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
                         .clickable { onSelect(tab.id) },
                     shape = RoundedCornerShape(999.dp),
-                    color = Color(0xFFF8E4B7)
+                    color = chipColors.backgroundColor
                 ) {
                     Text(
                         text = tab.title,
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF7B6027)
+                        color = chipColors.textColor
                     )
                 }
             } else {
@@ -1850,7 +1868,7 @@ private fun SpaceContributionTabRow(
                         .padding(vertical = 10.dp),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = chipColors.textColor
                 )
             }
         }
@@ -1885,9 +1903,9 @@ private fun SpaceContributionVideoActions(
             shape = RoundedCornerShape(999.dp),
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
             colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = Color(0xFF8A6B2E)
+                contentColor = MaterialTheme.colorScheme.primary
             ),
-            border = BorderStroke(1.dp, Color(0xFFD9C49A))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Icon(
                 imageVector = Icons.Outlined.PlayCircleOutline,
@@ -2242,7 +2260,7 @@ private fun SpaceVideoListItemRow(
         duration = video.length,
         publishTime = FormatUtils.formatPublishTime(video.created),
         play = video.play.toLong(),
-        reply = video.comment.toLong(),
+        secondaryCount = video.comment.toLong(),
         onClick = onClick,
         sharedTransitionKey = video.bvid,
         sharedTransitionScope = sharedTransitionScope,
@@ -2258,12 +2276,22 @@ private fun SpaceArchiveListItemRow(
     duration: String,
     publishTime: String,
     play: Long,
-    reply: Long,
+    secondaryCount: Long,
     onClick: () -> Unit,
     sharedTransitionKey: String? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenWidthPx = remember(configuration.screenWidthDp, density) {
+        with(density) { configuration.screenWidthDp.dp.toPx() }
+    }
+    val screenHeightPx = remember(configuration.screenHeightDp, density) {
+        with(density) { configuration.screenHeightDp.dp.toPx() }
+    }
+    val densityValue = density.density
+    var coverBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val coverWidth = 160.dp
     val coverHeight = coverWidth / VIDEO_SHARED_COVER_ASPECT_RATIO
     val coverShape = RoundedCornerShape(12.dp)
@@ -2289,12 +2317,25 @@ private fun SpaceArchiveListItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .clickable { onClick() }
+            .clickable {
+                coverBounds?.let { bounds ->
+                    CardPositionManager.recordCardPosition(
+                        bounds = bounds,
+                        screenWidth = screenWidthPx,
+                        screenHeight = screenHeightPx,
+                        density = densityValue
+                    )
+                }
+                onClick()
+            }
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = coverModifier
+                .onGloballyPositioned { coordinates ->
+                    coverBounds = coordinates.boundsInRoot()
+                }
                 .width(coverWidth)
                 .height(coverHeight)
                 .clip(coverShape)
@@ -2439,7 +2480,7 @@ private fun SpaceArchiveListItemRow(
                         modifier = Modifier.size(15.dp)
                     )
                     Text(
-                        text = reply.toString(),
+                        text = FormatUtils.formatStat(secondaryCount),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2834,9 +2875,10 @@ private fun SpaceCollectionWithPreviewCard(
 
 @Composable
 private fun SpaceOfficialTag(text: String) {
+    val colors = resolveSpaceOfficialTagColors(MaterialTheme.colorScheme)
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = Color(0xFFF3EBDD)
+        color = colors.backgroundColor
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
@@ -2860,7 +2902,7 @@ private fun SpaceOfficialTag(text: String) {
                 text = text,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF6B5A3B)
+                color = colors.textColor
             )
         }
     }

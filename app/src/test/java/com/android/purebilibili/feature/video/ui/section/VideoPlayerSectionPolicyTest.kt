@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.section
 
+import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,12 +34,88 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun bottomGestureExclusion_includesExpandedProgressPreviewContainer() {
+        assertEquals(
+            186,
+            resolveVideoPlayerBottomGestureExclusionHeightDp(
+                controlBarBottomPaddingDp = 14,
+                progressSpacingDp = 10,
+                progressContainerHeightDp = 120,
+                controlRowHeightDp = 30,
+                extraBufferDp = 12
+            )
+        )
+    }
+
+    @Test
+    fun dragStart_ignoresProgressPreviewZoneAboveBottomControls() {
+        assertTrue(
+            shouldIgnoreVideoPlayerDragStart(
+                offsetY = 830f,
+                containerHeightPx = 1_000f,
+                edgeSafeZonePx = 48f,
+                bottomGestureExclusionPx = 186f
+            )
+        )
+    }
+
+    @Test
     fun gestureSeekDuration_usesFallbackWhenPlayerDurationIsUnset() {
         assertEquals(
             120_000L,
             resolveGestureSeekableDurationMs(
                 playbackDurationMs = 0L,
                 fallbackDurationMs = 120_000L
+            )
+        )
+    }
+
+    @Test
+    fun keepScreenAwake_onlyWhilePlaybackIsActiveOrStarting() {
+        assertTrue(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = true,
+                isPlaying = true,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertTrue(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = true,
+                isPlaying = false,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+        assertTrue(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = true,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
+    fun keepScreenAwake_allowsSleepBeforeStartPausedAndEnded() {
+        assertFalse(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = false,
+                isPlaying = false,
+                playbackState = Player.STATE_IDLE
+            )
+        )
+        assertFalse(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = false,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = true,
+                isPlaying = false,
+                playbackState = Player.STATE_ENDED
             )
         )
     }
@@ -565,7 +642,22 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = true,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
+            )
+        )
+    }
+
+    @Test
+    fun autoplayChromeAutoHide_staysOffWhileSeekScrubbing() {
+        assertFalse(
+            shouldAutoHidePlayerChromeOnPlaybackStart(
+                showControls = true,
+                hasAutoHiddenForCurrentVideo = false,
+                isPlaying = true,
+                isFirstFrameRendered = true,
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = true
             )
         )
     }
@@ -578,7 +670,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = true,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
             )
         )
         assertFalse(
@@ -587,7 +680,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = true,
                 isPlaying = true,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
             )
         )
         assertFalse(
@@ -596,7 +690,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = false,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
             )
         )
         assertFalse(
@@ -605,7 +700,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = true,
                 isFirstFrameRendered = false,
-                forceCoverDuringReturnAnimation = false
+                forceCoverDuringReturnAnimation = false,
+                isSeekScrubbing = false
             )
         )
         assertFalse(
@@ -614,7 +710,8 @@ class VideoPlayerSectionPolicyTest {
                 hasAutoHiddenForCurrentVideo = false,
                 isPlaying = true,
                 isFirstFrameRendered = true,
-                forceCoverDuringReturnAnimation = true
+                forceCoverDuringReturnAnimation = true,
+                isSeekScrubbing = false
             )
         )
     }

@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-16 · Synced to v7.8.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-04-17 · Synced to v7.9.1 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.8.3-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.9.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -388,7 +388,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-04-16 (v7.8.3). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-04-17 (v7.9.1). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -430,12 +430,12 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.8.3 · 2026-04-16)
+### Latest (v7.9.1 · 2026-04-17)
 
-- 🎬 **PiliPlus-aligned player controls**: the progress bar, drag preview, and seek preview path were rewritten so portrait and landscape now share the same seek / preview model.
-- 🖼️ **More reliable preview frames**: `videoshot` now handles second-based timelines, missing-index fallback, and stable sprite cropping with fewer mismatched thumbnails.
-- ▶️ **Seek recovery playback**: fast seek, double-tap seek, and drag seek now have an explicit playback recovery path plus a visible “resuming playback” state.
-- 🔎 **Faster search entry**: search now starts in a lighter startup mode, with delayed hot/discover loading, delayed autofocus, and reduced first-frame blur cost.
+- 🎞️ Fixed occasional aspect-ratio glitches and black bars when entering immersive portrait playback from tablet landscape.
+- ⏱️ Fixed the seek preview getting stuck after repeated progress-bar drags.
+- 🌙 Updated keep-screen-on behavior so the screen can sleep normally before playback starts, while paused, and after playback ends.
+- ✨ Added shared-element coverage for UP space season/series videos and improved theme adaptation for parts of the space UI.
 
 ---
 

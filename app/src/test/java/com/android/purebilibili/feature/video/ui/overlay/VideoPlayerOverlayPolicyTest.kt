@@ -794,4 +794,42 @@ class VideoPlayerOverlayPolicyTest {
 
         assertEquals(12_000L, resolved.current)
     }
+
+    @Test
+    fun inlineControlsAutoHide_staysOffWhileSeekScrubbing() {
+        assertFalse(
+            shouldAutoHideInlineControlsAfterDelay(
+                controlsVisible = true,
+                isPlaying = true,
+                isSeekScrubbing = true
+            )
+        )
+    }
+
+    @Test
+    fun inlineControlsAutoHide_allowsPlayingIdleControlsToHide() {
+        assertTrue(
+            shouldAutoHideInlineControlsAfterDelay(
+                controlsVisible = true,
+                isPlaying = true,
+                isSeekScrubbing = false
+            )
+        )
+    }
+
+    @Test
+    fun hiddenInlineControls_cancelActiveSeekScrub() {
+        assertTrue(
+            shouldCancelSeekScrubWhenControlsHidden(
+                controlsVisible = false,
+                isSeekScrubbing = true
+            )
+        )
+        assertFalse(
+            shouldCancelSeekScrubWhenControlsHidden(
+                controlsVisible = true,
+                isSeekScrubbing = true
+            )
+        )
+    }
 }

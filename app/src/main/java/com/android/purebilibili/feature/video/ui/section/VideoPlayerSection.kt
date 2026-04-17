@@ -392,7 +392,7 @@ fun VideoPlayerSection(
         resolveVideoPlayerBottomGestureExclusionHeightDp(
             controlBarBottomPaddingDp = bottomControlBarLayoutPolicy.bottomPaddingDp,
             progressSpacingDp = bottomControlBarLayoutPolicy.progressSpacingDp,
-            progressTouchHeightDp = videoProgressBarLayoutPolicy.touchContainerHeightDp,
+            progressContainerHeightDp = videoProgressBarLayoutPolicy.draggingContainerHeightDp,
             controlRowHeightDp = bottomControlBarLayoutPolicy.playButtonSizeDp
         )
     }
@@ -503,10 +503,27 @@ fun VideoPlayerSection(
     var observedPlaybackSpeed by remember(playerState.player) {
         mutableFloatStateOf(playerState.player.playbackParameters.speed)
     }
+    var keepVideoPlaybackAwake by remember(playerState.player) {
+        mutableStateOf(
+            shouldKeepVideoPlaybackAwake(
+                playWhenReady = playerState.player.playWhenReady,
+                isPlaying = playerState.player.isPlaying,
+                playbackState = playerState.player.playbackState
+            )
+        )
+    }
     DisposableEffect(playerState.player) {
+        fun updateKeepScreenAwake() {
+            keepVideoPlaybackAwake = shouldKeepVideoPlaybackAwake(
+                playWhenReady = playerState.player.playWhenReady,
+                isPlaying = playerState.player.isPlaying,
+                playbackState = playerState.player.playbackState
+            )
+        }
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
+                updateKeepScreenAwake()
                 val now = android.os.SystemClock.elapsedRealtime()
                 if (playbackState == Player.STATE_BUFFERING) {
                     if (bufferingStartedAtMs == 0L) {
@@ -538,11 +555,20 @@ fun VideoPlayerSection(
             override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
                 observedPlaybackSpeed = playbackParameters.speed
             }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updateKeepScreenAwake()
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                updateKeepScreenAwake()
+            }
         }
         playerState.player.addListener(listener)
         // 初始化状态
         isBuffering = playerState.player.playbackState == Player.STATE_BUFFERING
         observedPlaybackSpeed = playerState.player.playbackParameters.speed
+        updateKeepScreenAwake()
         onDispose {
             playerState.player.removeListener(listener)
         }
@@ -2020,7 +2046,7 @@ fun VideoPlayerSection(
                             setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                             useController = false
-                            keepScreenOn = true
+                            keepScreenOn = keepVideoPlaybackAwake
                             resizeMode = viewportAspectRatio.playerResizeMode
                             visibility = if (shouldShowInlinePlayerView(
                                     isPortraitFullscreen = isPortraitFullscreen,
@@ -2043,6 +2069,7 @@ fun VideoPlayerSection(
                             )
                         )
                         playerView.resizeMode = viewportAspectRatio.playerResizeMode
+                        playerView.keepScreenOn = keepVideoPlaybackAwake
                         playerView.visibility = if (shouldShowInlinePlayerView(
                                 isPortraitFullscreen = isPortraitFullscreen,
                                 forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
@@ -2228,7 +2255,8 @@ fun VideoPlayerSection(
         hasAutoHiddenControlsForCurrentVideo,
         isFirstFrameRendered,
         forceCoverDuringReturnAnimation,
-        playerState.player.isPlaying
+        playerState.player.isPlaying,
+        sharedSeekSession.isSliderMoving
     ) {
         if (
             shouldAutoHidePlayerChromeOnPlaybackStart(
@@ -2236,7 +2264,8 @@ fun VideoPlayerSection(
                 hasAutoHiddenForCurrentVideo = hasAutoHiddenControlsForCurrentVideo,
                 isPlaying = playerState.player.isPlaying,
                 isFirstFrameRendered = isFirstFrameRendered,
-                forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
+                forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
+                isSeekScrubbing = sharedSeekSession.isSliderMoving
             )
         ) {
             showControls = false

@@ -246,6 +246,21 @@ internal fun shouldShowPersistentBottomProgressBar(
     }
 }
 
+internal fun shouldAutoHideInlineControlsAfterDelay(
+    controlsVisible: Boolean,
+    isPlaying: Boolean,
+    isSeekScrubbing: Boolean
+): Boolean {
+    return controlsVisible && isPlaying && !isSeekScrubbing
+}
+
+internal fun shouldCancelSeekScrubWhenControlsHidden(
+    controlsVisible: Boolean,
+    isSeekScrubbing: Boolean
+): Boolean {
+    return !controlsVisible && isSeekScrubbing
+}
+
 internal fun resolveDisplayedOnlineCount(
     onlineCount: String,
     showOnlineCount: Boolean
@@ -831,12 +846,35 @@ fun VideoPlayerOverlay(
         else viewPoints.lastOrNull { progressState.current >= it.fromMs }?.content
     }
 
-    LaunchedEffect(isVisible, isPlaying) {
-        if (isVisible && isPlaying) {
+    LaunchedEffect(isVisible, isPlaying, isSeekScrubbing) {
+        if (
+            shouldAutoHideInlineControlsAfterDelay(
+                controlsVisible = isVisible,
+                isPlaying = isPlaying,
+                isSeekScrubbing = isSeekScrubbing
+            )
+        ) {
             delay(4000)
-            if (isVisible) {
+            if (
+                shouldAutoHideInlineControlsAfterDelay(
+                    controlsVisible = isVisible,
+                    isPlaying = isPlaying,
+                    isSeekScrubbing = isSeekScrubbing
+                )
+            ) {
                 onToggleVisible()
             }
+        }
+    }
+
+    LaunchedEffect(isVisible, isSeekScrubbing) {
+        if (
+            shouldCancelSeekScrubWhenControlsHidden(
+                controlsVisible = isVisible,
+                isSeekScrubbing = isSeekScrubbing
+            )
+        ) {
+            onSeekDragCancel()
         }
     }
     

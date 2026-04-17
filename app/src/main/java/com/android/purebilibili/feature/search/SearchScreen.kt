@@ -47,6 +47,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -220,9 +221,10 @@ internal fun shouldApplyInitialSearchKeyword(
 
 internal fun shouldResetSearchResultScroll(
     searchSessionId: Long,
-    showResults: Boolean
+    showResults: Boolean,
+    lastResetSessionId: Long
 ): Boolean {
-    return showResults && searchSessionId > 0L
+    return showResults && searchSessionId > 0L && searchSessionId != lastResetSessionId
 }
 
 internal fun resolveSearchSubmitKeyword(
@@ -274,15 +276,26 @@ fun SearchScreen(
     val resultStateKey = remember(state.searchSessionId, state.searchType) {
         state.searchSessionId to state.searchType
     }
-    val resultGridState = remember(resultStateKey) { LazyGridState() }
-    val resultListState = remember(resultStateKey) { LazyListState() }
+    val resultGridState = rememberSaveable(resultStateKey, saver = LazyGridState.Saver) {
+        LazyGridState()
+    }
+    val resultListState = rememberSaveable(resultStateKey, saver = LazyListState.Saver) {
+        LazyListState()
+    }
+    var lastResetSearchSessionId by rememberSaveable { mutableLongStateOf(0L) }
 
     LaunchedEffect(resultStateKey, state.showResults) {
-        if (!shouldResetSearchResultScroll(searchSessionId = state.searchSessionId, showResults = state.showResults)) {
+        if (!shouldResetSearchResultScroll(
+                searchSessionId = state.searchSessionId,
+                showResults = state.showResults,
+                lastResetSessionId = lastResetSearchSessionId
+            )
+        ) {
             return@LaunchedEffect
         }
         resultListState.scrollToItem(0)
         resultGridState.scrollToItem(0)
+        lastResetSearchSessionId = state.searchSessionId
     }
 
     // ✨ Haze State

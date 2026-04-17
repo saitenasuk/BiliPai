@@ -45,17 +45,27 @@ internal fun resolveGestureSeekableDurationMs(
     }
 }
 
+internal fun shouldKeepVideoPlaybackAwake(
+    playWhenReady: Boolean,
+    isPlaying: Boolean,
+    playbackState: Int
+): Boolean {
+    if (!playWhenReady) return false
+    if (playbackState == Player.STATE_ENDED || playbackState == Player.STATE_IDLE) return false
+    return isPlaying || playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_READY
+}
+
 internal fun resolveVideoPlayerBottomGestureExclusionHeightDp(
     controlBarBottomPaddingDp: Int,
     progressSpacingDp: Int,
-    progressTouchHeightDp: Int,
+    progressContainerHeightDp: Int,
     controlRowHeightDp: Int,
     extraBufferDp: Int = PLAYER_DRAG_GESTURE_BOTTOM_EXCLUSION_BUFFER_DP
 ): Int {
     return (
         controlBarBottomPaddingDp +
             progressSpacingDp +
-            progressTouchHeightDp +
+            progressContainerHeightDp +
             controlRowHeightDp +
             extraBufferDp
         ).coerceAtLeast(0)
@@ -702,13 +712,15 @@ internal fun shouldAutoHidePlayerChromeOnPlaybackStart(
     hasAutoHiddenForCurrentVideo: Boolean,
     isPlaying: Boolean,
     isFirstFrameRendered: Boolean,
-    forceCoverDuringReturnAnimation: Boolean
+    forceCoverDuringReturnAnimation: Boolean,
+    isSeekScrubbing: Boolean
 ): Boolean {
     return showControls &&
         !hasAutoHiddenForCurrentVideo &&
         isPlaying &&
         isFirstFrameRendered &&
-        !forceCoverDuringReturnAnimation
+        !forceCoverDuringReturnAnimation &&
+        !isSeekScrubbing
 }
 
 internal fun shouldRebindPlayerSurfaceOnForeground(

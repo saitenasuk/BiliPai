@@ -146,7 +146,7 @@ fun CommonListScreen(
     globalHazeState: HazeState? = null // [新增] 接收全局 HazeState
 ) {
     val state by viewModel.uiState.collectAsState()
-    val gridState = rememberLazyGridState()
+    val primaryGridState = rememberLazyGridState()
     
     // 📱 响应式布局参数
     // Fix: 手机端(Compact)使用较小的最小宽度以保证2列显示 (360dp / 170dp = 2.1 -> 2列)
@@ -196,32 +196,6 @@ fun CommonListScreen(
         }
     }
     
-    // 收藏分页状态
-    val isLoadingMoreFav by favoriteViewModel?.isLoadingMoreState?.collectAsState() 
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    val hasMoreFav by favoriteViewModel?.hasMoreState?.collectAsState() 
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    
-    //  历史记录分页状态
-    val isLoadingMoreHis by historyViewModel?.isLoadingMoreState?.collectAsState() 
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    val hasMoreHis by historyViewModel?.hasMoreState?.collectAsState() 
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    val isLoadingMoreSeasonDetail by seasonSeriesDetailViewModel?.isLoadingMoreState?.collectAsState()
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    val hasMoreSeasonDetail by seasonSeriesDetailViewModel?.hasMoreState?.collectAsState()
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    
-    //  使用 derivedStateOf 来高效检测滚动位置
-    val shouldLoadMore = androidx.compose.runtime.remember {
-        androidx.compose.runtime.derivedStateOf {
-            val layoutInfo = gridState.layoutInfo
-            val totalItems = layoutInfo.totalItemsCount
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            totalItems > 0 && lastVisibleItem >= totalItems - 4  // 提前4个item开始加载
-        }
-    }
-    
     // [Feature] BottomBar Scroll Hiding for CommonListScreen (History/Favorite)
     val setBottomBarVisible = com.android.purebilibili.core.ui.LocalSetBottomBarVisible.current
     
@@ -229,9 +203,9 @@ fun CommonListScreen(
     var lastFirstVisibleItem by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var lastScrollOffset by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     
-    LaunchedEffect(gridState) {
+    LaunchedEffect(primaryGridState) {
         snapshotFlow { 
-            Pair(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset) 
+            Pair(primaryGridState.firstVisibleItemIndex, primaryGridState.firstVisibleItemScrollOffset) 
         }
         .distinctUntilChanged()
         .collect { (firstVisibleItem, scrollOffset) ->
@@ -299,17 +273,6 @@ fun CommonListScreen(
         hasHistoryViewModel = historyViewModel != null,
         hasSeasonSeriesDetailViewModel = seasonSeriesDetailViewModel != null
     )
-    val paginationSnapshot = resolveCommonListPaginationSnapshot(
-        owner = loadMoreOwner,
-        favoriteHasMore = hasMoreFav,
-        favoriteIsLoadingMore = isLoadingMoreFav,
-        historyHasMore = hasMoreHis,
-        historyIsLoadingMore = isLoadingMoreHis,
-        seasonDetailHasMore = hasMoreSeasonDetail,
-        seasonDetailIsLoadingMore = isLoadingMoreSeasonDetail
-    )
-    val isLoadingMore = paginationSnapshot.isLoadingMore
-    val hasMore = paginationSnapshot.hasMore
     val favoriteContentMode = resolveFavoriteContentMode(
         isFavoritePage = favoriteViewModel != null && !isSubscribedBrowse,
         folderCount = foldersState.size
@@ -349,18 +312,6 @@ fun CommonListScreen(
         }
     }
 
-    //  滚动到底部时加载更多
-    LaunchedEffect(shouldLoadMore.value, hasMore, isLoadingMore, loadMoreOwner) {
-        if (shouldLoadMore.value && hasMore && !isLoadingMore) {
-            when (loadMoreOwner) {
-                CommonListLoadMoreOwner.FAVORITE -> favoriteViewModel?.loadMore()
-                CommonListLoadMoreOwner.HISTORY -> historyViewModel?.loadMore()
-                CommonListLoadMoreOwner.SEASON_SERIES_DETAIL -> seasonSeriesDetailViewModel?.loadMore()
-                CommonListLoadMoreOwner.NONE -> Unit
-            }
-        }
-    }
-    
     // [新增] Pager State (仅当有多个文件夹时使用)
     // 尽管 compose 会自动处理 rememberKey，但这里用 foldersState.size 作为 key 确保变化时重置
     val pagerState = rememberPagerState(initialPage = 0) {
@@ -569,7 +520,8 @@ fun CommonListScreen(
                                 { video -> favoriteVm.removeVideo(video) }
                             } else {
                                 null
-                            }
+                            },
+                            gridState = primaryGridState
                         )
                     }
 
@@ -638,7 +590,8 @@ fun CommonListScreen(
                                     }
                                 }
                             }
-                        } else null
+                        } else null,
+                        gridState = primaryGridState
                     )
                 }
             }
@@ -919,8 +872,10 @@ private fun CommonListContent(
     resolveHistoryItem: ((com.android.purebilibili.data.model.response.VideoItem) -> HistoryItem?)? = null,
     onHistoryLongDelete: ((String) -> Unit)? = null,
     onHistoryDissolveComplete: ((String) -> Unit)? = null,
-    onHistoryToggleSelect: ((String) -> Unit)? = null
+    onHistoryToggleSelect: ((String) -> Unit)? = null,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState? = null
 ) {
+    val resolvedGridState = gridState ?: rememberLazyGridState()
     if (isLoading && items.isEmpty()) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
@@ -960,12 +915,10 @@ private fun CommonListContent(
                 Text("没有找到相关视频", color = Color.Gray)
              }
         } else {
-            val gridState = rememberLazyGridState()
-            
             // 自动加载更多
-            val shouldLoadMore = androidx.compose.runtime.remember {
+            val shouldLoadMore = androidx.compose.runtime.remember(resolvedGridState) {
                 androidx.compose.runtime.derivedStateOf {
-                    val layoutInfo = gridState.layoutInfo
+                    val layoutInfo = resolvedGridState.layoutInfo
                     val total = layoutInfo.totalItemsCount
                     val last = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
                     total > 0 && last >= total - 4
@@ -977,7 +930,7 @@ private fun CommonListContent(
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
-                state = gridState,
+                state = resolvedGridState,
                 contentPadding = PaddingValues(
                     start = spacing,
                     end = spacing,

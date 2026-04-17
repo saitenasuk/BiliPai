@@ -145,6 +145,32 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
+    fun portraitViewportSize_canFillContainerForImmersivePlayback() {
+        val layout = resolvePortraitVideoViewportSize(
+            containerWidth = 1200,
+            containerHeight = 800,
+            currentVideoAspect = 16f / 9f,
+            fillContainer = true
+        )
+
+        assertEquals(1200, layout.width)
+        assertEquals(800, layout.height)
+    }
+
+    @Test
+    fun portraitViewportSize_fitModeKeepsAspectInsideContainer() {
+        val layout = resolvePortraitVideoViewportSize(
+            containerWidth = 1200,
+            containerHeight = 800,
+            currentVideoAspect = 16f / 9f,
+            fillContainer = false
+        )
+
+        assertEquals(1200, layout.width)
+        assertEquals(675, layout.height)
+    }
+
+    @Test
     fun sharedPlayerEntry_reusesExistingFrameWhenSharedPlayerAlreadyHasVideoSize() {
         assertEquals(
             0,

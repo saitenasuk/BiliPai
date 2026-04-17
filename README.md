@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <sub>最后更新：2026-04-17 · 文档已同步至 v7.9.0（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
+  <sub>最后更新：2026-04-17 · 文档已同步至 v7.9.1（以 <a href="CHANGELOG.md">CHANGELOG</a> 与源码为准）</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.9.0-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.9.1-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -527,7 +527,7 @@ app/src/main/java/com/android/purebilibili
 ## 🗺️ 路线图
 
 > [!TIP]
-> 路线图最后同步于 2026-04-17（v7.9.0）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
+> 路线图最后同步于 2026-04-17（v7.9.1）。功能以最新 Release、`CHANGELOG.md` 与主分支代码为准。
 
 ### ✅ 已完成功能
 
@@ -572,12 +572,12 @@ app/src/main/java/com/android/purebilibili
 
 查看完整更新记录：[CHANGELOG.md](CHANGELOG.md)
 
-### 最近更新 (v7.9.0 · 2026-04-17)
+### 最近更新 (v7.9.1 · 2026-04-17)
 
-- 🫧 **空间页继续打磨**：顶部布局、头像区和关注按钮位置继续修正，毛玻璃与滚动内容保持稳定联动。
-- 💬 **普通视频弹幕增强**：补齐会员渐变彩色、自发弹幕与重复计数字段传递，发送面板新增关注弹幕开关。
-- 📦 **离线缓存更稳**：自定义下载目录场景下补强离线缓存列表的可播放判断和路径容错，降低进入列表时的异常退出风险。
-- 🧹 **重复弹幕显示收敛**：重复弹幕保留普通合并样式，不再额外生成居中的黄色特效弹幕。
+- 🎞️ 修复平板横屏进入竖屏沉浸播放时画面比例偶发异常、留黑边的问题。
+- ⏱️ 修复进度条反复拖动时预览图偶发卡住的问题。
+- 🌙 调整视频页常亮策略，未开始播放、暂停和播放结束后允许自动息屏。
+- ✨ 补齐 UP 主空间合集/系列视频共享元素过渡，并完善部分深浅色主题适配。
 
 ### 历史版本
 
