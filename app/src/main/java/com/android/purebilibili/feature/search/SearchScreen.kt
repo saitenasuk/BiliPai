@@ -1,18 +1,10 @@
 // 文件路径: feature/search/SearchScreen.kt
 package com.android.purebilibili.feature.search
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import androidx.compose.animation.core.animateDpAsState
@@ -70,9 +62,6 @@ import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.ui.LoadingAnimation
-import com.android.purebilibili.core.ui.motion.continuityTween
-import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
-import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppChevronDownIcon
@@ -317,6 +306,7 @@ fun SearchScreen(
     }
     val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsState(initial = true)
     val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsState(initial = true)
+    val discoverSectionEnabled by SettingsManager.getSearchDiscoverSectionEnabled(context).collectAsState(initial = true)
     val liquidGlassEnabled by SettingsManager.getLiquidGlassEnabled(context).collectAsState(initial = true)
     val headerBlurEnabled by SettingsManager.getHeaderBlurEnabled(context).collectAsState(initial = true)
     val bottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(context).collectAsState(initial = true)
@@ -384,19 +374,6 @@ fun SearchScreen(
         shouldForceLowBudgetSearchHeaderBlur(
             isSearching = state.isSearching,
             isScrollingResults = isSearchResultsScrolling
-        )
-    }
-    val showHotSectionHeader by remember(state.hotList, hotSearchEnabled) {
-        derivedStateOf {
-            shouldShowSearchHotHeader(
-                hotItemCount = state.hotList.size,
-                hotSearchEnabled = hotSearchEnabled
-            )
-        }
-    }
-    val searchHomeMotionSpec = remember(effectiveSearchMotionBudget) {
-        resolveSearchHomeContentMotionSpec(
-            reducedMotion = effectiveSearchMotionBudget == SearchMotionBudget.REDUCED
         )
     }
     val emptyStateCopy = remember(state.emptyStateReason, state.searchType) {
@@ -960,85 +937,44 @@ fun SearchScreen(
                 val useSplitLayout = shouldUseSearchSplitLayout(
                     widthDp = configuration.screenWidthDp
                 )
-                val enterOffsetPx = with(density) { searchHomeMotionSpec.enterOffsetDp.dp.roundToPx() }
-                val exitOffsetPx = with(density) { searchHomeMotionSpec.exitOffsetDp.dp.roundToPx() }
-
-                AnimatedContent(
-                    targetState = showHotSectionHeader,
-                    transitionSpec = {
-                        val resolvedEnterOffset = if (searchHomeMotionSpec.enterFromTop) {
-                            -enterOffsetPx
-                        } else {
-                            enterOffsetPx
+                SearchLandingContent(
+                    historyListState = historyListState,
+                    useSplitLayout = useSplitLayout,
+                    layoutPolicy = searchLayoutPolicy,
+                    contentTopPadding = contentTopPadding,
+                    bottomPadding = resultBottomPadding,
+                    hotList = state.hotList,
+                    discoverTitle = state.discoverTitle,
+                    discoverList = state.discoverList,
+                    historyList = state.historyList,
+                    hotSearchEnabled = hotSearchEnabled,
+                    discoverSectionEnabled = discoverSectionEnabled,
+                    onToggleHotSearch = {
+                        scope.launch {
+                            SettingsManager.setSearchHotSectionEnabled(context, !hotSearchEnabled)
                         }
-                        val resolvedExitOffset = if (searchHomeMotionSpec.exitTowardTop) {
-                            -exitOffsetPx
-                        } else {
-                            exitOffsetPx
-                        }
-                        ContentTransform(
-                            targetContentEnter = fadeIn(
-                                animationSpec = emphasizedEnterTween(
-                                    searchHomeMotionSpec.fadeInDurationMillis
-                                )
-                            ) + slideInVertically(
-                                animationSpec = emphasizedEnterTween(
-                                    searchHomeMotionSpec.sizeTransformDurationMillis
-                                ),
-                                initialOffsetY = { resolvedEnterOffset }
-                            ),
-                            initialContentExit = fadeOut(
-                                animationSpec = emphasizedExitTween(
-                                    searchHomeMotionSpec.fadeOutDurationMillis
-                                )
-                            ) + slideOutVertically(
-                                animationSpec = emphasizedExitTween(
-                                    searchHomeMotionSpec.fadeOutDurationMillis
-                                ),
-                                targetOffsetY = { resolvedExitOffset }
-                            ),
-                            sizeTransform = SizeTransform(
-                                clip = false,
-                                sizeAnimationSpec = { _, _ ->
-                                    continuityTween(
-                                        searchHomeMotionSpec.sizeTransformDurationMillis
-                                    )
-                                }
-                            )
-                        )
                     },
-                    label = "searchHomeContent"
-                ) {
-                    SearchLandingContent(
-                        historyListState = historyListState,
-                        useSplitLayout = useSplitLayout,
-                        layoutPolicy = searchLayoutPolicy,
-                        contentTopPadding = contentTopPadding,
-                        bottomPadding = resultBottomPadding,
-                        hotList = state.hotList,
-                        discoverTitle = state.discoverTitle,
-                        discoverList = state.discoverList,
-                        historyList = state.historyList,
-                        hotSearchEnabled = hotSearchEnabled,
-                        onToggleHotSearch = {
-                            scope.launch {
-                                SettingsManager.setSearchHotSectionEnabled(context, !hotSearchEnabled)
-                            }
-                        },
-                        onRefreshHot = viewModel::refreshHotSearch,
-                        onOpenTrending = onOpenTrending,
-                        onRefreshDiscover = viewModel::refreshDiscover,
-                        onKeywordClick = {
-                            viewModel.search(it)
-                            keyboardController?.hide()
-                        },
-                        onClearHistory = viewModel::clearHistory,
-                        onDeleteHistory = viewModel::deleteHistory,
-                        modifier = Modifier.then(
-                            if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier
-                        )
+                    onToggleDiscoverSection = {
+                        scope.launch {
+                            SettingsManager.setSearchDiscoverSectionEnabled(
+                                context,
+                                !discoverSectionEnabled
+                            )
+                        }
+                    },
+                    onRefreshHot = viewModel::refreshHotSearch,
+                    onOpenTrending = onOpenTrending,
+                    onRefreshDiscover = viewModel::refreshDiscover,
+                    onKeywordClick = {
+                        viewModel.search(it)
+                        keyboardController?.hide()
+                    },
+                    onClearHistory = viewModel::clearHistory,
+                    onDeleteHistory = viewModel::deleteHistory,
+                    modifier = Modifier.then(
+                        if (searchHazeEnabled) Modifier.hazeSource(state = hazeState) else Modifier
                     )
-                }
+                )
             }
 
             // ---  顶部搜索栏 (常驻顶部) ---

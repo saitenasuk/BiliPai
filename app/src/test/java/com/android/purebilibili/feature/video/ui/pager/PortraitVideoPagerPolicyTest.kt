@@ -5,6 +5,7 @@ import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.ViewInfo
 import androidx.media3.common.Player
+import androidx.media3.ui.AspectRatioFrameLayout
 import com.android.purebilibili.feature.video.viewmodel.PlayerUiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -168,6 +169,19 @@ class PortraitVideoPagerPolicyTest {
 
         assertEquals(1200, layout.width)
         assertEquals(675, layout.height)
+    }
+
+    @Test
+    fun portraitPager_defaultViewportPolicy_doesNotForceFillContainer() {
+        assertFalse(resolvePortraitPagerFillContainer())
+    }
+
+    @Test
+    fun portraitPager_defaultResizeMode_prefersFit() {
+        assertEquals(
+            AspectRatioFrameLayout.RESIZE_MODE_FIT,
+            resolvePortraitPagerResizeMode()
+        )
     }
 
     @Test

@@ -206,4 +206,60 @@ class PlaybackSeekControllerTest {
             )
         )
     }
+
+    @Test
+    fun pendingSeekRecovery_doesNotResumeWhenSeekStartedFromPausedState() {
+        val state = PlaybackSeekSessionState(
+            playbackPositionMs = 10_000L,
+            sliderPositionMs = 24_000L,
+            isSliderMoving = false,
+            pendingSeekPositionMs = 24_000L,
+            shouldResumePlayback = false
+        )
+
+        assertFalse(
+            shouldAttemptPlaybackRecoveryAfterSeek(
+                state = state,
+                playWhenReady = false,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldShowPlaybackRecoveryUiAfterSeek(
+                state = state,
+                playWhenReady = false,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
+    fun pendingSeekRecovery_stopsAfterUserPausesBeforeRecoveryFinishes() {
+        val state = PlaybackSeekSessionState(
+            playbackPositionMs = 10_000L,
+            sliderPositionMs = 24_000L,
+            isSliderMoving = false,
+            pendingSeekPositionMs = 24_000L,
+            shouldResumePlayback = true
+        )
+
+        assertFalse(
+            shouldAttemptPlaybackRecoveryAfterSeek(
+                state = state,
+                playWhenReady = false,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+        assertFalse(
+            shouldShowPlaybackRecoveryUiAfterSeek(
+                state = state,
+                playWhenReady = false,
+                isPlaying = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
 }

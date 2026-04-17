@@ -90,6 +90,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.network.NetworkModule
@@ -1407,7 +1408,7 @@ private fun VideoPageItem(
             PortraitVideoViewportContainer(
                 currentVideoAspect = currentVideoAspect,
                 modifier = Modifier.fillMaxSize(),
-                fillContainer = true
+                fillContainer = resolvePortraitPagerFillContainer()
             ) {
                 key(currentPlayingBvid, bvid) {
                     Box(
@@ -1427,7 +1428,7 @@ private fun VideoPageItem(
                                     player = exoPlayer
                                     useController = false
                                     keepScreenOn = shouldKeepPortraitPagerItemAwake
-                                    resizeMode = VideoAspectRatio.FILL.playerResizeMode
+                                    resizeMode = resolvePortraitPagerResizeMode()
                                     setKeepContentOnPlayerReset(true)
                                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
@@ -1439,8 +1440,8 @@ private fun VideoPageItem(
                                     view.player = exoPlayer
                                 }
                                 view.keepScreenOn = shouldKeepPortraitPagerItemAwake
-                                if (view.resizeMode != VideoAspectRatio.FILL.playerResizeMode) {
-                                    view.resizeMode = VideoAspectRatio.FILL.playerResizeMode
+                                if (view.resizeMode != resolvePortraitPagerResizeMode()) {
+                                    view.resizeMode = resolvePortraitPagerResizeMode()
                                 }
                             },
                             modifier = Modifier.fillMaxSize()
@@ -1454,7 +1455,7 @@ private fun VideoPageItem(
                                         setVideoViewport(
                                             videoWidth = exoPlayer.videoSize.width,
                                             videoHeight = exoPlayer.videoSize.height,
-                                            resizeMode = VideoAspectRatio.FILL.playerResizeMode
+                                            resizeMode = resolvePortraitPagerResizeMode()
                                         )
                                         danmakuManager.attachView(danmakuView())
                                     }
@@ -1464,7 +1465,7 @@ private fun VideoPageItem(
                                     container.setVideoViewport(
                                         videoWidth = exoPlayer.videoSize.width,
                                         videoHeight = exoPlayer.videoSize.height,
-                                        resizeMode = playerViewRef?.resizeMode ?: VideoAspectRatio.FILL.playerResizeMode
+                                        resizeMode = playerViewRef?.resizeMode ?: resolvePortraitPagerResizeMode()
                                     )
                                     val view = container.danmakuView()
                                     if (view.width > 0 && view.height > 0) {
@@ -2142,6 +2143,10 @@ internal fun resolvePortraitVideoViewportSize(
         )
     }
 }
+
+internal fun resolvePortraitPagerFillContainer(): Boolean = false
+
+internal fun resolvePortraitPagerResizeMode(): Int = AspectRatioFrameLayout.RESIZE_MODE_FIT
 
 @Composable
 internal fun PortraitVideoViewportContainer(

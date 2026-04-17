@@ -133,13 +133,14 @@ internal fun shouldAttemptPlaybackRecoveryAfterSeek(
     playbackState: Int
 ): Boolean {
     return state.pendingSeekPositionMs != null &&
+        state.shouldResumePlayback == true &&
+        playWhenReady &&
         !isPlaying &&
         (
-            playWhenReady ||
-                playbackState == Player.STATE_BUFFERING ||
+            playbackState == Player.STATE_BUFFERING ||
                 playbackState == Player.STATE_READY ||
                 playbackState == Player.STATE_IDLE
-            )
+        )
 }
 
 internal fun shouldShowPlaybackRecoveryUiAfterSeek(
@@ -149,10 +150,11 @@ internal fun shouldShowPlaybackRecoveryUiAfterSeek(
     playbackState: Int
 ): Boolean {
     return state.pendingSeekPositionMs != null &&
+        state.shouldResumePlayback == true &&
+        playWhenReady &&
         !isPlaying &&
         (
-            playWhenReady ||
-                playbackState == Player.STATE_BUFFERING ||
+            playbackState == Player.STATE_BUFFERING ||
                 playbackState == Player.STATE_READY
-            )
+        )
 }
