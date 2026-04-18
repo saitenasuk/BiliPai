@@ -12,19 +12,22 @@ class SearchScreenPolicyTest {
         assertTrue(
             shouldResetSearchResultScroll(
                 searchSessionId = 1L,
-                showResults = true
+                showResults = true,
+                lastResetSessionId = 0L
             )
         )
         assertFalse(
             shouldResetSearchResultScroll(
                 searchSessionId = 0L,
-                showResults = true
+                showResults = true,
+                lastResetSessionId = 0L
             )
         )
         assertFalse(
             shouldResetSearchResultScroll(
                 searchSessionId = 2L,
-                showResults = false
+                showResults = false,
+                lastResetSessionId = 1L
             )
         )
     }

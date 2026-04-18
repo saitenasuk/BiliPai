@@ -160,4 +160,26 @@ class SearchMotionBudgetPolicyTest {
             )
         )
     }
+
+    @Test
+    fun newSearchSession_resetsResultScroll() {
+        assertTrue(
+            shouldResetSearchResultScroll(
+                searchSessionId = 3L,
+                showResults = true,
+                lastResetSessionId = 2L
+            )
+        )
+    }
+
+    @Test
+    fun restoredSearchScreen_doesNotResetExistingResultScroll() {
+        assertFalse(
+            shouldResetSearchResultScroll(
+                searchSessionId = 3L,
+                showResults = true,
+                lastResetSessionId = 3L
+            )
+        )
+    }
 }

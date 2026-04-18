@@ -376,13 +376,19 @@ fun FluidHomeTopBar(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 //  中间：搜索框
+                val searchClickInteractionSource = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(36.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .clickable { onSearchClick() }
+                        .clickable(
+                            interactionSource = searchClickInteractionSource,
+                            indication = null
+                        ) {
+                            onSearchClick()
+                        }
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {

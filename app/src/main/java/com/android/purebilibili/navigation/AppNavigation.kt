@@ -1932,6 +1932,17 @@ fun AppNavigation(
                     mid = mid,
                     onBack = { navController.popBackStack() },
                     onVideoClick = { bvid -> navigateToVideo(bvid, 0L, "") },
+                    onAudioClick = { sid ->
+                        navController.navigate(ScreenRoutes.MusicDetail.createRoute(sid))
+                    },
+                    onBangumiClick = { seasonId ->
+                        if (seasonId > 0L) {
+                            navController.navigate(ScreenRoutes.BangumiDetail.createRoute(seasonId))
+                        }
+                    },
+                    onWebClick = { url, title ->
+                        navController.navigate(ScreenRoutes.Web.createRoute(url, title))
+                    },
                     onPlayAllAudioClick = { bvid ->
                         navigateToVideo(bvid, 0L, "", startAudio = true)
                     },

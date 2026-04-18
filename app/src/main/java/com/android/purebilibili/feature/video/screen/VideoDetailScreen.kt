@@ -112,6 +112,7 @@ import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.state.rememberVideoPlayerState
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
+import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlaybackAwake
 import com.android.purebilibili.feature.video.ui.components.ReplyHeader
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.VideoCommentSheetHost
@@ -1064,9 +1065,6 @@ fun VideoDetailScreen(
             WindowCompat.setDecorFitsSystemWindows(window, false)
         }
         
-        //  [修复] 进入视频页时保持屏幕常亮，防止自动熄屏
-        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        
         onDispose {
             pendingTopBarActionRunnable?.let(topBarActionHandler::removeCallbacks)
             pendingTopBarActionRunnable = null
@@ -1292,6 +1290,53 @@ fun VideoDetailScreen(
         fallbackResumePositionMs = resumePositionMsFromRoute,
         startPaused = isPortraitFullscreen && !useSharedPortraitPlayer
     )
+    val shouldKeepVideoScreenAwake by produceState(
+        initialValue = shouldKeepVideoPlaybackAwake(
+            playWhenReady = playerState.player.playWhenReady,
+            isPlaying = playerState.player.isPlaying,
+            playbackState = playerState.player.playbackState
+        ),
+        key1 = playerState.player
+    ) {
+        val player = playerState.player
+        fun updateAwakeState() {
+            value = shouldKeepVideoPlaybackAwake(
+                playWhenReady = player.playWhenReady,
+                isPlaying = player.isPlaying,
+                playbackState = player.playbackState
+            )
+        }
+        updateAwakeState()
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updateAwakeState()
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                updateAwakeState()
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                updateAwakeState()
+            }
+        }
+        player.addListener(listener)
+        awaitDispose {
+            player.removeListener(listener)
+        }
+    }
+    DisposableEffect(window, shouldKeepVideoScreenAwake) {
+        if (shouldKeepVideoScreenAwake) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            if (shouldKeepVideoScreenAwake) {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+    }
     val isVideoPlaying by produceState(
         initialValue = playerState.player.isPlaying,
         key1 = playerState.player
@@ -3225,9 +3270,9 @@ fun VideoDetailScreen(
         com.android.purebilibili.feature.video.ui.components.DanmakuSendDialog(
             visible = showDanmakuDialog,
             onDismiss = { viewModel.hideDanmakuSendDialog() },
-            onSend = { message, color, mode, fontSize ->
+            onSend = { message, color, mode, fontSize, encourage ->
                 android.util.Log.d("VideoDetailScreen", "📤 Sending danmaku: $message")
-                viewModel.sendDanmaku(message, color, mode, fontSize)
+                viewModel.sendDanmaku(message, color, mode, fontSize, encourage)
             },
             isSending = isSendingDanmaku,
             initialColor = rememberedDanmakuSendColor,

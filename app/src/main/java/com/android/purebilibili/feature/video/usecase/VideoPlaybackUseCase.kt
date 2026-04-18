@@ -642,7 +642,8 @@ class VideoPlaybackUseCase(
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
         isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
-        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+        playWhenReady: Boolean = true
     ): QualitySwitchResult? {
         if (cachedVideos.isEmpty()) {
             Logger.d("VideoPlaybackUseCase", " changeQualityFromCache: cache is EMPTY, returning null")
@@ -716,7 +717,7 @@ class VideoPlaybackUseCase(
                 audioUrl = audioUrl,
                 adaptiveDashSource = adaptiveDashSource,
                 seekTo = currentPos,
-                playWhenReady = true
+                playWhenReady = playWhenReady
             )
             return QualitySwitchResult(
                 videoUrl = videoUrl,
@@ -748,7 +749,8 @@ class VideoPlaybackUseCase(
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
         isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
-        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+        playWhenReady: Boolean = true
     ): QualitySwitchResult? {
         Logger.d("VideoPlaybackUseCase", " changeQualityFromApi: bvid=$bvid, cid=$cid, target=$qualityId")
         val effectivePlaybackQualityMode = if (
@@ -791,10 +793,10 @@ class VideoPlaybackUseCase(
                 audioUrl = selection.audioUrl,
                 adaptiveDashSource = selection.adaptiveDashSource,
                 seekTo = currentPos,
-                playWhenReady = true
-            ) // Switching quality should always auto-play
+                playWhenReady = playWhenReady
+            )
         } else {
-            playVideo(selection.videoUrl, currentPos, playWhenReady = true)
+            playVideo(selection.videoUrl, currentPos, playWhenReady = playWhenReady)
         }
         
         Logger.d("VideoPlaybackUseCase", " Quality switch result: target=$qualityId, actual=${selection.actualQuality}")
@@ -1006,14 +1008,14 @@ class VideoPlaybackUseCase(
                 (qualityId < PREMIUM_API_ONLY_QUALITY_FLOOR || allowPremiumApiOnlyQualities)
         }
 
-        val mergedQualityIds = when {
-            normalizedApi.isNotEmpty() -> normalizedApi.filter { qualityId ->
+        val mergedQualityIds = (normalizedApi + normalizedDash)
+            .distinct()
+            .sortedDescending()
+            .filter { qualityId ->
                 qualityId in normalizedDash ||
                     qualityId < PREMIUM_API_ONLY_QUALITY_FLOOR ||
                     allowPremiumApiOnlyQualities
             }
-            else -> normalizedDash
-        }
         val switchableQualities = normalizedDash
 
         return QualityMergeResult(

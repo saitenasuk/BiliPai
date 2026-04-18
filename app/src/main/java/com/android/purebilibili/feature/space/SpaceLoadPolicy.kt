@@ -7,13 +7,16 @@ import com.android.purebilibili.data.model.response.SeriesArchiveItem
 import com.android.purebilibili.data.model.response.SeriesItem
 import com.android.purebilibili.data.model.response.SpaceAggregateArchiveItem
 import com.android.purebilibili.data.model.response.SpaceAggregateData
+import com.android.purebilibili.data.model.response.SpaceAggregateFavoriteItem
 import com.android.purebilibili.data.model.response.SpaceAudioItem
 import com.android.purebilibili.data.model.response.SpaceUserInfo
 import com.android.purebilibili.data.model.response.SpaceVideoItem
+import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.RelationStatData
 import com.android.purebilibili.data.model.response.UpStatData
 import com.android.purebilibili.data.model.response.ArchiveStatInfo
 import com.android.purebilibili.data.model.response.SpaceArticleItem
+import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.VideoSortOrder
 
 enum class SpaceSearchScope {
@@ -28,7 +31,8 @@ internal fun resolveSpaceSearchScope(
 ): SpaceSearchScope {
     return when {
         selectedMainTab == SpaceMainTab.DYNAMIC -> SpaceSearchScope.DYNAMIC
-        selectedMainTab == SpaceMainTab.CONTRIBUTION && selectedSubTab == SpaceSubTab.VIDEO -> {
+        selectedMainTab == SpaceMainTab.CONTRIBUTION &&
+            selectedSubTab == SpaceSubTab.VIDEO -> {
             SpaceSearchScope.VIDEO
         }
         else -> SpaceSearchScope.NONE
@@ -63,6 +67,11 @@ internal fun applySpaceSupplementalData(
     seasonArchives: Map<Long, List<SeasonArchiveItem>>,
     seriesArchives: Map<Long, List<SeriesArchiveItem>>
 ): SpaceUiState.Success {
+    val mergedContributionTabs = mergeSpaceContributionTabsWithCollections(
+        baseTabs = state.contributionTabs,
+        seasons = seasons,
+        series = series
+    )
     val nextState = state.copy(
         seasons = seasons,
         series = series,
@@ -70,6 +79,7 @@ internal fun applySpaceSupplementalData(
         collectedFavoriteFolders = collectedFavoriteFolders,
         seasonArchives = seasonArchives,
         seriesArchives = seriesArchives,
+        contributionTabs = mergedContributionTabs,
         headerState = state.headerState.copy(
             createdFavorites = createdFavoriteFolders,
             collectedFavorites = collectedFavoriteFolders
@@ -86,6 +96,48 @@ internal fun applySpaceSupplementalData(
             it.copy(hasLoaded = hasCollectionsLoaded)
         }
     )
+}
+
+internal fun mapSeasonArchiveToVideoItem(
+    item: SeasonArchiveItem,
+    mid: Long
+): VideoItem {
+    return VideoItem(
+        bvid = item.bvid,
+        title = item.title,
+        pic = item.pic,
+        owner = com.android.purebilibili.data.model.response.Owner(mid = mid),
+        stat = Stat(
+            view = item.stat.view.toInt(),
+            danmaku = item.stat.danmaku.toInt(),
+            reply = item.stat.reply.toInt()
+        ),
+        duration = item.duration,
+        pubdate = item.pubdate
+    )
+}
+
+internal fun mapSeriesArchiveToVideoItem(
+    item: SeriesArchiveItem,
+    mid: Long
+): VideoItem {
+    return VideoItem(
+        bvid = item.bvid,
+        title = item.title,
+        pic = item.pic,
+        owner = com.android.purebilibili.data.model.response.Owner(mid = mid),
+        stat = Stat(
+            view = item.stat.view.toInt(),
+            danmaku = item.stat.danmaku.toInt(),
+            reply = item.stat.reply.toInt()
+        ),
+        duration = item.duration,
+        pubdate = item.pubdate
+    )
+}
+
+internal fun resolveSpaceArchiveSharedTransitionKey(bvid: String): String? {
+    return bvid.trim().takeIf { it.isNotEmpty() }
 }
 
 internal fun resolveInitialSpaceVideoPage(
@@ -128,8 +180,21 @@ internal data class SpaceInitialSeed(
     val totalAudios: Int,
     val articles: List<SpaceArticleItem>,
     val totalArticles: Int,
+    val homeFavoriteFolders: List<FavFolder>,
+    val homeFavoriteFolderCount: Int,
+    val homeCoinVideos: List<SpaceAggregateArchiveItem>,
+    val homeCoinVideoCount: Int,
+    val homeLikeVideos: List<SpaceAggregateArchiveItem>,
+    val homeLikeVideoCount: Int,
+    val homeBangumiItems: List<SpaceAggregateArchiveItem>,
+    val homeBangumiCount: Int,
+    val homeComicItems: List<SpaceAggregateArchiveItem>,
+    val homeComicCount: Int,
+    val mainTabs: List<SpaceMainTabItem>,
+    val contributionTabs: List<SpaceContributionTab>,
     val defaultMainTab: SpaceMainTab,
-    val defaultSubTab: SpaceSubTab
+    val defaultSubTab: SpaceSubTab,
+    val defaultContributionTabId: String
 )
 
 internal fun resolveSpaceInitialSeedFromAggregate(
@@ -142,13 +207,18 @@ internal fun resolveSpaceInitialSeedFromAggregate(
     if (card.name.isBlank() || card.face.isBlank()) return null
 
     val topPhoto = resolveSpaceTopPhoto(
-        topPhoto = data.images?.imgUrl.orEmpty(),
+        topPhoto = data.images?.imgUrl.orEmpty().ifBlank { data.images?.nightImgUrl.orEmpty() },
         cardLargePhoto = cardLargePhoto,
         cardSmallPhoto = cardSmallPhoto
     )
     val relation = card.relation
     val isFollowed = relation.isFollow == 1 || relation.status in setOf(2, 6)
-    val defaultSelection = resolveSpaceAggregateDefaultSelection(data.defaultTab)
+    val mainTabs = resolveSpaceMainTabs(data.tab2)
+    val contributionTabs = resolveSpaceContributionTabs(data.tab2)
+    val defaultSelection = resolveSpaceAggregateDefaultSelection(
+        defaultTab = data.defaultTab,
+        contributionTabs = contributionTabs
+    )
 
     return SpaceInitialSeed(
         userInfo = SpaceUserInfo(
@@ -179,8 +249,21 @@ internal fun resolveSpaceInitialSeedFromAggregate(
         totalAudios = data.audios?.count ?: 0,
         articles = data.article?.item.orEmpty(),
         totalArticles = data.article?.count ?: 0,
+        homeFavoriteFolders = data.favourite2?.item.orEmpty().map(::mapSpaceAggregateFavoriteFolder),
+        homeFavoriteFolderCount = data.favourite2?.count ?: 0,
+        homeCoinVideos = data.coinArchive?.item.orEmpty(),
+        homeCoinVideoCount = data.coinArchive?.count ?: 0,
+        homeLikeVideos = data.likeArchive?.item.orEmpty(),
+        homeLikeVideoCount = data.likeArchive?.count ?: 0,
+        homeBangumiItems = data.season?.item.orEmpty(),
+        homeBangumiCount = data.season?.count ?: 0,
+        homeComicItems = data.comic?.item.orEmpty(),
+        homeComicCount = data.comic?.count ?: 0,
+        mainTabs = mainTabs,
+        contributionTabs = contributionTabs,
         defaultMainTab = defaultSelection.first,
-        defaultSubTab = defaultSelection.second
+        defaultSubTab = defaultSelection.second,
+        defaultContributionTabId = defaultSelection.third
     )
 }
 
@@ -213,8 +296,22 @@ internal fun buildInitialSpaceSuccessState(
         totalVideos = seed.totalVideos,
         categories = categories,
         selectedSubTab = selectedSubTab,
+        selectedContributionTabId = seed.defaultContributionTabId,
+        contributionTabs = seed.contributionTabs,
         audios = seed.audios,
         articles = seed.articles,
+        totalAudios = seed.totalAudios,
+        totalArticles = seed.totalArticles,
+        homeFavoriteFolders = seed.homeFavoriteFolders,
+        homeFavoriteFolderCount = seed.homeFavoriteFolderCount,
+        homeCoinVideos = seed.homeCoinVideos,
+        homeCoinVideoCount = seed.homeCoinVideoCount,
+        homeLikeVideos = seed.homeLikeVideos,
+        homeLikeVideoCount = seed.homeLikeVideoCount,
+        homeBangumiItems = seed.homeBangumiItems,
+        homeBangumiCount = seed.homeBangumiCount,
+        homeComicItems = seed.homeComicItems,
+        homeComicCount = seed.homeComicCount,
         isLoadingMore = shouldShowInitialVideoLoading,
         hasMoreVideos = seed.totalVideos > seed.videos.size,
         hasMoreAudios = seed.totalAudios > seed.audios.size,
@@ -228,19 +325,32 @@ internal fun buildInitialSpaceSuccessState(
             createdFavorites = emptyList(),
             collectedFavorites = emptyList()
         ),
-        tabShellState = tabShellState
+        tabShellState = tabShellState,
+        mainTabs = seed.mainTabs
     )
 }
 
-internal fun resolveSpaceAggregateDefaultSelection(defaultTab: String): Pair<SpaceMainTab, SpaceSubTab> {
+internal fun resolveSpaceAggregateDefaultSelection(
+    defaultTab: String,
+    contributionTabs: List<SpaceContributionTab>
+): Triple<SpaceMainTab, SpaceSubTab, String> {
+    val contributionTab = when (defaultTab.lowercase()) {
+        "article" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.ARTICLE || it.subTab == SpaceSubTab.OPUS }
+        "opus" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.OPUS || it.subTab == SpaceSubTab.ARTICLE }
+        "audio" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.AUDIO }
+        "season_video" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.SEASON_VIDEO }
+        "series" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.SERIES }
+        "ugcseason" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.UGC_SEASON }
+        "comic" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.COMIC }
+        else -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.VIDEO } ?: contributionTabs.firstOrNull()
+    } ?: buildDefaultSpaceContributionTabs().first()
+
     return when (defaultTab.lowercase()) {
-        "dynamic" -> SpaceMainTab.DYNAMIC to SpaceSubTab.VIDEO
-        "home" -> SpaceMainTab.HOME to SpaceSubTab.VIDEO
-        "article" -> SpaceMainTab.CONTRIBUTION to SpaceSubTab.ARTICLE
-        "audio" -> SpaceMainTab.CONTRIBUTION to SpaceSubTab.AUDIO
-        "favorite" -> SpaceMainTab.COLLECTIONS to SpaceSubTab.VIDEO
-        "video", "contribute" -> SpaceMainTab.CONTRIBUTION to SpaceSubTab.VIDEO
-        else -> SpaceMainTab.CONTRIBUTION to SpaceSubTab.VIDEO
+        "dynamic" -> Triple(SpaceMainTab.DYNAMIC, contributionTab.subTab, contributionTab.id)
+        "home" -> Triple(SpaceMainTab.HOME, contributionTab.subTab, contributionTab.id)
+        "favorite" -> Triple(SpaceMainTab.FAVORITE, contributionTab.subTab, contributionTab.id)
+        "bangumi" -> Triple(SpaceMainTab.BANGUMI, contributionTab.subTab, contributionTab.id)
+        else -> Triple(SpaceMainTab.CONTRIBUTION, contributionTab.subTab, contributionTab.id)
     }
 }
 
@@ -314,6 +424,17 @@ private fun mapSpaceAggregateVideoItem(item: SpaceAggregateArchiveItem): SpaceVi
         created = item.ctime,
         author = item.author,
         typename = item.tname
+    )
+}
+
+private fun mapSpaceAggregateFavoriteFolder(item: SpaceAggregateFavoriteItem): FavFolder {
+    val resolvedId = item.mediaId.takeIf { it > 0L } ?: item.id.takeIf { it > 0L } ?: item.fid
+    return FavFolder(
+        id = resolvedId,
+        fid = item.fid,
+        mid = item.mid,
+        title = item.title,
+        media_count = item.media_count.takeIf { it > 0 } ?: item.count
     )
 }
 

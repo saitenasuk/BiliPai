@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -1851,6 +1852,7 @@ fun iOSHomeHeader(
                                         )
                                     }
                                 }
+                                val searchClickInteractionSource = remember { MutableInteractionSource() }
                                 Box(
                                     modifier = Modifier
                                         .widthIn(max = 640.dp)
@@ -1895,7 +1897,10 @@ fun iOSHomeHeader(
                                             },
                                             shape = searchContainerShape
                                         )
-                                        .clickable {
+                                        .clickable(
+                                            interactionSource = searchClickInteractionSource,
+                                            indication = null
+                                        ) {
                                             haptic(HapticType.LIGHT)
                                             onSearchClick()
                                         }

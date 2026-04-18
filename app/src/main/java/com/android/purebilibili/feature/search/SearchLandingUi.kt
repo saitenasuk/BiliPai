@@ -55,6 +55,14 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 private const val SEARCH_HIGHLIGHT_START_TOKEN = "§hl§"
 private const val SEARCH_HIGHLIGHT_END_TOKEN = "§/hl§"
 
+internal fun resolveSearchKeywordSectionToggleLabel(enabled: Boolean): String {
+    return if (enabled) "隐藏" else "显示"
+}
+
+internal fun resolveSearchKeywordSectionHiddenText(title: String): String {
+    return "已隐藏$title"
+}
+
 @Composable
 fun SearchLandingContent(
     historyListState: LazyListState,
@@ -67,7 +75,9 @@ fun SearchLandingContent(
     discoverList: List<SearchKeywordUiModel>,
     historyList: List<SearchHistory>,
     hotSearchEnabled: Boolean,
+    discoverSectionEnabled: Boolean,
     onToggleHotSearch: () -> Unit,
+    onToggleDiscoverSection: () -> Unit,
     onRefreshHot: () -> Unit,
     onOpenTrending: () -> Unit,
     onRefreshDiscover: () -> Unit,
@@ -110,8 +120,9 @@ fun SearchLandingContent(
                         title = discoverTitle,
                         items = discoverList,
                         columns = layoutPolicy.hotSearchColumns,
-                        enabled = true,
+                        enabled = discoverSectionEnabled,
                         showTrendingAction = false,
+                        onToggleEnabled = onToggleDiscoverSection,
                         onRefresh = onRefreshDiscover,
                         onKeywordClick = onKeywordClick
                     )
@@ -172,8 +183,9 @@ fun SearchLandingContent(
                     title = discoverTitle,
                     items = discoverList,
                     columns = layoutPolicy.hotSearchColumns,
-                    enabled = true,
+                    enabled = discoverSectionEnabled,
                     showTrendingAction = false,
+                    onToggleEnabled = onToggleDiscoverSection,
                     onRefresh = onRefreshDiscover,
                     onKeywordClick = onKeywordClick
                 )
@@ -292,7 +304,7 @@ private fun SearchKeywordSection(
         } else if (!enabled) {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "已隐藏热搜入口",
+                text = resolveSearchKeywordSectionHiddenText(title),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -340,22 +352,28 @@ private fun SearchKeywordSectionHeader(
             }
         }
 
-        if (!enabled && onToggleEnabled != null) {
-            AssistChip(
-                onClick = onToggleEnabled,
-                label = { Text("显示") }
-            )
-        } else {
-            TextButton(onClick = onRefresh) {
-                Icon(
-                    imageVector = Icons.Rounded.Refresh,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "刷新",
-                    color = MaterialTheme.colorScheme.secondary
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (enabled) {
+                TextButton(onClick = onRefresh) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "刷新",
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            }
+            if (onToggleEnabled != null) {
+                AssistChip(
+                    onClick = onToggleEnabled,
+                    label = { Text(resolveSearchKeywordSectionToggleLabel(enabled)) }
                 )
             }
         }

@@ -397,10 +397,11 @@ object BangumiRepository {
     suspend fun getMyFollowBangumi(
         type: Int = 1,  // 1=追番 2=追剧
         page: Int = 1,
-        pageSize: Int = 30
+        pageSize: Int = 30,
+        vmid: Long? = null
     ): Result<MyFollowBangumiData> = withContext(Dispatchers.IO) {
         try {
-            val mid = TokenManager.midCache ?: return@withContext Result.failure(Exception("未登录"))
+            val mid = vmid?.takeIf { it > 0L } ?: TokenManager.midCache ?: return@withContext Result.failure(Exception("未登录"))
             val response = api.getMyFollowBangumi(
                 vmid = mid,
                 type = type,
