@@ -81,6 +81,20 @@ internal fun shouldUseCompactInlinePortraitPlayerForCommentTab(
         !isPortraitFullscreen
 }
 
+internal fun shouldUseCompactInlinePortraitPlayerForIntroScroll(
+    useOfficialInlinePortraitDetailExperience: Boolean,
+    selectedTabIndex: Int,
+    isPortraitFullscreen: Boolean,
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    introScrollThresholdPx: Int = 56
+): Boolean {
+    if (!useOfficialInlinePortraitDetailExperience || isPortraitFullscreen) return false
+    if (selectedTabIndex != 0) return false
+    if (firstVisibleItemIndex > 0) return true
+    return firstVisibleItemScrollOffset >= introScrollThresholdPx
+}
+
 internal fun resolveInlinePortraitPlayerCollapseProgress(
     manualCollapseProgress: Float,
     compactForCommentTabProgress: Float

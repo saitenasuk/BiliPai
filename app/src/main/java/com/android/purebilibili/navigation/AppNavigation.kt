@@ -586,6 +586,8 @@ fun AppNavigation(
         // [新增] 首页回顶事件通道 (Channel based event bus)
         val homeScrollChannel = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
         val dynamicScrollChannel = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
+        val historyScrollChannel = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
+        val favoriteScrollChannel = remember { kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED) }
         // [New] Global Scroll Offset State
         val scrollOffsetState = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
@@ -1241,6 +1243,7 @@ fun AppNavigation(
                     viewModel = historyViewModel,
                     onBack = { navController.popBackStack() },
                     globalHazeState = mainHazeState, // [新增] 传入全局 HazeState
+                    scrollToTopChannel = historyScrollChannel,
                     onVideoClick = { lookupKey, cid, cover ->
                         // [修复] 根据历史记录类型导航到不同页面
                         val historyItem = historyViewModel.getHistoryItem(lookupKey)
@@ -1343,6 +1346,7 @@ fun AppNavigation(
                     viewModel = favoriteViewModel,
                     onBack = { navController.popBackStack() },
                     globalHazeState = mainHazeState, // [新增] 传入全局 HazeState
+                    scrollToTopChannel = favoriteScrollChannel,
                     onVideoClick = { bvid, cid, cover -> navigateToVideo(bvid, cid, cover) },
                     onFavoriteFolderClick = { mediaId, ownerMid, title ->
                         navController.navigate(
@@ -2326,7 +2330,13 @@ fun AppNavigation(
                                     onItemClick = { item ->
                                         when (resolveBottomBarSelectionAction(currentBottomNavItem, item)) {
                                             BottomBarSelectionAction.NAVIGATE -> navigateTo(item.route)
-                                            BottomBarSelectionAction.HOME_RESELECT -> homeScrollChannel.trySend(Unit)
+                                            BottomBarSelectionAction.RESELECT -> when (item) {
+                                                BottomNavItem.HOME -> homeScrollChannel.trySend(Unit)
+                                                BottomNavItem.DYNAMIC -> dynamicScrollChannel.trySend(Unit)
+                                                BottomNavItem.HISTORY -> historyScrollChannel.trySend(Unit)
+                                                BottomNavItem.FAVORITE -> favoriteScrollChannel.trySend(Unit)
+                                                else -> Unit
+                                            }
                                         }
                                     },
                                     onHomeDoubleTap = { homeScrollChannel.trySend(Unit) },
@@ -2355,7 +2365,13 @@ fun AppNavigation(
                                 onItemClick = { item ->
                                     when (resolveBottomBarSelectionAction(currentBottomNavItem, item)) {
                                         BottomBarSelectionAction.NAVIGATE -> navigateTo(item.route)
-                                        BottomBarSelectionAction.HOME_RESELECT -> homeScrollChannel.trySend(Unit)
+                                        BottomBarSelectionAction.RESELECT -> when (item) {
+                                            BottomNavItem.HOME -> homeScrollChannel.trySend(Unit)
+                                            BottomNavItem.DYNAMIC -> dynamicScrollChannel.trySend(Unit)
+                                            BottomNavItem.HISTORY -> historyScrollChannel.trySend(Unit)
+                                            BottomNavItem.FAVORITE -> favoriteScrollChannel.trySend(Unit)
+                                            else -> Unit
+                                        }
                                     }
                                 },
                                 onHomeDoubleTap = { homeScrollChannel.trySend(Unit) },

@@ -75,6 +75,7 @@ class DownloadWorker(
             ?: return@withContext Result.failure()
         
         com.android.purebilibili.core.util.Logger.d("DownloadWorker", "🚀 Starting download: $taskId")
+        setForeground(getForegroundInfo())
         
         try {
             // 执行下载
@@ -85,23 +86,14 @@ class DownloadWorker(
             
         } catch (e: kotlinx.coroutines.CancellationException) {
             com.android.purebilibili.core.util.Logger.d("DownloadWorker", "⏸️ Download paused: $taskId")
-            // 用户主动取消，不重试
-            Result.failure()
+            Result.success()
             
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e("DownloadWorker", "❌ Download failed: $taskId", e)
             
             // 更新任务状态
             DownloadManager.markFailed(taskId, e.message ?: "下载失败")
-            
-            // 网络错误时重试，其他错误直接失败
-            if (e is java.net.UnknownHostException || 
-                e is java.net.SocketTimeoutException ||
-                e is java.net.ConnectException) {
-                Result.retry()
-            } else {
-                Result.failure()
-            }
+            Result.success()
         }
     }
     

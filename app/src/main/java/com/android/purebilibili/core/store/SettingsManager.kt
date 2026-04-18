@@ -288,6 +288,7 @@ data class HomeSettings(
     val predictiveBackAnimationEnabled: Boolean = true, // [New] 预测性返回手势支持（默认开启）
     val smartVisualGuardEnabled: Boolean = false, // [Retired] 智能流畅优先已下线，固定关闭
     val compactVideoStatsOnCover: Boolean = true, //  播放量/评论数显示在封面底部（默认开启）
+    val lowQualityHomeCoverInDataSaver: Boolean = false, // 省流量时首页封面使用低清晰度
     val showHomeCoverGlassBadges: Boolean = true, // 首页封面玻璃信息显示
     val showHomeInfoGlassBadges: Boolean = true, // 首页信息区玻璃标签显示
     val showHomeUpBadges: Boolean = true, // 首页和相关推荐 UP 主标识显示
@@ -697,6 +698,8 @@ object SettingsManager {
     private val KEY_SMART_VISUAL_GUARD_ENABLED = booleanPreferencesKey("smart_visual_guard_enabled")
     //  [新增] 视频卡片统计信息贴封面开关
     private val KEY_COMPACT_VIDEO_STATS_ON_COVER = booleanPreferencesKey("compact_video_stats_on_cover")
+    private val KEY_LOW_QUALITY_HOME_COVER_IN_DATA_SAVER =
+        booleanPreferencesKey("low_quality_home_cover_in_data_saver")
     private val KEY_HOME_COVER_GLASS_BADGES_VISIBLE = booleanPreferencesKey("home_cover_glass_badges_visible")
     private val KEY_HOME_INFO_GLASS_BADGES_VISIBLE = booleanPreferencesKey("home_info_glass_badges_visible")
     private val KEY_HOME_UP_BADGES_VISIBLE = booleanPreferencesKey("home_up_badges_visible")
@@ -760,6 +763,8 @@ object SettingsManager {
             predictiveBackAnimationEnabled = preferences[KEY_PREDICTIVE_BACK_ANIMATION_ENABLED] ?: true,
             smartVisualGuardEnabled = false,
             compactVideoStatsOnCover = preferences[KEY_COMPACT_VIDEO_STATS_ON_COVER] ?: true,
+            lowQualityHomeCoverInDataSaver =
+                preferences[KEY_LOW_QUALITY_HOME_COVER_IN_DATA_SAVER] ?: false,
             showHomeCoverGlassBadges = preferences[KEY_HOME_COVER_GLASS_BADGES_VISIBLE] ?: true,
             showHomeInfoGlassBadges = preferences[KEY_HOME_INFO_GLASS_BADGES_VISIBLE] ?: true,
             showHomeUpBadges = preferences[KEY_HOME_UP_BADGES_VISIBLE] ?: true,
@@ -1388,6 +1393,15 @@ object SettingsManager {
 
     suspend fun setCompactVideoStatsOnCover(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_COMPACT_VIDEO_STATS_ON_COVER] = value }
+    }
+
+    fun getLowQualityHomeCoverInDataSaver(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_LOW_QUALITY_HOME_COVER_IN_DATA_SAVER] ?: false }
+
+    suspend fun setLowQualityHomeCoverInDataSaver(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LOW_QUALITY_HOME_COVER_IN_DATA_SAVER] = value
+        }
     }
 
     fun getHomeCoverGlassBadgesVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data

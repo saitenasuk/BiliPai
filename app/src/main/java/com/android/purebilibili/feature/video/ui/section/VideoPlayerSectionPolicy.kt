@@ -536,9 +536,11 @@ internal fun shouldEnableManualStartCoverOverlay(
 
 internal fun shouldFillPlayerViewportForManualStartCover(
     shouldKeepCoverForManualStart: Boolean,
-    forceCoverDuringReturnAnimation: Boolean
+    forceCoverDuringReturnAnimation: Boolean,
+    isVerticalVideo: Boolean = false
 ): Boolean {
-    return shouldKeepCoverForManualStart && !forceCoverDuringReturnAnimation
+    if (forceCoverDuringReturnAnimation) return false
+    return shouldKeepCoverForManualStart || isVerticalVideo
 }
 
 internal enum class ManualStartPlayButtonAnchor {

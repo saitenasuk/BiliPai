@@ -2219,6 +2219,16 @@ fun VideoDetailScreen(
                             selectedTabIndex = selectedVideoContentTabIndex,
                             isPortraitFullscreen = isPortraitFullscreen
                         )
+                    var introFirstVisibleItemIndex by remember { mutableIntStateOf(0) }
+                    var introFirstVisibleItemScrollOffset by remember { mutableIntStateOf(0) }
+                    val compactInlinePlayerForIntroScroll =
+                        shouldUseCompactInlinePortraitPlayerForIntroScroll(
+                            useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience,
+                            selectedTabIndex = selectedVideoContentTabIndex,
+                            isPortraitFullscreen = isPortraitFullscreen,
+                            firstVisibleItemIndex = introFirstVisibleItemIndex,
+                            firstVisibleItemScrollOffset = introFirstVisibleItemScrollOffset
+                        )
                     
                     // 📏 [Collapsing Player] 上滑隐藏播放器逻辑
                     val expandedPortraitInlineSpec = remember(configuration.screenWidthDp, configuration.screenHeightDp) {
@@ -2309,7 +2319,7 @@ fun VideoDetailScreen(
                         isPortraitFullscreen = isPortraitFullscreen
                     )
                     val commentTabCollapseProgress by animateFloatAsState(
-                        targetValue = if (compactInlinePlayerForCommentTab) 1f else 0f,
+                        targetValue = if (compactInlinePlayerForCommentTab || compactInlinePlayerForIntroScroll) 1f else 0f,
                         animationSpec = tween(
                             durationMillis = 260,
                             easing = FastOutSlowInEasing
@@ -2724,7 +2734,11 @@ fun VideoDetailScreen(
                                                         showUpBadge = homeUpBadgesVisible,
                                                         showInteractionActions = shouldShowVideoDetailActionButtons(),
                                                         isVideoPlaying = isVideoPlaying,
-                                                        onSelectedTabChange = { selectedVideoContentTabIndex = it }
+                                                        onSelectedTabChange = { selectedVideoContentTabIndex = it },
+                                                        onIntroScrollStateChange = { index, offset ->
+                                                            introFirstVisibleItemIndex = index
+                                                            introFirstVisibleItemScrollOffset = offset
+                                                        }
                                                     )
 
                                                     // 底部输入栏 (覆盖在内容之上)

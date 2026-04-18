@@ -1409,6 +1409,10 @@ fun PlaybackSettingsContent(
                         .getDataSaverMode(context).collectAsState(
                             initial = com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY
                         )
+                    val homeSettings by com.android.purebilibili.core.store.SettingsManager
+                        .getHomeSettings(context).collectAsState(
+                            initial = com.android.purebilibili.core.store.HomeSettings()
+                        )
                     val dataSaverModeOptions = listOf(
                         PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.OFF, "关闭"),
                         PlaybackSegmentOption(com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY, "仅移动数据"),
@@ -1428,6 +1432,26 @@ fun PlaybackSettingsContent(
                                 }
                             }
                         )
+
+                        IOSDivider()
+
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Photo,
+                            title = "省流量时降低首页封面清晰度",
+                            subtitle = if (homeSettings.lowQualityHomeCoverInDataSaver) {
+                                "开启后仅在省流量模式生效时加载低清晰度首页封面"
+                            } else {
+                                "默认始终加载高清首页封面"
+                            },
+                            checked = homeSettings.lowQualityHomeCoverInDataSaver,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setLowQualityHomeCoverInDataSaver(context, enabled)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
                         
                         //  功能说明
                         IOSDivider()
@@ -1445,7 +1469,7 @@ fun PlaybackSettingsContent(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "开启后将自动降低封面图质量、禁用预加载、限制视频最高480P",
+                                "省流量模式会禁用预加载、限制视频最高480P；首页封面是否降清晰度由上方开关决定。",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                 lineHeight = 16.sp

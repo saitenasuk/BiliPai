@@ -69,6 +69,8 @@ import com.android.purebilibili.core.ui.rememberAppSettingsIcon
 import com.android.purebilibili.core.store.HomeHeaderBlurMode
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.feature.home.resolveHomeTopCategories
+import com.android.purebilibili.feature.home.resolveHomeTopCollapsedHandleHeight
+import com.android.purebilibili.feature.home.resolveHomeTopTabPresentationHeight
 import com.android.purebilibili.feature.home.HomeGlassResolvedColors
 import com.android.purebilibili.feature.home.rememberHomeGlassChromeColors
 import com.android.purebilibili.feature.home.rememberHomeGlassPillColors
@@ -1131,6 +1133,8 @@ fun iOSHomeHeader(
     backdrop: com.kyant.backdrop.backdrops.LayerBackdrop? = null,
     homeSettings: com.android.purebilibili.core.store.HomeSettings? = null,
     topTabsVisible: Boolean = true,
+    topTabsCollapsed: Boolean = false,
+    onTopTabsCollapsedChange: (Boolean) -> Unit = {},
     motionTier: MotionTier = MotionTier.Normal,
     isScrolling: Boolean = false,
     isTransitionRunning: Boolean = false,
@@ -1429,7 +1433,16 @@ fun iOSHomeHeader(
     }
     val currentSearchHeight = with(density) { scrollLayout.searchBarHeightPx.toDp() }
     val searchAlpha = scrollLayout.searchAlpha
-    val currentTabHeight = with(density) { scrollLayout.tabRowHeightPx.toDp() }
+    val expandedTabHeight = with(density) { scrollLayout.tabRowHeightPx.toDp() }
+    val currentTabHeight by animateDpAsState(
+        targetValue = resolveHomeTopTabPresentationHeight(
+            expandedHeight = expandedTabHeight,
+            isCollapsed = topTabsVisible && topTabsCollapsed,
+            collapsedHandleHeight = resolveHomeTopCollapsedHandleHeight()
+        ),
+        animationSpec = tween(durationMillis = 180),
+        label = "currentTabHeight"
+    )
     val tabAlpha = scrollLayout.tabAlpha
     val searchRevealFraction = if (searchBarHeightPx > 0f) {
         (scrollLayout.searchBarHeightPx / searchBarHeightPx).coerceIn(0f, 1f)
@@ -1526,7 +1539,7 @@ fun iOSHomeHeader(
         containerAlpha = tabChromeColors.containerColor.alpha
     )
     val tabContentAlpha by animateFloatAsState(
-        targetValue = if (topTabsVisible) 1f else 0f,
+        targetValue = if (topTabsVisible && !topTabsCollapsed) 1f else 0f,
         animationSpec = tween(durationMillis = 180),
         label = "tabContentAlpha"
     )
@@ -2143,7 +2156,10 @@ fun iOSHomeHeader(
                                 renderMode = tabChromeRenderMode,
                                 softenWideChrome = true
                             )
-                        }
+                        },
+                        gestureEnabled = topTabsVisible,
+                        isTabsCollapsed = topTabsCollapsed,
+                        onTabsCollapsedChange = onTopTabsCollapsedChange
                     ) {
                         CategoryTabRow(
                             categories = topCategories,

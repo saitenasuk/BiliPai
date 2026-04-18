@@ -2244,7 +2244,8 @@ fun VideoPlayerSection(
     )
     val fillPlayerViewportForManualStartCover = shouldFillPlayerViewportForManualStartCover(
         shouldKeepCoverForManualStart = keepCoverForManualStart,
-        forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
+        forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
+        isVerticalVideo = isVerticalVideo
     )
     val manualStartPlayButtonLayoutSpec = remember {
         resolveManualStartPlayButtonLayoutSpec()

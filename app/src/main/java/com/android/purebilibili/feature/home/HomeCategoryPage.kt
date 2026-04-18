@@ -70,6 +70,7 @@ internal fun HomeCategoryPageContent(
     cardTransitionEnabled: Boolean,
     smartVisualGuardEnabled: Boolean = false,
     isDataSaverActive: Boolean,
+    preferLowQualityCover: Boolean = false,
     compactStatsOnCover: Boolean = true,
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
@@ -151,6 +152,8 @@ internal fun HomeCategoryPageContent(
                     LiveRoomCard(
                         room = room,
                         index = index,
+                        isDataSaverActive = isDataSaverActive,
+                        preferLowQualityCover = preferLowQualityCover,
                         modifier = if (index == 0) firstGridItemModifier else Modifier,
                         onClick = { onLiveClick(room.roomid, room.title, room.uname) } 
                     )
@@ -177,6 +180,8 @@ internal fun HomeCategoryPageContent(
                     LiveRoomCard(
                         room = room,
                         index = index,
+                        isDataSaverActive = isDataSaverActive,
+                        preferLowQualityCover = preferLowQualityCover,
                         modifier = if (categoryState.followedLiveRooms.isEmpty() && index == 0) {
                             firstGridItemModifier
                         } else {
@@ -277,6 +282,8 @@ internal fun HomeCategoryPageContent(
                                         motionTier = cardMotionTier,
                                         transitionEnabled = cardTransitionEnabled,
                                         scrollLiteModeEnabled = scrollLiteModeEnabled,
+                                        isDataSaverActive = isDataSaverActive,
+                                        preferLowQualityCover = preferLowQualityCover,
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
                                         showUpBadge = showUpBadges,
@@ -308,6 +315,7 @@ internal fun HomeCategoryPageContent(
                                         scrollLiteModeEnabled = scrollLiteModeEnabled,
                                         showPublishTime = true,
                                         isDataSaverActive = isDataSaverActive,
+                                        preferLowQualityCover = preferLowQualityCover,
                                         compactStatsOnCover = compactStatsOnCover,
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
