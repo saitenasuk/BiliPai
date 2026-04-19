@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -262,7 +263,8 @@ fun VideoContentSection(
     showUpBadge: Boolean = true,
     showInteractionActions: Boolean = true,
     isVideoPlaying: Boolean = false,
-    onSelectedTabChange: (Int) -> Unit = {}
+    onSelectedTabChange: (Int) -> Unit = {},
+    onIntroScrollStateChange: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val tabs = listOf("简介", "评论 $replyCount")
     val pagerState = rememberPagerState(pageCount = { tabs.size })
@@ -309,6 +311,13 @@ fun VideoContentSection(
     }
     LaunchedEffect(pagerState.currentPage) {
         onSelectedTabChange(pagerState.currentPage)
+    }
+    LaunchedEffect(introListState) {
+        snapshotFlow { introListState.firstVisibleItemIndex to introListState.firstVisibleItemScrollOffset }
+            .distinctUntilChanged()
+            .collect { state: Pair<Int, Int> ->
+                onIntroScrollStateChange(state.first, state.second)
+            }
     }
     val bottomContentPadding = if (showInteractionActions) 84.dp else 12.dp
 

@@ -108,14 +108,14 @@ internal fun resolveVideoCardMenuOffset(
 
 internal fun resolveVideoCardCoverCacheKey(
     video: VideoItem,
-    isDataSaverActive: Boolean
+    useLowQualityCover: Boolean
 ): String {
     val normalizedIdentity = video.bvid.trim().ifEmpty {
         video.pic.trim().ifEmpty {
             "fallback_${video.id.coerceAtLeast(0L)}_${video.cid.coerceAtLeast(0L)}_${video.title.hashCode()}"
         }
     }
-    val qualityTag = if (isDataSaverActive) "s" else "n"
+    val qualityTag = if (useLowQualityCover) "s" else "n"
     return "cover_${normalizedIdentity}_${qualityTag}"
 }
 
@@ -141,6 +141,7 @@ fun ElegantVideoCard(
     scrollLiteModeEnabled: Boolean = false,
     showPublishTime: Boolean = false,   //  是否显示发布时间（搜索结果用）
     isDataSaverActive: Boolean = false, // 🚀 [性能优化] 从父级传入，避免每个卡片重复计算
+    preferLowQualityCover: Boolean = false,
     glassEnabled: Boolean = true,
     blurEnabled: Boolean = true,
     compactStatsOnCover: Boolean = true, // 播放量/评论数是否贴在封面底部
@@ -218,14 +219,18 @@ fun ElegantVideoCard(
     //  [新增] 确认对话框状态
     var showUnfavoriteDialog by remember { mutableStateOf(false) }
     
-    val coverCacheKey = remember(video, isDataSaverActive) {
+    val useLowQualityCover = isDataSaverActive && preferLowQualityCover
+    val coverCacheKey = remember(video, useLowQualityCover) {
         resolveVideoCardCoverCacheKey(
             video = video,
-            isDataSaverActive = isDataSaverActive
+            useLowQualityCover = useLowQualityCover
         )
     }
-    val coverUrl = remember(video.bvid) {
-        FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic)
+    val coverUrl = remember(video.bvid, useLowQualityCover) {
+        FormatUtils.resolveVideoCoverUrl(
+            if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic,
+            useLowQuality = useLowQualityCover
+        )
     }
     val premiumBadgeLabel = remember(video.rights) {
         resolveVideoPremiumBadgeLabel(video.rights)

@@ -108,6 +108,22 @@ data class PlaybackSelectionResult(
 
 internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = true
 
+internal enum class PlaybackBootstrapMode {
+    DETAIL_ONLY,
+    DETAIL_AND_PLAYURL_PARALLEL
+}
+
+internal fun resolvePlaybackBootstrapMode(
+    bvid: String,
+    cid: Long
+): PlaybackBootstrapMode {
+    return if (bvid.isNotBlank() && cid > 0L) {
+        PlaybackBootstrapMode.DETAIL_AND_PLAYURL_PARALLEL
+    } else {
+        PlaybackBootstrapMode.DETAIL_ONLY
+    }
+}
+
 internal fun applyPlaybackIntentAfterSourceChange(
     player: Player,
     playWhenReady: Boolean
@@ -338,15 +354,10 @@ class VideoPlaybackUseCase(
             //  [性能优化] 并行请求视频详情、相关推荐。
             // 表情映射在首帧链路中跳过，避免自动播放起播被非关键请求阻塞。
             val (detailResult, relatedVideos, emoteMap) = kotlinx.coroutines.coroutineScope {
-                val detailDeferred = async {
-                    VideoRepository.getVideoDetails(
-                        bvid = bvid,
-                        aid = aid,
-                        requestedCid = cid,
-                        targetQuality = defaultQuality,
-                        audioLang = audioLang
-                    )
-                }
+                val bootstrapMode = resolvePlaybackBootstrapMode(
+                    bvid = bvid,
+                    cid = cid
+                )
                 val relatedDeferred = async { 
                     if (bvid.isNotEmpty()) VideoRepository.getRelatedVideos(bvid) else emptyList() 
                 }
@@ -355,8 +366,52 @@ class VideoPlaybackUseCase(
                 } else {
                     emptyMap()
                 }
-                
-                Triple(detailDeferred.await(), relatedDeferred.await(), emoteMap)
+
+                val mergedDetailResult = when (bootstrapMode) {
+                    PlaybackBootstrapMode.DETAIL_AND_PLAYURL_PARALLEL -> {
+                        val infoDeferred = async {
+                            VideoRepository.getVideoInfoOnly(
+                                bvid = bvid,
+                                aid = aid,
+                                requestedCid = cid
+                            )
+                        }
+                        val playUrlDeferred = async {
+                            VideoRepository.getInitialPlayUrlData(
+                                bvid = bvid,
+                                cid = cid,
+                                targetQuality = defaultQuality,
+                                audioLang = audioLang
+                            )
+                        }
+
+                        infoDeferred.await().fold(
+                            onSuccess = { info ->
+                                val playData = playUrlDeferred.await()
+                                if (playData == null) {
+                                    Result.failure(Exception("无法获取播放地址"))
+                                } else {
+                                    Result.success(info to playData)
+                                }
+                            },
+                            onFailure = { error ->
+                                Result.failure(error)
+                            }
+                        )
+                    }
+
+                    PlaybackBootstrapMode.DETAIL_ONLY -> {
+                        VideoRepository.getVideoDetails(
+                            bvid = bvid,
+                            aid = aid,
+                            requestedCid = cid,
+                            targetQuality = defaultQuality,
+                            audioLang = audioLang
+                        )
+                    }
+                }
+
+                Triple(mergedDetailResult, relatedDeferred.await(), emoteMap)
             }
             
             return detailResult.fold(
@@ -1051,7 +1106,7 @@ class VideoPlaybackUseCase(
         isDolbyVisionSupported: Boolean
     ): Int {
         val capabilityCeiling = when {
-            isVip -> Int.MAX_VALUE
+            isVip -> 125
             isLoggedIn -> 80
             else -> 64
         }

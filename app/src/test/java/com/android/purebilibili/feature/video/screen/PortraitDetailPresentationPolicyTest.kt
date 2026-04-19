@@ -147,6 +147,28 @@ class PortraitDetailPresentationPolicyTest {
     }
 
     @Test
+    fun inlinePortraitPlayer_compactsWhenIntroHasScrolledDown() {
+        assertTrue(
+            shouldUseCompactInlinePortraitPlayerForIntroScroll(
+                useOfficialInlinePortraitDetailExperience = true,
+                selectedTabIndex = 0,
+                isPortraitFullscreen = false,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 80
+            )
+        )
+        assertFalse(
+            shouldUseCompactInlinePortraitPlayerForIntroScroll(
+                useOfficialInlinePortraitDetailExperience = true,
+                selectedTabIndex = 0,
+                isPortraitFullscreen = false,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 20
+            )
+        )
+    }
+
+    @Test
     fun inlinePortraitPlayer_commentTabUsesCollapsedVisualProgressWithoutChangingManualState() {
         assertEquals(
             1f,

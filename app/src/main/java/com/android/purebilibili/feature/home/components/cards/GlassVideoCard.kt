@@ -75,6 +75,8 @@ fun GlassVideoCard(
     animationEnabled: Boolean = true,  //  卡片动画开关
     motionTier: MotionTier = MotionTier.Normal,
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
+    isDataSaverActive: Boolean = false,
+    preferLowQualityCover: Boolean = false,
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
     showUpBadge: Boolean = true,
@@ -125,8 +127,12 @@ fun GlassVideoCard(
     //  [新增] 长按删除菜单状态
     var showDismissMenu by remember { mutableStateOf(false) }
     
-    val coverUrl = remember(video.bvid) {
-        FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic)
+    val useLowQualityCover = isDataSaverActive && preferLowQualityCover
+    val coverUrl = remember(video.bvid, useLowQualityCover) {
+        FormatUtils.resolveVideoCoverUrl(
+            if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic,
+            useLowQuality = useLowQualityCover
+        )
     }
     
     val primaryColor = MaterialTheme.colorScheme.primary

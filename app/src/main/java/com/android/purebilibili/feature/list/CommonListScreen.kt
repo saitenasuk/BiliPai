@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.list
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.spring
 import dev.chrisbanes.haze.HazeState
@@ -53,7 +54,9 @@ import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -69,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
+import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
@@ -96,6 +100,10 @@ import com.android.purebilibili.feature.space.SeasonSeriesDetailViewModel
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlayMode
 import com.android.purebilibili.feature.video.player.PlaylistManager
+import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
+import com.android.purebilibili.core.util.resolveScrollToTopPlan
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 
 internal enum class FavoriteContentMode {
     BASE_LIST,
@@ -143,10 +151,13 @@ fun CommonListScreen(
     onCollectionClick: ((Long, Long, String) -> Unit)? = null,
     onFavoriteFolderClick: ((Long, Long, String) -> Unit)? = null,
     onPlayAllAudioClick: ((String, Long) -> Unit)? = null,
-    globalHazeState: HazeState? = null // [新增] 接收全局 HazeState
+    globalHazeState: HazeState? = null, // [新增] 接收全局 HazeState
+    scrollToTopChannel: Channel<Unit>? = null
 ) {
     val state by viewModel.uiState.collectAsState()
     val primaryGridState = rememberLazyGridState()
+    val subscribedFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val favoritePagerGridStates = remember { mutableStateMapOf<Int, androidx.compose.foundation.lazy.grid.LazyGridState>() }
     
     // 📱 响应式布局参数
     // Fix: 手机端(Compact)使用较小的最小宽度以保证2列显示 (360dp / 170dp = 2.1 -> 2列)
@@ -317,6 +328,76 @@ fun CommonListScreen(
     val pagerState = rememberPagerState(initialPage = 0) {
         if (favoriteViewModel != null && foldersState.size > 1) foldersState.size else 0
     }
+
+    val commonListBottomPadding = resolveBottomSafeAreaPadding(
+        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        extraBottomPadding = 120.dp
+    )
+    val activeCommonListScrollState = remember(
+        favoriteViewModel,
+        favoriteContentMode,
+        isSubscribedBrowse,
+        pagerState.currentPage,
+        primaryGridState,
+        subscribedFolderListState,
+        favoritePagerGridStates.size
+    ) {
+        {
+            when {
+                isSubscribedBrowse -> CommonListScrollState.List(subscribedFolderListState)
+                favoriteViewModel != null && favoriteContentMode == FavoriteContentMode.PAGER -> {
+                    favoritePagerGridStates[pagerState.currentPage]?.let(CommonListScrollState::Grid)
+                        ?: CommonListScrollState.Grid(primaryGridState)
+                }
+                else -> CommonListScrollState.Grid(primaryGridState)
+            }
+        }
+    }
+    val shouldShowBackToTop by remember {
+        derivedStateOf {
+            when (val scrollState = activeCommonListScrollState()) {
+                is CommonListScrollState.Grid -> shouldShowCommonListBackToTop(
+                    firstVisibleItemIndex = scrollState.state.firstVisibleItemIndex,
+                    firstVisibleItemScrollOffset = scrollState.state.firstVisibleItemScrollOffset
+                )
+                is CommonListScrollState.List -> shouldShowCommonListBackToTop(
+                    firstVisibleItemIndex = scrollState.state.firstVisibleItemIndex,
+                    firstVisibleItemScrollOffset = scrollState.state.firstVisibleItemScrollOffset
+                )
+            }
+        }
+    }
+
+    suspend fun scrollCommonListToTop() {
+        when (val scrollState = activeCommonListScrollState()) {
+            is CommonListScrollState.Grid -> {
+                val currentIndex = scrollState.state.firstVisibleItemIndex
+                val plan = resolveScrollToTopPlan(currentIndex)
+                plan.preJumpIndex?.let { preJump ->
+                    if (currentIndex > preJump) {
+                        scrollState.state.scrollToItem(preJump)
+                    }
+                }
+                scrollState.state.animateScrollToItem(plan.animateTargetIndex)
+            }
+            is CommonListScrollState.List -> {
+                val currentIndex = scrollState.state.firstVisibleItemIndex
+                val plan = resolveScrollToTopPlan(currentIndex)
+                plan.preJumpIndex?.let { preJump ->
+                    if (currentIndex > preJump) {
+                        scrollState.state.scrollToItem(preJump)
+                    }
+                }
+                scrollState.state.animateScrollToItem(plan.animateTargetIndex)
+            }
+        }
+    }
+
+    LaunchedEffect(scrollToTopChannel) {
+        scrollToTopChannel?.receiveAsFlow()?.collect {
+            scrollCommonListToTop()
+        }
+    }
     
     // [Fix] 协程作用域 (用于 UI 事件触发的滚动)
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -400,6 +481,7 @@ fun CommonListScreen(
                             top = headerHeightDp,
                             bottom = scaffoldPadding.calculateBottomPadding()
                         ),
+                        listState = subscribedFolderListState,
                         spacing = spacing.medium,
                         hasMore = subscribedFolderProgressState.hasMore,
                         isLoadingMore = subscribedFolderProgressState.isLoadingMore,
@@ -483,14 +565,17 @@ fun CommonListScreen(
                                     playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl)
                                 },
                                 onCollectionClick = onCollectionClick,
-                                onLoadMore = { favoriteVm.loadMoreForFolder(page) },
-                                onUnfavorite = if (folderUiState.canRemoveItems) {
-                                    { video -> favoriteVm.removeVideo(video) }
-                                } else {
-                                    null
-                                }
-                            )
-                        }
+                            onLoadMore = { favoriteVm.loadMoreForFolder(page) },
+                            onUnfavorite = if (folderUiState.canRemoveItems) {
+                                { video -> favoriteVm.removeVideo(video) }
+                            } else {
+                                null
+                            },
+                            gridState = favoritePagerGridStates.getOrPut(page) {
+                                androidx.compose.foundation.lazy.grid.LazyGridState()
+                            }
+                        )
+                    }
                     }
 
                     FavoriteContentMode.SINGLE_FOLDER -> {
@@ -781,6 +866,32 @@ fun CommonListScreen(
                             }
                         }
                     }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = shouldShowBackToTop,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = commonListBottomPadding + 12.dp),
+                enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(180)) +
+                    androidx.compose.animation.scaleIn(initialScale = 0.92f),
+                exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(140)) +
+                    androidx.compose.animation.scaleOut(targetScale = 0.92f)
+            ) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            scrollCommonListToTop()
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(
+                        imageVector = rememberAppChevronUpIcon(),
+                        contentDescription = "回到顶部"
+                    )
                 }
             }
         }
@@ -1205,6 +1316,7 @@ private fun FavoriteSubscribedFolderList(
     folders: List<com.android.purebilibili.data.model.response.FavFolder>,
     searchQuery: String,
     padding: PaddingValues,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     spacing: androidx.compose.ui.unit.Dp,
     hasMore: Boolean,
     isLoadingMore: Boolean,
@@ -1219,7 +1331,6 @@ private fun FavoriteSubscribedFolderList(
         return
     }
 
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val shouldLoadMore = androidx.compose.runtime.remember {
         androidx.compose.runtime.derivedStateOf {
             val layoutInfo = listState.layoutInfo
@@ -1249,6 +1360,11 @@ private fun FavoriteSubscribedFolderList(
             FavoriteSubscribedFolderRow(folder = folder, onClick = { onFolderClick(folder) })
         }
     }
+}
+
+private sealed interface CommonListScrollState {
+    data class Grid(val state: androidx.compose.foundation.lazy.grid.LazyGridState) : CommonListScrollState
+    data class List(val state: androidx.compose.foundation.lazy.LazyListState) : CommonListScrollState
 }
 
 @Composable

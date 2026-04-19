@@ -228,6 +228,9 @@ private fun DownloadTaskItem(
                         contentAlignment = Alignment.Center
                     ) {
                         when (task.status) {
+                            DownloadStatus.QUEUED -> {
+                                Text("排队中", color = Color.White, fontSize = 12.sp)
+                            }
                             DownloadStatus.DOWNLOADING, DownloadStatus.MERGING -> {
                                 CircularProgressIndicator(
                                     progress = { task.progress },
@@ -304,6 +307,7 @@ private fun DownloadTaskItem(
                 
                 // 状态文字
                 val statusText = when (task.status) {
+                    DownloadStatus.QUEUED -> "排队中..."
                     DownloadStatus.PENDING -> "等待中..."
                     DownloadStatus.DOWNLOADING -> "下载中 ${(task.progress * 100).toInt()}%"
                     DownloadStatus.MERGING -> "处理中..."

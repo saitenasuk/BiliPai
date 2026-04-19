@@ -906,6 +906,7 @@ fun HomeScreen(
     //  根据滚动距离动态调整 BottomBar 可见性
     //  逻辑优化：使用 nestedScrollConnection 监听滚动
     var isHeaderVisible by rememberSaveable { mutableStateOf(true) }
+    var areTopTabsManuallyCollapsed by rememberSaveable { mutableStateOf(false) }
     
     // Constants
     val topTabStyle = remember(isBottomBarFloating, isHeaderBlurEnabled, isTopBarLiquidGlassEnabled) {
@@ -1262,6 +1263,7 @@ fun HomeScreen(
                                      cardTransitionEnabled = cardTransitionEnabled,
                                      smartVisualGuardEnabled = false,
                                      isDataSaverActive = isDataSaverActive,
+                                     preferLowQualityCover = homeSettings.lowQualityHomeCoverInDataSaver,
                                      compactStatsOnCover = homeSettings.compactVideoStatsOnCover,
                                      showCoverGlassBadges = homeSettings.showHomeCoverGlassBadges,
                                      showInfoGlassBadges = homeSettings.showHomeInfoGlassBadges,
@@ -1420,6 +1422,10 @@ fun HomeScreen(
                 isForwardNavigatingToDetail = hideTopTabsForForwardDetailNav,
                 isReturningFromDetail = CardPositionManager.isReturningFromDetail
             ),
+            topTabsCollapsed = areTopTabsManuallyCollapsed,
+            onTopTabsCollapsedChange = { collapsed ->
+                areTopTabsManuallyCollapsed = collapsed
+            },
             motionTier = deviceUiProfile.motionTier,
             isScrolling = isFeedScrollInProgress,
             isTransitionRunning = isHeaderTransitionRunning,

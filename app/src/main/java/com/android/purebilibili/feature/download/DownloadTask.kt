@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 enum class DownloadStatus {
+    QUEUED,         // 已加入队列，等待轮到
     PENDING,        // 等待下载
     DOWNLOADING,    // 下载中
     MERGING,        // 合并音视频中
