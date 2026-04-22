@@ -79,6 +79,7 @@ fun StoryVideoCard(
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
     showUpBadge: Boolean = true,
+    showDurationBadge: Boolean = true,
     showPublishTime: Boolean = false,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
@@ -294,7 +295,7 @@ fun StoryVideoCard(
             }
             
             //  时长标签 (保留在封面上)
-            if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
+            if (showDurationBadge && badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -322,7 +323,7 @@ fun StoryVideoCard(
                             .padding(horizontal = 6.dp, vertical = 3.dp)
                     )
                 }
-            } else {
+            } else if (showDurationBadge) {
                 Text(
                     text = durationText,
                     color = Color.White,

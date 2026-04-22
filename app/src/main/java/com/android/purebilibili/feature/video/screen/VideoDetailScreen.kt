@@ -2712,6 +2712,7 @@ fun VideoDetailScreen(
                                                         onRetryAiSummary = { viewModel.retryAiSummary() },
                                                         bgmInfo = success.bgmInfo,
                                                         onBgmClick = onBgmClick,
+                                                        onlineCount = success.onlineCount,
                                                         ownerFollowerCount = success.ownerFollowerCount,
                                                         ownerVideoCount = success.ownerVideoCount,
                                                         showUpBadge = homeUpBadgesVisible,

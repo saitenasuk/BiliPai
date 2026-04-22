@@ -148,6 +148,7 @@ fun ElegantVideoCard(
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
     showUpBadge: Boolean = true,
+    showDurationBadge: Boolean = true,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
@@ -569,7 +570,7 @@ fun ElegantVideoCard(
                     Spacer(modifier = Modifier.weight(1f))
 
                     //  时长标签 (与播放量/评论数同行对齐)
-                    if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
+                    if (showDurationBadge && badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
                         Surface(
                             shape = RoundedCornerShape(smallCornerRadius),
                             color = emphasizedCoverPillColors.containerColor,
@@ -595,7 +596,7 @@ fun ElegantVideoCard(
                                     .padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
-                    } else {
+                    } else if (showDurationBadge) {
                         Text(
                             text = durationText,
                             color = Color.White,
@@ -615,7 +616,7 @@ fun ElegantVideoCard(
                 }
             } else {
                 //  非贴封面模式时，时长标签仍独立显示在右下角
-                if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
+                if (showDurationBadge && badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -644,7 +645,7 @@ fun ElegantVideoCard(
                                 .padding(horizontal = 4.dp, vertical = 2.dp)
                         )
                     }
-                } else {
+                } else if (showDurationBadge) {
                     Text(
                         text = durationText,
                         color = Color.White,

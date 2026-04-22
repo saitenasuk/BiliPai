@@ -75,6 +75,7 @@ internal fun HomeCategoryPageContent(
     showCoverGlassBadges: Boolean = true,
     showInfoGlassBadges: Boolean = true,
     showUpBadges: Boolean = true,
+    showDurationBadges: Boolean = true,
     oldContentAnchorBvid: String? = null,
     oldContentStartIndex: Int? = null,
     todayWatchEnabled: Boolean = false,
@@ -287,6 +288,7 @@ internal fun HomeCategoryPageContent(
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
                                         showUpBadge = showUpBadges,
+                                        showDurationBadge = showDurationBadges,
                                         showPublishTime = true,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onLongClick = if (isDynamicDetailCard) null else ({ longPressCallback(video) }),
@@ -320,6 +322,7 @@ internal fun HomeCategoryPageContent(
                                         showCoverGlassBadges = showCoverGlassBadges,
                                         showInfoGlassBadges = showInfoGlassBadges,
                                         showUpBadge = showUpBadges,
+                                        showDurationBadge = showDurationBadges,
                                         onDismiss = { onDismissVideo(video.bvid) },
                                         onWatchLater = if (isDynamicDetailCard) null else ({
                                             onWatchLater(video.bvid, resolveWatchLaterAid(video))

@@ -372,6 +372,12 @@ fun AppearanceSettingsContent(
     val homeUpBadgesVisible by SettingsManager
         .getHomeUpBadgesVisible(context)
         .collectAsState(initial = true)
+    val homeVideoDurationBadgesVisible by SettingsManager
+        .getHomeVideoDurationBadgesVisible(context)
+        .collectAsState(initial = true)
+    val showOnlineCount by SettingsManager
+        .getShowOnlineCount(context)
+        .collectAsState(initial = false)
     val showMd3DynamicColorControl =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val showThemeColorPicker = !state.dynamicColor
@@ -1221,6 +1227,24 @@ fun AppearanceSettingsContent(
 
                         IOSDivider(modifier = Modifier.padding(start = 16.dp))
                         IOSSwitchItem(
+                            icon = CupertinoIcons.Default.Clock,
+                            title = "首页视频时长",
+                            subtitle = if (homeVideoDurationBadgesVisible) {
+                                "推荐视频封面右下角显示时长"
+                            } else {
+                                "隐藏推荐视频封面的时长，减少封面占用"
+                            },
+                            checked = homeVideoDurationBadgesVisible,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setHomeVideoDurationBadgesVisible(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSGreen
+                        )
+
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
+                        IOSSwitchItem(
                             icon = CupertinoIcons.Default.Tag,
                             title = "信息区玻璃样式",
                             subtitle = if (homeInfoGlassBadgesVisible) {
@@ -1253,6 +1277,24 @@ fun AppearanceSettingsContent(
                                 }
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSBlue
+                        )
+
+                        IOSDivider(modifier = Modifier.padding(start = 16.dp))
+                        IOSSwitchItem(
+                            icon = CupertinoIcons.Default.ChartBar,
+                            title = "视频页观看人数",
+                            subtitle = if (showOnlineCount) {
+                                "普通视频页和播放器控制层显示“xx人正在看”"
+                            } else {
+                                "关闭后不展示同时观看人数"
+                            },
+                            checked = showOnlineCount,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setShowOnlineCount(context, it)
+                                }
+                            },
+                            iconTint = com.android.purebilibili.core.theme.iOSPurple
                         )
                         
                         // 网格列数设置 (仅在双列网格模式下显示)
