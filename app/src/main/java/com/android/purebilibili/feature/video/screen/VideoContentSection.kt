@@ -258,6 +258,8 @@ fun VideoContentSection(
     onRetryAiSummary: () -> Unit = {},
     bgmInfo: BgmInfo? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
+    onlineCount: String = "",
+    showOnlineCount: Boolean = true,
     ownerFollowerCount: Int? = null,
     ownerVideoCount: Int? = null,
     showUpBadge: Boolean = true,
@@ -388,6 +390,8 @@ fun VideoContentSection(
                         aiSummaryPrompt = aiSummaryPrompt,
                         onRetryAiSummary = onRetryAiSummary,
                         bgmInfo = bgmInfo,
+                        onlineCount = onlineCount,
+                        showOnlineCount = showOnlineCount,
                         onTimestampClick = onTimestampClick,
                         onBgmClick = onBgmClick,
                         showInteractionActions = showInteractionActions,
@@ -516,6 +520,8 @@ private fun VideoIntroTab(
     bgmInfo: BgmInfo? = null,
     onTimestampClick: ((Long) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
+    onlineCount: String = "",
+    showOnlineCount: Boolean = true,
     showInteractionActions: Boolean = true,
     animateVideoDetailLayout: Boolean = true
 ) {
@@ -556,6 +562,8 @@ private fun VideoIntroTab(
                 aiSummaryPrompt = aiSummaryPrompt,
                 onRetryAiSummary = onRetryAiSummary,
                 bgmInfo = bgmInfo,
+                onlineCount = onlineCount,
+                showOnlineCount = showOnlineCount,
                 onTimestampClick = onTimestampClick,
                 onBgmClick = onBgmClick,
                 showInteractionActions = showInteractionActions,
@@ -818,6 +826,8 @@ private fun VideoHeaderContent(
     bgmInfo: BgmInfo? = null,
     onTimestampClick: ((Long) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
+    onlineCount: String = "",
+    showOnlineCount: Boolean = true,
     showInteractionActions: Boolean = true,
     animateVideoDetailLayout: Boolean = true
 ) {
@@ -849,6 +859,8 @@ private fun VideoHeaderContent(
             videoTags = videoTags,
             transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
             bgmInfo = bgmInfo,
+            onlineCount = onlineCount,
+            showOnlineCount = showOnlineCount,
             onBgmClick = onBgmClick,
             animateLayout = animateVideoDetailLayout
         )

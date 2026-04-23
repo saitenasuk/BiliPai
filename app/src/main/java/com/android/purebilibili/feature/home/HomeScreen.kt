@@ -1276,6 +1276,7 @@ fun HomeScreen(
                                      showCoverGlassBadges = homeSettings.showHomeCoverGlassBadges,
                                      showInfoGlassBadges = homeSettings.showHomeInfoGlassBadges,
                                      showUpBadges = homeSettings.showHomeUpBadges,
+                                     showDurationBadges = homeSettings.showHomeVideoDurationBadges,
                                      oldContentAnchorBvid = if (shouldShowRecommendOldContentDivider(
                                              currentCategory = category,
                                              refreshNewItemsKey = state.refreshNewItemsKey,
