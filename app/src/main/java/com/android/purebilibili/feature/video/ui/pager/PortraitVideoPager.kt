@@ -166,6 +166,11 @@ internal enum class PortraitFavoriteAction {
     OpenFavoriteFolders
 }
 
+internal enum class PortraitDanmakuSurfaceMode {
+    VideoViewport,
+    Page
+}
+
 /**
  * 竖屏无缝滑动播放页面 (TikTok Style)
  * 
@@ -207,6 +212,7 @@ fun PortraitVideoPager(
     val danmakuEnabled = danmakuSettings.enabled
     val danmakuOpacity = danmakuSettings.opacity
     val danmakuFontScale = danmakuSettings.fontScale
+    val effectiveDanmakuFontScale = resolvePortraitDanmakuReadableFontScale(danmakuFontScale)
     val danmakuSpeed = danmakuSettings.speed
     val danmakuDisplayArea = danmakuSettings.displayArea
     val danmakuMergeDuplicates = danmakuSettings.mergeDuplicates
@@ -827,6 +833,7 @@ fun PortraitVideoPager(
     LaunchedEffect(
         danmakuOpacity,
         danmakuFontScale,
+        effectiveDanmakuFontScale,
         danmakuSpeed,
         danmakuDisplayArea,
         danmakuMergeDuplicates,
@@ -840,7 +847,7 @@ fun PortraitVideoPager(
     ) {
         danmakuManager.updateSettings(
             opacity = danmakuOpacity,
-            fontScale = danmakuFontScale,
+            fontScale = effectiveDanmakuFontScale,
             speed = danmakuSpeed,
             displayArea = danmakuDisplayArea,
             mergeDuplicates = danmakuMergeDuplicates,
@@ -1479,6 +1486,22 @@ private fun VideoPageItem(
                 scaleY = commentExpandedPlayerScale
                 transformOrigin = TransformOrigin(0.5f, 0f)
             }
+        val danmakuSurfaceMode = resolvePortraitDanmakuSurfaceMode(currentVideoAspect)
+        val viewportTransformModifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = panX
+                translationY = panY
+            }
+        val pageDanmakuModifier = mediaLayerModifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = panX
+                translationY = panY
+            }
 
         // [核心逻辑]
         // 始终保留 AndroidView 以确保 Surface 准备就绪，但只有当播放器加载了当前视频时才将其绑定或显示
@@ -1492,14 +1515,7 @@ private fun VideoPageItem(
             ) {
                 key(currentPlayingBvid, bvid) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                                translationX = panX
-                                translationY = panY
-                            }
+                        modifier = viewportTransformModifier
                     ) {
                         AndroidView(
                             factory = { ctx ->
@@ -1527,41 +1543,35 @@ private fun VideoPageItem(
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        if (danmakuEnabled) {
-                            AndroidView(
-                                factory = { ctx ->
-                                    FaceOcclusionDanmakuContainer(ctx).apply {
-                                        setMasks(faceVisualMasks)
-                                        setVideoViewport(
-                                            videoWidth = exoPlayer.videoSize.width,
-                                            videoHeight = exoPlayer.videoSize.height,
-                                            resizeMode = resolvePortraitPagerResizeMode()
-                                        )
-                                        danmakuManager.attachView(danmakuView())
-                                    }
-                                },
-                                update = { container ->
-                                    container.setMasks(faceVisualMasks)
-                                    container.setVideoViewport(
-                                        videoWidth = exoPlayer.videoSize.width,
-                                        videoHeight = exoPlayer.videoSize.height,
-                                        resizeMode = playerViewRef?.resizeMode ?: resolvePortraitPagerResizeMode()
-                                    )
-                                    val view = container.danmakuView()
-                                    if (view.width > 0 && view.height > 0) {
-                                        val sizeTag = "${view.width}x${view.height}"
-                                        if (view.tag != sizeTag) {
-                                            view.tag = sizeTag
-                                            danmakuManager.attachView(view)
-                                        }
-                                    }
-                                },
+                        if (danmakuEnabled && danmakuSurfaceMode == PortraitDanmakuSurfaceMode.VideoViewport) {
+                            PortraitDanmakuOverlay(
+                                danmakuManager = danmakuManager,
+                                faceVisualMasks = faceVisualMasks,
+                                videoWidth = exoPlayer.videoSize.width,
+                                videoHeight = exoPlayer.videoSize.height,
+                                resizeMode = playerViewRef?.resizeMode ?: resolvePortraitPagerResizeMode(),
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
                 }
             }
+        }
+
+        if (
+            isCurrentPage &&
+            isPlayerReadyForThisVideo &&
+            danmakuEnabled &&
+            danmakuSurfaceMode == PortraitDanmakuSurfaceMode.Page
+        ) {
+            PortraitDanmakuOverlay(
+                danmakuManager = danmakuManager,
+                faceVisualMasks = faceVisualMasks,
+                videoWidth = exoPlayer.videoSize.width,
+                videoHeight = exoPlayer.videoSize.height,
+                resizeMode = playerViewRef?.resizeMode ?: resolvePortraitPagerResizeMode(),
+                modifier = pageDanmakuModifier
+            )
         }
 
         // 封面图 (在加载中、未匹配到视频、或未开始播放时显示)
@@ -2200,7 +2210,60 @@ internal fun resolvePortraitVideoInteractionUiState(
     }
 }
 
+@Composable
+private fun PortraitDanmakuOverlay(
+    danmakuManager: DanmakuManager,
+    faceVisualMasks: List<FaceOcclusionVisualMask>,
+    videoWidth: Int,
+    videoHeight: Int,
+    resizeMode: Int,
+    modifier: Modifier = Modifier
+) {
+    AndroidView(
+        factory = { ctx ->
+            FaceOcclusionDanmakuContainer(ctx).apply {
+                setMasks(faceVisualMasks)
+                setVideoViewport(
+                    videoWidth = videoWidth,
+                    videoHeight = videoHeight,
+                    resizeMode = resizeMode
+                )
+                danmakuManager.attachView(danmakuView())
+            }
+        },
+        update = { container ->
+            container.setMasks(faceVisualMasks)
+            container.setVideoViewport(
+                videoWidth = videoWidth,
+                videoHeight = videoHeight,
+                resizeMode = resizeMode
+            )
+            val view = container.danmakuView()
+            if (view.width > 0 && view.height > 0) {
+                val sizeTag = "${view.width}x${view.height}"
+                if (view.tag != sizeTag) {
+                    view.tag = sizeTag
+                    danmakuManager.attachView(view)
+                }
+            }
+        },
+        modifier = modifier
+    )
+}
+
 internal fun resolvePortraitPagerRepeatMode(): Int = Player.REPEAT_MODE_OFF
+
+internal fun resolvePortraitDanmakuSurfaceMode(currentVideoAspect: Float): PortraitDanmakuSurfaceMode {
+    return if (currentVideoAspect > 1f) {
+        PortraitDanmakuSurfaceMode.Page
+    } else {
+        PortraitDanmakuSurfaceMode.VideoViewport
+    }
+}
+
+internal fun resolvePortraitDanmakuReadableFontScale(fontScale: Float): Float {
+    return (fontScale * 1.18f).coerceIn(0.3f, 2.0f)
+}
 
 internal data class PortraitVideoViewportSize(
     val width: Int,

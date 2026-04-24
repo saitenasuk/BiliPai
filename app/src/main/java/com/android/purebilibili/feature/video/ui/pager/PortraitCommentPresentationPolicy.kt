@@ -14,6 +14,11 @@ internal fun shouldOpenPortraitCommentThreadDetail(
     useEmbeddedPresentation: Boolean
 ): Boolean = true
 
+internal fun resolvePortraitCommentHostMainSheetVisible(
+    commentSheetVisible: Boolean,
+    subReplyVisible: Boolean
+): Boolean = commentSheetVisible || subReplyVisible
+
 private const val PORTRAIT_COMMENT_SHEET_PLAYER_SCALE = 0.58f
 
 internal fun resolvePortraitCommentExpandedPlayerScale(

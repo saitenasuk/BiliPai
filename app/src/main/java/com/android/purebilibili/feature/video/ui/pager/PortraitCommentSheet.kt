@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.ui.pager
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.video.ui.components.VideoCommentSheetHost
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
@@ -20,8 +22,14 @@ fun PortraitCommentSheet(
     onReplyClick: (ReplyItem) -> Unit = {},
     onUserClick: (Long) -> Unit
 ) {
+    val subReplyState by commentViewModel.subReplyState.collectAsState()
+    val hostMainSheetVisible = resolvePortraitCommentHostMainSheetVisible(
+        commentSheetVisible = visible,
+        subReplyVisible = subReplyState.visible
+    )
+
     VideoCommentSheetHost(
-        mainSheetVisible = visible,
+        mainSheetVisible = hostMainSheetVisible,
         onDismiss = onDismiss,
         onMainSheetVisibilityProgressChange = onVisibilityProgressChange,
         commentViewModel = commentViewModel,

@@ -29,6 +29,16 @@ class PortraitCommentPresentationPolicyTest {
     }
 
     @Test
+    fun `portrait thread detail keeps main sheet presentation even if parent sheet flag is false`() {
+        assertTrue(
+            resolvePortraitCommentHostMainSheetVisible(
+                commentSheetVisible = false,
+                subReplyVisible = true
+            )
+        )
+    }
+
+    @Test
     fun `portrait player shrinks while comment sheet is expanded`() {
         assertEquals(0.58f, resolvePortraitCommentExpandedPlayerScale(commentSheetVisible = true))
         assertEquals(1f, resolvePortraitCommentExpandedPlayerScale(commentSheetVisible = false))

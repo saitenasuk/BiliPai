@@ -75,6 +75,52 @@ class PlaybackSeekControllerTest {
     }
 
     @Test
+    fun forwardPendingSeek_clearsWhenPlaybackHasAdvancedPastTarget() {
+        val commitResult = finishPlaybackSeekInteraction(
+            updatePlaybackSeekInteraction(
+                state = startPlaybackSeekInteraction(
+                    state = syncPlaybackSeekSession(
+                        state = PlaybackSeekSessionState(),
+                        playbackPositionMs = 10_000L
+                    )
+                ),
+                positionMs = 25_000L
+            )
+        )
+
+        val synced = syncPlaybackSeekSession(
+            state = commitResult.state,
+            playbackPositionMs = 25_800L
+        )
+
+        assertEquals(25_800L, synced.sliderPositionMs)
+        assertNull(synced.pendingSeekPositionMs)
+    }
+
+    @Test
+    fun backwardPendingSeek_clearsWhenPlaybackHasMovedBeforeTarget() {
+        val commitResult = finishPlaybackSeekInteraction(
+            updatePlaybackSeekInteraction(
+                state = startPlaybackSeekInteraction(
+                    state = syncPlaybackSeekSession(
+                        state = PlaybackSeekSessionState(),
+                        playbackPositionMs = 80_000L
+                    )
+                ),
+                positionMs = 25_000L
+            )
+        )
+
+        val synced = syncPlaybackSeekSession(
+            state = commitResult.state,
+            playbackPositionMs = 24_200L
+        )
+
+        assertEquals(24_200L, synced.sliderPositionMs)
+        assertNull(synced.pendingSeekPositionMs)
+    }
+
+    @Test
     fun cancelSeek_restoresLastPlaybackPosition() {
         val draggingState = updatePlaybackSeekInteraction(
             state = startPlaybackSeekInteraction(
