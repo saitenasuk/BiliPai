@@ -24,7 +24,7 @@ private const val VIDEO_PLAYER_COVER_REVEAL_HOLD_DELAY_MILLIS = 96
 private const val VIDEO_PLAYER_SURFACE_REVEAL_DURATION_MILLIS = 220
 private const val VIDEO_PLAYER_SURFACE_REVEAL_INITIAL_SCALE = 0.985f
 
-internal const val LONG_PRESS_SPEED_LOCK_THRESHOLD_DP = 72
+internal const val LONG_PRESS_SPEED_LOCK_ZONE_HEIGHT_DP = 96
 internal const val FOREGROUND_SURFACE_RECOVERY_DELAY_MS = 80L
 internal const val FOREGROUND_SURFACE_RECOVERY_TIMEOUT_MS = 1200L
 
@@ -157,16 +157,18 @@ internal fun shouldEnableViewportTransformGesture(
     return false
 }
 
-internal fun shouldLockLongPressSpeedBySwipe(
+internal fun shouldLockLongPressSpeedInTargetZone(
     isLongPressing: Boolean,
     alreadyLocked: Boolean,
-    totalDragDistanceY: Float,
-    thresholdPx: Float
+    currentPointerY: Float,
+    containerHeightPx: Float,
+    lockZoneHeightPx: Float
 ): Boolean {
-    return isLongPressing &&
-        !alreadyLocked &&
-        thresholdPx > 0f &&
-        totalDragDistanceY <= -thresholdPx
+    if (!isLongPressing || alreadyLocked) return false
+    if (containerHeightPx <= 0f || lockZoneHeightPx <= 0f) return false
+    val clampedZoneHeightPx = lockZoneHeightPx.coerceAtMost(containerHeightPx / 2f)
+    return currentPointerY <= clampedZoneHeightPx ||
+        currentPointerY >= containerHeightPx - clampedZoneHeightPx
 }
 
 internal fun shouldConsumeExclusiveLongPressSpeedDrag(
