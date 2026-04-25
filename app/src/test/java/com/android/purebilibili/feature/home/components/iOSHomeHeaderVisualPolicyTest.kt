@@ -786,9 +786,9 @@ class iOSHomeHeaderVisualPolicyTest {
     }
 
     @Test
-    fun `ios unified home header keeps blur on the local panel while preserving top backdrop blur`() {
+    fun `ios unified home header removes local glass panel while preserving top backdrop blur`() {
         assertEquals(
-            HomeTopChromeRenderMode.BLUR,
+            HomeTopChromeRenderMode.PLAIN,
             resolveHomeTopPanelChromeRenderMode(
                 renderMode = HomeTopChromeRenderMode.BLUR,
                 uiPreset = UiPreset.IOS,

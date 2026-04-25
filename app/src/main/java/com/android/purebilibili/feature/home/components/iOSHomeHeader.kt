@@ -691,9 +691,7 @@ internal fun resolveHomeTopPanelChromeRenderMode(
     uiPreset: UiPreset = UiPreset.IOS,
     useUnifiedPanel: Boolean = false
 ): HomeTopChromeRenderMode {
-    if (useUnifiedPanel && renderMode == HomeTopChromeRenderMode.BLUR && uiPreset == UiPreset.IOS) {
-        return HomeTopChromeRenderMode.BLUR
-    }
+    if (useUnifiedPanel) return HomeTopChromeRenderMode.PLAIN
     return resolveHomeTopLocalChromeRenderMode(
         renderMode = renderMode,
         uiPreset = uiPreset
@@ -1594,6 +1592,8 @@ fun iOSHomeHeader(
         tabHeightDp = currentTabHeight.value,
         integratedCollapsedTopBar = integratedCollapsedTopBar
     )
+    val drawUnifiedTopPanelChrome =
+        renderUnifiedTopPanelChrome && effectiveTopPanelChromeRenderMode != HomeTopChromeRenderMode.PLAIN
     val isTopTabViewportSyncEnabled = resolveHomeTopTabViewportSyncEnabled(
         currentTabHeightDp = currentTabHeight.value,
         tabAlpha = tabAlpha,
@@ -1662,7 +1662,7 @@ fun iOSHomeHeader(
                                 .padding(horizontal = unifiedPanelHorizontalPadding)
                                 .clip(unifiedPanelShape)
                                 .then(
-                                    if (renderUnifiedTopPanelChrome) {
+                                    if (drawUnifiedTopPanelChrome) {
                                         Modifier.homeTopChromeSurface(
                                             renderMode = effectiveTopPanelChromeRenderMode,
                                             shape = unifiedPanelShape,
@@ -1685,7 +1685,7 @@ fun iOSHomeHeader(
                                 )
                                 .then(
                                     if (
-                                        renderUnifiedTopPanelChrome &&
+                                        drawUnifiedTopPanelChrome &&
                                         !integratedCollapsedTopBar &&
                                         !useUnifiedLiquidChrome
                                     ) {
@@ -1700,7 +1700,7 @@ fun iOSHomeHeader(
                     )
             ) {
                 if (
-                    renderUnifiedTopPanelChrome &&
+                    drawUnifiedTopPanelChrome &&
                     useUnifiedTopPanel &&
                     !integratedCollapsedTopBar &&
                     !useUnifiedLiquidChrome
@@ -2105,6 +2105,7 @@ fun iOSHomeHeader(
                     if (
                         useUnifiedTopPanel &&
                         shouldShowUnifiedHomeTopPanelDivider(uiPreset) &&
+                        drawUnifiedTopPanelChrome &&
                         currentTabHeight > 0.dp &&
                         tabAlpha * tabContentAlpha > 0f &&
                         searchRevealFraction > 0f
