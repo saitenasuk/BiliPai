@@ -172,6 +172,17 @@ internal class DampedDragAnimationState(
             offsetAnimation.snapTo(desiredDragOffsetPx)
         }
     }
+
+    fun setPressed(pressed: Boolean) {
+        pressJob?.cancel()
+        pressJob = scope.launch {
+            if (pressed) {
+                pressProgressAnimation.animateTo(1f, motionSpec.drag.pressSpring.toSpringSpec())
+            } else if (!isDragging) {
+                pressProgressAnimation.animateTo(0f, motionSpec.drag.pressSpring.toSpringSpec())
+            }
+        }
+    }
     
     /**
      * 立即跳转到指定位置（无动画）

@@ -914,6 +914,19 @@ fun VideoPlayerSection(
         }
     }
 
+    fun applyExplicitPlaybackSpeedChange(speed: Float) {
+        if (
+            shouldClearLockedLongPressSpeedForExplicitSpeedChange(
+                longPressSpeedLocked = longPressSpeedLocked,
+                isLongPressing = isLongPressing
+            )
+        ) {
+            longPressSpeedLocked = false
+            lockedLongPressSpeed = speed
+        }
+        playerState.player.setPlaybackSpeed(speed)
+    }
+
     var rootModifier = Modifier
         .fillMaxSize()
         .clipToBounds()
@@ -1018,7 +1031,7 @@ fun VideoPlayerSection(
                                 containerHeightPx = size.height.toFloat()
                             )
                             if (abs(playerState.player.playbackParameters.speed - resolvedSpeed) > 0.001f) {
-                                playerState.player.setPlaybackSpeed(resolvedSpeed)
+                                applyExplicitPlaybackSpeedChange(resolvedSpeed)
                             }
                             twoFingerFeedbackSpeed = resolvedSpeed
                             twoFingerSpeedFeedbackVisible = true
@@ -3206,20 +3219,59 @@ fun VideoPlayerSection(
             exit = fadeOut(animationSpec = tween(gestureMotionSpec.longPressHintDurationMillis))
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
+                val lockZoneVisual = resolveLongPressSpeedLockZoneVisualPolicy()
                 val zoneModifier = Modifier
                     .fillMaxWidth()
                     .height(LONG_PRESS_SPEED_LOCK_ZONE_HEIGHT_DP.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
-                    .border(
-                        width = 1.dp,
-                        color = Color.White.copy(alpha = 0.36f)
+                val markerColor = MaterialTheme.colorScheme.primary
+                Box(modifier = zoneModifier.align(Alignment.TopCenter)) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .height(lockZoneVisual.edgeGradientHeightDp.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        markerColor.copy(alpha = lockZoneVisual.edgeGradientAlpha),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
                     )
-                Box(
-                    modifier = zoneModifier.align(Alignment.TopCenter)
-                )
-                Box(
-                    modifier = zoneModifier.align(Alignment.BottomCenter)
-                )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth(lockZoneVisual.centerMarkerWidthFraction)
+                            .height(lockZoneVisual.centerMarkerHeightDp.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(markerColor.copy(alpha = lockZoneVisual.centerMarkerAlpha))
+                    )
+                }
+                Box(modifier = zoneModifier.align(Alignment.BottomCenter)) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(lockZoneVisual.edgeGradientHeightDp.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        markerColor.copy(alpha = lockZoneVisual.edgeGradientAlpha)
+                                    )
+                                )
+                            )
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth(lockZoneVisual.centerMarkerWidthFraction)
+                            .height(lockZoneVisual.centerMarkerHeightDp.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(markerColor.copy(alpha = lockZoneVisual.centerMarkerAlpha))
+                    )
+                }
             }
         }
 
@@ -3823,6 +3875,7 @@ fun VideoPlayerSection(
                 // 🔁 [新增] 播放模式
                 currentPlayMode = currentPlayMode,
                 onPlayModeClick = onPlayModeClick,
+                onPlaybackSpeedChange = ::applyExplicitPlaybackSpeedChange,
                 
                 // [新增] 侧边栏抽屉数据与交互
                 relatedVideos = relatedVideos,

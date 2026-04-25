@@ -39,7 +39,7 @@ fun LandscapeChatOverlay(
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
                 try {
                     messages.add(item)
-                    if (messages.size > 50) messages.removeFirst() // 横屏模式只保留最近50条
+                    if (messages.size > 50) messages.removeAt(0) // 横屏模式只保留最近50条
                     if (!listState.isScrollInProgress && messages.isNotEmpty()) {
                         listState.animateScrollToItem((messages.size - 1).coerceAtLeast(0))
                     }

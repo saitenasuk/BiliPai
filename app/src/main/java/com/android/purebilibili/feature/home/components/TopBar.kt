@@ -170,6 +170,29 @@ internal fun resolveTopTabItemWidthDp(
     return baseWidth.coerceAtLeast(resolveTopTabMinItemWidthDp(isFloatingStyle))
 }
 
+internal fun resolveTopTabVisibleCategorySlots(
+    categoryCount: Int,
+    longestLabelLength: Int = 0
+): Int {
+    return resolveTopTabVisibleSlots(
+        categoryCount = categoryCount,
+        longestLabelLength = longestLabelLength
+    ).coerceAtMost(categoryCount.coerceAtLeast(1)).coerceAtLeast(1)
+}
+
+internal fun resolveTopTabActionSlotWidthDp(
+    containerWidthDp: Float,
+    categoryCount: Int,
+    longestLabelLength: Int = 0
+): Float {
+    if (containerWidthDp <= 0f) return 0f
+    val categorySlots = resolveTopTabVisibleCategorySlots(
+        categoryCount = categoryCount,
+        longestLabelLength = longestLabelLength
+    )
+    return containerWidthDp / (categorySlots + 1)
+}
+
 internal fun normalizeTopTabLabelMode(mode: Int): Int {
     return when (mode) {
         0, 1, 2 -> mode
@@ -532,27 +555,45 @@ fun CategoryTabRow(
         return
     }
 
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(tabRowHeight)
-            .padding(horizontal = resolveTopTabRowHorizontalPaddingDp(
-                isFloatingStyle = isFloatingStyle,
-                edgeToEdge = edgeToEdge
-            ).dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(
+                horizontal = resolveTopTabRowHorizontalPaddingDp(
+                    isFloatingStyle = isFloatingStyle,
+                    edgeToEdge = edgeToEdge
+                ).dp
+            )
     ) {
-        // [Refactor] 使用 BoxWithConstraints 动态计算宽度
-        BoxWithConstraints(
+        val longestLabelLength = categories.maxOfOrNull { it.length } ?: 0
+        val visibleCategorySlots = resolveTopTabVisibleCategorySlots(
+            categoryCount = categories.size,
+            longestLabelLength = longestLabelLength
+        )
+        val actionSlotWidth = resolveTopTabActionSlotWidthDp(
+            containerWidthDp = maxWidth.value,
+            categoryCount = categories.size,
+            longestLabelLength = longestLabelLength
+        ).dp
+        val tabViewportWidth = actionSlotWidth * visibleCategorySlots
+
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
+                .fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // [Refactor] 使用 BoxWithConstraints 动态计算宽度
+            BoxWithConstraints(
+                modifier = Modifier
+                    .width(tabViewportWidth)
+                    .fillMaxHeight()
+            ) {
             val tabWidth = resolveTopTabItemWidthDp(
                 containerWidthDp = maxWidth.value,
                 categoryCount = categories.size,
                 isFloatingStyle = isFloatingStyle,
-                longestLabelLength = categories.maxOfOrNull { it.length } ?: 0
+                longestLabelLength = longestLabelLength
             ).dp
             val localDensity = LocalDensity.current
             val tabListState = rememberLazyListState()
@@ -845,32 +886,36 @@ fun CategoryTabRow(
                 }
             }
         }
-        
-        Spacer(modifier = Modifier.width(4.dp))
-        
+
         //  分区按钮
         Box(
             modifier = Modifier
-                .size(actionButtonSize)
-                .clip(RoundedCornerShape(actionButtonCorner))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
-                },
+                .width(actionSlotWidth)
+                .fillMaxHeight(),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                resolveTopTabPartitionIcon(uiPreset),
-                contentDescription = "浏览全部分区",
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.size(actionIconSize)
-            )
+            Box(
+                modifier = Modifier
+                    .size(actionButtonSize)
+                    .clip(RoundedCornerShape(actionButtonCorner))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    resolveTopTabPartitionIcon(uiPreset),
+                    contentDescription = "浏览全部分区",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.size(actionIconSize)
+                )
+            }
         }
-        
-        Spacer(modifier = Modifier.width(8.dp))
     }
+}
 }
 
 @Composable

@@ -64,7 +64,7 @@ internal const val DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED = true
  */
 enum class LiquidGlassStyle(val value: Int) {
     CLASSIC(0),      // BiliPai's Wavy Ripple
-    SIMP_MUSIC(1),   // SimpMusic's Adaptive Lens
+    SUKISU(1),       // SukiSU floating bottom bar glass
     IOS26(2);        // iOS26-like layered liquid glass
 
     companion object {
@@ -85,7 +85,7 @@ enum class LiquidGlassMode(val value: Int, val label: String) {
 internal fun resolveLegacyLiquidGlassMode(style: LiquidGlassStyle): LiquidGlassMode = when (style) {
     LiquidGlassStyle.IOS26 -> LiquidGlassMode.CLEAR
     LiquidGlassStyle.CLASSIC -> LiquidGlassMode.BALANCED
-    LiquidGlassStyle.SIMP_MUSIC -> LiquidGlassMode.FROSTED
+    LiquidGlassStyle.SUKISU -> LiquidGlassMode.BALANCED
 }
 
 internal fun resolveDefaultLiquidGlassStrength(mode: LiquidGlassMode): Float = when (mode) {
@@ -149,7 +149,7 @@ internal fun resolveLegacyLiquidGlassStyleFromProgress(progress: Float): LiquidG
     return when (resolveLiquidGlassModeFromProgress(progress)) {
         LiquidGlassMode.CLEAR -> LiquidGlassStyle.IOS26
         LiquidGlassMode.BALANCED -> LiquidGlassStyle.CLASSIC
-        LiquidGlassMode.FROSTED -> LiquidGlassStyle.SIMP_MUSIC
+        LiquidGlassMode.FROSTED -> LiquidGlassStyle.SUKISU
     }
 }
 
@@ -728,7 +728,7 @@ object SettingsManager {
     private val KEY_LIQUID_GLASS_MODE = intPreferencesKey("liquid_glass_mode")
     private val KEY_LIQUID_GLASS_STRENGTH = floatPreferencesKey("liquid_glass_strength")
     private val KEY_LIQUID_GLASS_PROGRESS = floatPreferencesKey("liquid_glass_progress")
-    private val FIXED_LIQUID_GLASS_STYLE = LiquidGlassStyle.CLASSIC
+    private val FIXED_LIQUID_GLASS_STYLE = LiquidGlassStyle.SUKISU
     private val FIXED_LIQUID_GLASS_MODE = LiquidGlassMode.BALANCED
     private const val FIXED_LIQUID_GLASS_STRENGTH = 0.52f
     private const val FIXED_LIQUID_GLASS_PROGRESS = 0.5f

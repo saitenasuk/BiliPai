@@ -32,6 +32,14 @@ class TopTabLayoutPolicyTest {
     }
 
     @Test
+    fun `ios top tab action shares centered slot with visible categories`() {
+        assertEquals(1, resolveTopTabVisibleCategorySlots(1, longestLabelLength = 2))
+        assertEquals(5, resolveTopTabVisibleCategorySlots(5, longestLabelLength = 6))
+        assertEquals(100f, resolveTopTabActionSlotWidthDp(600f, 5, longestLabelLength = 6), 0.001f)
+        assertEquals(100f, resolveTopTabItemWidthDp(500f, 5, isFloatingStyle = false), 0.001f)
+    }
+
+    @Test
     fun `live route decision should follow category key not localized label`() {
         assertTrue(shouldRouteTopTabToLivePage("LIVE"))
         assertTrue(shouldRouteTopTabToLivePage("live"))

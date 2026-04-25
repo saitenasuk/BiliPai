@@ -75,21 +75,23 @@ class BottomBarMiuixPolicyTest {
     }
 
     @Test
-    fun `android native floating branch reuses shared refraction motion policy`() {
+    fun `android native floating branch uses sukisu three layer backdrop structure`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
 
-        assertTrue(source.contains("val refractionMotionProfile = resolveBottomBarRefractionMotionProfile("))
-        assertTrue(source.contains("val refractionLayerPolicy = resolveBottomBarRefractionLayerPolicy("))
-        assertTrue(source.contains("rememberCombinedBackdrop(backdrop, tintedContentBackdrop)"))
+        assertTrue(source.contains("val tabsBackdrop = rememberLayerBackdrop()"))
+        assertTrue(source.contains(".layerBackdrop(tabsBackdrop)"))
+        assertTrue(source.contains("rememberCombinedBackdrop(backdrop, tabsBackdrop)"))
+        assertTrue(source.contains("lens(24.dp.toPx(), 24.dp.toPx())"))
+        assertTrue(source.contains("chromaticAberration = true"))
     }
 
     @Test
-    fun `android native indicator backdrop keeps blur before lens distortion`() {
+    fun `android native indicator backdrop matches sukisu lens order`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
 
         assertTrue(
             Regex(
-                """\.background\(indicatorColor, shellShape\)[\s\S]*?drawBackdrop\([\s\S]*?effects = \{[\s\S]*?blur\([\s\S]*?lens\(""",
+                """rememberCombinedBackdrop\(backdrop, tabsBackdrop\)[\s\S]*?drawBackdrop\([\s\S]*?effects = \{[\s\S]*?lens\([\s\S]*?chromaticAberration = true""",
                 RegexOption.MULTILINE
             ).containsMatchIn(source)
         )

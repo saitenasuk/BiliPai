@@ -10,26 +10,78 @@ class BottomBarMiuixStructureTest {
     @Test
     fun `android native floating branch renders through kernelsu aligned renderer`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
-        val exportOffsetUses = "translationX = exportPanelOffsetPx".toRegex().findAll(source).count()
-        val indicatorOffsetUses = "translationX = indicatorPanelOffsetPx".toRegex().findAll(source).count()
-        val visibleOffsetUses = "translationX = visiblePanelOffsetPx".toRegex().findAll(source).count()
+        val kernelSuRendererSource = source
+            .substringAfter("private fun KernelSuAlignedBottomBar(")
+            .substringBefore("@Composable\nprivate fun AndroidNativeBottomBarItem(")
 
         assertTrue(source.contains("KernelSuAlignedBottomBar("))
-        assertTrue(source.contains("AndroidNativeBottomBarTuning("))
-        assertTrue(source.contains("resolveSharedBottomBarCapsuleShape("))
-        assertTrue(source.contains("drawBackdrop("))
-        assertTrue(source.contains("vibrancy()"))
-        assertTrue(source.contains("lens("))
-        assertTrue(source.contains("ColorFilter.tint("))
-        assertTrue(source.contains("rememberCombinedBackdrop(backdrop, tintedContentBackdrop)"))
-        assertTrue(source.contains("val motionProgress by remember"))
-        assertTrue(source.contains("Highlight.Default.copy(alpha = motionProgress)"))
-        assertTrue(source.contains("val exportPanelOffsetPx by remember"))
-        assertTrue(source.contains("val indicatorPanelOffsetPx by remember"))
-        assertTrue(source.contains("val visiblePanelOffsetPx by remember"))
-        assertTrue(exportOffsetUses == 2)
-        assertTrue(indicatorOffsetUses == 1)
-        assertTrue(visibleOffsetUses == 2)
+        assertTrue(kernelSuRendererSource.contains("AndroidNativeBottomBarTuning"))
+        assertTrue(kernelSuRendererSource.contains("resolveSharedBottomBarCapsuleShape("))
+        assertTrue(kernelSuRendererSource.contains("drawBackdrop("))
+        assertTrue(kernelSuRendererSource.contains("vibrancy()"))
+        assertTrue(kernelSuRendererSource.contains("lens("))
+        assertTrue(kernelSuRendererSource.contains("ColorFilter.tint("))
+        assertTrue(kernelSuRendererSource.contains("rememberCombinedBackdrop(backdrop, tabsBackdrop)"))
+        assertTrue(kernelSuRendererSource.contains("val tabsBackdrop = rememberLayerBackdrop()"))
+        assertTrue(kernelSuRendererSource.contains("val progress = dampedDragState.pressProgress"))
+        assertTrue(kernelSuRendererSource.contains("layerBlock = {"))
+        assertTrue(kernelSuRendererSource.contains("val indicatorScale = lerp(1f, 78f / 56f, motionProgress)"))
+        assertTrue(kernelSuRendererSource.contains("val velocity = dampedDragState.velocity / 10f"))
+        assertTrue(kernelSuRendererSource.contains("scaleX = indicatorScale /"))
+        assertTrue(kernelSuRendererSource.contains("scaleY = indicatorScale *"))
+        assertTrue(kernelSuRendererSource.contains("chromaticAberration = true"))
+        assertTrue(kernelSuRendererSource.contains("selected = true,"))
+        assertTrue(kernelSuRendererSource.contains("selectedColor = exportTintColor,"))
+        assertTrue(kernelSuRendererSource.contains("unselectedColor = exportTintColor,"))
+        assertTrue(kernelSuRendererSource.contains("Highlight.Default.copy(alpha = motionProgress)"))
+        assertFalse(kernelSuRendererSource.contains("item = currentItem,"))
+        assertFalse(kernelSuRendererSource.contains("val tintedContentBackdrop = rememberLayerBackdrop()"))
+        assertFalse(kernelSuRendererSource.contains("val refractionMotionProfile by remember"))
+    }
+
+    @Test
+    fun `sukisu renderer draws visible content below indicator with transparent input overlay`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+        val kernelSuRendererSource = source
+            .substringAfter("private fun KernelSuAlignedBottomBar(")
+            .substringBefore("@Composable\nprivate fun AndroidNativeBottomBarItem(")
+
+        val visibleContentIndex = kernelSuRendererSource.indexOf("selected = currentItem == item")
+        val tintCaptureIndex = kernelSuRendererSource.indexOf(".layerBackdrop(tabsBackdrop)")
+        val indicatorIndex = kernelSuRendererSource.indexOf("backdrop = contentBackdrop")
+        val hitOverlayIndex = kernelSuRendererSource.indexOf(
+            ".alpha(0f)\n                        .graphicsLayer { translationX = panelOffsetPx }\n                        .horizontalDragGesture",
+            startIndex = indicatorIndex
+        )
+
+        assertTrue(visibleContentIndex >= 0)
+        assertTrue(tintCaptureIndex > visibleContentIndex)
+        assertTrue(indicatorIndex > tintCaptureIndex)
+        assertTrue(hitOverlayIndex > indicatorIndex)
+    }
+
+    @Test
+    fun `android native input overlay forwards press state to indicator animation`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+        val kernelSuRendererSource = source
+            .substringAfter("private fun KernelSuAlignedBottomBar(")
+            .substringBefore("@Composable\nprivate fun AndroidNativeBottomBarItem(")
+        val androidItemSource = source.substringAfter("@Composable\nprivate fun AndroidNativeBottomBarItem(")
+
+        assertTrue(kernelSuRendererSource.contains("onPressChanged = dampedDragState::setPressed"))
+        assertTrue(androidItemSource.contains("collectIsPressedAsState()"))
+        assertTrue(androidItemSource.contains("LaunchedEffect(isPressed, interactive)"))
+    }
+
+    @Test
+    fun `ios floating bottom bar also routes to sukisu renderer`() {
+        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
+        val iosRendererSource = source
+            .substringAfter("if (LocalUiPreset.current == UiPreset.MD3)")
+            .substringBefore("// 🔒 [防抖]")
+
+        assertTrue(iosRendererSource.contains("KernelSuAlignedBottomBar("))
+        assertTrue(iosRendererSource.contains("iconStyle = SharedFloatingBottomBarIconStyle.CUPERTINO"))
     }
 
     @Test

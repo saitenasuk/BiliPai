@@ -491,7 +491,7 @@ internal fun resolveHomeTopUnifiedPanelInnerPadding(
     } else if (uiPreset == UiPreset.MD3) {
         10.dp
     } else {
-        8.dp
+        6.dp
     }
 }
 
@@ -517,7 +517,7 @@ internal fun resolveHomeTopUnifiedPanelCornerRadius(
     } else if (uiPreset == UiPreset.MD3) {
         16.dp
     } else {
-        28.dp
+        32.dp
     }
 }
 
@@ -545,6 +545,8 @@ internal fun resolveHomeTopSearchToTabsSpacing(
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): Dp {
     return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        4.dp
+    } else if (uiPreset == UiPreset.IOS) {
         4.dp
     } else {
         6.dp
@@ -1222,11 +1224,7 @@ fun iOSHomeHeader(
         homeSettings?.liquidGlassProgress,
         liquidStyle
     ) {
-        if (homeSettings != null) {
-            resolveLiquidGlassTuning(progress = homeSettings.liquidGlassProgress)
-        } else {
-            resolveLiquidGlassTuning(liquidStyle)
-        }
+        resolveLiquidGlassTuning(liquidStyle)
     }
     val topChromeRenderMode = resolveHomeTopChromeRenderMode(
         materialMode = topChromeMaterialMode,

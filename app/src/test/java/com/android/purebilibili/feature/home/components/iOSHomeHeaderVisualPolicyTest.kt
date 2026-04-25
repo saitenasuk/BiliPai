@@ -329,7 +329,7 @@ class iOSHomeHeaderVisualPolicyTest {
     @Test
     fun `home header collapse distance includes search spacing before pinned tabs`() {
         assertEquals(
-            54.dp,
+            52.dp,
             resolveHomeTopSearchCollapseDistance(
                 searchBarHeight = 48.dp,
                 uiPreset = UiPreset.IOS
@@ -352,7 +352,7 @@ class iOSHomeHeaderVisualPolicyTest {
         assertEquals(48.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
         assertEquals(14.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true))
         assertEquals(10.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true, uiPreset = UiPreset.MD3))
-        assertEquals(6.dp, resolveHomeTopSearchToTabsSpacing())
+        assertEquals(4.dp, resolveHomeTopSearchToTabsSpacing())
         assertEquals(6.dp, resolveHomeTopSearchToTabsSpacing(UiPreset.MD3))
     }
 
@@ -364,9 +364,9 @@ class iOSHomeHeaderVisualPolicyTest {
         assertTrue(shouldShowUnifiedHomeTopPanelDivider(UiPreset.MD3))
         assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding())
         assertEquals(0.dp, resolveHomeTopUnifiedPanelHorizontalPadding(UiPreset.MD3))
-        assertEquals(8.dp, resolveHomeTopUnifiedPanelInnerPadding())
+        assertEquals(6.dp, resolveHomeTopUnifiedPanelInnerPadding())
         assertEquals(10.dp, resolveHomeTopUnifiedPanelInnerPadding(UiPreset.MD3))
-        assertEquals(28.dp, resolveHomeTopUnifiedPanelCornerRadius())
+        assertEquals(32.dp, resolveHomeTopUnifiedPanelCornerRadius())
         assertEquals(16.dp, resolveHomeTopUnifiedPanelCornerRadius(UiPreset.MD3))
         assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding())
         assertEquals(0.dp, resolveHomeTopEmbeddedTabHorizontalPadding(UiPreset.MD3))
@@ -409,7 +409,7 @@ class iOSHomeHeaderVisualPolicyTest {
     @Test
     fun `home list top padding reserves full unified header height without underlapping md3 tabs`() {
         assertEquals(
-            175.dp,
+            169.dp,
             resolveHomeTopReservedListPadding(
                 statusBarHeight = 44.dp,
                 searchBarHeight = 48.dp,

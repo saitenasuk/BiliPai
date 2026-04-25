@@ -89,7 +89,7 @@ fun LiveChatSection(
                 try {
                     val shouldAutoScroll = !listState.isScrollInProgress && !isAwayFromBottom
                     messages.add(item)
-                    if (messages.size > 200) messages.removeFirst()
+                    if (messages.size > 200) messages.removeAt(0)
                     // 只有当用户没有滚动时才自动滚动
                     if (shouldAutoScroll && messages.isNotEmpty()) {
                         listState.animateScrollToItem(messages.size - 1)

@@ -28,11 +28,33 @@ internal const val LONG_PRESS_SPEED_LOCK_ZONE_HEIGHT_DP = 96
 internal const val FOREGROUND_SURFACE_RECOVERY_DELAY_MS = 80L
 internal const val FOREGROUND_SURFACE_RECOVERY_TIMEOUT_MS = 1200L
 
+internal data class LongPressSpeedLockZoneVisualPolicy(
+    val zoneFillAlpha: Float,
+    val borderAlpha: Float,
+    val edgeGradientAlpha: Float,
+    val centerMarkerAlpha: Float,
+    val edgeGradientHeightDp: Int,
+    val centerMarkerHeightDp: Int,
+    val centerMarkerWidthFraction: Float
+)
+
 internal data class LongPressSpeedStartDecision(
     val originalPlaybackParameters: PlaybackParameters,
     val targetPlaybackParameters: PlaybackParameters,
     val clearExistingLock: Boolean
 )
+
+internal fun resolveLongPressSpeedLockZoneVisualPolicy(): LongPressSpeedLockZoneVisualPolicy {
+    return LongPressSpeedLockZoneVisualPolicy(
+        zoneFillAlpha = 0f,
+        borderAlpha = 0f,
+        edgeGradientAlpha = 0.24f,
+        centerMarkerAlpha = 0.68f,
+        edgeGradientHeightDp = 16,
+        centerMarkerHeightDp = 3,
+        centerMarkerWidthFraction = 0.34f
+    )
+}
 
 internal fun resolveGestureSeekableDurationMs(
     playbackDurationMs: Long,
@@ -187,6 +209,13 @@ internal fun shouldReapplyLockedLongPressSpeed(
     return longPressSpeedLocked &&
         !isLongPressing &&
         abs(observedPlaybackSpeed - lockedLongPressSpeed) > 0.001f
+}
+
+internal fun shouldClearLockedLongPressSpeedForExplicitSpeedChange(
+    longPressSpeedLocked: Boolean,
+    isLongPressing: Boolean
+): Boolean {
+    return longPressSpeedLocked && !isLongPressing
 }
 
 internal fun shouldRestorePlaybackParametersAfterLongPressRelease(

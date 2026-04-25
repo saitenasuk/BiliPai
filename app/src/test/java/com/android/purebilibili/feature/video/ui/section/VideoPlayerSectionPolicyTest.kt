@@ -890,6 +890,17 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun longPressSpeedLock_visualHidesBroadGlassZones() {
+        val visual = resolveLongPressSpeedLockZoneVisualPolicy()
+
+        assertEquals(0f, visual.zoneFillAlpha)
+        assertEquals(0f, visual.borderAlpha)
+        assertTrue(visual.edgeGradientAlpha > 0f)
+        assertTrue(visual.centerMarkerAlpha > visual.edgeGradientAlpha)
+        assertTrue(visual.centerMarkerWidthFraction < 0.5f)
+    }
+
+    @Test
     fun longPressSpeedDrag_usesSingleLongPressDragGestureDetector() {
         val source = loadVideoPlayerSectionSource()
 
@@ -957,6 +968,28 @@ class VideoPlayerSectionPolicyTest {
                 isLongPressing = false,
                 observedPlaybackSpeed = 1.0f,
                 lockedLongPressSpeed = 2.0f
+            )
+        )
+    }
+
+    @Test
+    fun explicitPlaybackSpeedChange_clearsLockedLongPressSpeedBeforeApplyingUserSpeed() {
+        assertTrue(
+            shouldClearLockedLongPressSpeedForExplicitSpeedChange(
+                longPressSpeedLocked = true,
+                isLongPressing = false
+            )
+        )
+        assertFalse(
+            shouldClearLockedLongPressSpeedForExplicitSpeedChange(
+                longPressSpeedLocked = true,
+                isLongPressing = true
+            )
+        )
+        assertFalse(
+            shouldClearLockedLongPressSpeedForExplicitSpeedChange(
+                longPressSpeedLocked = false,
+                isLongPressing = false
             )
         )
     }

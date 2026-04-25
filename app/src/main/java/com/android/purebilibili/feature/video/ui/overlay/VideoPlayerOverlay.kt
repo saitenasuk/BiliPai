@@ -433,6 +433,7 @@ fun VideoPlayerOverlay(
     // 🔁 [新增] 播放模式
     currentPlayMode: com.android.purebilibili.feature.video.player.PlayMode = com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL,
     onPlayModeClick: () -> Unit = {},
+    onPlaybackSpeedChange: (Float) -> Unit = { speed -> player.setPlaybackSpeed(speed) },
     
     // [新增] 侧边栏抽屉数据与交互
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo> = emptyList(),
@@ -1481,7 +1482,7 @@ fun VideoPlayerOverlay(
                 currentSpeed = currentSpeed,
                 onSpeedSelected = { speed ->
                     currentSpeed = speed
-                    player.setPlaybackSpeed(speed)
+                    onPlaybackSpeedChange(speed)
                     scope.launch {
                         SettingsManager.setLastPlaybackSpeed(context, speed)
                     }
@@ -1595,7 +1596,7 @@ fun VideoPlayerOverlay(
                 currentSpeed = currentSpeed,
                 onSpeedChange = { speed ->
                     currentSpeed = speed
-                    player.setPlaybackSpeed(speed)
+                    onPlaybackSpeedChange(speed)
                     scope.launch {
                         SettingsManager.setLastPlaybackSpeed(context, speed)
                     }
