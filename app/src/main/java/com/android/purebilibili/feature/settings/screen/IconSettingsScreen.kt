@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +55,17 @@ data class IconOption(val key: String, val name: String, val desc: String, val i
 
 // 分组定义
 data class IconGroup(val title: String, val icons: List<IconOption>)
+
+internal fun resolveIconSettingsContainerColor(
+    background: Color,
+    surfaceVariant: Color
+): Color {
+    return lerp(
+        background.copy(alpha = 1f),
+        surfaceVariant.copy(alpha = 1f),
+        0.3f
+    ).copy(alpha = 1f)
+}
 
 // This function was implicitly requested to be moved here.
 // Assuming its content based on common patterns for such a function.
@@ -120,7 +132,10 @@ fun IconSettingsScreen(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), // iOS 分组背景色风格
+        containerColor = resolveIconSettingsContainerColor(
+            background = MaterialTheme.colorScheme.background,
+            surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+        ),
         contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
         IconSettingsContent(

@@ -41,6 +41,7 @@ class AppIconAliasMappingTest {
         val aliases = allManagedAppIconLauncherAliases("com.android.purebilibili")
         assertTrue(aliases.contains("com.android.purebilibili.MainActivityAliasBiliPai"))
         assertTrue(aliases.contains("com.android.purebilibili.MainActivityAliasHeadphone"))
+        assertTrue(aliases.contains("com.android.purebilibili.MainActivityAlias3D"))
         kotlin.test.assertFalse(aliases.contains("com.android.purebilibili.MainActivityAliasFlatMaterial"))
         kotlin.test.assertFalse(aliases.contains("com.android.purebilibili.MainActivityAliasRetro"))
     }

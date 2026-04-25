@@ -95,6 +95,8 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
 private const val AUTO_HIDE_DELAY = 4000L
+private const val VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 96
+private const val VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 120
 
 // Keep for backward compatibility, maps to new GestureMode
 enum class FullscreenGestureMode { None, Brightness, Volume, Seek }
@@ -104,6 +106,24 @@ internal fun shouldRebindFullscreenSurfaceOnResume(
     hasPlayer: Boolean
 ): Boolean {
     return hasPlayerView && hasPlayer
+}
+
+internal fun shouldStartFullscreenDragGesture(
+    gesturesEnabled: Boolean,
+    showControls: Boolean,
+    startY: Float,
+    screenHeight: Float,
+    statusBarExclusionZonePx: Float,
+    visibleTopControlsHeightPx: Float,
+    visibleBottomControlsHeightPx: Float
+): Boolean {
+    if (!gesturesEnabled || screenHeight <= 0f) return false
+    if (startY < statusBarExclusionZonePx) return false
+    if (!showControls) return true
+
+    val topControlsBottom = visibleTopControlsHeightPx.coerceAtLeast(statusBarExclusionZonePx)
+    val bottomControlsTop = (screenHeight - visibleBottomControlsHeightPx).coerceAtLeast(0f)
+    return startY >= topControlsBottom && startY <= bottomControlsTop
 }
 
 /**
@@ -401,6 +421,12 @@ fun FullscreenPlayerOverlay(
     
     // [问题8修复] 状态栏排除区域高度（像素）
     val statusBarExclusionZonePx = with(density) { 40.dp.toPx() }
+    val visibleTopControlsHeightPx = with(density) {
+        VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP.dp.toPx()
+    }
+    val visibleBottomControlsHeightPx = with(density) {
+        VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP.dp.toPx()
+    }
     val overlayHazeState = rememberRecoverableHazeState()
     val displayedProgressState = remember(
         currentPosition,
@@ -471,16 +497,27 @@ fun FullscreenPlayerOverlay(
                     }
                 )
             }
-            .pointerInput(gesturesEnabled, fullscreenSwipeSeekSeconds) {
-                if (!gesturesEnabled) return@pointerInput
+            .pointerInput(gesturesEnabled, fullscreenSwipeSeekSeconds, showControls) {
+                if (!gesturesEnabled) {
+                    return@pointerInput
+                }
                 
                 val screenWidth = size.width.toFloat()
                 val screenHeight = size.height.toFloat()
+                var dragGestureActive = false
                 
                 detectDragGestures(
                     onDragStart = { offset ->
-                        // [问题8修复] 排除状态栏区域的手势触发
-                        if (offset.y < statusBarExclusionZonePx) {
+                        dragGestureActive = shouldStartFullscreenDragGesture(
+                            gesturesEnabled = gesturesEnabled,
+                            showControls = showControls,
+                            startY = offset.y,
+                            screenHeight = screenHeight,
+                            statusBarExclusionZonePx = statusBarExclusionZonePx,
+                            visibleTopControlsHeightPx = visibleTopControlsHeightPx,
+                            visibleBottomControlsHeightPx = visibleBottomControlsHeightPx
+                        )
+                        if (!dragGestureActive) {
                             gestureMode = FullscreenGestureMode.None
                             return@detectDragGestures
                         }
@@ -508,6 +545,7 @@ fun FullscreenPlayerOverlay(
                     },
                     onDragEnd = {
                         if (
+                            dragGestureActive &&
                             gestureMode == FullscreenGestureMode.Seek &&
                             shouldCommitGestureSeek(
                                 currentPositionMs = gestureSeekStartPosition,
@@ -519,10 +557,15 @@ fun FullscreenPlayerOverlay(
                                 danmakuManager.seekTo(seekPreviewPosition)
                             }
                         }
+                        dragGestureActive = false
                         gestureMode = FullscreenGestureMode.None
                     },
-                    onDragCancel = { gestureMode = FullscreenGestureMode.None },
+                    onDragCancel = {
+                        dragGestureActive = false
+                        gestureMode = FullscreenGestureMode.None
+                    },
                     onDrag = { change, dragAmount ->
+                        if (!dragGestureActive) return@detectDragGestures
                         change.consume()
                         when (gestureMode) {
                             FullscreenGestureMode.Brightness -> {

@@ -269,21 +269,33 @@ internal fun resolveMd3TopTabActionButtonSize(
     isFloatingStyle: Boolean,
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ) = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
-    if (isFloatingStyle) 46.dp else 38.dp
+    if (isFloatingStyle) 50.dp else 44.dp
 } else {
-    if (isFloatingStyle) 44.dp else 36.dp
+    if (isFloatingStyle) 48.dp else 42.dp
 }
 
 internal fun resolveMd3TopTabActionIconSize(
     isFloatingStyle: Boolean,
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ) = if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
-    if (isFloatingStyle) 21.dp else 18.dp
+    if (isFloatingStyle) 24.dp else 22.dp
 } else {
-    if (isFloatingStyle) 20.dp else 18.dp
+    if (isFloatingStyle) 24.dp else 22.dp
 }
 
 internal fun resolveMd3TopTabActionContentBottomPadding(): Dp = 4.dp
+
+internal fun resolveIosTopTabRowHeight(isFloatingStyle: Boolean): Dp =
+    if (isFloatingStyle) 62.dp else 56.dp
+
+internal fun resolveIosTopTabActionButtonSize(isFloatingStyle: Boolean): Dp =
+    if (isFloatingStyle) 52.dp else 48.dp
+
+internal fun resolveIosTopTabActionButtonCorner(isFloatingStyle: Boolean): Dp =
+    if (isFloatingStyle) 24.dp else 22.dp
+
+internal fun resolveIosTopTabActionIconSize(isFloatingStyle: Boolean): Dp =
+    if (isFloatingStyle) 26.dp else 24.dp
 
 internal fun performHomeTopBarTap(
     haptic: (HapticType) -> Unit,
@@ -488,10 +500,10 @@ fun CategoryTabRow(
     val haptic = com.android.purebilibili.core.util.rememberHapticFeedback()
     val scrollChannel = com.android.purebilibili.feature.home.LocalHomeScrollChannel.current
     val coroutineScope = rememberCoroutineScope()
-    val tabRowHeight = if (isFloatingStyle) 62.dp else 48.dp
-    val actionButtonSize = if (isFloatingStyle) 50.dp else 44.dp
-    val actionButtonCorner = if (isFloatingStyle) 22.dp else 22.dp
-    val actionIconSize = if (isFloatingStyle) 22.dp else 20.dp
+    val tabRowHeight = resolveIosTopTabRowHeight(isFloatingStyle)
+    val actionButtonSize = resolveIosTopTabActionButtonSize(isFloatingStyle)
+    val actionButtonCorner = resolveIosTopTabActionButtonCorner(isFloatingStyle)
+    val actionIconSize = resolveIosTopTabActionIconSize(isFloatingStyle)
     val topIndicatorHeight = visualTuning.nonFloatingIndicatorHeightDp.dp
     val topIndicatorCorner = visualTuning.nonFloatingIndicatorCornerDp.dp
     val topIndicatorWidthRatio = visualTuning.nonFloatingIndicatorWidthRatio
@@ -1307,10 +1319,11 @@ fun CategoryTabItem(
      val showIcon = shouldShowTopTabIcon(normalizedLabelMode)
      val showText = shouldShowTopTabText(normalizedLabelMode)
      val icon = resolveTopTabCategoryIcon(categoryKey, uiPreset)
-     val iconSize = if (showText) 16.dp else 18.dp
+     val iconSize = resolveTopTabIconSizeDp(normalizedLabelMode).dp
      val textSize = resolveTopTabLabelTextSizeSp(normalizedLabelMode).sp
      val textLineHeight = resolveTopTabLabelLineHeightSp(normalizedLabelMode).sp
      val contentMinHeight = resolveTopTabContentMinHeightDp().dp
+     val iconTextSpacing = resolveTopTabIconTextSpacingDp(normalizedLabelMode).dp
      
      val targetScale = resolveTopTabContentScale(
          selectionFraction = selectionFraction,
@@ -1356,7 +1369,7 @@ fun CategoryTabItem(
                          .size(iconSize)
                          .offset(y = (-0.5).dp)
                  )
-                 Spacer(modifier = Modifier.height(2.dp))
+                 Spacer(modifier = Modifier.height(iconTextSpacing))
                  Text(
                      text = category,
                      color = contentColor,

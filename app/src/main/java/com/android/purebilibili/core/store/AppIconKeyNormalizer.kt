@@ -71,5 +71,6 @@ fun resolveAppIconLauncherAlias(packageName: String, rawKey: String?): String {
 fun allManagedAppIconLauncherAliases(packageName: String): Set<String> {
     return LAUNCHER_ALIAS_SUFFIX_BY_KEY.values
         .map { aliasSuffix -> "$APP_ICON_COMPONENT_PACKAGE_NAME.$aliasSuffix" }
+        .plus(APP_ICON_COMPAT_ALIAS_CLASS_NAME)
         .toSet()
 }

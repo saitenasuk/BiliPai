@@ -65,6 +65,28 @@ class VideoProgressBarPolicyTest {
     }
 
     @Test
+    fun dragCommitPosition_usesLatestDragTarget() {
+        assertEquals(
+            54_000L,
+            resolveSeekDragCommitPositionMs(
+                dragStartPositionMs = 18_000L,
+                latestDragPositionMs = 54_000L
+            )
+        )
+    }
+
+    @Test
+    fun dragCommitPosition_allowsDraggingBackToStart() {
+        assertEquals(
+            0L,
+            resolveSeekDragCommitPositionMs(
+                dragStartPositionMs = 18_000L,
+                latestDragPositionMs = 0L
+            )
+        )
+    }
+
+    @Test
     fun progressFraction_clampsOutsideBounds() {
         assertEquals(0f, resolveProgressFraction(positionMs = -1L, durationMs = 60_000L))
         assertEquals(1f, resolveProgressFraction(positionMs = 80_000L, durationMs = 60_000L))

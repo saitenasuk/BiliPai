@@ -22,7 +22,6 @@ import com.android.purebilibili.core.lifecycle.BackgroundManager
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.plugin.PluginManager
-import com.android.purebilibili.core.store.APP_ICON_COMPAT_ALIAS_CLASS_NAME
 import com.android.purebilibili.core.store.DEFAULT_ANALYTICS_ENABLED
 import com.android.purebilibili.core.store.DEFAULT_CRASH_TRACKING_ENABLED
 import com.android.purebilibili.core.store.SettingsManager
@@ -338,7 +337,6 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
             try {
                 val pm = packageManager
                 val packageName = this@PureApplication.packageName
-                val compatAlias = android.content.ComponentName(packageName, APP_ICON_COMPAT_ALIAS_CLASS_NAME)
                 val defaultLauncherAlias = resolveAppIconLauncherAlias(packageName, "icon_3d")
                 
                 // 读取用户保存的图标偏好
@@ -358,13 +356,6 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
                 val targetAliasComponent = android.content.ComponentName(packageName, targetAlias)
                 val targetState = pm.getComponentEnabledSetting(targetAliasComponent)
 
-                // 保留兼容入口（无 Launcher 图标），确保旧 IDE 运行配置可用
-                pm.setComponentEnabledSetting(
-                    compatAlias,
-                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    android.content.pm.PackageManager.DONT_KILL_APP
-                )
-                
                 // 如果目标alias是disabled（说明之前被禁用了，可能是重装），强制重置为默认(icon_3d)
                 if (currentIcon != "icon_3d" && targetState == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
                     Logger.d(PureApplicationRuntimeConfig.TAG, " Detected reinstall: target icon '$currentIcon' is disabled, resetting to 'icon_3d'")

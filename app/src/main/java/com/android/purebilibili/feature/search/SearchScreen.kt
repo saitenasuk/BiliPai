@@ -1064,7 +1064,11 @@ fun SearchTopBar(
     LaunchedEffect(autoFocusEnabled, query) {
         if (autoFocusEnabled && query.isEmpty()) {
             kotlinx.coroutines.delay(60)
-            focusRequester.requestFocus()
+            runCatching {
+                focusRequester.requestFocus()
+            }.onFailure { e ->
+                com.android.purebilibili.core.util.Logger.e("SearchScreen", "Failed to auto focus search field", e)
+            }
         }
     }
     

@@ -359,18 +359,18 @@ internal fun resolveHomeTopTabRowHeight(
     if (uiPreset == UiPreset.MD3) {
         if (androidNativeVariant == AndroidNativeVariant.MIUIX) {
             return if (showIconAndText) {
-                if (isTabFloating) 54.dp else 50.dp
+                if (isTabFloating) 60.dp else 56.dp
             } else {
-                if (isTabFloating) 50.dp else 46.dp
+                if (isTabFloating) 54.dp else 48.dp
             }
         }
         return if (showIconAndText) {
-            if (isTabFloating) 56.dp else 52.dp
+            if (isTabFloating) 62.dp else 60.dp
         } else {
-            if (isTabFloating) 48.dp else 44.dp
+            if (isTabFloating) 52.dp else 48.dp
         }
     }
-    return if (isTabFloating) 56.dp else 46.dp
+    return resolveIosTopTabRowHeight(isTabFloating)
 }
 
 internal fun resolveHomeTopSearchRowHorizontalPadding(

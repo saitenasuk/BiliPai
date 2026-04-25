@@ -133,6 +133,17 @@ internal fun resolveSeekPreviewTargetPositionMs(
     }
 }
 
+internal fun resolveSeekDragCommitPositionMs(
+    dragStartPositionMs: Long,
+    latestDragPositionMs: Long
+): Long {
+    return if (latestDragPositionMs >= 0L) {
+        latestDragPositionMs
+    } else {
+        dragStartPositionMs.coerceAtLeast(0L)
+    }
+}
+
 internal fun resolveProgressFraction(
     positionMs: Long,
     durationMs: Long
@@ -1004,6 +1015,11 @@ fun VideoProgressBar(
 ) {
     var containerWidthPx by remember { mutableFloatStateOf(0f) }
     var dragTargetPositionMs by remember { mutableLongStateOf(displayPositionMs.coerceAtLeast(0L)) }
+    val currentOnSeek by rememberUpdatedState(onSeek)
+    val currentOnSeekStart by rememberUpdatedState(onSeekStart)
+    val currentOnSeekDragStart by rememberUpdatedState(onSeekDragStart)
+    val currentOnSeekDragUpdate by rememberUpdatedState(onSeekDragUpdate)
+    val currentOnSeekDragCancel by rememberUpdatedState(onSeekDragCancel)
     LaunchedEffect(displayPositionMs, isSeekScrubbing) {
         if (!isSeekScrubbing) {
             dragTargetPositionMs = displayPositionMs.coerceAtLeast(0L)
@@ -1126,13 +1142,15 @@ fun VideoProgressBar(
                             durationMs = duration
                         )
                         dragTargetPositionMs = targetPositionMs
-                        onSeekStart()
-                        onSeekDragStart(targetPositionMs)
-                        onSeekDragUpdate(targetPositionMs)
-                        onSeek(targetPositionMs)
+                        currentOnSeekStart()
+                        currentOnSeekDragStart(targetPositionMs)
+                        currentOnSeekDragUpdate(targetPositionMs)
+                        currentOnSeek(targetPositionMs)
                     }
                 }
                 .pointerInput(duration) {
+                    var dragStartPositionMs = displayPositionMs.coerceAtLeast(0L)
+                    var latestDragPositionMs = dragStartPositionMs
                     detectDragGestures(
                         onDragStart = { offset ->
                             val targetPositionMs = resolveSeekPositionFromTouch(
@@ -1140,9 +1158,11 @@ fun VideoProgressBar(
                                 containerWidthPx = size.width.toFloat(),
                                 durationMs = duration
                             )
+                            dragStartPositionMs = targetPositionMs
+                            latestDragPositionMs = targetPositionMs
                             dragTargetPositionMs = targetPositionMs
-                            onSeekStart()
-                            onSeekDragStart(targetPositionMs)
+                            currentOnSeekStart()
+                            currentOnSeekDragStart(targetPositionMs)
                         },
                         onDrag = { change, _ ->
                             change.consume()
@@ -1151,14 +1171,20 @@ fun VideoProgressBar(
                                 containerWidthPx = size.width.toFloat(),
                                 durationMs = duration
                             )
+                            latestDragPositionMs = targetPositionMs
                             dragTargetPositionMs = targetPositionMs
-                            onSeekDragUpdate(targetPositionMs)
+                            currentOnSeekDragUpdate(targetPositionMs)
                         },
                         onDragEnd = {
-                            onSeek(dragTargetPositionMs)
+                            currentOnSeek(
+                                resolveSeekDragCommitPositionMs(
+                                    dragStartPositionMs = dragStartPositionMs,
+                                    latestDragPositionMs = latestDragPositionMs
+                                )
+                            )
                         },
                         onDragCancel = {
-                            onSeekDragCancel()
+                            currentOnSeekDragCancel()
                         }
                     )
                 },

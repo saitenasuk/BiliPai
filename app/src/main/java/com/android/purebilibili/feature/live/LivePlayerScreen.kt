@@ -80,8 +80,6 @@ import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.Checkmark
-import io.github.alexzhirkevich.cupertino.icons.outlined.Plus
-import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronDown
 import io.github.alexzhirkevich.cupertino.icons.outlined.ChevronBackward
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -702,24 +700,6 @@ fun LivePlayerScreen(
 
     val interactionContent: @Composable (Boolean) -> Unit = { isOverlay ->
         LivePrimaryInteractionPanel(
-            anchorInfoBar = {
-                AnchorInfoBar(
-                    roomTitle = liveRoomTitle,
-                    anchorInfo = anchorInfo,
-                    isFollowing = successState?.isFollowing ?: false,
-                    online = roomInfo.online,
-                    watchedText = roomInfo.watchedText,
-                    onlineRankText = roomInfo.onlineRankText,
-                    liveStartTime = roomInfo.liveStartTime,
-                    onFollowClick = { viewModel.toggleFollow() },
-                    onUserClick = onUserClick,
-                    onQualityClick = { showQualityMenu = true },
-                    currentQualityDesc = currentQualityDesc,
-                    onOpenRank = { showContributionRankSheet = true },
-                    onOpenSend = { showSendDanmakuSheet = true },
-                    onOpenBlock = { showBlockDialog = true }
-                )
-            },
             selectedTab = selectedInteractionTab,
             onSelectedTab = { selectedInteractionTab = it },
             chatContent = { chatContent(isOverlay, false) },
@@ -751,7 +731,14 @@ fun LivePlayerScreen(
                         onCopyLink = { copyLiveUrl() },
                         onShare = { shareLiveUrl() },
                         onShareToMessage = { shareLiveToMessage() },
-                        onOpenBrowser = { openLiveUrl() }
+                        onOpenBrowser = { openLiveUrl() },
+                        isFollowing = successState?.isFollowing ?: false,
+                        currentQualityDesc = currentQualityDesc,
+                        onFollowClick = { viewModel.toggleFollow() },
+                        onQualityClick = { showQualityMenu = true },
+                        onOpenRank = { showContributionRankSheet = true },
+                        onOpenSend = { showSendDanmakuSheet = true },
+                        onOpenBlock = { showBlockDialog = true }
                     )
                     Row(
                         modifier = Modifier
@@ -842,6 +829,13 @@ fun LivePlayerScreen(
                     onShare = { shareLiveUrl() },
                     onShareToMessage = { shareLiveToMessage() },
                     onOpenBrowser = { openLiveUrl() },
+                    isFollowing = successState?.isFollowing ?: false,
+                    currentQualityDesc = currentQualityDesc,
+                    onFollowClick = { viewModel.toggleFollow() },
+                    onQualityClick = { showQualityMenu = true },
+                    onOpenRank = { showContributionRankSheet = true },
+                    onOpenSend = { showSendDanmakuSheet = true },
+                    onOpenBlock = { showBlockDialog = true },
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
                 Box(
@@ -876,7 +870,14 @@ fun LivePlayerScreen(
                         onCopyLink = { copyLiveUrl() },
                         onShare = { shareLiveUrl() },
                         onShareToMessage = { shareLiveToMessage() },
-                        onOpenBrowser = { openLiveUrl() }
+                        onOpenBrowser = { openLiveUrl() },
+                        isFollowing = successState?.isFollowing ?: false,
+                        currentQualityDesc = currentQualityDesc,
+                        onFollowClick = { viewModel.toggleFollow() },
+                        onQualityClick = { showQualityMenu = true },
+                        onOpenRank = { showContributionRankSheet = true },
+                        onOpenSend = { showSendDanmakuSheet = true },
+                        onOpenBlock = { showBlockDialog = true }
                     )
                     Box(modifier = Modifier.fillMaxWidth().aspectRatio(16f/9f)) {
                         playerContent()
@@ -1014,161 +1015,6 @@ private fun LiveRoomBackdrop(
     }
 }
 
-// 辅助组件：主播信息条
-// 辅助组件：主播信息条
-@Composable
-private fun AnchorInfoBar(
-    roomTitle: String,
-    anchorInfo: com.android.purebilibili.feature.live.AnchorInfo,
-    isFollowing: Boolean,
-    online: Int,
-    watchedText: String,
-    onlineRankText: String,
-    liveStartTime: Long,
-    onFollowClick: () -> Unit,
-    onUserClick: (Long) -> Unit,
-    onQualityClick: () -> Unit,
-    currentQualityDesc: String,
-    onOpenRank: () -> Unit,
-    onOpenSend: () -> Unit,
-    onOpenBlock: () -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        shadowElevation = 1.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(
-                    model = anchorInfo.face,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color.LightGray)
-                        .clickable { onUserClick(anchorInfo.uid) }
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = roomTitle.ifBlank { anchorInfo.uname },
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = anchorInfo.uname,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        val metaItems = listOf(
-                            watchedText,
-                            onlineRankText,
-                            formatLiveDuration(liveStartTime)
-                        ).filter { it.isNotBlank() }
-                        Surface(
-                            color = Color(0xFFFF6699).copy(0.05f),
-                            shape = RoundedCornerShape(2.dp)
-                        ) {
-                            Text(
-                                text = if (online > 0) "人气 ${formatLiveViewerCount(online)}" else "人气 -",
-                                color = Color(0xFFFF6699),
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                            )
-                        }
-                        metaItems.take(2).forEach { item ->
-                            Text(
-                                text = item,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
-                TextButton(
-                    onClick = onQualityClick,
-                    contentPadding = PaddingValues(horizontal = 8.dp),
-                    modifier = Modifier.height(30.dp)
-                ) {
-                    Text(currentQualityDesc, fontSize = 13.sp, color = Color(0xFF61666D))
-                    Spacer(Modifier.width(2.dp))
-                    Icon(CupertinoIcons.Default.ChevronDown, null, modifier = Modifier.size(12.dp), tint = Color(0xFF61666D))
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                Button(
-                    onClick = onFollowClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isFollowing) Color(0xFFE3E5E7) else MaterialTheme.colorScheme.primary,
-                        contentColor = if (isFollowing) Color(0xFF9499A0) else Color.White
-                    ),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    if (!isFollowing) {
-                        Icon(CupertinoIcons.Outlined.Plus, contentDescription = null, modifier = Modifier.size(12.dp))
-                        Spacer(Modifier.width(4.dp))
-                    }
-                    Text(
-                        text = if (isFollowing) "已关注" else "关注",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LiveRoomActionChip(text = "高能榜", onClick = onOpenRank)
-                LiveRoomActionChip(text = "发弹幕", onClick = onOpenSend)
-                LiveRoomActionChip(text = "屏蔽", onClick = onOpenBlock)
-            }
-        }
-    }
-}
-
-@Composable
-private fun LiveRoomActionChip(
-    text: String,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-    ) {
-        Text(
-            text = text,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-        )
-    }
-}
-
 @Composable
 private fun LivePortraitOverlayAppBar(
     roomTitle: String,
@@ -1182,6 +1028,13 @@ private fun LivePortraitOverlayAppBar(
     onShare: () -> Unit,
     onShareToMessage: () -> Unit,
     onOpenBrowser: () -> Unit,
+    isFollowing: Boolean,
+    currentQualityDesc: String,
+    onFollowClick: () -> Unit,
+    onQualityClick: () -> Unit,
+    onOpenRank: () -> Unit,
+    onOpenSend: () -> Unit,
+    onOpenBlock: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = rememberLiveChromePalette()
@@ -1240,6 +1093,13 @@ private fun LivePortraitOverlayAppBar(
             LiveRoomOverflowMenu(
                 expanded = expanded,
                 onDismiss = { onExpandedChange(false) },
+                isFollowing = isFollowing,
+                currentQualityDesc = currentQualityDesc,
+                onFollowClick = onFollowClick,
+                onQualityClick = onQualityClick,
+                onOpenRank = onOpenRank,
+                onOpenSend = onOpenSend,
+                onOpenBlock = onOpenBlock,
                 onCopyLink = onCopyLink,
                 onShare = onShare,
                 onShareToMessage = onShareToMessage,
@@ -1253,6 +1113,13 @@ private fun LivePortraitOverlayAppBar(
 private fun LiveRoomOverflowMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
+    isFollowing: Boolean,
+    currentQualityDesc: String,
+    onFollowClick: () -> Unit,
+    onQualityClick: () -> Unit,
+    onOpenRank: () -> Unit,
+    onOpenSend: () -> Unit,
+    onOpenBlock: () -> Unit,
     onCopyLink: () -> Unit,
     onShare: () -> Unit,
     onShareToMessage: () -> Unit,
@@ -1262,6 +1129,42 @@ private fun LiveRoomOverflowMenu(
         expanded = expanded,
         onDismissRequest = onDismiss
     ) {
+        DropdownMenuItem(
+            text = { Text(if (isFollowing) "取消关注" else "关注主播") },
+            onClick = {
+                onDismiss()
+                onFollowClick()
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("画质：$currentQualityDesc") },
+            onClick = {
+                onDismiss()
+                onQualityClick()
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("高能榜") },
+            onClick = {
+                onDismiss()
+                onOpenRank()
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("发弹幕") },
+            onClick = {
+                onDismiss()
+                onOpenSend()
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("屏蔽弹幕") },
+            leadingIcon = { Icon(Icons.Outlined.Block, contentDescription = null) },
+            onClick = {
+                onDismiss()
+                onOpenBlock()
+            }
+        )
         DropdownMenuItem(
             text = { Text("复制链接") },
             leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
@@ -1333,14 +1236,12 @@ private fun LivePortraitInfoPanel(
 
 @Composable
 private fun LivePrimaryInteractionPanel(
-    anchorInfoBar: @Composable () -> Unit,
     selectedTab: Int,
     onSelectedTab: (Int) -> Unit,
     chatContent: @Composable () -> Unit,
     superChatContent: @Composable () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        anchorInfoBar()
         TabRow(selectedTabIndex = selectedTab) {
             Tab(
                 selected = selectedTab == 0,

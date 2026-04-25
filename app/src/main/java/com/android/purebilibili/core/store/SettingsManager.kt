@@ -549,6 +549,19 @@ internal fun toggleCollectionSubscription(
     }
 }
 
+internal fun setCollectionSubscription(
+    subscribedCollectionIds: Set<String>,
+    collectionId: Long,
+    subscribed: Boolean
+): Set<String> {
+    val normalizedId = collectionId.takeIf { it > 0L }?.toString() ?: return subscribedCollectionIds
+    return if (subscribed) {
+        subscribedCollectionIds + normalizedId
+    } else {
+        subscribedCollectionIds - normalizedId
+    }
+}
+
 internal fun decodeCollectionSortPreferences(rawValue: String?): Map<Long, CollectionSortMode> {
     if (rawValue.isNullOrBlank()) return emptyMap()
     return runCatching {
@@ -3092,6 +3105,16 @@ object SettingsManager {
             val current = decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS])
             preferences[KEY_SUBSCRIBED_COLLECTION_IDS] = encodeCollectionSubscriptionIds(
                 toggleCollectionSubscription(current, collectionId)
+            )
+        }
+    }
+
+    suspend fun setCollectionSubscription(context: Context, collectionId: Long, subscribed: Boolean) {
+        if (collectionId <= 0L) return
+        context.settingsDataStore.edit { preferences ->
+            val current = decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS])
+            preferences[KEY_SUBSCRIBED_COLLECTION_IDS] = encodeCollectionSubscriptionIds(
+                setCollectionSubscription(current, collectionId, subscribed)
             )
         }
     }
