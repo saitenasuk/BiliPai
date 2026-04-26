@@ -18,6 +18,9 @@ import com.android.purebilibili.core.theme.AppFontSizePreset
 import com.android.purebilibili.core.theme.AppUiScalePreset
 import com.android.purebilibili.core.theme.AndroidNativeVariant
 import com.android.purebilibili.core.theme.UiPreset
+import com.android.purebilibili.core.theme.normalizeThemeColorIndex
+import com.android.purebilibili.core.theme.resolveColorSpecPreference
+import com.android.purebilibili.core.theme.resolvePaletteStylePreference
 import com.android.purebilibili.data.model.response.LiveFavoriteTagEntry
 import com.android.purebilibili.feature.settings.share.SettingsShareApplyResult
 import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinition
@@ -36,6 +39,8 @@ import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
 import com.android.purebilibili.feature.video.ui.gesture.TwoFingerSpeedToggleState
 import com.android.purebilibili.feature.video.ui.gesture.applyHorizontalTwoFingerSpeedToggle
 import com.android.purebilibili.feature.video.ui.gesture.applyVerticalTwoFingerSpeedToggle
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamiccolor.ColorSpec
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -64,7 +69,7 @@ internal const val DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED = true
  */
 enum class LiquidGlassStyle(val value: Int) {
     CLASSIC(0),      // BiliPai's Wavy Ripple
-    SIMP_MUSIC(1),   // SimpMusic's Adaptive Lens
+    SUKISU(1),       // SukiSU floating bottom bar glass
     IOS26(2);        // iOS26-like layered liquid glass
 
     companion object {
@@ -85,7 +90,7 @@ enum class LiquidGlassMode(val value: Int, val label: String) {
 internal fun resolveLegacyLiquidGlassMode(style: LiquidGlassStyle): LiquidGlassMode = when (style) {
     LiquidGlassStyle.IOS26 -> LiquidGlassMode.CLEAR
     LiquidGlassStyle.CLASSIC -> LiquidGlassMode.BALANCED
-    LiquidGlassStyle.SIMP_MUSIC -> LiquidGlassMode.FROSTED
+    LiquidGlassStyle.SUKISU -> LiquidGlassMode.BALANCED
 }
 
 internal fun resolveDefaultLiquidGlassStrength(mode: LiquidGlassMode): Float = when (mode) {
@@ -149,7 +154,7 @@ internal fun resolveLegacyLiquidGlassStyleFromProgress(progress: Float): LiquidG
     return when (resolveLiquidGlassModeFromProgress(progress)) {
         LiquidGlassMode.CLEAR -> LiquidGlassStyle.IOS26
         LiquidGlassMode.BALANCED -> LiquidGlassStyle.CLASSIC
-        LiquidGlassMode.FROSTED -> LiquidGlassStyle.SIMP_MUSIC
+        LiquidGlassMode.FROSTED -> LiquidGlassStyle.SUKISU
     }
 }
 
@@ -601,6 +606,8 @@ object SettingsManager {
     private val KEY_UI_PRESET = intPreferencesKey("ui_preset")
     private val KEY_ANDROID_NATIVE_VARIANT = intPreferencesKey("android_native_variant_v1")
     private val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+    private val KEY_THEME_COLOR_STYLE = stringPreferencesKey("theme_color_style")
+    private val KEY_THEME_COLOR_SPEC = stringPreferencesKey("theme_color_spec")
     private val KEY_BG_PLAY = booleanPreferencesKey("bg_play")
     //  [新增] 触感反馈 (默认开启)
     private val KEY_HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
@@ -728,7 +735,7 @@ object SettingsManager {
     private val KEY_LIQUID_GLASS_MODE = intPreferencesKey("liquid_glass_mode")
     private val KEY_LIQUID_GLASS_STRENGTH = floatPreferencesKey("liquid_glass_strength")
     private val KEY_LIQUID_GLASS_PROGRESS = floatPreferencesKey("liquid_glass_progress")
-    private val FIXED_LIQUID_GLASS_STYLE = LiquidGlassStyle.CLASSIC
+    private val FIXED_LIQUID_GLASS_STYLE = LiquidGlassStyle.SUKISU
     private val FIXED_LIQUID_GLASS_MODE = LiquidGlassMode.BALANCED
     private const val FIXED_LIQUID_GLASS_STRENGTH = 0.52f
     private const val FIXED_LIQUID_GLASS_PROGRESS = 0.5f
@@ -1109,6 +1116,20 @@ object SettingsManager {
         context.settingsDataStore.edit { preferences -> preferences[KEY_DYNAMIC_COLOR] = value }
     }
 
+    fun getThemeColorStyle(context: Context): Flow<PaletteStyle> = context.settingsDataStore.data
+        .map { preferences -> resolvePaletteStylePreference(preferences[KEY_THEME_COLOR_STYLE]) }
+
+    suspend fun setThemeColorStyle(context: Context, style: PaletteStyle) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_THEME_COLOR_STYLE] = style.name }
+    }
+
+    fun getThemeColorSpec(context: Context): Flow<ColorSpec.SpecVersion> = context.settingsDataStore.data
+        .map { preferences -> resolveColorSpecPreference(preferences[KEY_THEME_COLOR_SPEC]) }
+
+    suspend fun setThemeColorSpec(context: Context, spec: ColorSpec.SpecVersion) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_THEME_COLOR_SPEC] = spec.name }
+    }
+
     fun getAppFontSizePreset(context: Context): Flow<AppFontSizePreset> = context.settingsDataStore.data
         .map { preferences ->
             AppFontSizePreset.fromValue(
@@ -1332,13 +1353,13 @@ object SettingsManager {
         return PlayerSettingsStore.getPreferredPlaybackSpeedSync(context)
     }
 
-    //  [新增] --- 主题色索引 (0-5, 默认 0 = BiliPink) ---
+    //  [新增] --- 主题色索引 (默认 0 = 经典蓝) ---
     fun getThemeColorIndex(context: Context): Flow<Int> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_THEME_COLOR_INDEX] ?: 0 }
+        .map { preferences -> normalizeThemeColorIndex(preferences[KEY_THEME_COLOR_INDEX] ?: 0) }
 
     suspend fun setThemeColorIndex(context: Context, index: Int) {
         context.settingsDataStore.edit { preferences -> 
-            preferences[KEY_THEME_COLOR_INDEX] = index.coerceIn(0, 9)
+            preferences[KEY_THEME_COLOR_INDEX] = normalizeThemeColorIndex(index)
         }
     }
     
@@ -4203,6 +4224,8 @@ object SettingsManager {
             IntShareablePreferenceDefinition(KEY_DARK_THEME_STYLE, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_APP_LANGUAGE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_DYNAMIC_COLOR, SettingsShareSection.APPEARANCE),
+            StringShareablePreferenceDefinition(KEY_THEME_COLOR_STYLE, SettingsShareSection.APPEARANCE),
+            StringShareablePreferenceDefinition(KEY_THEME_COLOR_SPEC, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_THEME_COLOR_INDEX, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_APP_ICON, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_FLOATING, SettingsShareSection.APPEARANCE),

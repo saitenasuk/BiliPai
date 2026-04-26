@@ -49,6 +49,37 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun bottomGestureExclusion_allowsLandscapeCenterDragWhenProgressPreviewIsHidden() {
+        val visibleControlExclusionPx = resolveVideoPlayerBottomGestureExclusionHeightDp(
+            controlBarBottomPaddingDp = 14,
+            progressSpacingDp = 10,
+            progressContainerHeightDp = 40,
+            controlRowHeightDp = 40,
+            extraBufferDp = 12
+        ).toFloat()
+
+        assertFalse(
+            shouldIgnoreVideoPlayerDragStart(
+                offsetY = 210f,
+                containerHeightPx = 360f,
+                edgeSafeZonePx = 48f,
+                bottomGestureExclusionPx = visibleControlExclusionPx
+            )
+        )
+    }
+
+    @Test
+    fun bottomGestureExclusion_usesVisibleProgressHeightInVideoPlayerSection() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/section/VideoPlayerSection.kt")
+            .readText()
+
+        assertTrue(
+            source.contains("progressContainerHeightDp = videoProgressBarLayoutPolicy.baseHeightWithChapterDp"),
+            "Background drag exclusion should use the visible idle progress bar height; the expanded preview height is only visible while the progress bar itself is scrubbing."
+        )
+    }
+
+    @Test
     fun dragStart_ignoresProgressPreviewZoneAboveBottomControls() {
         assertTrue(
             shouldIgnoreVideoPlayerDragStart(
@@ -859,6 +890,17 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun longPressSpeedLock_visualHidesBroadGlassZones() {
+        val visual = resolveLongPressSpeedLockZoneVisualPolicy()
+
+        assertEquals(0f, visual.zoneFillAlpha)
+        assertEquals(0f, visual.borderAlpha)
+        assertTrue(visual.edgeGradientAlpha > 0f)
+        assertTrue(visual.centerMarkerAlpha > visual.edgeGradientAlpha)
+        assertTrue(visual.centerMarkerWidthFraction < 0.5f)
+    }
+
+    @Test
     fun longPressSpeedDrag_usesSingleLongPressDragGestureDetector() {
         val source = loadVideoPlayerSectionSource()
 
@@ -926,6 +968,28 @@ class VideoPlayerSectionPolicyTest {
                 isLongPressing = false,
                 observedPlaybackSpeed = 1.0f,
                 lockedLongPressSpeed = 2.0f
+            )
+        )
+    }
+
+    @Test
+    fun explicitPlaybackSpeedChange_clearsLockedLongPressSpeedBeforeApplyingUserSpeed() {
+        assertTrue(
+            shouldClearLockedLongPressSpeedForExplicitSpeedChange(
+                longPressSpeedLocked = true,
+                isLongPressing = false
+            )
+        )
+        assertFalse(
+            shouldClearLockedLongPressSpeedForExplicitSpeedChange(
+                longPressSpeedLocked = true,
+                isLongPressing = true
+            )
+        )
+        assertFalse(
+            shouldClearLockedLongPressSpeedForExplicitSpeedChange(
+                longPressSpeedLocked = false,
+                isLongPressing = false
             )
         )
     }

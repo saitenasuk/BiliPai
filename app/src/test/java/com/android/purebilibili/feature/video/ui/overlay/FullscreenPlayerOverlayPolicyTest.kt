@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -49,6 +51,61 @@ class FullscreenPlayerOverlayPolicyTest {
                 visibleBottomControlsHeightPx = 120f
             )
         )
+    }
+
+    @Test
+    fun fullscreenBottomGestureExclusion_matchesVisibleBottomControlsHeight() {
+        assertEquals(90, resolveFullscreenVisibleBottomControlsGestureExclusionHeightDp())
+    }
+
+    @Test
+    fun fullscreenLandscapeSeekGesture_allowsLowerMiddleAboveVisibleControls() {
+        assertTrue(
+            shouldStartFullscreenDragGesture(
+                gesturesEnabled = true,
+                showControls = true,
+                startY = 260f,
+                screenHeight = 360f,
+                statusBarExclusionZonePx = 40f,
+                visibleTopControlsHeightPx = 96f,
+                visibleBottomControlsHeightPx = resolveFullscreenVisibleBottomControlsGestureExclusionHeightDp().toFloat()
+            )
+        )
+    }
+
+    @Test
+    fun fullscreenPendingGestureSeekPosition_holdsUntilPlayerReportsTarget() {
+        assertEquals(
+            25_000L,
+            resolveFullscreenPendingGestureSeekPosition(
+                currentPositionMs = 10_000L,
+                pendingSeekPositionMs = 25_000L
+            )
+        )
+        assertEquals(
+            null,
+            resolveFullscreenPendingGestureSeekPosition(
+                currentPositionMs = 24_700L,
+                pendingSeekPositionMs = 25_000L
+            )
+        )
+    }
+
+    @Test
+    fun fullscreenPlaybackButton_usesThemeTintedNativeIconWithoutSurfaceShadow() {
+        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/overlay/FullscreenPlayerOverlay.kt")
+            .readText()
+        val playbackButtonIndex = source.indexOf("togglePlayerPlaybackFromUserAction(it)")
+        val buttonSource = source.substring(
+            playbackButtonIndex - 220,
+            playbackButtonIndex + 520
+        )
+
+        assertTrue(buttonSource.contains("IconButton("))
+        assertTrue(buttonSource.contains("Icons.Filled.Pause"))
+        assertTrue(buttonSource.contains("Icons.Filled.PlayArrow"))
+        assertTrue(buttonSource.contains("tint = MaterialTheme.colorScheme.primary"))
+        assertFalse(buttonSource.contains("Surface("))
     }
 
     @Test

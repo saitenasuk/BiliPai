@@ -491,7 +491,7 @@ internal fun resolveHomeTopUnifiedPanelInnerPadding(
     } else if (uiPreset == UiPreset.MD3) {
         10.dp
     } else {
-        8.dp
+        6.dp
     }
 }
 
@@ -517,7 +517,7 @@ internal fun resolveHomeTopUnifiedPanelCornerRadius(
     } else if (uiPreset == UiPreset.MD3) {
         16.dp
     } else {
-        28.dp
+        32.dp
     }
 }
 
@@ -545,6 +545,8 @@ internal fun resolveHomeTopSearchToTabsSpacing(
     androidNativeVariant: AndroidNativeVariant = AndroidNativeVariant.MATERIAL3
 ): Dp {
     return if (uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX) {
+        4.dp
+    } else if (uiPreset == UiPreset.IOS) {
         4.dp
     } else {
         6.dp
@@ -689,9 +691,7 @@ internal fun resolveHomeTopPanelChromeRenderMode(
     uiPreset: UiPreset = UiPreset.IOS,
     useUnifiedPanel: Boolean = false
 ): HomeTopChromeRenderMode {
-    if (useUnifiedPanel && renderMode == HomeTopChromeRenderMode.BLUR && uiPreset == UiPreset.IOS) {
-        return HomeTopChromeRenderMode.BLUR
-    }
+    if (useUnifiedPanel) return HomeTopChromeRenderMode.PLAIN
     return resolveHomeTopLocalChromeRenderMode(
         renderMode = renderMode,
         uiPreset = uiPreset
@@ -715,8 +715,8 @@ internal fun resolveHomeTopSearchChromeRenderMode(
         }
         return when (renderMode) {
             HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP,
-            HomeTopChromeRenderMode.LIQUID_GLASS_HAZE -> renderMode
-            HomeTopChromeRenderMode.BLUR,
+            HomeTopChromeRenderMode.LIQUID_GLASS_HAZE,
+            HomeTopChromeRenderMode.BLUR -> renderMode
             HomeTopChromeRenderMode.PLAIN -> HomeTopChromeRenderMode.PLAIN
         }
     }
@@ -1222,11 +1222,7 @@ fun iOSHomeHeader(
         homeSettings?.liquidGlassProgress,
         liquidStyle
     ) {
-        if (homeSettings != null) {
-            resolveLiquidGlassTuning(progress = homeSettings.liquidGlassProgress)
-        } else {
-            resolveLiquidGlassTuning(liquidStyle)
-        }
+        resolveLiquidGlassTuning(liquidStyle)
     }
     val topChromeRenderMode = resolveHomeTopChromeRenderMode(
         materialMode = topChromeMaterialMode,
@@ -1596,6 +1592,8 @@ fun iOSHomeHeader(
         tabHeightDp = currentTabHeight.value,
         integratedCollapsedTopBar = integratedCollapsedTopBar
     )
+    val drawUnifiedTopPanelChrome =
+        renderUnifiedTopPanelChrome && effectiveTopPanelChromeRenderMode != HomeTopChromeRenderMode.PLAIN
     val isTopTabViewportSyncEnabled = resolveHomeTopTabViewportSyncEnabled(
         currentTabHeightDp = currentTabHeight.value,
         tabAlpha = tabAlpha,
@@ -1664,7 +1662,7 @@ fun iOSHomeHeader(
                                 .padding(horizontal = unifiedPanelHorizontalPadding)
                                 .clip(unifiedPanelShape)
                                 .then(
-                                    if (renderUnifiedTopPanelChrome) {
+                                    if (drawUnifiedTopPanelChrome) {
                                         Modifier.homeTopChromeSurface(
                                             renderMode = effectiveTopPanelChromeRenderMode,
                                             shape = unifiedPanelShape,
@@ -1687,7 +1685,7 @@ fun iOSHomeHeader(
                                 )
                                 .then(
                                     if (
-                                        renderUnifiedTopPanelChrome &&
+                                        drawUnifiedTopPanelChrome &&
                                         !integratedCollapsedTopBar &&
                                         !useUnifiedLiquidChrome
                                     ) {
@@ -1702,7 +1700,7 @@ fun iOSHomeHeader(
                     )
             ) {
                 if (
-                    renderUnifiedTopPanelChrome &&
+                    drawUnifiedTopPanelChrome &&
                     useUnifiedTopPanel &&
                     !integratedCollapsedTopBar &&
                     !useUnifiedLiquidChrome
@@ -2107,6 +2105,7 @@ fun iOSHomeHeader(
                     if (
                         useUnifiedTopPanel &&
                         shouldShowUnifiedHomeTopPanelDivider(uiPreset) &&
+                        drawUnifiedTopPanelChrome &&
                         currentTabHeight > 0.dp &&
                         tabAlpha * tabContentAlpha > 0f &&
                         searchRevealFraction > 0f
@@ -2221,9 +2220,11 @@ fun iOSHomeHeader(
                                 isGlassSupported,
                             liquidGlassStyle = liquidStyle,
                             liquidGlassTuning = liquidGlassTuning,
+                            hazeState = hazeState,
                             backdrop = backdrop,
-                            isFloatingStyle = if (useUnifiedTopPanel) false else isTabFloating,
+                            isFloatingStyle = isTabFloating,
                             edgeToEdge = integratedCollapsedTopBar,
+                            hasOuterChromeSurface = false,
                             interactionBudget = interactionBudget,
                             isViewportSyncEnabled = isTopTabViewportSyncEnabled
                         )

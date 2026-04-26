@@ -28,7 +28,7 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.isTopBarLiquidGlassEnabled)
         assertTrue(result.isBottomBarLiquidGlassEnabled)
         assertTrue(result.isLiquidGlassEnabled)
-        assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
+        assertEquals(LiquidGlassStyle.SUKISU, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
         assertEquals(0.52f, result.liquidGlassStrength)
         assertFalse(result.cardAnimationEnabled)
@@ -84,7 +84,7 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.isTopBarLiquidGlassEnabled)
         assertFalse(result.isBottomBarLiquidGlassEnabled)
         assertFalse(result.isLiquidGlassEnabled)
-        assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
+        assertEquals(LiquidGlassStyle.SUKISU, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
         assertEquals(0.52f, result.liquidGlassStrength)
         assertEquals(0.5f, result.liquidGlassProgress)
@@ -134,14 +134,14 @@ class HomeSettingsMappingPolicyTest {
     @Test
     fun legacyLiquidGlassTuning_isCollapsedToSingleSharedMaterialRecipe() {
         val prefs = mutablePreferencesOf(
-            intPreferencesKey("liquid_glass_style") to LiquidGlassStyle.SIMP_MUSIC.value,
+            intPreferencesKey("liquid_glass_style") to LiquidGlassStyle.SUKISU.value,
             intPreferencesKey("liquid_glass_mode") to LiquidGlassMode.BALANCED.value,
             floatPreferencesKey("liquid_glass_strength") to 0.31f
         )
 
         val result = mapHomeSettingsFromPreferences(prefs)
 
-        assertEquals(LiquidGlassStyle.CLASSIC, result.liquidGlassStyle)
+        assertEquals(LiquidGlassStyle.SUKISU, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
         assertEquals(0.52f, result.liquidGlassStrength)
         assertEquals(0.5f, result.liquidGlassProgress)

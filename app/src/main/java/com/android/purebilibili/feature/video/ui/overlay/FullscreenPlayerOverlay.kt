@@ -1,15 +1,8 @@
 // 文件路径: feature/video/FullscreenPlayerOverlay.kt
 package com.android.purebilibili.feature.video.ui.overlay
 
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionDanmakuContainer
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionMaskStabilizer
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionModuleState
-import com.android.purebilibili.feature.video.danmaku.FaceOcclusionVisualMask
-import com.android.purebilibili.feature.video.danmaku.checkFaceOcclusionModuleState
-import com.android.purebilibili.feature.video.danmaku.createFaceOcclusionDetector
-import com.android.purebilibili.feature.video.danmaku.detectFaceOcclusionRegions
-import com.android.purebilibili.feature.video.danmaku.installFaceOcclusionModule
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
+import com.android.purebilibili.feature.video.playback.policy.shouldHoldPlaybackTransitionPosition
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
@@ -17,6 +10,7 @@ import com.android.purebilibili.feature.video.ui.section.shouldCommitGestureSeek
 import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlaybackAwake
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
+import com.bytedance.danmaku.render.engine.DanmakuView
 
 import android.app.Activity
 import android.content.Context
@@ -34,7 +28,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -46,6 +39,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.BrightnessHigh
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,16 +85,36 @@ import androidx.lifecycle.compose.currentStateAsState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.withTimeoutOrNull
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 
 private const val AUTO_HIDE_DELAY = 4000L
 private const val VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 96
-private const val VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 120
+private const val VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 90
 
 // Keep for backward compatibility, maps to new GestureMode
 enum class FullscreenGestureMode { None, Brightness, Volume, Seek }
+
+internal fun resolveFullscreenVisibleBottomControlsGestureExclusionHeightDp(): Int {
+    return VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP
+}
+
+internal fun resolveFullscreenPendingGestureSeekPosition(
+    currentPositionMs: Long,
+    pendingSeekPositionMs: Long?
+): Long? {
+    val targetPositionMs = pendingSeekPositionMs ?: return null
+    return if (
+        shouldHoldPlaybackTransitionPosition(
+            playerPositionMs = currentPositionMs,
+            transitionPositionMs = targetPositionMs
+        )
+    ) {
+        targetPositionMs
+    } else {
+        null
+    }
+}
 
 internal fun shouldRebindFullscreenSurfaceOnResume(
     hasPlayerView: Boolean,
@@ -181,10 +196,6 @@ fun FullscreenPlayerOverlay(
             } ?: false
         )
     }
-    var faceVisualMasks by remember { mutableStateOf(emptyList<FaceOcclusionVisualMask>()) }
-    val faceMaskStabilizer = remember { FaceOcclusionMaskStabilizer() }
-    var smartOcclusionModuleState by remember { mutableStateOf(FaceOcclusionModuleState.Checking) }
-    var smartOcclusionDownloadProgress by remember { mutableStateOf<Int?>(null) }
     //  共享弹幕管理器（横竖屏切换保持状态，同时可用于手势 seek 同步）
     val danmakuManager = rememberDanmakuManager()
 
@@ -256,6 +267,7 @@ fun FullscreenPlayerOverlay(
     var currentProgress by remember { mutableFloatStateOf(0f) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
+    var pendingGestureSeekPositionMs by remember { mutableStateOf<Long?>(null) }
     val currentClockText by produceState(initialValue = formatCurrentClock(), hostLifecycleStarted) {
         if (!hostLifecycleStarted) {
             value = formatCurrentClock()
@@ -384,6 +396,10 @@ fun FullscreenPlayerOverlay(
                     fallbackDurationMs = miniPlayerManager.duration
                 )
                 currentPosition = it.currentPosition
+                pendingGestureSeekPositionMs = resolveFullscreenPendingGestureSeekPosition(
+                    currentPositionMs = currentPosition,
+                    pendingSeekPositionMs = pendingGestureSeekPositionMs
+                )
                 if (gestureMode != FullscreenGestureMode.Seek && duration > 0L) {
                     currentProgress = (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
                 }
@@ -425,13 +441,14 @@ fun FullscreenPlayerOverlay(
         VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP.dp.toPx()
     }
     val visibleBottomControlsHeightPx = with(density) {
-        VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP.dp.toPx()
+        resolveFullscreenVisibleBottomControlsGestureExclusionHeightDp().dp.toPx()
     }
     val overlayHazeState = rememberRecoverableHazeState()
     val displayedProgressState = remember(
         currentPosition,
         duration,
         seekPreviewPosition,
+        pendingGestureSeekPositionMs,
         gestureMode,
         player?.bufferedPosition
     ) {
@@ -442,7 +459,8 @@ fun FullscreenPlayerOverlay(
                 buffered = player?.bufferedPosition ?: 0L
             ),
             previewPositionMs = seekPreviewPosition,
-            previewActive = gestureMode == FullscreenGestureMode.Seek
+            previewActive = gestureMode == FullscreenGestureMode.Seek,
+            playbackTransitionPositionMs = pendingGestureSeekPositionMs
         )
     }
     
@@ -474,6 +492,7 @@ fun FullscreenPlayerOverlay(
                                 FullscreenDoubleTapAction.SeekBackward -> {
                                     val seekMs = seekBackwardSeconds * 1000L
                                     val newPos = (p.currentPosition - seekMs).coerceAtLeast(0L)
+                                    pendingGestureSeekPositionMs = newPos
                                     seekPlayerFromUserAction(p, newPos)
                                     danmakuManager.seekTo(newPos)
                                 }
@@ -486,6 +505,7 @@ fun FullscreenPlayerOverlay(
                                     } else {
                                         target
                                     }
+                                    pendingGestureSeekPositionMs = newPos
                                     seekPlayerFromUserAction(p, newPos)
                                     danmakuManager.seekTo(newPos)
                                 }
@@ -553,6 +573,7 @@ fun FullscreenPlayerOverlay(
                             )
                         ) {
                             player?.let {
+                                pendingGestureSeekPositionMs = seekPreviewPosition
                                 seekPlayerFromUserAction(it, seekPreviewPosition)
                                 danmakuManager.seekTo(seekPreviewPosition)
                             }
@@ -624,19 +645,6 @@ fun FullscreenPlayerOverlay(
         val danmakuSmartOcclusion = danmakuSettings.smartOcclusion
         val danmakuBlockRulesRaw = danmakuSettings.blockRulesRaw
         val danmakuBlockRules = danmakuSettings.blockRules
-        val faceDetector = remember { createFaceOcclusionDetector() }
-        DisposableEffect(faceDetector) {
-            onDispose {
-                faceDetector.close()
-            }
-        }
-
-        LaunchedEffect(faceDetector) {
-            smartOcclusionModuleState = FaceOcclusionModuleState.Checking
-            smartOcclusionDownloadProgress = null
-            smartOcclusionModuleState = checkFaceOcclusionModuleState(context, faceDetector)
-        }
-        
         //  获取当前 cid 并加载弹幕
         val currentCid = miniPlayerManager.currentCid
         LaunchedEffect(currentCid, danmakuEnabled, player) {
@@ -690,57 +698,6 @@ fun FullscreenPlayerOverlay(
             )
         }
 
-        LaunchedEffect(
-            playerViewRef,
-            player,
-            faceDetector,
-            danmakuEnabled,
-            danmakuSmartOcclusion,
-            smartOcclusionModuleState
-        ) {
-            if (
-                !danmakuEnabled ||
-                !danmakuSmartOcclusion ||
-                smartOcclusionModuleState != FaceOcclusionModuleState.Ready
-            ) {
-                faceMaskStabilizer.reset()
-                faceVisualMasks = emptyList()
-                return@LaunchedEffect
-            }
-            faceMaskStabilizer.reset()
-            while (isActive) {
-                val view = playerViewRef
-                val exoPlayer = player
-                if (view == null || exoPlayer == null || !exoPlayer.isPlaying || view.width <= 0 || view.height <= 0) {
-                    delay(1200L)
-                    continue
-                }
-
-                val videoWidth = exoPlayer.videoSize.width
-                val videoHeight = exoPlayer.videoSize.height
-                val sampleWidth = 480
-                val sampleHeight = when {
-                    videoWidth > 0 && videoHeight > 0 -> (sampleWidth * videoHeight / videoWidth).coerceIn(270, 960)
-                    else -> 270
-                }
-
-                val detection = withTimeoutOrNull(1_500L) {
-                    detectFaceOcclusionRegions(
-                        playerView = view,
-                        sampleWidth = sampleWidth,
-                        sampleHeight = sampleHeight,
-                        detector = faceDetector
-                    )
-                } ?: com.android.purebilibili.feature.video.danmaku.FaceOcclusionDetectionResult(
-                    verticalRegions = emptyList(),
-                    maskRects = emptyList(),
-                    visualMasks = emptyList()
-                )
-                faceVisualMasks = faceMaskStabilizer.step(detection.visualMasks)
-                delay(if (detection.visualMasks.isEmpty()) 1300L else 900L)
-            }
-        }
-        
         //  绑定 Player（不在 onDispose 中释放，单例会保持状态）
         //  [修复] 移除 detachView 调用，避免横竖屏切换时弹幕消失
         // attachView 会自动暂停旧视图，不需要手动 detach
@@ -814,25 +771,13 @@ fun FullscreenPlayerOverlay(
                 if (danmakuEnabled) {
                     AndroidView(
                         factory = { ctx ->
-                            FaceOcclusionDanmakuContainer(ctx).apply {
-                                setMasks(faceVisualMasks)
-                                setVideoViewport(
-                                    videoWidth = exoPlayer.videoSize.width,
-                                    videoHeight = exoPlayer.videoSize.height,
-                                    resizeMode = aspectRatio.playerResizeMode
-                                )
-                                danmakuManager.attachView(danmakuView())
+                            DanmakuView(ctx).apply {
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                danmakuManager.attachView(this)
                                 com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView (RenderEngine) created for fullscreen")
                             }
                         },
-                        update = { container ->
-                            container.setMasks(faceVisualMasks)
-                            container.setVideoViewport(
-                                videoWidth = exoPlayer.videoSize.width,
-                                videoHeight = exoPlayer.videoSize.height,
-                                resizeMode = aspectRatio.playerResizeMode
-                            )
-                            val view = container.danmakuView()
+                        update = { view ->
                             if (view.width > 0 && view.height > 0) {
                                 val sizeTag = "${view.width}x${view.height}"
                                 if (view.tag != sizeTag) {
@@ -975,19 +920,16 @@ fun FullscreenPlayerOverlay(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            //  [新增] 左下角播放/暂停按钮
-                            Surface(
+                            IconButton(
                                 onClick = {
                                     lastInteractionTime = System.currentTimeMillis()
                                     player?.let { togglePlayerPlaybackFromUserAction(it) }
                                 },
-                                shape = CircleShape,
-                                color = Color.Transparent
                             ) {
                                 Icon(
-                                    imageVector = if (isPlaying) CupertinoIcons.Default.Pause else CupertinoIcons.Default.Play,
+                                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                                     contentDescription = if (isPlaying) "暂停" else "播放",
-                                    tint = Color.White,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -1027,6 +969,7 @@ fun FullscreenPlayerOverlay(
                                     )
                                     val newPosition = (dragProgress * seekableDuration).toLong()
                                     player?.let {
+                                        pendingGestureSeekPositionMs = newPosition
                                         seekPlayerFromUserAction(it, newPosition)
                                         danmakuManager.seekTo(newPosition)
                                     }
@@ -1106,8 +1049,6 @@ fun FullscreenPlayerOverlay(
                 blockRulesRaw = localBlockRulesRaw,
                 smartOcclusion = localSmartOcclusion,
                 fullscreenWidthMode = localFullscreenPanelWidthMode,
-                smartOcclusionModuleState = smartOcclusionModuleState,
-                smartOcclusionDownloadProgress = smartOcclusionDownloadProgress,
                 onOpacityChange = { 
                     localOpacity = it
                     danmakuManager.opacity = it
@@ -1165,24 +1106,6 @@ fun FullscreenPlayerOverlay(
                 onFullscreenWidthModeChange = {
                     localFullscreenPanelWidthMode = it
                     scope.launch { SettingsManager.setDanmakuFullscreenPanelWidthMode(context, it) }
-                },
-                onSmartOcclusionDownloadClick = {
-                    if (smartOcclusionModuleState != FaceOcclusionModuleState.Downloading) {
-                        scope.launch {
-                            smartOcclusionModuleState = FaceOcclusionModuleState.Downloading
-                            smartOcclusionDownloadProgress = 0
-                            smartOcclusionModuleState = installFaceOcclusionModule(
-                                context = context,
-                                detector = faceDetector,
-                                onProgress = { progress ->
-                                    smartOcclusionDownloadProgress = progress
-                                }
-                            )
-                            if (smartOcclusionModuleState != FaceOcclusionModuleState.Downloading) {
-                                smartOcclusionDownloadProgress = null
-                            }
-                        }
-                    }
                 },
                 onDismiss = { showDanmakuSettings = false }
             )

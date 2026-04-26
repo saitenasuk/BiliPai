@@ -83,7 +83,36 @@ internal fun resolveLiquidGlassTuning(
 }
 
 internal fun resolveLiquidGlassTuning(style: LiquidGlassStyle): LiquidGlassTuning {
-    return resolveLiquidGlassTuning(progress = resolveLegacyLiquidGlassProgress(style))
+    return when (style) {
+        LiquidGlassStyle.SUKISU -> sukisuLiquidGlassTuning()
+        else -> resolveLiquidGlassTuning(progress = resolveLegacyLiquidGlassProgress(style))
+    }
+}
+
+private fun sukisuLiquidGlassTuning(): LiquidGlassTuning {
+    return LiquidGlassTuning(
+        mode = LiquidGlassMode.BALANCED,
+        progress = 0.5f,
+        strength = resolveDefaultLiquidGlassStrength(LiquidGlassMode.BALANCED),
+        backdropBlurRadius = 8f,
+        surfaceAlpha = 0.40f,
+        whiteOverlayAlpha = 0.04f,
+        refractIntensity = 0.28f,
+        refractionAmount = 24f,
+        refractionHeight = 24f,
+        indicatorTintAlpha = 0.20f,
+        indicatorLensBoost = 1.18f,
+        indicatorEdgeWarpBoost = 1.16f,
+        indicatorChromaticBoost = 0.90f,
+        chromaticAberrationEnabled = false,
+        chromaticAberrationAmount = 0f,
+        scrollCoupledRefraction = false,
+        scrollCoupledRefractionAmount = 0f,
+        useNeutralIndicatorTint = false,
+        neutralIndicatorTintAmount = 0f,
+        depthEffectEnabled = true,
+        depthEffectAmount = 1f
+    )
 }
 
 private fun lerp(start: Float, stop: Float, fraction: Float): Float {
