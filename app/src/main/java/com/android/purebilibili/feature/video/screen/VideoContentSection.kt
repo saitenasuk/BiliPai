@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -17,7 +16,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -40,7 +38,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,6 +55,7 @@ import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.VideoTag
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.model.response.BgmInfo
+import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
@@ -1036,56 +1034,17 @@ private fun VideoContentTabBar(
                 .padding(horizontal = layoutSpec.containerHorizontalPaddingDp.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
+            BottomBarLiquidSegmentedControl(
+                items = tabs,
+                selectedIndex = selectedTabIndex,
+                onSelected = onTabSelected,
                 modifier = Modifier
                     .weight(layoutSpec.tabsRowWeight)
-                    .then(
-                        if (layoutSpec.tabsRowScrollable) {
-                            Modifier.horizontalScroll(rememberScrollState())
-                        } else {
-                            Modifier
-                        }
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    val isSelected = selectedTabIndex == index
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clickable { onTabSelected(index) }
-                            .padding(
-                                vertical = layoutSpec.tabVerticalPaddingDp.dp,
-                                horizontal = layoutSpec.tabHorizontalPaddingDp.dp
-                            )
-                    ) {
-                        Text(
-                            text = title,
-                            fontSize = if (isSelected) {
-                                layoutSpec.selectedTabFontSizeSp.sp
-                            } else {
-                                layoutSpec.unselectedTabFontSizeSp.sp
-                            },
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, // Slightly bolder unselected
-                            color = if (isSelected) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurface, // More visible unselected color
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .width(if (isSelected) layoutSpec.indicatorWidthDp.dp else 0.dp)
-                                .height(3.dp)
-                                .clip(RoundedCornerShape(1.5.dp))
-                                .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                        )
-                    }
-                    if (index < tabs.lastIndex) {
-                        Spacer(modifier = Modifier.width(layoutSpec.tabSpacingDp.dp))
-                    }
-                }
-            }
+                    .padding(start = 0.dp, top = 7.dp, end = 8.dp, bottom = 7.dp),
+                height = 40.dp,
+                indicatorHeight = 34.dp,
+                labelFontSize = layoutSpec.unselectedTabFontSizeSp.sp
+            )
 
             // [新增] 恢复画面按钮 (仅在播放器折叠时显示)
             AnimatedVisibility(

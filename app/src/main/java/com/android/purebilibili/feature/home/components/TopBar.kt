@@ -817,7 +817,7 @@ fun CategoryTabRow(
             
             // [简化] 直接从 PagerState 计算位置，不再使用 DampedDragAnimationState
             // 这是唯一的状态源，消除多状态同步问题
-            val currentPosition by remember(pagerState) {
+            val currentPosition by remember(pagerState, selectedIndex) {
                 derivedStateOf {
                     resolveTopTabPagerPosition(
                         selectedIndex = selectedIndex,
@@ -976,6 +976,19 @@ fun CategoryTabRow(
                     velocityPxPerSecond = indicatorVelocityPxPerSecond,
                     liquidGlassEnabled = effectiveLiquidGlassEnabled
                 )
+                val topTabPanelOffsetPx = with(localDensity) {
+                    resolveBottomBarMotionSpec(BottomBarMotionProfile.IOS_FLOATING)
+                        .refraction
+                        .panelOffsetMaxDp
+                        .dp
+                        .toPx()
+                }
+                val indicatorPanelOffsetPx = topTabPanelOffsetPx *
+                    topTabRefractionProfile.indicatorPanelOffsetFraction
+                val exportPanelOffsetPx = topTabPanelOffsetPx *
+                    topTabRefractionProfile.exportPanelOffsetFraction
+                val visiblePanelOffsetPx = topTabPanelOffsetPx *
+                    topTabRefractionProfile.visiblePanelOffsetFraction
 
                 // 1. [Layer] Background Liquid Indicator
                 // [修复] 使用 layoutInfo 动态计算滚动偏移
@@ -990,7 +1003,7 @@ fun CategoryTabRow(
                 }
 
                 Box(modifier = Modifier.graphicsLayer {
-                    translationX = -scrollOffset
+                    translationX = -scrollOffset + indicatorPanelOffsetPx
                 }) {
                     val isDarkTheme = isSystemInDarkTheme()
                     val topIndicatorTintAlpha = resolveIosFloatingBottomIndicatorTintAlpha(
@@ -1030,7 +1043,7 @@ fun CategoryTabRow(
                             isLiquidGlassEnabled = effectiveLiquidGlassEnabled,
                             clampToBounds = true,
                             edgeInset = floatingIndicatorEdgeInset,
-                            viewportShiftPx = scrollOffset,
+                            viewportShiftPx = scrollOffset - indicatorPanelOffsetPx,
                             indicatorWidthMultiplier = floatingLiquidWidthMultiplier,
                             indicatorMinWidth = floatingLiquidMinWidth,
                             indicatorMaxWidth = floatingLiquidMaxWidth,
@@ -1076,7 +1089,7 @@ fun CategoryTabRow(
                             .clearAndSetSemantics {}
                             .alpha(0f)
                             .layerBackdrop(tabContentBackdrop)
-                            .graphicsLayer { translationX = -scrollOffset }
+                            .graphicsLayer { translationX = -scrollOffset + exportPanelOffsetPx }
                     ) {
                         Row(
                             modifier = Modifier
@@ -1115,7 +1128,9 @@ fun CategoryTabRow(
 
                 // 2. [Layer] Content Tabs
                 Box(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { translationX = visiblePanelOffsetPx }
                 ) {
                     LazyRow(
                         state = tabListState,
@@ -1670,7 +1685,10 @@ internal data class TopTabRefractionMotionProfile(
     val chromaticBoostScale: Float,
     val forceChromaticAberration: Boolean,
     val visibleSelectionEmphasis: Float,
-    val exportSelectionEmphasis: Float
+    val exportSelectionEmphasis: Float,
+    val indicatorPanelOffsetFraction: Float,
+    val visiblePanelOffsetFraction: Float,
+    val exportPanelOffsetFraction: Float
 )
 
 internal fun resolveTopTabRefractionMotionProfile(
@@ -1686,7 +1704,10 @@ internal fun resolveTopTabRefractionMotionProfile(
             chromaticBoostScale = 1f,
             forceChromaticAberration = false,
             visibleSelectionEmphasis = 1f,
-            exportSelectionEmphasis = 1f
+            exportSelectionEmphasis = 1f,
+            indicatorPanelOffsetFraction = 0f,
+            visiblePanelOffsetFraction = 0f,
+            exportPanelOffsetFraction = 0f
         )
     }
     val bottomMotionSpec = resolveBottomBarMotionSpec(BottomBarMotionProfile.IOS_FLOATING)
@@ -1702,7 +1723,10 @@ internal fun resolveTopTabRefractionMotionProfile(
         chromaticBoostScale = bottomProfile.chromaticBoostScale,
         forceChromaticAberration = bottomProfile.forceChromaticAberration,
         visibleSelectionEmphasis = bottomProfile.visibleSelectionEmphasis,
-        exportSelectionEmphasis = bottomProfile.exportSelectionEmphasis
+        exportSelectionEmphasis = bottomProfile.exportSelectionEmphasis,
+        indicatorPanelOffsetFraction = bottomProfile.indicatorPanelOffsetFraction,
+        visiblePanelOffsetFraction = bottomProfile.visiblePanelOffsetFraction,
+        exportPanelOffsetFraction = bottomProfile.exportPanelOffsetFraction
     )
 }
 

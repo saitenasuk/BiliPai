@@ -148,7 +148,7 @@ class HomeInteractionMotionBudgetPolicyTest {
                 selectedIndex = 0,
                 pagerCurrentPage = 0,
                 pagerTargetPage = 1,
-                pagerCurrentPageOffsetFraction = -0.35f,
+                pagerCurrentPageOffsetFraction = 0.35f,
                 pagerIsScrolling = true
             )
         )
@@ -158,7 +158,7 @@ class HomeInteractionMotionBudgetPolicyTest {
                 selectedIndex = 1,
                 pagerCurrentPage = 1,
                 pagerTargetPage = 0,
-                pagerCurrentPageOffsetFraction = 0.35f,
+                pagerCurrentPageOffsetFraction = -0.35f,
                 pagerIsScrolling = true
             )
         )
@@ -172,7 +172,7 @@ class HomeInteractionMotionBudgetPolicyTest {
                 selectedIndex = 0,
                 pagerCurrentPage = 0,
                 pagerTargetPage = 0,
-                pagerCurrentPageOffsetFraction = -0.35f,
+                pagerCurrentPageOffsetFraction = 0.35f,
                 pagerIsScrolling = true
             )
         )
@@ -182,7 +182,7 @@ class HomeInteractionMotionBudgetPolicyTest {
                 selectedIndex = 1,
                 pagerCurrentPage = 1,
                 pagerTargetPage = 1,
-                pagerCurrentPageOffsetFraction = 0.35f,
+                pagerCurrentPageOffsetFraction = -0.35f,
                 pagerIsScrolling = true
             )
         )

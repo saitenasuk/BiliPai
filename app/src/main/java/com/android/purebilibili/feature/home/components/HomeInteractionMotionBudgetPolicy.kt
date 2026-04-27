@@ -70,10 +70,10 @@ internal fun resolveTopTabPagerPosition(
     if (!pagerIsScrolling) return (pagerCurrentPage ?: selectedIndex).toFloat()
     val currentPage = pagerCurrentPage ?: return selectedIndex.toFloat()
     val offsetFraction = pagerCurrentPageOffsetFraction ?: 0f
-    // PagerState.targetPage only changes after the drag crosses the settle threshold.
-    // currentPageOffsetFraction changes immediately, so deriving the absolute page
-    // position from it keeps the top capsule visually attached to the finger.
-    return currentPage - offsetFraction
+    // currentPageOffsetFraction changes immediately during a drag. Compose reports
+    // forward page movement as a positive offset, so adding it keeps the capsule
+    // attached to the finger instead of mirroring the swipe direction.
+    return currentPage + offsetFraction
 }
 
 internal fun resolveMd3TopTabViewportPosition(

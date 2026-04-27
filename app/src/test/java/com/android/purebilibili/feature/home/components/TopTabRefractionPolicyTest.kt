@@ -68,6 +68,9 @@ class TopTabRefractionPolicyTest {
         assertEquals(1f, profile.chromaticBoostScale, 0.001f)
         assertEquals(1f, profile.lensAmountScale, 0.001f)
         assertEquals(1f, profile.lensHeightScale, 0.001f)
+        assertEquals(0f, profile.indicatorPanelOffsetFraction, 0.001f)
+        assertEquals(0f, profile.visiblePanelOffsetFraction, 0.001f)
+        assertEquals(0f, profile.exportPanelOffsetFraction, 0.001f)
     }
 
     @Test
@@ -140,6 +143,9 @@ class TopTabRefractionPolicyTest {
         assertEquals(bottom.forceChromaticAberration, top.forceChromaticAberration)
         assertEquals(bottom.visibleSelectionEmphasis, top.visibleSelectionEmphasis, 0.001f)
         assertEquals(bottom.exportSelectionEmphasis, top.exportSelectionEmphasis, 0.001f)
+        assertEquals(bottom.indicatorPanelOffsetFraction, top.indicatorPanelOffsetFraction, 0.001f)
+        assertEquals(bottom.visiblePanelOffsetFraction, top.visiblePanelOffsetFraction, 0.001f)
+        assertEquals(bottom.exportPanelOffsetFraction, top.exportPanelOffsetFraction, 0.001f)
     }
 
     @Test
