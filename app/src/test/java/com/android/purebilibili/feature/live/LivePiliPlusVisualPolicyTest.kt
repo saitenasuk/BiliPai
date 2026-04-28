@@ -26,15 +26,15 @@ class LivePiliPlusVisualPolicyTest {
     }
 
     @Test
-    fun `chip colors use Material secondary container for theme aware selection`() {
+    fun `chip colors use theme accent for selected home category`() {
         val colors = resolveLivePiliPlusChipColors(
-            selectedContainer = Color(0xFFE8DEF8),
-            selectedContent = Color(0xFF1D192B),
+            selectedContainer = Color(0xFF8FD5FF),
+            selectedContent = Color(0xFF001F2A),
             unselectedContent = Color(0xFF49454F)
         )
 
-        assertEquals(Color(0xFFE8DEF8), colors.selectedContainerColor)
-        assertEquals(Color(0xFF1D192B), colors.selectedContentColor)
+        assertEquals(Color(0xFF8FD5FF), colors.selectedContainerColor)
+        assertEquals(Color(0xFF001F2A), colors.selectedContentColor)
         assertEquals(Color.Transparent, colors.unselectedContainerColor)
         assertEquals(Color(0xFF49454F), colors.unselectedContentColor)
     }

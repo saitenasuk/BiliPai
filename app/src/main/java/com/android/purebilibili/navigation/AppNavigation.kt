@@ -61,6 +61,7 @@ import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.dynamic.DynamicScreen
 import com.android.purebilibili.feature.dynamic.LocalDynamicScrollChannel
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewOverlayHost
+import com.android.purebilibili.feature.live.shouldStopLivePlaybackOnRouteDispose
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.ProvideAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.SharedTransitionProvider
@@ -2145,13 +2146,26 @@ fun AppNavigation(
             val roomId = backStackEntry.arguments?.getLong("roomId") ?: 0L
             val title = backStackEntry.arguments?.getString("title") ?: ""
             val uname = backStackEntry.arguments?.getString("uname") ?: ""
+            val activity = context as? android.app.Activity
+
+            DisposableEffect(roomId, miniPlayerManager) {
+                onDispose {
+                    val isChangingConfigurations = activity?.isChangingConfigurations == true
+                    if (shouldStopLivePlaybackOnRouteDispose(isChangingConfigurations)) {
+                        miniPlayerManager?.markLeavingByNavigation(forceStop = true)
+                    }
+                }
+            }
             
             ProvideAnimatedVisibilityScope(animatedVisibilityScope = this) {
                 com.android.purebilibili.feature.live.LivePlayerScreen(
                     roomId = roomId,
                     title = Uri.decode(title),
                     uname = Uri.decode(uname),
-                    onBack = { navController.popBackStack() },
+                    onBack = {
+                        miniPlayerManager?.markLeavingByNavigation(forceStop = true)
+                        navController.popBackStack()
+                    },
                     onUserClick = { mid -> navController.navigate(ScreenRoutes.Space.createRoute(mid)) }
                 )
             }

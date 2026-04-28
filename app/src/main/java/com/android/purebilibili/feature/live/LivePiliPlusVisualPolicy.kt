@@ -97,6 +97,10 @@ internal fun shouldRenderLiveDanmakuImageEmoticon(emoticonUrl: String?): Boolean
     return !emoticonUrl.isNullOrBlank()
 }
 
+internal fun shouldStopLivePlaybackOnRouteDispose(isChangingConfigurations: Boolean): Boolean {
+    return !isChangingConfigurations
+}
+
 internal fun resolveLivePiliPlusRoomColorTokens(
     inputOverlayColor: Color = Color.White,
     inputContentColor: Color = Color(0xFFEEEEEE)

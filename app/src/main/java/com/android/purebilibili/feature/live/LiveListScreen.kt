@@ -641,11 +641,10 @@ private fun LiveAreaHomeChipRow(
     onAreaSelected: (Int) -> Unit
 ) {
     val palette = rememberLiveChromePalette()
-    val colorScheme = MaterialTheme.colorScheme
     val chipColors = resolveLivePiliPlusChipColors(
-        selectedContainer = colorScheme.secondaryContainer,
-        selectedContent = colorScheme.onSecondaryContainer,
-        unselectedContent = colorScheme.onSurfaceVariant
+        selectedContainer = palette.accentStrong,
+        selectedContent = palette.onAccent,
+        unselectedContent = palette.secondaryText
     )
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
