@@ -110,7 +110,25 @@ class LiveRealtimeMessagePolicyTest {
         assertEquals("report-sign", chat.item.reportSign)
     }
 
+    @Test
+    fun `danmaku parser does not attach unrelated emoticon url to normal text`() {
+        val action = resolveLiveRealtimeAction(
+            liveDanmakuJson(
+                text = "wbg?!! 专业吃大王?",
+                emotsKey = "[热]"
+            )
+        )
+
+        val chat = assertIs<LiveRealtimeAction.EmitChat>(action)
+        assertEquals("wbg?!! 专业吃大王?", chat.item.text)
+        assertEquals(null, chat.item.emoticonUrl)
+    }
+
     private fun liveDanmakuJson(): JsonObject {
+        return liveDanmakuJson(text = "[热]", emotsKey = "[热]")
+    }
+
+    private fun liveDanmakuJson(text: String, emotsKey: String): JsonObject {
         return json(
             """
             {
@@ -121,10 +139,10 @@ class LiveRealtimeMessagePolicyTest {
                   null,
                   null,
                   {
-                    "extra": "{\"id_str\":\"dm-1\",\"dm_type\":0,\"reply_uname\":\"Carol\",\"emots\":{\"[热]\":{\"url\":\"https://example.com/hot.png\"}}}"
+                    "extra": "{\"id_str\":\"dm-1\",\"dm_type\":0,\"reply_uname\":\"Carol\",\"emots\":{\"$emotsKey\":{\"url\":\"https://example.com/hot.png\"}}}"
                   }
                 ],
-                "[热]",
+                "$text",
                 [42, "Bob", 0],
                 [2, "牌子", "", 0, 6067854],
                 [5],

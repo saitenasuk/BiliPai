@@ -192,10 +192,7 @@ private fun resolveDanmakuEmoticonUrl(
     val emots = extraPayload?.obj("emots") ?: return null
     val exact = emots.obj(text)?.string("url").orEmpty()
     if (exact.isNotBlank()) return exact
-    return emots.values
-        .asSequence()
-        .mapNotNull { it.asObjectOrNull()?.string("url") }
-        .firstOrNull { it.isNotBlank() }
+    return null
 }
 
 private fun resolveBlockingMessage(json: JsonObject, cmd: String): String {
