@@ -42,6 +42,17 @@ class DynamicLayoutPolicyTest {
     }
 
     @Test
+    fun `dynamic top tab row uses bottom bar liquid glass proportions`() {
+        val spec = resolveDynamicTopBarLiquidTabSpec()
+
+        assertEquals(2, spec.topPaddingDp)
+        assertEquals(8, spec.bottomPaddingDp)
+        assertEquals(42, spec.heightDp)
+        assertEquals(34, spec.indicatorHeightDp)
+        assertEquals(14, spec.labelFontSizeSp)
+    }
+
+    @Test
     fun `dynamic sidebar trims width without crowding avatar affordances`() {
         assertEquals(68.dp, resolveDynamicSidebarWidth(isExpanded = true))
         assertEquals(60.dp, resolveDynamicSidebarWidth(isExpanded = false))

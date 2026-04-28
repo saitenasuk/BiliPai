@@ -2,28 +2,24 @@
 package com.android.purebilibili.feature.dynamic.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.rememberScrollState
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarHorizontalPadding
-import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarTabEndPadding
+import com.android.purebilibili.feature.dynamic.resolveDynamicTopBarLiquidTabSpec
+import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
 import com.android.purebilibili.core.ui.blur.BlurStyles
 import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
 import dev.chrisbanes.haze.HazeState
@@ -49,7 +45,7 @@ fun DynamicTopBarWithTabs(
 ) {
     val density = LocalDensity.current
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
-    val tabScrollState = rememberScrollState()
+    val liquidTabSpec = resolveDynamicTopBarLiquidTabSpec()
     
     //  读取当前模糊强度以确定背景透明度
     val blurIntensity = currentUnifiedBlurIntensity()
@@ -107,42 +103,25 @@ fun DynamicTopBarWithTabs(
             }
             
             // Tab栏
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(tabScrollState)
                     .padding(
                         start = resolveDynamicTopBarHorizontalPadding(),
-                        end = resolveDynamicTopBarHorizontalPadding()
-                    ),
-                horizontalArrangement = Arrangement.Start
+                        end = resolveDynamicTopBarHorizontalPadding(),
+                        top = liquidTabSpec.topPaddingDp.dp,
+                        bottom = liquidTabSpec.bottomPaddingDp.dp
+                    )
             ) {
-                tabs.forEachIndexed { index, tab ->
-                    val isSelected = selectedTab == index
-                    val selectedColor = rememberDynamicTabSelectedColor()
-                    val defaultColor = rememberDynamicTabUnselectedColor()
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clickable { onTabSelected(index) }
-                            .padding(end = resolveDynamicTopBarTabEndPadding(), bottom = 2.dp)
-                    ) {
-                        Text(
-                            tab,
-                            fontSize = 16.sp,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                            color = if (isSelected) selectedColor else defaultColor
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Box(
-                            modifier = Modifier
-                                .width(if (isSelected) 24.dp else 18.dp)
-                                .height(if (isSelected) 2.5.dp else 2.dp)
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(if (isSelected) selectedColor else Color.Transparent)
-                        )
-                    }
-                }
+                BottomBarLiquidSegmentedControl(
+                    items = tabs,
+                    selectedIndex = selectedTab,
+                    onSelected = onTabSelected,
+                    modifier = Modifier.fillMaxWidth(),
+                    height = liquidTabSpec.heightDp.dp,
+                    indicatorHeight = liquidTabSpec.indicatorHeightDp.dp,
+                    labelFontSize = liquidTabSpec.labelFontSizeSp.sp
+                )
             }
         }
     }

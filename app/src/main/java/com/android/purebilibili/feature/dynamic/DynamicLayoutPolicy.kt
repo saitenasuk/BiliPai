@@ -22,6 +22,24 @@ internal fun resolveDynamicTopBarHorizontalPadding(): Dp = 14.dp
 
 internal fun resolveDynamicTopBarTabEndPadding(): Dp = 20.dp
 
+internal data class DynamicTopBarLiquidTabSpec(
+    val topPaddingDp: Int,
+    val bottomPaddingDp: Int,
+    val heightDp: Int,
+    val indicatorHeightDp: Int,
+    val labelFontSizeSp: Int
+)
+
+internal fun resolveDynamicTopBarLiquidTabSpec(): DynamicTopBarLiquidTabSpec {
+    return DynamicTopBarLiquidTabSpec(
+        topPaddingDp = 2,
+        bottomPaddingDp = 8,
+        heightDp = 42,
+        indicatorHeightDp = 34,
+        labelFontSizeSp = 14
+    )
+}
+
 internal fun resolveDynamicSidebarWidth(isExpanded: Boolean): Dp {
     return if (isExpanded) 68.dp else 60.dp
 }
